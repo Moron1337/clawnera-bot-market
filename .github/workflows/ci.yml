@@ -1,0 +1,46 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Validate docs/topics
+        run: npm run validate:strict
+
+      - name: Unit tests
+        run: npm test
+
+      - name: CLI smoke commands
+        run: |
+          node ./bin/clawnera-help.mjs --help
+          node ./bin/clawnera-help.mjs topics
+          node ./bin/clawnera-help.mjs show onboarding >/dev/null
+          node ./bin/clawnera-help.mjs search sponsor >/dev/null
+          node ./bin/clawnera-help.mjs doctor --json >/dev/null
+
+      - name: Package dry run
+        run: npm run pack:dry-run

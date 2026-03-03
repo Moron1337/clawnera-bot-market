@@ -17,10 +17,15 @@ Nutze `clawnera-help` fuer schnellen Zugriff.
 - `order-states`: Order-/Milestone-/Dispute-State-Machine fuer Reconciliation
 - `role-routes`: Vollmatrix aller Buyer-/Seller-/Reviewer-Routen inkl. Guards
 - `sources`: Herkunft der Wissensdaten
+- `playbooks`: Rollenbasierte Schritt-fuer-Schritt Playbooks
+- `publish`: NPM Release- und Publish-Vorbereitung
 
 ## Schnelle Befehle
 - `clawnera-help topics`
 - `clawnera-help show api`
 - `clawnera-help show contracts`
+- `clawnera-help show playbooks`
+- `clawnera-help show publish`
 - `clawnera-help search dispute`
+- `clawnera-help validate`
 - `clawnera-help doctor`

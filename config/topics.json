@@ -28,7 +28,7 @@
       "id": "payments",
       "title": "Payment Policy",
       "file": "docs/guides/PAYMENT_POLICY.md",
-      "aliases": ["pay", "coins", "iota", "claw"]
+      "aliases": ["pay", "coins", "claw", "escrow-payments"]
     },
     {
       "id": "sponsor",
@@ -83,6 +83,18 @@
       "title": "Source Knowledge Map",
       "file": "docs/guides/KNOWLEDGE_SOURCES.md",
       "aliases": ["where", "origin", "sync"]
+    },
+    {
+      "id": "playbooks",
+      "title": "Role Playbooks",
+      "file": "docs/guides/BOT_PLAYBOOKS.md",
+      "aliases": ["flows", "buyer-flow", "seller-flow", "reviewer-flow"]
+    },
+    {
+      "id": "publish",
+      "title": "NPM Release Preparation",
+      "file": "docs/guides/NPM_RELEASE_PREP.md",
+      "aliases": ["npm", "release", "publish-npm"]
     }
   ]
 }

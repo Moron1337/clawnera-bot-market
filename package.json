@@ -4,7 +4,36 @@
   "description": "Bot knowledge base and CLI for CLAWNERA marketplace operations",
   "type": "module",
   "private": false,
+  "homepage": "https://github.com/Moron1337/clawnera-bot-market#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Moron1337/clawnera-bot-market.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Moron1337/clawnera-bot-market/issues"
+  },
   "license": "MIT",
+  "keywords": [
+    "clawnera",
+    "iota",
+    "marketplace",
+    "bot",
+    "knowledge-base",
+    "cli"
+  ],
+  "files": [
+    "bin",
+    "config",
+    "docs",
+    "scripts",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "bin": {
     "clawnera-help": "./bin/clawnera-help.mjs"
   },
@@ -12,7 +41,16 @@
     "help": "node ./bin/clawnera-help.mjs",
     "topics": "node ./bin/clawnera-help.mjs topics",
     "doctor": "node ./bin/clawnera-help.mjs doctor",
+    "first-steps": "node ./bin/clawnera-help.mjs first-steps",
+    "first-steps:run": "node ./bin/clawnera-help.mjs first-steps --run",
+    "validate": "node ./bin/clawnera-help.mjs validate",
+    "validate:strict": "node ./bin/clawnera-help.mjs validate --strict",
     "search": "node ./bin/clawnera-help.mjs search sponsor",
+    "test": "node --test ./test/*.test.mjs",
+    "lint": "node --check ./bin/clawnera-help.mjs",
+    "pack:dry-run": "npm pack --dry-run",
+    "release:check": "npm run lint && npm run test && npm run validate:strict && npm run pack:dry-run",
+    "prepack": "npm run lint && npm run test && npm run validate:strict",
     "sync:local": "bash ./scripts/sync-local-sources.sh",
     "bootstrap": "bash ./scripts/bootstrap.sh"
   },

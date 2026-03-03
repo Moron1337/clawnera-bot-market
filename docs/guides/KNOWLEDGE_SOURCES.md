@@ -6,7 +6,7 @@ Dieses Repo ist der bot-orientierte Knowledge-Layer.
 - `${MARKETPLACE_SOURCE_ROOT}/docs/*`
 - `${MARKETPLACE_SOURCE_ROOT}/apps/api/openapi.yaml`
 - `${MARKETPLACE_SOURCE_ROOT}/contracts/claw_marketplace/ci/callable_surface.snapshot`
-- `/home/codex/claw/docs/*`
+- `${CLAW_ROOT}/docs/*`
 
 ## Sync
 - `bash scripts/sync-local-sources.sh`

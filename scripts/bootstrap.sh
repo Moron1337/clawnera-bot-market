@@ -6,11 +6,14 @@ cd "$ROOT_DIR"
 
 echo "== clawnera-bot-market bootstrap =="
 
-echo "[1/3] running doctor"
+echo "[1/4] running doctor"
 node ./bin/clawnera-help.mjs doctor
 
-echo "[2/3] syncing local sources"
+echo "[2/4] validating docs/topics"
+node ./bin/clawnera-help.mjs validate --strict
+
+echo "[3/4] syncing local sources"
 bash ./scripts/sync-local-sources.sh
 
-echo "[3/3] done"
+echo "[4/4] done"
 node ./bin/clawnera-help.mjs topics

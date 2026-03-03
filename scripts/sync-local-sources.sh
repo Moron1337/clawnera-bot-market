@@ -8,10 +8,10 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="$ROOT_DIR/docs/docsources"
 
 MARKETPLACE_SOURCE_ROOT="${MARKETPLACE_SOURCE_ROOT:-}"
-CLAW_ROOT="${CLAW_ROOT:-/home/codex/claw}"
+CLAW_ROOT="${CLAW_ROOT:-}"
 
 if [[ -z "$MARKETPLACE_SOURCE_ROOT" ]]; then
-  for candidate in "$HOME"/*; do
+  for candidate in "$ROOT_DIR/.." "$HOME"/*; do
     if [[ -f "$candidate/apps/api/openapi.yaml" ]] && [[ -f "$candidate/contracts/claw_marketplace/ci/callable_surface.snapshot" ]]; then
       MARKETPLACE_SOURCE_ROOT="$candidate"
       break
@@ -22,6 +22,15 @@ fi
 if [[ -z "$MARKETPLACE_SOURCE_ROOT" ]]; then
   echo "missing_marketplace_source_root: set MARKETPLACE_SOURCE_ROOT=/path/to/marketplace-core-repo"
   exit 1
+fi
+
+if [[ -z "$CLAW_ROOT" ]]; then
+  for candidate in "$ROOT_DIR/../claw" "$HOME/claw" "$HOME"/*; do
+    if [[ -f "$candidate/docs/CLAW_OPERATIONS_CURRENT.md" ]] && [[ -f "$candidate/docs/CLAW_SWAP_GATEWAY_CURRENT.md" ]]; then
+      CLAW_ROOT="$candidate"
+      break
+    fi
+  done
 fi
 
 mkdir -p "$OUT_DIR/core" "$OUT_DIR/claw"
@@ -51,9 +60,13 @@ copy_if_exists "$MARKETPLACE_SOURCE_ROOT/apps/api/openapi.yaml" "$OUT_DIR/core/o
 copy_if_exists "$MARKETPLACE_SOURCE_ROOT/contracts/claw_marketplace/ci/callable_surface.snapshot" "$OUT_DIR/core/callable_surface.snapshot"
 
 # CLAW ecosystem docs
-copy_if_exists "$CLAW_ROOT/docs/CLAW_OPERATIONS_CURRENT.md" "$OUT_DIR/claw/CLAW_OPERATIONS_CURRENT.md"
-copy_if_exists "$CLAW_ROOT/docs/CLAW_SWAP_GATEWAY_CURRENT.md" "$OUT_DIR/claw/CLAW_SWAP_GATEWAY_CURRENT.md"
-copy_if_exists "$CLAW_ROOT/docs/CLAW_LOCAL_ORACLE_SYNC_RUNBOOK.md" "$OUT_DIR/claw/CLAW_LOCAL_ORACLE_SYNC_RUNBOOK.md"
+if [[ -n "$CLAW_ROOT" ]]; then
+  copy_if_exists "$CLAW_ROOT/docs/CLAW_OPERATIONS_CURRENT.md" "$OUT_DIR/claw/CLAW_OPERATIONS_CURRENT.md"
+  copy_if_exists "$CLAW_ROOT/docs/CLAW_SWAP_GATEWAY_CURRENT.md" "$OUT_DIR/claw/CLAW_SWAP_GATEWAY_CURRENT.md"
+  copy_if_exists "$CLAW_ROOT/docs/CLAW_LOCAL_ORACLE_SYNC_RUNBOOK.md" "$OUT_DIR/claw/CLAW_LOCAL_ORACLE_SYNC_RUNBOOK.md"
+else
+  echo "missing_claw_root: set CLAW_ROOT=/path/to/claw-repo (continuing with core sources only)"
+fi
 
 MANIFEST="$OUT_DIR/SYNC_MANIFEST.txt"
 {

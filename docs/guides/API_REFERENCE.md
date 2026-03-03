@@ -2,8 +2,8 @@
 
 Quellen:
 - OpenAPI Snapshot: `docs/docsources/core/openapi.yaml`
-- Runtime-Handler: `/home/codex/clawdex/apps/api/src/worker.ts`
-- Request-Parser: `/home/codex/clawdex/apps/api/src/contracts.ts`
+- Runtime-Handler (Core-Repo): `apps/api/src/worker.ts`
+- Request-Parser (Core-Repo): `apps/api/src/contracts.ts`
 
 ## 0) Baseline fuer alle Bots
 

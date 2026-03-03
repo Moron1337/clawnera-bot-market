@@ -3,7 +3,7 @@
 Quellen:
 - `docs/docsources/core/callable_surface.snapshot`
 - `docs/docsources/core/SMART_CONTRACT_FUNCTION_INVENTORY_AND_USER_TEST_MATRIX.md`
-- SDK Builder Mapping in `/home/codex/clawdex/packages/sdk/src/tx/*.ts`
+- SDK Builder Mapping (Core-Repo): `packages/sdk/src/tx/*.ts`
 
 ## 1) Wichtige Architekturregeln fuer Bots
 

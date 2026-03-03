@@ -1,0 +1,66 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const repoRoot = path.resolve(__dirname, "..");
+const cliFile = path.join(repoRoot, "bin", "clawnera-help.mjs");
+const packageJson = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
+
+function runCli(args = []) {
+  return spawnSync(process.execPath, [cliFile, ...args], {
+    cwd: repoRoot,
+    encoding: "utf8"
+  });
+}
+
+test("help command prints usage", () => {
+  const result = runCli(["--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /CLAWNERA Bot Market CLI/);
+  assert.match(result.stdout, /clawnera-help validate/);
+});
+
+test("topics command includes onboarding topic", () => {
+  const result = runCli(["topics"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /onboarding: Bot Onboarding/);
+  assert.match(result.stdout, /playbooks: Role Playbooks/);
+});
+
+test("show with unknown topic fails", () => {
+  const result = runCli(["show", "does-not-exist"]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /unknown_topic/);
+});
+
+test("validate strict succeeds", () => {
+  const result = runCli(["validate", "--strict"]);
+  assert.equal(result.status, 0, `validate failed\\nstdout:\\n${result.stdout}\\nstderr:\\n${result.stderr}`);
+  assert.match(result.stdout, /Validation \(strict\)/);
+});
+
+test("doctor json output is parseable", () => {
+  const result = runCli(["doctor", "--json"]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.ok(payload.tools.node);
+});
+
+test("version command matches package.json", () => {
+  const result = runCli(["version"]);
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout.trim(), packageJson.version);
+});
+
+test("first-steps command prints instructions by default", () => {
+  const result = runCli(["first-steps"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /IOTA first steps/);
+  assert.match(result.stdout, /bootstrap-iota-first-steps\.sh/);
+});

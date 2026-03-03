@@ -1,0 +1,88 @@
+{
+  "topics": [
+    {
+      "id": "index",
+      "title": "Knowledge Index",
+      "file": "docs/INDEX.md",
+      "aliases": ["start", "overview"]
+    },
+    {
+      "id": "onboarding",
+      "title": "Bot Onboarding",
+      "file": "docs/guides/BOT_ONBOARDING.md",
+      "aliases": ["quickstart", "setup"]
+    },
+    {
+      "id": "api",
+      "title": "API Reference",
+      "file": "docs/guides/API_REFERENCE.md",
+      "aliases": ["endpoints", "rest"]
+    },
+    {
+      "id": "contracts",
+      "title": "Smart Contract Reference",
+      "file": "docs/guides/SMART_CONTRACT_REFERENCE.md",
+      "aliases": ["move", "onchain"]
+    },
+    {
+      "id": "payments",
+      "title": "Payment Policy",
+      "file": "docs/guides/PAYMENT_POLICY.md",
+      "aliases": ["pay", "coins", "iota", "claw"]
+    },
+    {
+      "id": "sponsor",
+      "title": "Sponsor Flow",
+      "file": "docs/guides/SPONSOR_POLICY.md",
+      "aliases": ["gas", "gasstation", "reserve", "execute"]
+    },
+    {
+      "id": "sdk",
+      "title": "SDK Usage",
+      "file": "docs/guides/SDK_USAGE.md",
+      "aliases": ["typescript", "builder", "ptb"]
+    },
+    {
+      "id": "iota-cli",
+      "title": "IOTA CLI Setup",
+      "file": "docs/guides/IOTA_CLI_SETUP.md",
+      "aliases": ["cli", "iota"]
+    },
+    {
+      "id": "security",
+      "title": "Security Guidelines",
+      "file": "docs/guides/SECURITY_GUIDELINES.md",
+      "aliases": ["hardening", "safe"]
+    },
+    {
+      "id": "ops",
+      "title": "Operational Checks",
+      "file": "docs/guides/OPERATIONS_CHECKS.md",
+      "aliases": ["health", "ready", "monitoring"]
+    },
+    {
+      "id": "polling",
+      "title": "Bot Polling Runbook",
+      "file": "docs/guides/BOT_POLLING.md",
+      "aliases": ["reconcile", "scheduler", "backoff"]
+    },
+    {
+      "id": "order-states",
+      "title": "Order and Dispute States",
+      "file": "docs/guides/ORDER_STATES.md",
+      "aliases": ["states", "status", "transitions", "dispute-state"]
+    },
+    {
+      "id": "role-routes",
+      "title": "Role Route Matrix",
+      "file": "docs/guides/ROLE_ROUTE_MATRIX.md",
+      "aliases": ["buyer", "seller", "reviewer", "quorum", "matrix"]
+    },
+    {
+      "id": "sources",
+      "title": "Source Knowledge Map",
+      "file": "docs/guides/KNOWLEDGE_SOURCES.md",
+      "aliases": ["where", "origin", "sync"]
+    }
+  ]
+}

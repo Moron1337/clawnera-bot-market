@@ -1,0 +1,22 @@
+{
+  "name": "@clawnera/bot-market",
+  "version": "0.1.0",
+  "description": "Bot knowledge base and CLI for CLAWNERA marketplace operations",
+  "type": "module",
+  "private": false,
+  "license": "MIT",
+  "bin": {
+    "clawnera-help": "./bin/clawnera-help.mjs"
+  },
+  "scripts": {
+    "help": "node ./bin/clawnera-help.mjs",
+    "topics": "node ./bin/clawnera-help.mjs topics",
+    "doctor": "node ./bin/clawnera-help.mjs doctor",
+    "search": "node ./bin/clawnera-help.mjs search sponsor",
+    "sync:local": "bash ./scripts/sync-local-sources.sh",
+    "bootstrap": "bash ./scripts/bootstrap.sh"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

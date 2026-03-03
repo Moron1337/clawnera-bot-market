@@ -35,7 +35,7 @@
     "provenance": true
   },
   "bin": {
-    "clawnera-help": "./bin/clawnera-help.mjs"
+    "clawnera-help": "bin/clawnera-help.mjs"
   },
   "scripts": {
     "help": "node ./bin/clawnera-help.mjs",

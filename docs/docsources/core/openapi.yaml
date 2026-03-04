@@ -102,7 +102,8 @@ paths:
                             type: boolean
                           privilegedSponsor:
                             type: object
-                            required: [enabled, mode, enforcement, requiresBotKey, requiresBotProfile]
+                            required:
+                              [enabled, mode, enforcement, requiresBotKey, requiresBotProfile, policy]
                             properties:
                               enabled:
                                 type: boolean
@@ -116,6 +117,50 @@ paths:
                                 type: boolean
                               requiresBotProfile:
                                 type: boolean
+                              policy:
+                                type: object
+                                required:
+                                  [
+                                    allowedPurposes,
+                                    allowedPaymentCoins,
+                                    paymentCoinOptional,
+                                    selfPayFallback,
+                                    platformFundedMarketing
+                                  ]
+                                properties:
+                                  allowedPurposes:
+                                    type: array
+                                    items:
+                                      type: string
+                                  allowedPaymentCoins:
+                                    type: array
+                                    items:
+                                      type: string
+                                  paymentCoinOptional:
+                                    type: boolean
+                                  selfPayFallback:
+                                    type: boolean
+                                  platformFundedMarketing:
+                                    type: object
+                                    required:
+                                      [
+                                        sponsorPreferred,
+                                        sponsorRequired,
+                                        selfPayFallback,
+                                        intentRequired,
+                                        intentSignatureRequired
+                                      ]
+                                    properties:
+                                      sponsorPreferred:
+                                        type: boolean
+                                      sponsorRequired:
+                                        type: boolean
+                                      selfPayFallback:
+                                        type: boolean
+                                      intentRequired:
+                                        type: boolean
+                                      intentSignatureRequired:
+                                        type: boolean
                       auth:
                         type: object
                         required: [bearerToken, botHeader]
@@ -179,7 +224,7 @@ paths:
                       sponsor:
                         type: object
                         required:
-                          [version, mode, actorAddress, canSponsor, sponsorQuotaTier, sponsorFastLane, reasonCodes, risk, signals, evaluatedAt]
+                          [version, mode, actorAddress, canSponsor, sponsorQuotaTier, sponsorFastLane, reasonCodes, risk, signals, evaluatedAt, policy]
                         properties:
                           version:
                             type: string
@@ -238,6 +283,50 @@ paths:
                           evaluatedAt:
                             type: string
                             format: date-time
+                          policy:
+                            type: object
+                            required:
+                              [
+                                allowedPurposes,
+                                allowedPaymentCoins,
+                                paymentCoinOptional,
+                                selfPayFallback,
+                                platformFundedMarketing
+                              ]
+                            properties:
+                              allowedPurposes:
+                                type: array
+                                items:
+                                  type: string
+                              allowedPaymentCoins:
+                                type: array
+                                items:
+                                  type: string
+                              paymentCoinOptional:
+                                type: boolean
+                              selfPayFallback:
+                                type: boolean
+                              platformFundedMarketing:
+                                type: object
+                                required:
+                                  [
+                                    sponsorPreferred,
+                                    sponsorRequired,
+                                    selfPayFallback,
+                                    intentRequired,
+                                    intentSignatureRequired
+                                  ]
+                                properties:
+                                  sponsorPreferred:
+                                    type: boolean
+                                  sponsorRequired:
+                                    type: boolean
+                                  selfPayFallback:
+                                    type: boolean
+                                  intentRequired:
+                                    type: boolean
+                                  intentSignatureRequired:
+                                    type: boolean
         "401":
           description: Missing or invalid bearer token.
   /policy/ranking:

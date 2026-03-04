@@ -206,6 +206,8 @@ Hinweis zu Deadline/Cancel Actions:
 ## 11) Sponsor Flow
 
 1. Actor-Privilegien pruefen: `GET /actors/me/capabilities`.
+   - Fuer Marketing-Orders `capabilities.sponsor.policy.platformFundedMarketing` beachten
+     (`sponsorRequired=true`, `selfPayFallback=false`).
 2. Reserve: `POST /sponsor/reserve`.
    - Kanonisches `orderId` mitsenden (required in `SPONSOR_ORDER_ID_MODE=required`).
 3. Tx mit genau den reservierten `gasCoins` bauen, dann lokal signieren.

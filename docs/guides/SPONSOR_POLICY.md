@@ -92,6 +92,12 @@ Recommended production default:
 
 Before sponsor writes:
 - call `GET /actors/me/capabilities`
+- `capabilities.sponsor.policy.platformFundedMarketing` marks strict marketing behavior:
+  - `sponsorPreferred=true`
+  - `sponsorRequired=true`
+  - `selfPayFallback=false`
+  - `intentRequired=true`
+  - `intentSignatureRequired=true`
 
 ### 3.1 `orderId` transition policy
 - Current default: `SPONSOR_ORDER_ID_MODE=optional` for backward compatibility.

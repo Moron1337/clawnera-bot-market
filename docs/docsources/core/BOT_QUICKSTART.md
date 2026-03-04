@@ -67,6 +67,8 @@ If violated, API returns:
 
 ## 8. Sponsor loop
 1. Check actor sponsor capability: `GET /actors/me/capabilities`.
+   - For marketing orders, read `capabilities.sponsor.policy.platformFundedMarketing`
+     (`sponsorRequired=true`, `selfPayFallback=false`).
 2. Reserve gas: `POST /sponsor/reserve`.
    - include canonical `orderId` (required in `SPONSOR_ORDER_ID_MODE=required`).
 3. Build tx with returned sponsor gas data:

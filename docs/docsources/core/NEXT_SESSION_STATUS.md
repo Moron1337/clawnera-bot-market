@@ -27,6 +27,57 @@
       - `reviewer_prequalified_keys_required`
       - `arb_signer_required_for_platform_fallback`.
 
+## Status Update (2026-03-04, Marketing-Sponsor-Runway Monitoring + Sponsor-Policy-Hinweis umgesetzt)
+- [x] Marketing-Sponsor-Flow als bevorzugter/strikter Pfad maschinenlesbar gemacht:
+  - `GET /capabilities` und `GET /actors/me/capabilities` liefern jetzt
+    `policy.platformFundedMarketing` mit:
+    - `sponsorPreferred=true`
+    - `sponsorRequired=true`
+    - `selfPayFallback=false`
+    - `intentRequired=true`
+    - `intentSignatureRequired=true`
+- [x] Health-Telemetrie fuer Runway erweitert:
+  - `/health.marketing.campaigns[]` liefert zusaetzlich:
+    - `initialBudget`
+    - `initialBondBudget`
+  - `/health.marketing` liefert:
+    - `auto_disable_budget_threshold`
+- [x] Dashboard-Runway-Monitoring + Alerts erweitert:
+  - neue KPIs:
+    - `sponsorMarketingBudgetRunwayMinPercent`
+    - `sponsorMarketingBondRunwayMinPercent`
+  - neue Threshold-Env:
+    - `DASHBOARD_ALERT_SPONSOR_MARKETING_BUDGET_RUNWAY_MIN_PERCENT` (default `15`)
+    - `DASHBOARD_ALERT_SPONSOR_MARKETING_BOND_RUNWAY_MIN_PERCENT` (default `15`)
+  - neue Alert-IDs:
+    - `sponsor.marketing_budget.runway.low`
+    - `sponsor.marketing_bond.runway.low`
+- [x] Prometheus/Collector-Pipeline fuer Marketing-Runway erweitert:
+  - Collector-Metriken:
+    - `clawdex_marketing_sponsor_telemetry_up`
+    - `clawdex_marketing_sponsor_campaigns_active`
+    - `clawdex_marketing_sponsor_budget_runway_min_percent`
+    - `clawdex_marketing_sponsor_bond_runway_min_percent`
+    - per campaign:
+      - `clawdex_marketing_sponsor_campaign_budget_runway_percent{campaign_id=...}`
+      - `clawdex_marketing_sponsor_campaign_bond_runway_percent{campaign_id=...}`
+  - neue Prometheus-Alerts:
+    - `ClawdexMarketingSponsorBudgetRunwayLow`
+    - `ClawdexMarketingSponsorBondRunwayLow`
+  - Collector-Deploy-Config akzeptiert jetzt `CLAWDEX_API_BASE_URL`.
+- [x] Verifikation (2026-03-04):
+  - `corepack pnpm --filter @clawdex/api typecheck` -> PASS.
+  - `corepack pnpm --filter @clawdex/api lint` -> PASS.
+  - `corepack pnpm --filter @clawdex/api test` -> `25 passed | 3 skipped` files, `299 passed | 3 skipped` tests.
+  - On-chain:
+    - `corepack pnpm dispute-quorum:onchain:e2e:testnet` -> extern `faucet_failed_500`.
+    - `DQ_ENABLE_FAUCET=0 corepack pnpm dispute-quorum:onchain:e2e:testnet` abgeschlossen; Report:
+      - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T190121062Z.json`
+      - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T190121062Z.md`
+    - Erwartete externe Blocker unveraendert:
+      - `reviewer_prequalified_keys_required`
+      - `arb_signer_required_for_platform_fallback`.
+
 ## Status Update (2026-03-04, TASK-SP-205 orderId-Transition fuer Sponsor-Flow umgesetzt)
 - [x] `TASK-SP-205` umgesetzt:
   - Neue Runtime-Policy: `SPONSOR_ORDER_ID_MODE=optional|required` (Default `optional`).
@@ -618,7 +669,7 @@
   - User-Signatur muss einen kanonischen Intent decken: `network|order_id|reservation_id|tx_digest|expires_at|purpose`.
   - Execute akzeptiert nur, wenn Intent frisch/gueltig ist und exakt zum reservierten Kontext passt.
   - Negative Tests: replay mit alter reservation, replay auf anderer order, mutation von `txBytesB64`.
-- [ ] Sponsor fuer Marketing-Orders (erst nach DQ-201 + Sponsor-Activation):
+- [x] Sponsor fuer Marketing-Orders (erst nach DQ-201 + Sponsor-Activation): **(2026-03-04)**
   - Marketing-Orders: `sponsor reserve/execute` als bevorzugter Pfad fuer gasless User.
   - Monitoring fuer Sponsor-Budget-Runway + Alert bei nahendem Erschoepfen.
   - Pflicht vor Marketing-GoLive: `SponsorReserveRequest.orderId` + order-gebundene Reservierungen + Intent-Guard.

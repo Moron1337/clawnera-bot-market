@@ -139,6 +139,9 @@ Operational constraints:
 - live minimum for sponsor reserve: `gasBudget >= 1_000_000`
 - reservation TTL default: `SPONSOR_RESERVATION_TTL_SEC=120`
 - recommended reserve->execute target: `<60s`
+- capability preflight for marketing:
+  - `GET /actors/me/capabilities` -> `capabilities.sponsor.policy.platformFundedMarketing`
+  - enforce `sponsorRequired=true` and `selfPayFallback=false` in bot flow planning.
 
 ## 8. Sponsor fallback and circuit-breaker policy
 - Non-marketing orders can return self-pay fallback:

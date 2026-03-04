@@ -101,6 +101,9 @@ Runtime checks:
 - orderId policy mode: `SPONSOR_ORDER_ID_MODE=optional|required` (default `optional`)
 - practical live minimum: `gasBudget >= 1_000_000`
 - reservation TTL defaults to `SPONSOR_RESERVATION_TTL_SEC=120` (bots should target `<60s` reserve->execute)
+- capability policy marker:
+  - `GET /actors/me/capabilities` -> `capabilities.sponsor.policy.platformFundedMarketing`
+    signals marketing sponsor strict-mode (`sponsorRequired=true`, `selfPayFallback=false`).
 
 ### `POST /sponsor/execute`
 Request body:

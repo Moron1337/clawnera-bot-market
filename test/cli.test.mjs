@@ -64,3 +64,16 @@ test("first-steps command prints instructions by default", () => {
   assert.match(result.stdout, /IOTA first steps/);
   assert.match(result.stdout, /bootstrap-iota-first-steps\.sh/);
 });
+
+test("sponsor-execute help prints usage", () => {
+  const result = runCli(["sponsor-execute", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Sponsor execute helper/);
+  assert.match(result.stdout, /reserve -> run --build-cmd -> execute/);
+});
+
+test("sponsor-execute fails without api base and jwt", () => {
+  const result = runCli(["sponsor-execute", "--dry-run"]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /sponsor_execute_helper_error/);
+});

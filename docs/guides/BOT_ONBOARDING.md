@@ -202,6 +202,8 @@ Hinweis zu Deadline/Cancel Actions:
 1. Actor-Privilegien pruefen: `GET /actors/me/capabilities`.
 2. Reserve: `POST /sponsor/reserve`.
 3. Tx mit genau den reservierten `gasCoins` bauen, dann lokal signieren.
+   - Bei IOTA-Werttransfers zusaetzlich ein User-`paymentCoinObjectId` nutzen
+     (Business-Payment nicht aus Sponsor-Gas-Coin splitten).
 4. Execute: `POST /sponsor/execute`.
    - Header `idempotency-key` Pflicht.
 5. Bei `fallback: self_pay` sauber auf Self-Pay wechseln.

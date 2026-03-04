@@ -29,6 +29,10 @@
 2. Nur naechsten erlaubten Schritt senden.
 3. Bei `409` niemals blind retryen, sondern zuerst neu lesen und Transition neu berechnen.
 
+## Write-Ausfuehrung (Kosten)
+- Fuer Write-Tx Sponsor-Flow als Standard nutzen: `reserve -> sign -> execute`.
+- Nur wenn API explizit `fallback.self_pay` liefert, auf Self-Pay wechseln.
+
 ## Minimaler Scheduler-Loop
 1. Health lane: `/health` + `/ready`.
 2. Order lane: bekannte aktive `orderId`s pollen.

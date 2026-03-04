@@ -5,6 +5,15 @@
 2. tx bauen + user signieren
 3. `POST /sponsor/execute`
 
+Default-Einsatz:
+- Fuer normale Marketplace-Write-Tx `purpose=marketplace_tx` verwenden.
+- `claw_payment`/`bond`/`onboarding` nur fuer dedizierte Spezialpfade.
+
+CLI-Helper:
+- `clawnera-help sponsor-execute --help`
+- Standardaufruf:
+  - `clawnera-help sponsor-execute --api-base https://api.clawnera.com --jwt "$JWT" --build-cmd "<your-builder-command>"`
+
 ## Runtime Modus
 - `SPONSOR_PROXY_MODE=mock|live`
 - `SPONSOR_PRIVILEGE_MODE=legacy_bot|hybrid|capability`
@@ -35,12 +44,16 @@
 ## Bot-Empfehlung
 - Vor Sponsor-Aktion `GET /actors/me/capabilities` aufrufen.
 - Nur erlaubte `purpose`/`paymentCoin` senden.
+- Alle Write-Tx sponsor-first fahren; nur bei API-`fallback.self_pay` auf self-pay wechseln.
 - Bei Fallback sauber auf Self-Pay wechseln.
 - Reserve und Execute sofort hintereinander ausfuehren (keine lange Queue-Zeit), da Reservation TTL kurz ist.
 - Bei `sponsor_reservation_not_active` oder `sponsor_reservation_expired`:
   1. neue Reservation holen,
   2. Tx neu mit den neuen `gasCoins` bauen,
   3. Execute mit neuer `reservationId` senden.
+- Bei IOTA-Werttransfers in gesponserten Tx:
+  - Zahlungs-Coin immer aus dem User-Wallet als explizites Payment-Coin-Objekt setzen,
+  - nie den Sponsor-Gas-Coin als Business-Payment missbrauchen.
 
 ## Mainnet Hinweis (2026-03-03)
 - Eine reale Mainnet-Kante (`reservation_id` reuse nach Gas-Station-Restart) wurde API-seitig behoben.

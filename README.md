@@ -51,6 +51,7 @@ Entwicklung lokal:
 - `clawnera-help doctor`
 - `clawnera-help first-steps`
 - `clawnera-help first-steps --run`
+- `clawnera-help sponsor-execute --help`
 - `clawnera-help bootstrap --sync`
 
 ## Struktur

@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execSync, spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -42,6 +43,7 @@ function printUsage() {
   console.log("  clawnera-help doctor                      Check local toolchain");
   console.log("  clawnera-help path                        Print repository path");
   console.log("  clawnera-help first-steps [--run]         Show or run IOTA first-step bootstrap");
+  console.log("  clawnera-help sponsor-execute [options]   Reserve->sign->execute sponsor helper");
   console.log("  clawnera-help validate [--strict]         Validate topic/docs consistency");
   console.log("  clawnera-help sync                        Sync local source snapshots");
   console.log("  clawnera-help bootstrap [--sync]          Run doctor + validate (+ optional sync)");
@@ -408,6 +410,422 @@ function runIotaFirstSteps(args) {
   };
 }
 
+function parseLongOptions(args) {
+  const options = {};
+  const positionals = [];
+
+  for (let index = 0; index < args.length; index += 1) {
+    const token = args[index];
+    if (!token.startsWith("--")) {
+      positionals.push(token);
+      continue;
+    }
+
+    const key = token.slice(2).trim().toLowerCase();
+    if (!key) {
+      positionals.push(token);
+      continue;
+    }
+
+    const next = args[index + 1];
+    if (next && !next.startsWith("--")) {
+      options[key] = next;
+      index += 1;
+    } else {
+      options[key] = true;
+    }
+  }
+
+  return { options, positionals };
+}
+
+function parsePositiveIntOption(rawValue, fieldName, fallback) {
+  if (rawValue === undefined || rawValue === null || rawValue === "") {
+    return fallback;
+  }
+  const parsed = Number.parseInt(String(rawValue), 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`invalid_${fieldName}`);
+  }
+  return parsed;
+}
+
+function normalizeApiBase(rawValue) {
+  if (!rawValue) {
+    return null;
+  }
+  try {
+    const parsed = new URL(String(rawValue).trim());
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return null;
+    }
+    const out = parsed.toString();
+    return out.endsWith("/") ? out.slice(0, -1) : out;
+  } catch {
+    return null;
+  }
+}
+
+async function requestJson(url, init, timeoutMs) {
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...init,
+      signal: controller.signal
+    });
+    const text = await response.text();
+    let body = null;
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch {
+      body = null;
+    }
+    return {
+      ok: response.ok,
+      status: response.status,
+      body,
+      raw: text
+    };
+  } catch (error) {
+    if (error && typeof error === "object" && "name" in error && error.name === "AbortError") {
+      return {
+        ok: false,
+        status: 0,
+        body: null,
+        raw: "",
+        error: "http_timeout"
+      };
+    }
+    return {
+      ok: false,
+      status: 0,
+      body: null,
+      raw: "",
+      error: error instanceof Error ? error.message : "http_error"
+    };
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+}
+
+function parseBuildOutputPayload(stdout) {
+  const trimmed = String(stdout || "").trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parseCandidate = (candidate) => {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return null;
+      }
+      if (typeof parsed.txBytesB64 !== "string" || typeof parsed.userSig !== "string") {
+        return null;
+      }
+      if (!parsed.txBytesB64.trim() || !parsed.userSig.trim()) {
+        return null;
+      }
+      return {
+        txBytesB64: parsed.txBytesB64.trim(),
+        userSig: parsed.userSig.trim()
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  const full = parseCandidate(trimmed);
+  if (full) {
+    return full;
+  }
+
+  const lines = trimmed.split(/\r?\n/);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index].trim();
+    if (!line) {
+      continue;
+    }
+    const parsed = parseCandidate(line);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function runBuildCommand(command, env, timeoutMs) {
+  const result = spawnSync("bash", ["-lc", command], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    env,
+    timeout: timeoutMs
+  });
+
+  if (result.error) {
+    if (result.error && typeof result.error === "object" && "code" in result.error && result.error.code === "ETIMEDOUT") {
+      return {
+        ok: false,
+        error: "builder_timeout"
+      };
+    }
+    return {
+      ok: false,
+      error: result.error instanceof Error ? result.error.message : "builder_spawn_failed"
+    };
+  }
+
+  if (result.status !== 0) {
+    return {
+      ok: false,
+      error: `builder_failed_exit_${result.status ?? "unknown"}`
+    };
+  }
+
+  const payload = parseBuildOutputPayload(result.stdout || "");
+  if (!payload) {
+    return {
+      ok: false,
+      error: "builder_output_invalid"
+    };
+  }
+
+  return {
+    ok: true,
+    payload
+  };
+}
+
+function hasSelfPayFallback(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return false;
+  }
+  const fallback = payload.fallback;
+  if (!fallback || typeof fallback !== "object" || Array.isArray(fallback)) {
+    return false;
+  }
+  return fallback.mode === "self_pay";
+}
+
+function sponsorExecuteUsageLines() {
+  return [
+    "Sponsor execute helper:",
+    "- Required: --api-base <url> --jwt <token>",
+    "- Default flow: reserve -> run --build-cmd -> execute",
+    "- Required unless --dry-run: --build-cmd '<shell command>'",
+    "- Defaults: --purpose marketplace_tx --gas-budget 1000000 --payment-coin iota",
+    "- Optional: --idempotency-key <key> --timeout-ms <ms> --builder-timeout-ms <ms> --reservation-out <file>",
+    "- Build command receives env vars:",
+    "  CLAWNERA_SPONSOR_RESERVATION_JSON",
+    "  CLAWNERA_SPONSOR_RESERVATION_ID",
+    "  CLAWNERA_SPONSOR_API_BASE_URL",
+    "  CLAWNERA_SPONSOR_PURPOSE",
+    "  CLAWNERA_SPONSOR_PAYMENT_COIN",
+    "  CLAWNERA_SPONSOR_GAS_COINS_JSON",
+    "  CLAWNERA_SPONSOR_RESERVATION_FILE (only when --reservation-out is used)",
+    "- Build command must output JSON with fields: txBytesB64, userSig",
+    "- For sponsored IOTA value tx: use user payment coin object for business amount; sponsor coins are gas-only."
+  ];
+}
+
+async function runSponsorExecute(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: sponsorExecuteUsageLines()
+    };
+  }
+
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals
+    };
+  }
+
+  const apiBase = normalizeApiBase(options["api-base"] || process.env.CLAWNERA_API_BASE_URL);
+  if (!apiBase) {
+    return {
+      ok: false,
+      error: "missing_or_invalid_api_base",
+      hint: "set --api-base or CLAWNERA_API_BASE_URL"
+    };
+  }
+
+  const jwt = String(options.jwt || process.env.CLAWNERA_API_JWT || "").trim();
+  if (!jwt) {
+    return {
+      ok: false,
+      error: "missing_jwt",
+      hint: "set --jwt or CLAWNERA_API_JWT"
+    };
+  }
+
+  const purpose = String(options.purpose || "marketplace_tx").trim().toLowerCase();
+  const paymentCoinRaw = options["payment-coin"];
+  const paymentCoin = paymentCoinRaw === undefined ? "iota" : String(paymentCoinRaw).trim().toLowerCase();
+  const dryRun = Boolean(options["dry-run"]);
+  const buildCmd = typeof options["build-cmd"] === "string" ? options["build-cmd"] : "";
+  const reservationOut = typeof options["reservation-out"] === "string" ? options["reservation-out"].trim() : "";
+
+  try {
+    const gasBudget = parsePositiveIntOption(options["gas-budget"], "gas_budget", 1_000_000);
+    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+    const builderTimeoutMs = parsePositiveIntOption(options["builder-timeout-ms"], "builder_timeout_ms", 60_000);
+    const idempotencyKey = typeof options["idempotency-key"] === "string" ? options["idempotency-key"] : randomUUID();
+
+    if (!dryRun && !buildCmd) {
+      return {
+        ok: false,
+        error: "missing_build_cmd",
+        hint: "set --build-cmd '<command>' or use --dry-run"
+      };
+    }
+
+    const reserveBody = {
+      purpose,
+      gasBudget,
+      ...(paymentCoin ? { paymentCoin } : {})
+    };
+
+    const reserveResult = await requestJson(
+      `${apiBase}/sponsor/reserve`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${jwt}`,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify(reserveBody)
+      },
+      timeoutMs
+    );
+
+    if (!reserveResult.ok) {
+      return {
+        ok: false,
+        error: reserveResult.error || "sponsor_reserve_failed",
+        status: reserveResult.status,
+        response: reserveResult.body
+      };
+    }
+
+    if (hasSelfPayFallback(reserveResult.body)) {
+      return {
+        ok: false,
+        error: "sponsor_fallback_self_pay_on_reserve",
+        response: reserveResult.body
+      };
+    }
+
+    const reservation = reserveResult.body?.reservation;
+    const reservationId =
+      reservation && typeof reservation.reservationId === "string" ? reservation.reservationId.trim() : "";
+    if (!reservationId) {
+      return {
+        ok: false,
+        error: "missing_reservation_id",
+        response: reserveResult.body
+      };
+    }
+
+    const safeReservationOut = reservationOut ? path.resolve(repoRoot, reservationOut) : "";
+    if (safeReservationOut) {
+      fs.mkdirSync(path.dirname(safeReservationOut), { recursive: true });
+      fs.writeFileSync(safeReservationOut, JSON.stringify(reserveResult.body, null, 2), { mode: 0o600 });
+      fs.chmodSync(safeReservationOut, 0o600);
+    }
+
+    if (dryRun) {
+      return {
+        ok: true,
+        mode: "dry_run",
+        reservationId,
+        sponsorAddress: reservation?.sponsorAddress || null,
+        reservationOut: safeReservationOut || null
+      };
+    }
+
+    const buildEnv = {
+      ...process.env,
+      CLAWNERA_SPONSOR_RESERVATION_JSON: JSON.stringify(reserveResult.body),
+      CLAWNERA_SPONSOR_RESERVATION_ID: reservationId,
+      CLAWNERA_SPONSOR_API_BASE_URL: apiBase,
+      CLAWNERA_SPONSOR_PURPOSE: purpose,
+      CLAWNERA_SPONSOR_PAYMENT_COIN: paymentCoin || "",
+      CLAWNERA_SPONSOR_GAS_COINS_JSON: JSON.stringify(Array.isArray(reservation?.gasCoins) ? reservation.gasCoins : [])
+    };
+    if (safeReservationOut) {
+      buildEnv.CLAWNERA_SPONSOR_RESERVATION_FILE = safeReservationOut;
+    }
+
+    const built = runBuildCommand(buildCmd, buildEnv, builderTimeoutMs);
+    if (!built.ok || !built.payload) {
+      return {
+        ok: false,
+        error: built.error || "builder_failed",
+        reservationId
+      };
+    }
+
+    const executeResult = await requestJson(
+      `${apiBase}/sponsor/execute`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${jwt}`,
+          "content-type": "application/json",
+          "idempotency-key": idempotencyKey
+        },
+        body: JSON.stringify({
+          reservationId,
+          txBytesB64: built.payload.txBytesB64,
+          userSig: built.payload.userSig
+        })
+      },
+      timeoutMs
+    );
+
+    if (!executeResult.ok) {
+      return {
+        ok: false,
+        error: executeResult.error || "sponsor_execute_failed",
+        status: executeResult.status,
+        response: executeResult.body,
+        reservationId
+      };
+    }
+
+    if (hasSelfPayFallback(executeResult.body)) {
+      return {
+        ok: false,
+        error: "sponsor_fallback_self_pay_on_execute",
+        response: executeResult.body,
+        reservationId
+      };
+    }
+
+    return {
+      ok: true,
+      mode: "execute",
+      reservationId,
+      txDigest: executeResult.body?.execution?.txDigest || null,
+      sponsorAddress: reservation?.sponsorAddress || null
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "sponsor_execute_helper_failed"
+    };
+  }
+}
+
 function parseArgs(argv) {
   const flags = {
     json: false,
@@ -448,7 +866,10 @@ function printJson(payload) {
 
 const { flags, command: parsedCommand, commandArgs } = parseArgs(process.argv.slice(2));
 const topics = loadTopics();
-const aliasCommands = new Map([["list", "topics"]]);
+const aliasCommands = new Map([
+  ["list", "topics"],
+  ["sponsor-run", "sponsor-execute"]
+]);
 const effectiveCommand = aliasCommands.get(parsedCommand) || parsedCommand;
 
 if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand === "--help") {
@@ -456,7 +877,20 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     printJson({
       name: "clawnera-help",
       version: readPackageVersion(),
-      commands: ["help", "topics", "show", "search", "doctor", "path", "first-steps", "validate", "sync", "bootstrap", "version"],
+      commands: [
+        "help",
+        "topics",
+        "show",
+        "search",
+        "doctor",
+        "path",
+        "first-steps",
+        "sponsor-execute",
+        "validate",
+        "sync",
+        "bootstrap",
+        "version"
+      ],
       topics
     });
   } else {
@@ -577,6 +1011,32 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (!result.ok) {
       process.exitCode = 1;
     }
+  }
+} else if (effectiveCommand === "sponsor-execute") {
+  const result = await runSponsorExecute(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    if (result.mode === "dry_run") {
+      console.log(`sponsor_reserve_ok reservation_id=${result.reservationId}`);
+      console.log("dry_run=true execute_step_skipped");
+      if (result.reservationOut) {
+        console.log(`reservation_file=${result.reservationOut}`);
+      }
+    } else {
+      console.log(`sponsor_reserve_ok reservation_id=${result.reservationId}`);
+      console.log(`sponsor_execute_ok tx_digest=${result.txDigest || "unknown"}`);
+    }
+  } else {
+    console.error(`sponsor_execute_helper_error: ${result.error}`);
+    if (result.status) {
+      console.error(`http_status=${result.status}`);
+    }
+    process.exitCode = 1;
   }
 } else if (effectiveCommand === "validate") {
   const validation = validateRepository(flags.strict);

@@ -73,15 +73,27 @@
    - `GET /orders/{orderId}/communication-agreement`
    - `orderId` lokal speichern (es gibt keinen `GET /orders` Listen-Endpunkt).
 
-### 3c) Escrow erstellen & funden (on-chain)
+### 3c) Dispute-Bond initialisieren & funden (vertragsschluss)
 
-1. `POST /bids/{listingId}/accept` erzeugt die Order, aber keine automatische Escrow-Funding-Transaktion.
-2. Buyer erstellt danach Escrow on-chain:
+1. `POST /bids/{listingId}/accept` liefert `disputeBondRequired`, `disputeBondState`, `disputeBondPolicy`.
+2. Bond on-chain initialisieren (direkt nach Accept):
+   - SDK: `buildInitOrderDisputeBondTx`
+   - `bondObjectId` lokal persistieren.
+3. Bond funding:
+   - `POST /orders/{orderId}/dispute-bond/fund` (Tx Plan)
+   - fuer Buyer und Seller jeweils mit demselben `bondObjectId`.
+4. Milestone-Writes sind bis Bond-Ready hart blockiert (`409 dispute_bond_not_active`).
+
+### 3d) Escrow erstellen & funden (on-chain)
+
+1. Buyer erstellt danach Escrow on-chain:
    - klassisch: `buildCreateEscrowIotaTx` oder `buildCreateEscrowClawTx`
    - milestone-basiert: `buildCreateMilestoneEscrowTx`
-3. `escrowObjectId` lokal zusammen mit `orderId` persistieren.
-4. Folge-Calls verwenden dieses `escrowObjectId` (z. B. Dispute/Review/Deadline/Cancel Bodies).
-5. Es gibt keinen dedizierten API-Endpoint "bind escrow to order"; die API validiert Mismatch nur, wenn bereits eine Bindung bekannt ist.
+2. `escrowObjectId` lokal zusammen mit `orderId` persistieren.
+3. Folge-Calls verwenden dieses `escrowObjectId` (z. B. Dispute/Review/Deadline/Cancel Bodies).
+4. Es gibt keinen dedizierten API-Endpoint "bind escrow to order"; die API validiert Mismatch nur, wenn bereits eine Bindung bekannt ist.
+5. Arbeitsstart erst wenn `GET /orders/{orderId}` den Status `IN_PROGRESS` zeigt
+   (Transition nach on-chain Bond+Escrow-Ready durch Reconcile).
 
 ## 4) Delivery + Milestone Flow
 
@@ -122,30 +134,24 @@ Hinweis:
 
 1. Optional Reviewer Onboarding:
    - `POST /reviewers/register` (Tx Plan)
-2. Bond on-chain initialisieren (vor Funding):
-   - SDK: `buildInitOrderDisputeBondTx`
-   - Ergebnis `bondObjectId` lokal persistieren.
-3. Bond funding:
-   - `POST /orders/{orderId}/dispute-bond/fund` (Tx Plan)
-   - benoetigt das vorhandene `bondObjectId`.
-4. Case open:
+2. Case open:
    - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` (Tx Plan)
    - Precondition: Milestone ist bereits `REJECTED` oder `DISPUTED`.
-5. Voting:
+3. Voting:
    - `POST /disputes/{disputeCaseId}/reviewers/accept`
    - `POST /disputes/{disputeCaseId}/votes/commit`
    - `POST /disputes/{disputeCaseId}/votes/reveal`
    - `reviewers/accept` ist fuer Buyer/Seller gesperrt (`party_cannot_accept_reviewer_slot`).
-6. Falls noetig:
+4. Falls noetig:
    - reviewer replace: `POST /disputes/{disputeCaseId}/reviewers/replace`
    - finalize: `POST /disputes/{disputeCaseId}/finalize`
    - fallback resolve/timeout: `POST /disputes/{disputeCaseId}/fallback/*`
    - `fallback/resolve` ist Break-glass und bei gesetzter Admin-Adresse effektiv admin-only.
    - `finalize`, `fallback/timeout` und `resolve-escrow` sind API-seitig primär capability-gated
      (nicht strikt auf Buyer/Seller eingegrenzt), daher Capability-Scope bewusst eng halten.
-7. Escrow final aufloesen:
+5. Escrow final aufloesen:
    - `POST /disputes/{disputeCaseId}/resolve-escrow`
-8. Optionaler DB-only Notfallpfad:
+6. Optionaler DB-only Notfallpfad:
    - `POST /orders/{orderId}/mark-disputed` (nur wenn Runtime `enableManualDispute=true`).
 
 Wichtig:

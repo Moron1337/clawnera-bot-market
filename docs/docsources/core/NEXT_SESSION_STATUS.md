@@ -117,6 +117,24 @@
 - [x] Evidenz:
   - `docs/reports/anchor-timeout-threshold-tuning-20260304.md`
 
+## Status Update (2026-03-04, Security-Cutover vorbereitet - Safe-Mode ohne Rotation)
+- [x] Neues Prep-Tool erstellt:
+  - `scripts/ops/prepare_security_cutover.sh`
+  - Zweck: nur Preflight + exakter Execute-Plan, **keine** Secret-Write-Aktion.
+- [x] Preflight-Checks erfolgreich:
+  - lokale Secret-Dateien vorhanden/nicht leer (`BOT_LISTING_API_KEY`, `GAS_STATION_AUTH`, `ADMIN_ADDRESS`, `MANAGED_STORAGE_PINATA_JWT`, `CLOUDFLARE_API_TOKEN`)
+  - Cloudflare Auth (`wrangler whoami`) ok
+  - API-Health/Smoke (`/health`, `/ready`, `/listings`, `/policy/fees`, `/capabilities`) jeweils `200`
+  - Hetzner SSH + relevante Gas-Station-Pfade erreichbar
+- [x] Window-Execute-Plan vorbereitet (ausgegeben durch Prep-Script):
+  - Rotation-Reihenfolge: `BOT_LISTING_API_KEY` -> `GAS_STATION_AUTH` -> `ADMIN_ADDRESS` -> `MANAGED_STORAGE_PINATA_JWT`
+  - danach `sync_bot_listing_key.sh` (`TARGETS=prod SYNC_SYNTHETIC_ENV=1`)
+  - danach Gas-Station-Verifikation auf Hetzner + finaler `preflight_mainnet_readiness.sh`
+- [x] Evidenz:
+  - `docs/reports/security-cutover-prep-20260304.md`
+- [ ] Bewusst offen gelassen:
+  - eigentliche Rotation/Execute wird erst im Startfenster ausgefuehrt, um Lockout-Risiko zu minimieren.
+
 ## Status Update (2026-03-04, TASK-SP-205 orderId-Transition fuer Sponsor-Flow umgesetzt)
 - [x] `TASK-SP-205` umgesetzt:
   - Neue Runtime-Policy: `SPONSOR_ORDER_ID_MODE=optional|required` (Default `optional`).
@@ -666,7 +684,7 @@
 
 ### P1 - Stabilitaet und Betrieb
 - [x] Monitoring-Thresholds fuer Anchor/Timeouts nach 24-48h Produktionsfenster final tunen. **(2026-03-04, siehe `docs/reports/anchor-timeout-threshold-tuning-20260304.md`)**
-- [ ] Security-Cutover ausfuehren (produktive Secrets rotieren + Post-Rotation-Verify). *(Tooling: `rotate_secrets_with_verify.sh` bereit)*
+- [ ] Security-Cutover ausfuehren (produktive Secrets rotieren + Post-Rotation-Verify). *(2026-03-04 vorbereitet via `scripts/ops/prepare_security_cutover.sh`; Execute bewusst erst im Startfenster)*
 - [x] Release-Gates in CI/Deploy verankern, damit die Test-/Abnahme-Reihenfolge nicht manuell vergessen werden kann. **(2026-03-02, config-drift in CI + release_gate_predeploy)**
 
 ### P2 - Deferred (bis CLAW-Payment aktiviert wird; Marketing-Gasless hat eigene P0-Blocker)

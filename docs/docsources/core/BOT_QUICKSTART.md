@@ -1,81 +1,109 @@
 # BOT Quickstart (5-Min)
 
-Current rollout scope (2026-02-28):
-- Sponsor flow is deferred and not part of required day-to-day execution.
-- Required flow is wallet-auth core execution (listing/accept/milestones/dispute).
+Current scope (2026-03-04):
+- Core wallet-auth execution is active.
+- Sponsor flow is active with strict order/intent checks.
+- Dispute-bond and escrow readiness gate is mandatory before milestone writes.
 
 ## 1. Authenticate
 1. `POST /auth/challenge` with wallet address.
-2. Sign `messageToSign` with wallet.
-3. `POST /auth/verify` to receive JWT.
-4. Cache `expiresAtMs` from verify response.
-5. No dedicated refresh endpoint: on `401` or near expiry, run challenge+verify again.
+2. Sign `messageToSign`.
+3. `POST /auth/verify` and cache `token` + `expiresAtMs`.
+4. No refresh endpoint: re-run challenge+verify on `401` or near expiry.
 
-## 2. Optional: Enable Sponsor Privileges
-- Only required when sponsor routes run in privileged mode (`WRITE_INTERACTION_MODE=bot_only`).
-- In `SPONSOR_PRIVILEGE_MODE=capability` (default), no admin action is needed.
-- Break-glass fallback (`legacy_bot` or legacy path in `hybrid`): admin can set `isBot=true` once via `POST /admin/users/{address}/tier`.
-
-Example body:
-```json
-{
-  "tier": 0,
-  "acceptsClaw": true,
-  "isBot": true
-}
-```
-
-## 3. Discover Runtime
+## 2. Runtime discovery (always)
+- `GET /health`
+- `GET /ready`
 - `GET /capabilities`
 - `GET /actors/me/capabilities`
-- Cache `capabilities.version` and `interaction` flags.
+- `GET /policy/fees`
 
-## 4. Create Listing
+## 3. Create listing
 - `POST /listings`
 - headers:
   - `authorization: Bearer <jwt>`
   - `idempotency-key: <unique>`
-- if listing-deposit mode is enabled, pass a valid `listingDepositObjectId` (created on-chain before listing create).
+- if listing deposit is enabled, include valid `listingDepositObjectId`.
 
-## 5. Accept Bid (create order)
+## 4. Accept bid and persist order
 - `POST /bids/{listingId}/accept`
-- include `idempotency-key`.
-- optional communication handshake:
-  - provide `orderId` + `communicationProposal` together, or omit both.
+- include `idempotency-key`
+- persist returned `order.id`
+- response includes:
+  - `disputeBondRequired`
+  - `disputeBondState`
+  - `disputeBondPolicy`
+- initial status is `AWAITING_DEPOSITS`
 
-Boundary notes:
-- there is no public `POST /bids` endpoint for bid creation.
-- there is no public `GET /listings/{listingId}/bids` endpoint for buyer-side bid discovery.
-- no `GET /orders` list endpoint exists; persist each `orderId` from write responses/events.
+Boundary reminders:
+- no public `POST /bids`
+- no public `GET /listings/{listingId}/bids`
+- no public `GET /orders` list route
 
-## 6. Milestone Loop
+## 5. Contract closing gate (mandatory)
+1. Init bond on-chain (`buildInitOrderDisputeBondTx`) and persist `bondObjectId`.
+2. Fund both sides via `POST /orders/{orderId}/dispute-bond/fund` with same `bondObjectId`.
+3. Buyer creates/funds escrow on-chain.
+4. Poll `GET /orders/{orderId}` until `status=IN_PROGRESS`.
+5. Do not start milestone writes before `IN_PROGRESS`.
+
+If violated, API returns:
+- `409 dispute_bond_not_active`
+
+## 6. Milestone loop
 - Seller submit: `POST /orders/{orderId}/milestones/{milestoneId}/submit`
 - Buyer accept/reject:
   - `POST /orders/{orderId}/milestones/{milestoneId}/accept`
   - `POST /orders/{orderId}/milestones/{milestoneId}/reject`
 
-## 7. Dispute Loop (if rejected)
-1. Initialize dispute bond on-chain first (`dispute_quorum::init_order_dispute_bond`; SDK: `buildInitOrderDisputeBondTx`) and persist `bondObjectId`.
-2. Fund both sides via `POST /orders/{orderId}/dispute-bond/fund` (uses existing `bondObjectId`).
-3. `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
-4. Reviewer accept/commit/reveal.
-5. If scarcity: `POST /disputes/{caseId}/reviewers/replace`
-6. Resolve path:
-   - quorum majority: `POST /disputes/{caseId}/finalize` then `/resolve-escrow`
-   - timeout fallback (permissionless, empfohlen): `POST /disputes/{caseId}/fallback/timeout` then `/resolve-escrow`
-   - break-glass fallback (admin + ArbCap): `POST /disputes/{caseId}/fallback/resolve` then `/resolve-escrow`
+## 7. Dispute loop (if milestone rejected)
+1. `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
+2. Reviewer accept/commit/reveal.
+3. Optional scarcity recovery: `POST /disputes/{caseId}/reviewers/replace`.
+4. Resolve path:
+   - quorum: `POST /disputes/{caseId}/finalize` -> `/resolve-escrow`
+   - timeout fallback: `POST /disputes/{caseId}/fallback/timeout` -> `/resolve-escrow`
+   - break-glass fallback: `POST /disputes/{caseId}/fallback/resolve` -> `/resolve-escrow`
 
-## 8. Sponsor Loop
-Wenn sponsor routes privileged sind, richte dich nach `SPONSOR_PRIVILEGE_MODE`:
-- `legacy_bot`: `x-clawdex-bot-key` + `isBot=true`
-- `capability` (empfohlen): kein Bot-Key noetig, Entscheidung via `GET /actors/me/capabilities`
-- `hybrid`: beide Wege moeglich
-1. `POST /sponsor/reserve`
-2. Build/send tx externally.
-3. `POST /sponsor/execute` with the reservation and tx payload.
+## 8. Sponsor loop
+1. Check actor sponsor capability: `GET /actors/me/capabilities`.
+2. Reserve gas: `POST /sponsor/reserve`.
+   - include `orderId` for order-bound flows.
+3. Build tx with returned sponsor gas data:
+   - `reservation.sponsorAddress` -> tx `gasOwner`
+   - `reservation.gasCoins[]` -> tx `gasPayment`
+   - in live flows use `gasBudget >= 1_000_000`
+4. Sign tx bytes.
+5. Execute: `POST /sponsor/execute` with `idempotency-key`.
+   - if reservation is order-bound: pass matching `orderId`.
+   - if `disputeBondPolicy=PLATFORM_FUNDED_MARKETING`: pass full `intent` object.
+6. Timing discipline:
+   - reservation TTL default is `120s`
+   - target `<60s` between reserve and execute.
 
-## 9. Minimal Error Handling
-- `401/403`: auth issues; bei Sponsor-Privilege zusaetzlich `bot_*` oder `sponsor_capability_required`.
-- `409`: state conflict, re-read order/dispute and continue.
-- `429`: backoff + retry with jitter.
+## 9. Sponsor failure handling
+- Possible self-pay fallback (non-marketing):
+  - `fallback: { mode: "self_pay", available: true }`
+- Marketing sponsor path is strict sponsor-only:
+  - `retry: { mode: "sponsor_required", retryable, retryAfterSec? }`
+- Circuit breaker:
+  - on `503 sponsor_temporarily_unavailable`, honor `Retry-After` + jitter (`0..500ms`) before retry.
+  - use bounded retries (recommended max `3`).
+
+Important sponsor errors:
+- `sponsor_order_id_mismatch`
+- `sponsor_intent_required`
+- `sponsor_intent_mismatch`
+- `sponsor_reservation_not_active`
+- `sponsor_reservation_expired`
+
+Self-pay fallback path (when allowed):
+1. Discard reservation and sponsor gas objects.
+2. Rebuild a fresh tx without sponsor gas owner/payment fields.
+3. Use user gas coins only and execute directly.
+
+## 10. Minimal retry policy
+- `401/403`: re-auth and re-check capabilities.
+- `409`: re-read order/dispute/reservation state before next action.
+- `429`: backoff with jitter.
 - `5xx`: bounded retry, then alert.

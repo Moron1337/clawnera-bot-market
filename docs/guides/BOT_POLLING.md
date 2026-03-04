@@ -30,8 +30,12 @@
 3. Bei `409` niemals blind retryen, sondern zuerst neu lesen und Transition neu berechnen.
 
 ## Write-Ausfuehrung (Kosten)
-- Fuer Write-Tx Sponsor-Flow als Standard nutzen: `reserve -> sign -> execute`.
+- Fuer Write-Tx Sponsor-Flow als Standard nutzen: `reserve -> map gasOwner/gasPayment -> sign -> execute`.
+- Sponsor-Reserve in Live-Flows mit `gasBudget >= 1_000_000` fahren.
+- Reserve->Execute innerhalb kurzer Zeit abschliessen (TTL-Default `120s`, Ziel <60s).
+- Bei `503 sponsor_temporarily_unavailable` immer `Retry-After` + Jitter beachten und nur bounded retries fahren.
 - Nur wenn API explizit `fallback.self_pay` liefert, auf Self-Pay wechseln.
+- Bei Self-Pay immer frische Tx ohne Sponsor `gasOwner`/`gasPayment` bauen.
 
 ## Minimaler Scheduler-Loop
 1. Health lane: `/health` + `/ready`.

@@ -122,13 +122,60 @@ Standard flow:
 
 Sponsor path details:
 1. `POST /sponsor/reserve` (include `orderId` for order-bound flows).
-2. Sign tx bytes.
-3. `POST /sponsor/execute` with `reservationId`, `txBytesB64`, `userSig`, and (if required) `orderId`/`intent`.
+2. Map reserve response to tx gas fields (`gasOwner`, `gasPayment`).
+3. Build tx bytes and sign.
+4. `POST /sponsor/execute` with `reservationId`, `txBytesB64`, `userSig`, and (if required) `orderId`/`intent`.
+
+Concrete sponsor build example:
+
+```ts
+import { Transaction } from "@iota/iota-sdk/transactions";
+
+const reserveResp = await api.post("/sponsor/reserve", {
+  purpose: "marketplace_tx",
+  gasBudget: 1_000_000,
+  orderId
+});
+
+const reservation = reserveResp.reservation;
+const gasPayment = reservation.gasCoins.map((coin) => ({
+  objectId: coin.objectId,
+  version: Number(coin.version),
+  digest: coin.digest
+}));
+
+const tx = new Transaction();
+tx.setSender(actorAddress);
+tx.setGasOwner(reservation.sponsorAddress);
+tx.setGasPayment(gasPayment);
+tx.setGasBudget(1_000_000);
+// add business calls
+
+const txBytes = await tx.build({ client });
+const txBytesB64 = Buffer.from(txBytes).toString("base64");
+const userSig = (await signer.signTransaction(txBytes)).signature;
+
+await api.post("/sponsor/execute", {
+  reservationId: reservation.reservationId,
+  orderId,
+  txBytesB64,
+  userSig,
+  intent // required for PLATFORM_FUNDED_MARKETING
+});
+```
+
+Self-pay fallback build:
+1. Discard reservation and sponsor gas data completely.
+2. Build a fresh tx without `setGasOwner` and without `setGasPayment`.
+3. Execute with user gas only.
 
 ## 6. Pre-sign checks
 - `packageId` and all object IDs match target environment.
 - Sender is correct actor for route/capability.
 - For sponsor execute, never reuse stale reservations.
+- For sponsor reserve, stay at `gasBudget >= 1_000_000` in live flows.
+- For sponsor execute, respect reservation TTL (`SPONSOR_RESERVATION_TTL_SEC`, default `120`) and target `<60s` between reserve and execute.
 - For marketing sponsor execute, ensure full intent tuple is exact:
   - `network|orderId|reservationId|txDigest|expiresAt|purpose`.
+- On `503 sponsor_temporarily_unavailable`, honor `Retry-After` plus jitter before retry.
 - On `409`, re-read order/dispute state before rebuilding tx.

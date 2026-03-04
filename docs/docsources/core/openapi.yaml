@@ -757,10 +757,16 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [order]
+                required: [order, disputeBondRequired, disputeBondState, disputeBondPolicy]
                 properties:
                   order:
                     $ref: "#/components/schemas/Order"
+                  disputeBondRequired:
+                    type: boolean
+                  disputeBondState:
+                    $ref: "#/components/schemas/OrderDisputeBondState"
+                  disputeBondPolicy:
+                    $ref: "#/components/schemas/OrderDisputeBondPolicy"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -3038,7 +3044,7 @@ components:
       properties:
         purpose:
           type: string
-          enum: [claw_payment, bond, onboarding]
+          enum: [claw_payment, bond, onboarding, marketplace_tx]
         gasBudget:
           type: integer
           minimum: 1
@@ -3249,7 +3255,27 @@ components:
         amount:
           type: string
           pattern: "^[0-9]+$"
+        marketingFundingCapObjectId:
+          type: string
+        marketingFundingCustodyProof:
+          $ref: "#/components/schemas/MarketingFundingCustodyProofRequest"
         clockObjectId:
+          type: string
+    MarketingFundingCustodyProofRequest:
+      type: object
+      additionalProperties: false
+      required: [jobId, approvalMode, approverA, approverB]
+      properties:
+        jobId:
+          type: string
+          minLength: 3
+          maxLength: 160
+        approvalMode:
+          type: string
+          enum: [four_eyes, multisig_2of3]
+        approverA:
+          type: string
+        approverB:
           type: string
     DisputeOpenRequest:
       type: object
@@ -3751,10 +3777,27 @@ components:
         createdAt:
           type: string
           format: date-time
+    OrderDisputeBondPolicy:
+      type: string
+      enum: [DUAL_BOND_REQUIRED, PLATFORM_FUNDED_MARKETING]
+    OrderDisputeBondState:
+      type: string
+      enum: [PENDING, ACTIVE, CANCELED]
     Order:
       type: object
       required:
-        [id, listingId, buyerAddress, sellerAddress, amount, currency, status, createdAt]
+        [
+          id,
+          listingId,
+          buyerAddress,
+          sellerAddress,
+          amount,
+          currency,
+          disputeBondPolicy,
+          disputeBondState,
+          status,
+          createdAt
+        ]
       properties:
         id:
           type: string
@@ -3775,12 +3818,23 @@ components:
           type: string
         escrowObjectId:
           type: string
+        disputeBondObjectId:
+          type: string
+        disputeBondPolicy:
+          $ref: "#/components/schemas/OrderDisputeBondPolicy"
+        disputeBondState:
+          $ref: "#/components/schemas/OrderDisputeBondState"
+        disputeBondActivatedAt:
+          type: string
+          format: date-time
+        marketingCampaignId:
+          type: string
         deadlineMs:
           type: integer
           format: int64
         status:
           type: string
-          enum: [AWAITING_ESCROW, IN_PROGRESS, DISPUTED, COMPLETED, CANCELLED]
+          enum: [AWAITING_DEPOSITS, IN_PROGRESS, DISPUTED, COMPLETED, CANCELLED]
         createdAt:
           type: string
           format: date-time
@@ -4634,7 +4688,7 @@ components:
           enum: [IOTA, CLAW]
         status:
           type: string
-          enum: [AWAITING_ESCROW, IN_PROGRESS, DISPUTED, COMPLETED, CANCELLED]
+          enum: [AWAITING_DEPOSITS, IN_PROGRESS, DISPUTED, COMPLETED, CANCELLED]
         escrowObjectId:
           type: string
         createdAt:

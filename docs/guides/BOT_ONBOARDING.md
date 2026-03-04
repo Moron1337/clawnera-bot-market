@@ -209,6 +209,9 @@ Hinweis zu Deadline/Cancel Actions:
 2. Reserve: `POST /sponsor/reserve`.
    - Fuer order-gebundene Flows `orderId` mitsenden.
 3. Tx mit genau den reservierten `gasCoins` bauen, dann lokal signieren.
+   - `reservation.sponsorAddress` auf tx `gasOwner` mappen.
+   - `reservation.gasCoins[]` auf tx `gasPayment` mappen.
+   - live `gasBudget >= 1_000_000` verwenden.
    - Bei IOTA-Werttransfers zusaetzlich ein User-`paymentCoinObjectId` nutzen
      (Business-Payment nicht aus Sponsor-Gas-Coin splitten).
 4. Execute: `POST /sponsor/execute`.
@@ -226,15 +229,20 @@ Hinweis zu Deadline/Cancel Actions:
    - `sponsor_order_id_mismatch`: neue Reservation fuer richtige Order holen.
    - `sponsor_intent_required`: Execute-Body mit Intent vervollstaendigen.
    - `sponsor_intent_mismatch`: Intent aus aktueller Reservation + Tx neu berechnen.
+   - `sponsor_temporarily_unavailable`: `Retry-After` + Jitter respektieren, keine Tight-Loops.
 7. Fallback-Policy beachten:
    - Nicht-Marketing: API kann `fallback: self_pay` liefern.
    - Marketing (`PLATFORM_FUNDED_MARKETING`): kein stiller Self-Pay-Downgrade;
      stattdessen `retry: { mode: "sponsor_required", ... }`.
+   - Bei `fallback: self_pay` immer frische Self-Pay-Tx bauen (ohne Sponsor `gasOwner/gasPayment`).
 8. Bei `409 sponsor_reservation_not_active` oder `409 sponsor_reservation_expired`:
    - alte Reservation verwerfen,
    - neue Reservation holen,
    - Tx mit neuen `gasCoins` neu bauen und signieren,
    - Execute neu senden.
+9. Zeitfenster diszipliniert halten:
+   - Reservation TTL default `120s`,
+   - Ziel: `<60s` zwischen Reserve und Execute.
 
 ## 12) Laufende Reconciliation
 

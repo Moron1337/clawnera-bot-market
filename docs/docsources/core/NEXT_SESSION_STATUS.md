@@ -1,5 +1,121 @@
 # Next Session Status (2026-02-27)
 
+## Status Update (2026-03-04, Sponsor-Dokumentation finalisiert + Bot-Guides synchronisiert)
+- [x] Sponsor-Dokumentation fuer Bot-Integrationen finalisiert:
+  - `docs/SPONSOR_POLICY.md`: Reserve-Response -> `gasOwner`/`gasPayment` Mapping, Circuit-Breaker Retry-Disziplin, Self-Pay-Rebuild.
+  - `docs/SDK_USAGE.md`: konkreter Sponsor-Tx-Build-Flow inkl. `setGasOwner`/`setGasPayment` und Self-Pay-Fallback-Build.
+  - `docs/API_REFERENCE.md`, `docs/BOT_QUICKSTART.md`, `docs/BOT_PROTOCOL_V1.md`: Live-Constraints (`gasBudget >= 1_000_000`, TTL `120s`, `<60s` Ziel), `503 sponsor_temporarily_unavailable` + `Retry-After`.
+- [x] Security-Backlog-Checkboxen abgeschlossen:
+  - Sponsor TX-Build-Anleitung
+  - Sponsor Circuit-Breaker-Verhalten
+  - Sponsor Gas-Budget-Minimum
+  - Sponsor Reservation-TTL
+  - Self-Pay-Fallback TX-Build-Anleitung
+- [x] Verifikation (2026-03-04):
+  - `corepack pnpm --filter @clawdex/api typecheck` -> PASS.
+  - `corepack pnpm --filter @clawdex/api lint` -> PASS.
+  - `corepack pnpm --filter @clawdex/api test` -> `24 passed | 3 skipped` files, `287 passed | 3 skipped` tests.
+  - On-chain:
+    - `corepack pnpm dispute-quorum:onchain:e2e:testnet` abgeschlossen; Report:
+      - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T172613926Z.json`
+      - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T172613926Z.md`
+    - Erwartete externe Blocker unveraendert:
+      - `reviewer_prequalified_keys_required`
+      - `arb_signer_required_for_platform_fallback`.
+
+## Status Update (2026-03-04, Sponsor Abuse/Quota-KPIs in produktive SLO aufgenommen)
+- [x] Sponsor-Abuse/Quota KPIs in die produktive SLO-Definition integriert:
+  - Dashboard-SLO erweitert um:
+    - `sponsorAbuseLimitedCount`
+    - `sponsorDailyQuotaExceededCount`
+  - Neue Dashboard-Alert-Thresholds:
+    - `DASHBOARD_ALERT_SPONSOR_ABUSE_LIMITED_THRESHOLD` (default `5`)
+    - `DASHBOARD_ALERT_SPONSOR_DAILY_QUOTA_EXCEEDED_THRESHOLD` (default `3`)
+  - Neue Dashboard-Alert-IDs:
+    - `sponsor.abuse_limited.spike`
+    - `sponsor.daily_quota_exceeded.spike`
+- [x] Prometheus/Grafana-Pipeline um produktive Sponsor-KPIs erweitert:
+  - Collector exportiert jetzt:
+    - `clawdex_sponsor_abuse_limited_5m`
+    - `clawdex_sponsor_daily_quota_exceeded_5m`
+  - Neue Prometheus-Alerts:
+    - `ClawdexSponsorAbuseLimitedSpike`
+    - `ClawdexSponsorDailyQuotaExceededSpike`
+  - Runbooks/Routing aktualisiert:
+    - `docs/OBSERVABILITY_DASHBOARD_RUNBOOK.md`
+    - `docs/OBSERVABILITY_PROMETHEUS_GRAFANA_RUNBOOK.md`
+    - `docs/ALERT_ROUTING_MATRIX.md`
+- [x] Verifikation (2026-03-04):
+  - `corepack pnpm --filter @clawdex/api lint` -> PASS.
+  - `corepack pnpm --filter @clawdex/api typecheck` -> PASS.
+  - `corepack pnpm --filter @clawdex/api test` -> `24 passed | 3 skipped` files, `287 passed | 3 skipped` tests.
+  - On-chain:
+    - `corepack pnpm dispute-quorum:onchain:e2e:testnet` abgeschlossen; Report:
+      - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T170813713Z.json`
+      - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T170813713Z.md`
+    - Erwartete externe Blocker unveraendert:
+      - `reviewer_prequalified_keys_required`
+      - `arb_signer_required_for_platform_fallback`.
+
+## Status Update (2026-03-04, Sponsor-Capability-Engine + Route-Cutover umgesetzt)
+- [x] Sponsor-Capability-Engine wieder aufgenommen:
+  - `GET /actors/me/capabilities` liefert jetzt Sponsor-Entscheidung mit:
+    - Quota (`usage/caps/remaining/exhausted`)
+    - Revocation-Status (`active/reason/suspendedUntil`)
+    - Fast-Lane-Policy (`minTier`, `rateLimitBps`).
+  - Neue Runtime-Parameter:
+    - `SPONSOR_FAST_LANE_MIN_TIER`
+    - `SPONSOR_FAST_LANE_RATE_LIMIT_BPS`
+    - `SPONSOR_CAPABILITY_AUTO_REVOKE_SEC`.
+- [x] Sponsor-Routen auf finales Capability-Modell produktiv gezogen:
+  - `/sponsor/reserve` und `/sponsor/execute` nutzen Capability-Entscheidung inkl. Quota-/Revocation-Gates.
+  - Fast-Lane wirkt jetzt zusaetzlich als Rate-Limit-Multiplikator.
+  - Auto-Revocation wird bei Abuse-Limit und Daily-Quota-Exhaust gesetzt und als `autoRevokedUntil` zurueckgegeben.
+  - `/admin/sponsor/circuit` zeigt aktive Auto-Revocations + Capability-Policy.
+- [x] Verifikation (2026-03-04):
+  - `corepack pnpm --filter @clawdex/api lint` -> PASS.
+  - `corepack pnpm --filter @clawdex/api typecheck` -> PASS.
+  - `corepack pnpm --filter @clawdex/api test` -> `24 passed | 3 skipped` files, `286 passed | 3 skipped` tests.
+  - On-chain:
+    - `corepack pnpm dispute-quorum:onchain:e2e:testnet` abgeschlossen; Report:
+      - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T165501444Z.json`
+      - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T165501444Z.md`
+    - Erwartete externe Blocker unveraendert:
+      - `reviewer_prequalified_keys_required`
+      - `arb_signer_required_for_platform_fallback`.
+
+## Status Update (2026-03-04, Dispute-Bond Gate + Lifecycle Hardening umgesetzt)
+- [x] `TASK-DQ-101` umgesetzt:
+  - Milestone-Writes (`submit|accept|reject`) blockieren hart ohne aktiven Bond mit
+    `409 dispute_bond_not_active` (`required`, `state`, `nextAction`).
+  - `POST /bids/{listingId}/accept` liefert jetzt `disputeBondRequired`, `disputeBondState`, `disputeBondPolicy`.
+- [x] `TASK-DQ-102` umgesetzt:
+  - Order-Lifecycle auf `AWAITING_DEPOSITS` migriert.
+  - Neue Bond-Felder in `orders`: policy/state/activated_at/marketing_campaign_id/dispute_bond_object_id.
+  - Migrationen hinzugefuegt: `apps/api/db/0010_order_dispute_bond_object_id.sql`,
+    `apps/api/db/0011_order_dispute_bond_lifecycle.sql`.
+  - Read-Model fuer `GET /orders/{id}` + `GET /orders/{id}/timeline` auf Bond-Metadaten erweitert.
+- [x] `TASK-DQ-103` umgesetzt:
+  - on-chain Helper `verifyOrderDisputeBondReady` aktiv im Write-Gate.
+  - Bond-State-Drift-Sync in Worker eingebaut (DB <-> on-chain), inkl. Audit bei Mismatch.
+  - Reconcile setzt `IN_PROGRESS` nur bei Bond `ACTIVE` + vorhandenem Escrow.
+- [x] `TASK-DQ-104` umgesetzt:
+  - Doku angepasst: `docs/BOT_QUICKSTART.md`, `docs/BOT_PROTOCOL_V1.md`,
+    `/home/codex/clawnera-bot-market/docs/guides/BOT_ONBOARDING.md`.
+  - OpenAPI angepasst (`apps/api/openapi.yaml`): `AWAITING_DEPOSITS`, neue Order-Bond-Felder,
+    erweiterte Accept-Response.
+- [x] `TASK-DQ-209` geschlossen:
+  - Status-Derivation setzt `IN_PROGRESS` nicht indirekt ueber Milestone-Refresh.
+  - Gate bleibt `AWAITING_DEPOSITS` bis Bond+Escrow ready verifiziert sind.
+- [x] Verifikation:
+  - `corepack pnpm --filter @clawdex/api test` -> `256 passed`.
+  - `corepack pnpm --filter @clawdex/api lint` -> PASS.
+  - `corepack pnpm --filter @clawdex/api typecheck` -> PASS.
+  - On-chain E2E Smoke:
+    - `CLAWDEX_BOT_LISTING_API_KEY=<secret> corepack pnpm order-full-2p-onchain:e2e:testnet`
+    - Ergebnis `ok=true`, `listingId=13a4583a-2a5e-4110-ba5a-34511b9a6afb`,
+      `orderId=5a536dcb-3e4c-40af-9221-7cab0b2aed6e`, final `DISPUTED`.
+
 ## Status Update (2026-03-03, Dispute-Quorum Default-Testnet Recut + ABI-Adaptive E2E)
 - [x] Neue Testnet-Revision fuer `claw_marketplace` publiziert:
   - Publish Tx: `Ki1mDGBd1D59Ejt7L2ySo9wUdsRcGtGnMCMpuiBeRb8`
@@ -410,16 +526,55 @@
 - [ ] Security-Cutover ausfuehren (produktive Secrets rotieren + Post-Rotation-Verify). *(Tooling: `rotate_secrets_with_verify.sh` bereit)*
 - [x] Release-Gates in CI/Deploy verankern, damit die Test-/Abnahme-Reihenfolge nicht manuell vergessen werden kann. **(2026-03-02, config-drift in CI + release_gate_predeploy)**
 
-### P2 - Deferred (bis CLAW-Payment aktiviert wird)
-- [ ] Sponsor-Capability-Engine (`canSponsor`, Quota/Fast-Lane, Auto-Revocation) wieder aufnehmen.
-- [ ] Sponsor-Routen (`/sponsor/reserve`, `/sponsor/execute`) auf finales Capability-Modell produktiv cutovern.
-- [ ] Sponsor-spezifische Abuse/Quota-KPIs in die produktive SLO-Definition aufnehmen.
+### P2 - Deferred (bis CLAW-Payment aktiviert wird; Marketing-Gasless hat eigene P0-Blocker)
+- [x] Sponsor-Capability-Engine (`canSponsor`, Quota/Fast-Lane, Auto-Revocation) wieder aufnehmen. **(2026-03-04)**
+- [x] Sponsor-Routen (`/sponsor/reserve`, `/sponsor/execute`) auf finales Capability-Modell produktiv cutovern. **(2026-03-04)**
+- [x] Sponsor-spezifische Abuse/Quota-KPIs in die produktive SLO-Definition aufnehmen. **(2026-03-04)**
+- [x] Sponsor TX-Build-Anleitung fuer Bots formalisieren: **(2026-03-04)**
+  - Reserve-Response liefert `gasCoins`/`gasOwner`/`gasPayment`; Bot muss diese in `TransactionData` einbauen.
+  - Konkreter Ablauf: Reserve → Response parsen → TX mit Sponsor-Gas-Objekten bauen → User-Sign → Execute.
+  - Realer Mainnet-Bug (2026-02) war: TX ohne korrekte `gasOwner`/`gasPayment` gebaut → Execute fehlgeschlagen.
+  - Doku-Ziel: neue Dateien `docs/SPONSOR_POLICY.md` + `docs/SDK_USAGE.md` anlegen und in `docs/BOT_PROTOCOL_V1.md` verlinken.
+- [x] Sponsor Circuit-Breaker-Verhalten in Bot-Docs aufnehmen: **(2026-03-04)**
+  - Bereits implementiert: bei Gas-Station-Ausfall liefern `/sponsor/reserve` und `/sponsor/execute` `503 sponsor_temporarily_unavailable` + `Retry-After` Header.
+  - SPONSOR_POLICY.md Failure-Sektion um `sponsor_temporarily_unavailable` + `Retry-After` Handling erweitern.
+  - BOT_PROTOCOL_V1.md §8 Retry Discipline um Circuit-Breaker-spezifisches Backoff ergaenzen.
+- [x] Sponsor Gas-Budget-Minimum dokumentieren: **(2026-03-04)**
+  - Gas-Station hat Mindest-`gasBudget` (aktuell `1_000_000`).
+  - `SponsorReserveRequest.gasBudget` unter diesem Wert fuehrt zu Reserve-Fehler.
+  - In `docs/SPONSOR_POLICY.md` und `docs/API_REFERENCE.md` (neu) aufnehmen.
+- [x] Sponsor Reservation-TTL konkret dokumentieren: **(2026-03-04)**
+  - `SPONSOR_RESERVATION_TTL_SEC` Default `120` (2 Minuten).
+  - SPONSOR_POLICY.md sagt nur "TTL kurz"; konkreten Wert oder Groessenordnung fuer Bots angeben.
+  - Bot-Empfehlung: Reserve und Execute innerhalb von <60s ausfuehren, nie alte Reservationen cachen.
+- [x] Self-Pay-Fallback TX-Build-Anleitung fuer Bots: **(2026-03-04)**
+  - Bei `fallback: self_pay` muss Bot TX **komplett neu** ohne Sponsor-Gas-Objekte bauen (eigene Gas-Coins).
+  - Konkreter Ablauf: Reserve fehlgeschlagen/fallback → TX mit eigenem Gas-Coin bauen → selbst signieren → `client.executeTransactionBlock()`.
+  - Wichtig: Payment-Coin und Gas-Coin sauber trennen (nie Sponsor-Gas-Coin fuer Business-Payment missbrauchen).
+  - In `docs/SPONSOR_POLICY.md` und `docs/BOT_QUICKSTART.md` als "Fallback-Pfad" Unterabschnitt dokumentieren.
+- [ ] `TASK-SP-205` Schema-Migration: `SponsorReserveRequest.orderId` Backward-Compatibility:
+  - Wenn `orderId` als Pflichtfeld eingefuehrt wird, bricht das bestehende Bots die kein `orderId` senden.
+  - Migrationsstrategie definieren: optionales Feld → Pflichtfeld mit Uebergangsfrist, oder API-Version.
+  - OpenAPI + clawnera-bot-market Docs rechtzeitig vor Cutover aktualisieren.
+- [x] Sponsor-Quota-Visibility fuer Bots: **(2026-03-04, via `GET /actors/me/capabilities`)**
+  - Bots brauchen vor Reserve einen Weg, ihr verbleibendes Sponsor-Budget/Quota abzufragen.
+  - Option A: `GET /actors/me/capabilities` um `sponsor.quotaRemaining`/`sponsor.quotaTier` erweitern.
+  - Option B: Neuer Endpoint `GET /sponsor/quota` mit `remaining`, `limit`, `resetAt`.
+  - Ziel: Bots koennen pre-flight pruefen ob Sponsoring verfuegbar ist, statt blind Reserve aufzurufen.
+- [ ] Signatur-/Intent-Domain-Separation fuer Sponsor-Flow:
+  - User-Signatur muss einen kanonischen Intent decken: `network|order_id|reservation_id|tx_digest|expires_at|purpose`.
+  - Execute akzeptiert nur, wenn Intent frisch/gueltig ist und exakt zum reservierten Kontext passt.
+  - Negative Tests: replay mit alter reservation, replay auf anderer order, mutation von `txBytesB64`.
+- [ ] Sponsor fuer Marketing-Orders (erst nach DQ-201 + Sponsor-Activation):
+  - Marketing-Orders: `sponsor reserve/execute` als bevorzugter Pfad fuer gasless User.
+  - Monitoring fuer Sponsor-Budget-Runway + Alert bei nahendem Erschoepfen.
+  - Pflicht vor Marketing-GoLive: `SponsorReserveRequest.orderId` + order-gebundene Reservierungen + Intent-Guard.
 
 ### Eingeflochtene offene Punkte aus bestehendem Backlog
 - Aus `Next Session Hardening Backlog`: Mailbox-Binding, Dispute-Binding, Prod-Fail-Fast.
 - Aus `P0 Reputation On-chain Betrieb absichern`: kompletter Reputation-Live-Nachweis.
 - Aus `Go/No-Go for Production`: Security-Cutover + formalisierter Go/No-Go mit Runtime-Evidenz.
-- Sponsor-bezogene Tasks bleiben absichtlich deferred und sind kein Blocker fuer den aktuellen Wallet-Auth-Release.
+- Sponsor-bezogene Tasks bleiben fuer den aktuellen Wallet-Auth-Release deferred; fuer Marketing-Gasless-GoLive sind DQ-Blocker (`TASK-DQ-201..209`) verpflichtend.
 
 ## Status Update (2026-02-27, Anchor-Gate auf staging+prod live)
 - Rollout ausgefuehrt:
@@ -1761,9 +1916,313 @@ corepack pnpm sponsor:reservations:sweep
 - [x] Dead-letter/Retry-Strategie fuer kritische Side-Effects einziehen (Audit, Sponsor Calls, Chain Sync).
 - [x] Auto-Recovery fuer Gas-Station-Ausfaelle implementieren (Circuit Breaker + Retry + klarer Fallback-Status statt hartem Fail).
 
+### P0 - Dispute-Bond als Scam-Protection bei Vertragsschluss (neu 2026-03-04)
+
+Design-Grundsatz:
+- Der Dispute-Bond ist **Scam-Protection**, nicht nur ein Dispute-Mechanismus.
+- Beide Parteien hinterlegen ihren Bond **bei Vertragsschluss** (direkt nach Order-Erstellung),
+  nicht erst wenn ein Dispute gebraucht wird.
+- Ohne aktiven Bond (beide Seiten funded) darf keine Milestone-Arbeit beginnen.
+- Korrekter Order-Ablauf:
+  1. `POST /bids/{listingId}/accept` → Order erstellt (`AWAITING_DEPOSITS`)
+  2. Buyer+Seller: Bond on-chain initialisieren (`init_order_dispute_bond`) + beide Seiten funden
+  3. Buyer: Escrow on-chain erstellen + funden
+  4. Bond ACTIVE + Escrow funded → Order `IN_PROGRESS`, Milestone-Arbeit kann beginnen
+- Marketing-Orders: Plattform-Funding ist nur nach Contract-Delta + Sponsor-Hardening erlaubt (sonst Feature-Flag bleibt aus).
+
+- [x] `TASK-DQ-101` Harter Bond-Gate bei Vertragsschluss.
+  - API-Gate: `POST /orders/{orderId}/milestones/{milestoneId}/submit|accept|reject` nur wenn `disputeBondState=ACTIVE`.
+  - Fehlerbild standardisieren: `409 dispute_bond_not_active` mit `required=true`, `state`, `nextAction`.
+  - `POST /bids/{listingId}/accept` Response um `disputeBondRequired`, `disputeBondState`, `disputeBondPolicy` erweitern,
+    damit Bot sofort weiss was als naechstes zu tun ist.
+  - Timing klar kommunizieren: Bond-Funding ist Teil des Vertragsschlusses, nicht des Dispute-Flows.
+    Bot-Ablauf nach Accept: Bond init → Bond fund (buyer+seller) → Escrow create → erst dann Milestone-Arbeit.
+- [x] `TASK-DQ-102` Order-Lifecycle um expliziten Bond-State erweitern.
+  - DB-Migration: `orders.dispute_bond_policy` (`DUAL_BOND_REQUIRED|PLATFORM_FUNDED_MARKETING`),
+    `orders.dispute_bond_state` (`PENDING|ACTIVE|CANCELED`), `orders.dispute_bond_activated_at`,
+    `orders.marketing_campaign_id` (nullable), `orders.dispute_bond_object_id` (nullable in Migration, danach required sobald vorhanden).
+  - Repository/InMemory + Postgres Parity fuer neue Felder.
+  - Read-Endpoints (`GET /orders/{id}`, `GET /orders/{id}/timeline`) um Bond-Metadaten erweitern.
+  - Neuer Order-Status `AWAITING_DEPOSITS` (statt direkt `AWAITING_ESCROW`):
+    Order bleibt in `AWAITING_DEPOSITS` bis Bond ACTIVE **und** Escrow funded.
+  - Transition-Trigger `AWAITING_DEPOSITS` → `IN_PROGRESS`:
+    Reconcile-Worker prueft on-chain Bond-State + Escrow-State; bei Bond ACTIVE **und** Escrow funded
+    wird Order automatisch auf `IN_PROGRESS` gesetzt. Kein separater API-Call durch den Bot noetig.
+  - `canTransitionOrderStatus` anpassen: `AWAITING_DEPOSITS → IN_PROGRESS` darf **nur** durch den
+    Reconcile-Worker (nach on-chain Verifikation) ausgeloest werden, **nicht** durch `deriveOrderStatusFromMilestones`.
+    Bestehende `AWAITING_ESCROW`-Referenzen im Code migrieren (stuckOrdersCli, reconcile.ts, repository.ts).
+- [x] `TASK-DQ-103` On-chain Ready-Check verbindlich einziehen.
+  - Helper `verifyOrderDisputeBondReady`: prueft on-chain `OrderDisputeBond` (`state == BOND_ACTIVE`, beide Seiten funded).
+  - Reconcile-Worker mappt on-chain Bond-Zustand auf DB (`PENDING -> ACTIVE`), inklusive Drift-Alert bei Mismatch.
+  - Negative-Guards: Milestone-Write verweigern, wenn Bond-Objekt fehlt/inkonsistent zur Order.
+  - Harte Bindung: Order muss zu genau einem `dispute_bond_object_id` gebunden sein; kein client-seitiges frei waehlbares Bond-Objekt.
+  - Binding-Moment: erster `POST /orders/{orderId}/dispute-bond/fund` mit `bondObjectId` speichert die Bindung
+    in `orders.dispute_bond_object_id`; alle Folge-Calls (fund andere Seite, open case) muessen denselben Wert liefern,
+    sonst `409 dispute_bond_object_id_mismatch`.
+  - Stuck-Bond-Watchdog: Order in `AWAITING_DEPOSITS` laenger als X Stunden → Auto-Cancel-Kandidat
+    (analog zum bestehenden `AWAITING_ESCROW` Watchdog).
+- [x] `TASK-DQ-104` Security/UX-Doku aktualisieren.
+  - `docs/BOT_QUICKSTART.md`, `docs/BOT_PROTOCOL_V1.md` auf den harten Timing-Gate anpassen.
+  - Klartext fuer Bots: "Order accepted ≠ Arbeitsstart. Arbeitsstart erst nach Bond ACTIVE + Escrow funded."
+  - `docs/BOT_QUICKSTART.md`: Bond-Init/Fund von "Dispute Loop" in den direkten Post-Accept Ablauf verschieben.
+  - `clawnera-bot-market/docs/guides/BOT_ONBOARDING.md`: Bond-Init/Fund von §7 (Dispute Quorum Flow)
+    nach §3 (direkt nach Order-Erstellung) verschieben. §7 bleibt fuer Dispute-Eröffnung/Voting/Resolution,
+    aber Bond-Funding ist kein Dispute-Schritt mehr sondern Vertragsschluss-Schritt.
+  - Ablauf klar als: Accept → Bond → Escrow → Milestone-Arbeit.
+
+- [x] `TASK-DQ-201` Contract-Delta fuer Marketing-Funding (Blocker vor Marketing-GoLive).
+  - Umsetzung (2026-03-04):
+    - `dispute_quorum.move` erweitert um dedizierte Capability `MarketingFundingCap` plus Entry
+      `issue_marketing_funding_cap`.
+    - Cap-gated Funding-Entry-Points live:
+      - `fund_bond_as_buyer_with_marketing_cap`
+      - `fund_bond_as_seller_with_marketing_cap`
+    - `OrderDisputeBond` erweitert um immutable `funding_policy` sowie sichere Refund-Metadaten
+      `buyer_funder`/`seller_funder`; Refund-Pfade zahlen damit an tatsaechliche Funder aus.
+    - Marketing-Policy bleibt on-chain streng:
+      - Standard-Funding-Entry-Points sind fuer `PLATFORM_FUNDED_MARKETING` geblockt.
+      - Marketing-Cap-Funding ist nur fuer Marketing-Policy und mit Plattform-Partei im Bond erlaubt.
+      - Side-Amount fuer Marketing-Cap-Funding muss exakt `cfg.min_dispute_bond_per_side_iota` sein.
+    - Campaign-Aktiv/Freigabe jetzt auch on-chain modelliert:
+      - neue Campaign-Gate-Registry via Dynamic-Field-Key `MarketingCampaignGateKey`.
+      - Admin-Entry `set_marketing_campaign_status` (emit `MarketingCampaignStatusSet`).
+      - Marketing-Cap-Funding verlangt aktive Campaign im on-chain Gate.
+      - neue Marketing-Bond-Init-Entry-Points:
+        - `create_order_dispute_bond_with_marketing_campaign`
+        - `init_order_dispute_bond_with_marketing_campaign`
+      - Marketing-Campaign-ID wird immutable im Bond gespeichert.
+    - SDK erweitert:
+      - neuer Init-Builder `buildInitOrderDisputeBondWithMarketingCampaignTx`.
+      - bestehende Marketing-Cap-Funding-Builder bleiben erhalten.
+  - Verifikation (2026-03-04):
+    - `corepack pnpm test:contracts` -> PASS (`199/199`).
+    - `corepack pnpm --filter @clawdex/sdk test` -> PASS (`65 passed | 1 skipped`).
+    - `corepack pnpm --filter @clawdex/api lint` -> PASS.
+    - `corepack pnpm --filter @clawdex/api typecheck` -> PASS.
+    - `corepack pnpm --filter @clawdex/api test` -> PASS (`24 passed | 3 skipped` files, `281 passed | 3 skipped` tests).
+    - `corepack pnpm ci:dq-rollout-gates` -> PASS.
+    - `corepack pnpm ci:contracts:abi-snapshot` -> PASS (Snapshots aktualisiert).
+    - On-chain:
+      - `corepack pnpm dispute-quorum:onchain:e2e:testnet` abgeschlossen; Report:
+        - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T162848601Z.json`
+        - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T162848601Z.md`
+      - Erwartete externe Blocker unveraendert:
+        - `reviewer_prequalified_keys_required`
+        - `arb_signer_required_for_platform_fallback`
+- [x] `TASK-DQ-202` Marketing Abuse-Schutz (API-Level).
+  - Campaign-Grenzen: `max_order_amount`, `max_open_orders_per_buyer`, `campaign_expiry_ms`.
+  - Nur Plattform-Creator duerfen Marketing-Listings erzeugen (Creator-Allowlist).
+  - Globaler Kill-Switch (`MARKETING_ENABLED=false`) + Auto-Disable bei Budget-Threshold.
+  - Rate-Limits fuer neue Wallets: `max_open_orders_per_buyer_new`, Cooldown.
+  - Telemetrie: `marketing_bonds_funded_total`, `marketing_campaign_budget_remaining`.
+  - Umsetzung (2026-03-04):
+    - Neue Marketing-Runtime-Config eingefuehrt (`MARKETING_ENABLED`, `MARKETING_CREATOR_ALLOWLIST`,
+      `MARKETING_DEFAULT_CAMPAIGN_ID`, `MARKETING_CAMPAIGNS`, `MARKETING_AUTO_DISABLE_BUDGET_THRESHOLD`)
+      inkl. Parser/Guards in `apps/api/src/config.ts`.
+    - Marketing-Listing-Guard aktiv in `POST /listings`:
+      - nur Allowlist-Creator,
+      - nur aktive/nicht abgelaufene Campaigns,
+      - `max_order_amount` enforced.
+    - Marketing-Accept-Guard aktiv in `POST /bids/{listingId}/accept`:
+      - `max_order_amount`,
+      - `max_open_orders_per_buyer`,
+      - `max_open_orders_per_buyer_new` + `new_wallet_cooldown_ms`,
+      - Campaign-Budget-Reserve vor Order-Create und Rollback bei Fehlern,
+      - Auto-Disable bei unterschrittenem Budget-Threshold.
+    - Repo/Postgres erweitert um `countOpenOrdersByBuyer(..., marketingCampaignId?)` fuer Campaign-spezifische
+      Open-Order-Limits.
+    - `POST /orders/{id}/dispute-bond/fund` liefert fuer Marketing-Funding Telemetrie mit
+      `marketing_bonds_funded_total` und aktuellem `marketing_campaign_budget_remaining`.
+    - `/health` um Marketing-Runtime-Telemetrie erweitert.
+  - Verifikation (2026-03-04):
+    - `corepack pnpm --filter @clawdex/api exec vitest run test/config.test.ts test/worker.test.ts` -> PASS.
+    - `corepack pnpm --filter @clawdex/api typecheck` -> PASS.
+    - `corepack pnpm --filter @clawdex/api test` -> `24 passed | 3 skipped` files, `270 passed | 3 skipped` tests.
+    - `corepack pnpm dispute-quorum:onchain:e2e:testnet` abgeschlossen; Report:
+      - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T144100573Z.json`
+      - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T144100573Z.md`
+      - Erwartete externe Blocker unveraendert: `reviewer_prequalified_keys_required`, `arb_signer_required_for_platform_fallback`.
+- [x] `TASK-DQ-203` Refund-/Budget-Sicherheit fuer Plattform-Funding.
+  - Bei `PLATFORM_FUNDED_MARKETING` muessen Refunds aus Bond-Pool an die tatsaechlichen Funder-Adressen gehen (nicht blind buyer/seller).
+  - Fallback/Cancel/Timeout-Pfade muessen dieselbe Rueckzahlungsregel nutzen.
+  - Keine Budget-Leaks: pro Campaign dedizierte Budget-Buckets + harte Untergrenzen fuer Reviewer-Payout.
+  - Umsetzung (2026-03-04):
+    - Refund-Routing auf Funder-Adressen umgestellt:
+      - `cancel_pending_order_dispute_bond`
+      - `distribute_fallback_pool` (inkl. Timeout-Fallback-Pfad)
+      - `distribute_quorum_pool`
+    - Gemeinsame Recipient-Helper (`buyer_refund_recipient`/`seller_refund_recipient`) erzwingen einheitliche
+      Rueckzahlungsziele aus `buyer_funder`/`seller_funder`.
+    - API-Level Budget-Hardening ergaenzt:
+      - Campaign-Config erweitert um dedizierten Bond-Bucket:
+        - `bond_budget_remaining`
+        - `reviewer_payout_budget_floor`
+      - Runtime-Guards in `POST /orders/{id}/dispute-bond/fund`:
+        - idempotente Bond-Budget-Reservierung pro `orderId+side` (kein Double-Charge bei Retries),
+        - hartes Mismatch-Blocking bei abweichendem Retry-Amount derselben `orderId+side`,
+        - harte Ablehnung bei Bond-Bucket-Exhaustion,
+        - harte Ablehnung bei Unterschreitung von `reviewer_payout_budget_floor`.
+      - Auto-Disable beruecksichtigt jetzt auch Bond-Bucket/Floor (zusaetzlich zu Listing-Budget-Threshold).
+      - Health/Fund-Telemetrie erweitert um:
+        - `marketing_campaign_bond_budget_remaining`
+        - `reviewer_payout_budget_floor`.
+    - Testabdeckung erweitert:
+      - Config-Validation fuer `reviewer_payout_budget_floor <= bond_budget_remaining`.
+      - Worker-Tests fuer:
+        - idempotente `orderId+side` Reservierung ohne Double-Charge,
+        - Reservation-Mismatch-Fehler bei abweichendem Retry-Amount,
+        - Floor-Breach-Ablehnung.
+  - Verifikation (2026-03-04):
+    - `corepack pnpm --filter @clawdex/api exec vitest run test/config.test.ts test/worker.test.ts` -> PASS.
+    - `corepack pnpm --filter @clawdex/api lint` -> PASS.
+    - `corepack pnpm --filter @clawdex/api typecheck` -> PASS.
+    - `corepack pnpm --filter @clawdex/api test` -> `24 passed | 3 skipped` files, `274 passed | 3 skipped` tests.
+    - `corepack pnpm dispute-quorum:onchain:e2e:testnet` abgeschlossen; Report:
+      - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T145611668Z.json`
+      - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T145611668Z.md`
+      - Erwartete externe Blocker unveraendert: `reviewer_prequalified_keys_required`, `arb_signer_required_for_platform_fallback`.
+- [x] `TASK-DQ-204` Sponsor-Hardening als Marketing-Blocker (nicht optional).
+  - `POST /sponsor/reserve` um `orderId` erweitern; in `sponsor_reservations` persistieren.
+  - `POST /sponsor/execute` akzeptiert nur bei `reservation.orderId` Match + Intent-Match (`network|order_id|reservation_id|tx_digest|expires_at|purpose`).
+  - Fuer Marketing-Policy kein stiller Self-Pay-Downgrade bei Sponsor-Fehlern (expliziter Fehler + klare Retry-Semantik).
+  - Backward-Compatibility via Uebergangsphase/API-Version, dann Pflichtfeld fuer Marketing-Flows.
+  - Umsetzung (2026-03-04):
+    - API-Contracts erweitert: `orderId` auf Reserve/Execute; optionales `intent`-Objekt auf Execute.
+    - Persistenz erweitert: `sponsor_reservations.order_id` (Schema + Migration `apps/api/db/0012_sponsor_reservation_order_id.sql`).
+    - Execute-Guards: harte `reservation.orderId`-Bindung und Intent-Match auf `network/orderId/reservationId/txDigest/expiresAt/purpose`.
+    - Marketing-Orders (`PLATFORM_FUNDED_MARKETING`) erzwingen sponsor-only Fehlerpfad ohne `fallback: self_pay` und mit explizitem `retry`-Block.
+    - Testabdeckung ergänzt in `apps/api/test/contracts.test.ts` und `apps/api/test/worker.test.ts` (orderId-Mismatch, intent-required/mismatch, sponsor-only retry semantics).
+- [x] `TASK-DQ-205` Doku-Artefakte vervollstaendigen (fehlende Ziel-Dateien).
+  - Umsetzung (2026-03-04):
+    - Neue Docs erstellt:
+      - `docs/SPONSOR_POLICY.md`
+      - `docs/SDK_USAGE.md`
+      - `docs/API_REFERENCE.md`
+    - Bestehende Docs aktualisiert:
+      - `docs/BOT_QUICKSTART.md`
+      - `docs/BOT_PROTOCOL_V1.md`
+    - `clawnera-bot-market` Guides auf dieselbe Sponsor-/API-Semantik synchronisiert:
+      - `docs/guides/SPONSOR_POLICY.md`
+      - `docs/guides/SDK_USAGE.md`
+      - `docs/guides/API_REFERENCE.md`
+      - `docs/guides/BOT_ONBOARDING.md`
+    - Dokumentierte Sponsor-Laufzeitregeln jetzt konsistent:
+      - `orderId`-Bindung auf `reserve/execute`
+      - `intent`-Pflicht fuer `PLATFORM_FUNDED_MARKETING`
+      - sponsor-only Retry-Semantik statt stiller Self-Pay-Downgrade bei Marketing.
+  - Verifikation (2026-03-04):
+    - `corepack pnpm --filter @clawdex/api lint` -> PASS.
+    - `corepack pnpm --filter @clawdex/api typecheck` -> PASS.
+    - `corepack pnpm --filter @clawdex/api test` -> `24 passed | 3 skipped` files, `277 passed | 3 skipped` tests.
+    - `corepack pnpm ci:dq-rollout-gates` -> PASS.
+    - `corepack pnpm test:contracts` -> PASS (`197/197`).
+    - On-chain:
+      - `corepack pnpm dispute-quorum:onchain:e2e:testnet` abgeschlossen; Report:
+        - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T154408940Z.json`
+        - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T154408940Z.md`
+      - Erwartete externe Blocker unveraendert:
+        - `reviewer_prequalified_keys_required`
+        - `arb_signer_required_for_platform_fallback`
+- [x] `TASK-DQ-206` Testmatrix + Rollout-Gates.
+  - Umsetzung (2026-03-04):
+    - API-Guard fuer Plattform-Partei ergaenzt:
+      - neue Runtime-Config `MARKETING_PLATFORM_ADDRESS` (optional, validierte IOTA-Adresse).
+      - `POST /orders/{id}/dispute-bond/fund` verweigert Marketing-Funding jetzt mit
+        `409 marketing_platform_party_required`, wenn bei gesetzter Plattform-Adresse weder Buyer noch Seller
+        die konfigurierte Plattform-Partei sind.
+    - API-Testmatrix erweitert:
+      - neuer echter End-to-End-Test `listing(marketing) -> accept -> dispute-bond/fund(with marketing cap)`
+        fuer `PLATFORM_FUNDED_MARKETING`.
+      - negativer Test `Marketing ohne Plattform-Partei -> rejected` (`marketing_platform_party_required`).
+      - bestehende Security-Negativtests als Pflichtanker weiterverwendet:
+        - Replay/Domain-Mismatch (`rejects signing-context audience mismatch...`)
+        - Sponsor `orderId`-Mismatch
+        - Sponsor `intent` required/mismatch
+        - Refund-Routing-Absicherung in Move-Tests (`test_dq_cancel_pending_marketing_bond_keeps_funder_routing`).
+    - Rollout-Gate in CI/Predeploy verankert:
+      - neues Gate-Script `scripts/ci/check_dispute_quorum_rollout_gates.sh`
+        (Coverage-Anker + gezielte DQ-206 API-Matrix via `vitest --testNamePattern`).
+      - neue npm-Task `ci:dq-rollout-gates`.
+      - eingebunden in:
+        - `.github/workflows/ci.yml`
+        - `scripts/ci/release_gate_predeploy.sh`
+      - Script dokumentiert den Rollout-Pfad:
+        `testnet -> staging canary -> mainnet canary (small campaign caps) -> scale-up`.
+  - Verifikation (2026-03-04):
+    - `corepack pnpm --filter @clawdex/api exec vitest run test/config.test.ts test/worker.test.ts` -> PASS (`152 passed`).
+    - `corepack pnpm ci:dq-rollout-gates` -> PASS.
+    - `corepack pnpm --filter @clawdex/api lint` -> PASS.
+    - `corepack pnpm --filter @clawdex/api typecheck` -> PASS.
+    - `corepack pnpm --filter @clawdex/api test` -> `24 passed | 3 skipped` files, `277 passed | 3 skipped` tests.
+    - `corepack pnpm test:contracts` -> PASS (`197/197`).
+    - On-chain:
+      - `corepack pnpm dispute-quorum:onchain:e2e:testnet` abgeschlossen; Report:
+        - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T151844073Z.json`
+        - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T151844073Z.md`
+      - Erwartete externe Blocker unveraendert:
+        - `reviewer_prequalified_keys_required`
+        - `arb_signer_required_for_platform_fallback`
+      - `corepack pnpm order-full-2p-onchain:e2e:testnet` mit gesetztem Bot-Key gestartet, lief bis `order_accepted`,
+        hing danach im externen Polling und wurde nach Timeout manuell beendet (kein lokaler Code-Fehler).
+- [x] `TASK-DQ-207` Governance/Custody fuer `MarketingFundingCap` (Blocker vor Prod).
+  - Umsetzung (2026-03-04):
+    - API-Custody-Gates fuer Marketing-Cap-Funding umgesetzt:
+      - neue Runtime-Flags:
+        - `MARKETING_CAP_SIGNING_QUEUE_REQUIRED` (default `true`)
+        - `MARKETING_CAP_FOUR_EYES_REQUIRED` (default `true`)
+        - `MARKETING_CAP_MULTISIG_2OF3_REQUIRED` (default `false`)
+      - `POST /orders/{id}/dispute-bond/fund` akzeptiert `marketingFundingCustodyProof` mit:
+        - `jobId`
+        - `approvalMode` (`four_eyes|multisig_2of3`)
+        - `approverA`
+        - `approverB`
+      - erzwungene Konfliktfehler fuer Marketing-Funding:
+        - `409 marketing_funding_custody_proof_required`
+        - `409 marketing_funding_four_eyes_required`
+        - `409 marketing_funding_multisig_2of3_required`
+    - Auditierbarkeit erweitert:
+      - Erfolgsaudit `dispute_quorum.bond.fund.plan` enthaelt jetzt
+        `marketingFundingJobId`, `marketingFundingApprovalMode`,
+        `marketingFundingApproverA`, `marketingFundingApproverB`.
+      - Deny-Audits fuer Custody-Verstoesse enthalten klaren `reason`.
+      - Response echo't `marketingFundingCustodyProof` im `request`-Block fuer Off-Chain-Evidence-Kopplung.
+    - API/Contract-Interface aktualisiert:
+      - `apps/api/openapi.yaml` um `MarketingFundingCustodyProofRequest` erweitert.
+      - `apps/api/src/contracts.ts` Request-Parser fuer Custody-Proof validiert strikt.
+    - CI-Rollout-Gate erweitert:
+      - `scripts/ci/check_dispute_quorum_rollout_gates.sh` prueft jetzt DQ-207-Testanker
+        (`custody proof required`, `four-eyes distinct`, `multisig 2-of-3 required`).
+    - Runbooks/API-Doku aktualisiert:
+      - `docs/SIGNING_QUEUE_RUNBOOK.md`
+      - `docs/API_REFERENCE.md`
+      - `docs/BOT_PROTOCOL_V1.md`
+  - Verifikation (2026-03-04):
+    - `corepack pnpm --filter @clawdex/api lint` -> PASS.
+    - `corepack pnpm --filter @clawdex/api typecheck` -> PASS.
+    - `corepack pnpm --filter @clawdex/api test` -> `24 passed | 3 skipped` files, `281 passed | 3 skipped` tests.
+    - `corepack pnpm ci:dq-rollout-gates` -> PASS.
+    - `corepack pnpm test:contracts` -> PASS (`197/197`).
+    - On-chain:
+      - `corepack pnpm dispute-quorum:onchain:e2e:testnet` abgeschlossen; Report:
+        - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T160833898Z.json`
+        - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T160833898Z.md`
+      - Erwartete externe Blocker unveraendert:
+        - `reviewer_prequalified_keys_required`
+        - `arb_signer_required_for_platform_fallback`
+- [x] `TASK-DQ-208` Atomare Bond-Bindung + Race-Safety.
+  - DB-Regeln: `order_id -> dispute_bond_object_id` first-write-wins; optional zusaetzlich unique auf `dispute_bond_object_id` zur Vermeidung von Reuse.
+  - Repository-Write als compare-and-set (kein blindes overwrite), idempotent bei Retries.
+  - Gleichzeitige `fund`-Requests (buyer/seller parallel) duerfen niemals zu inkonsistenter Bindung fuehren.
+  - Fehlervertrag bei Race klar festlegen: `409 dispute_bond_object_id_mismatch`.
+- [x] `TASK-DQ-209` Status-Derivation-Bypass schliessen.
+  - `deriveOrderStatusFromMilestones`/`refreshOrderStatusFromMilestones`/Timeline-Refresh duerfen `IN_PROGRESS` nicht setzen, solange Bond+Escrow nicht ready sind.
+  - `AWAITING_DEPOSITS` bleibt hard gate bis beide Preconditions on-chain bestaetigt sind.
+  - Tests: Milestone-Status darf nie indirekt `AWAITING_DEPOSITS -> IN_PROGRESS` triggern ohne Ready-Check.
+  - Negative Test: manuelle Milestone-Mutation auf `SUBMITTED` darf Gate nicht umgehen.
+
 ### P1 - Datenkonsistenz und Selbstheilung
 - [x] Reconciliation-Worker zyklisch laufen lassen: on-chain Events vs. `orders/listings` in Postgres abgleichen und korrigieren.
-- [x] Watchdog fuer "stuck orders" bauen (z. B. `AWAITING_ESCROW` zu lange) inkl. Auto-Transition/Flagging.
+- [x] Watchdog fuer "stuck orders" bauen (z. B. `AWAITING_DEPOSITS` zu lange) inkl. Auto-Transition/Flagging.
 - [x] Listing-Deposit-Settlement-Worker bauen (`listing-deposit:settle`) inkl. compare-and-set Finalisierung `REFUND_PENDING` -> `REFUNDED/FORFEITED`.
 - [x] Sponsor-Reservations mit Ablauf/Leichenbereinigung regelmaessig aufraeumen.
 - [x] Rewards/Payout Pipeline vollautomatisieren (plan -> review gate -> execute -> verify) mit sicheren Guardrails.

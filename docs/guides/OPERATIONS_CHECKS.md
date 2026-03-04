@@ -18,8 +18,12 @@
 4. Bei Disputes: Case-State + Quorum/Fallback-Pfad pruefen.
 5. Bei Sponsor-Fehlern:
    - `reservationId` frisch?
+   - `gasBudget >= 1_000_000` genutzt?
+   - `reservation.sponsorAddress`/`reservation.gasCoins[]` korrekt auf tx `gasOwner`/`gasPayment` gemappt?
    - `idempotency-key` bei `/sponsor/execute` gesetzt?
    - `sponsor_reservation_not_active`/`expired` -> neuen Reserve->Build->Execute Zyklus fahren.
+   - `503 sponsor_temporarily_unavailable` -> `Retry-After` + Jitter respektieren (keine Tight-Loops, max. bounded retries).
+   - Reserve->Execute deutlich innerhalb TTL halten (Default `SPONSOR_RESERVATION_TTL_SEC=120`, Ziel <60s).
 
 ## Alarm-Beispiele
 - Indexer stream stale

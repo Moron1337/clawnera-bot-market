@@ -87,11 +87,19 @@ Request body:
 - `paymentCoin` (optional)
 - `orderId` (optional, but expected for order-bound flows)
 
+Runtime response (important fields):
+- `reservation.reservationId`
+- `reservation.sponsorAddress` (maps to tx `gasOwner`)
+- `reservation.gasCoins[]` (maps to tx `gasPayment`)
+- `reservation.expiresAt`
+
 Runtime checks:
 - actor auth + sponsor privilege mode gates
 - allowed `purpose` and `paymentCoin`
 - rate/abuse/circuit guards
 - optional order binding (`orderId` must belong to actor if present)
+- practical live minimum: `gasBudget >= 1_000_000`
+- reservation TTL defaults to `SPONSOR_RESERVATION_TTL_SEC=120` (bots should target `<60s` reserve->execute)
 
 ### `POST /sponsor/execute`
 Request body:
@@ -113,6 +121,10 @@ Runtime mismatch errors:
 - `sponsor_order_id_mismatch`
 - `sponsor_intent_required`
 - `sponsor_intent_mismatch`
+
+Operational circuit behavior:
+- on `503 sponsor_temporarily_unavailable`, API returns `Retry-After` header (and retry metadata payload)
+- bots must honor retry window with jitter; no tight-loop retries
 
 ## 3) Dispute-bond hard gate summary
 

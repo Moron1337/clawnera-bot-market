@@ -6,9 +6,52 @@ Scope:
 
 ## 1. Canonical flow
 1. Call `POST /sponsor/reserve`.
-2. Build PTB with returned sponsor gas data.
-3. User signs transaction bytes.
-4. Call `POST /sponsor/execute` with `idempotency-key`.
+2. Parse reserve response and map sponsor gas fields to transaction gas fields.
+3. Build PTB with returned sponsor gas data.
+4. User signs transaction bytes.
+5. Call `POST /sponsor/execute` with `idempotency-key`.
+
+### 1.1 Reserve-response -> PTB gas mapping (required)
+`POST /sponsor/reserve` returns `reservation` with:
+- `reservationId`
+- `sponsorAddress`
+- `gasCoins[]` (`objectId`, `version`, `digest`)
+- `expiresAt`
+
+Minimal mapping:
+- `gasOwner = reservation.sponsorAddress`
+- `gasPayment = reservation.gasCoins[]`
+
+TypeScript example:
+
+```ts
+const reserve = await api.post("/sponsor/reserve", {
+  purpose: "marketplace_tx",
+  gasBudget: 1_000_000,
+  orderId
+});
+
+const reservation = reserve.reservation;
+const gasPayment = reservation.gasCoins.map((coin) => ({
+  objectId: coin.objectId,
+  version: Number(coin.version),
+  digest: coin.digest
+}));
+
+const tx = new Transaction();
+tx.setSender(actorAddress);
+tx.setGasOwner(reservation.sponsorAddress);
+tx.setGasPayment(gasPayment);
+tx.setGasBudget(1_000_000);
+// add your business moveCall/splitCoins/transfer calls
+
+const txBytes = await tx.build({ client });
+const userSig = (await signer.signTransaction(txBytes)).signature;
+```
+
+If `gasCoins` is empty/unusable:
+- do not send `execute` with incomplete gas mapping,
+- either retry reserve (bounded) or switch to documented self-pay fallback.
 
 ## 2. Request contract
 
@@ -76,11 +119,25 @@ Non-marketing orders may return self-pay fallback:
 - `sponsor_reservation_not_active`
 - `sponsor_reservation_expired`
 
+### 7.1 Circuit-breaker retry discipline (`sponsor_temporarily_unavailable`)
+When API returns:
+- status `503`
+- error `sponsor_temporarily_unavailable`
+- `Retry-After` header (seconds)
+
+Bot policy:
+1. Read `Retry-After` header; if missing, use payload `retryAfterSec`; if both missing, fallback `30s`.
+2. Sleep at least that duration plus jitter (`0..500ms`).
+3. Re-check `GET /actors/me/capabilities` before next reserve.
+4. Use bounded attempts (recommended max `3` attempts in one workflow).
+5. For `retry.mode=sponsor_required`, do not downgrade to self-pay.
+
 ## 8. Self-pay fallback runbook
 When fallback is provided:
 1. Discard sponsor reservation context.
-2. Rebuild tx with user gas.
-3. Keep business payment coin and gas coin separated.
-4. Sign and execute directly.
+2. Rebuild a brand-new tx without `setGasOwner(...)` and without `setGasPayment(...)`.
+3. Use user-owned gas coins only.
+4. Keep business payment coin and gas coin separated.
+5. Sign and execute directly.
 
 Never reuse old reservation IDs or sponsor gas objects in self-pay flow.

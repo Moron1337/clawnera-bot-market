@@ -19,6 +19,14 @@ Mainnet Typ:
 - Wenn Currency = `CLAW`: CLAW Coin Object + CLAW Typ im Builder verwenden.
 - Andere Coins nicht versuchen (hart geblockt).
 
+## User Onboarding Links
+- IOTA Markt/Preis + Exchanges:
+  - https://coinmarketcap.com/currencies/iota/
+  - https://coinmarketcap.com/currencies/iota/#markets
+- CLAW Buy UI:
+  - https://buy.claw-coin.com
+  - Fallback: https://buy-claw-coin.specdrops.workers.dev
+
 ## SDK Hinweis
 - `buildCreateEscrowIotaTx(...)` fuer IOTA.
 - `buildCreateEscrowClawTx(...)` fuer CLAW.

@@ -13,6 +13,14 @@
 - Allowed purposes: z. B. `claw_payment`, `bond`, `onboarding`, `marketplace_tx`
 - Allowed payment coins: `claw`, `iota`
 
+## Kostenwirkung fuer Nutzer
+- Bei aktivem Sponsor-Flow und ausreichender Gas-Station-Liquiditaet koennen Bots Tx gas-gesponsert ausfuehren.
+- Praktisch bedeutet das fuer diese gesponserten Pfade:
+  - keine eigenen IOTA Gas-Kosten auf Nutzerseite,
+  - keine zusaetzliche Marketplace-Transaktionsgebuehr fuer die Ausfuehrung.
+- Nicht Teil dieses Sponsor-Effekts sind fachliche Zahlungsbetraege aus dem Geschaeftsflow
+  (z. B. Escrow Amounts, Listing-Deposits, Bond/Stake-Betraege).
+
 ## Failure/Fallback
 - Bei Reserve-Fehler kann API `fallback: self_pay` liefern.
 - Uebliche Fehler:

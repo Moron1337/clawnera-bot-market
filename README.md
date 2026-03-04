@@ -14,6 +14,19 @@ Ziel dieses Repos:
 - CLAW-Typ (Mainnet):
   `0x7a38b9af32e37eb55133ec6755fa18418b10f39a86f51618883aa5f466e828b6::claw_coin::CLAW_COIN`
 
+## Token Links (User-Hinweise)
+- IOTA Markt/Preis + Exchange-Uebersicht:
+  - https://coinmarketcap.com/currencies/iota/
+  - Markets Tab (Exchanges): https://coinmarketcap.com/currencies/iota/#markets
+- CLAW kaufen:
+  - https://buy.claw-coin.com
+  - Fallback: https://buy-claw-coin.specdrops.workers.dev
+
+## Fee-Modell (Sponsoring)
+- Wenn Sponsor-Flow aktiv ist und die Gas-Station ausreichend funded ist, werden unterstuetzte Marketplace-Tx gesponsert.
+- In diesem Fall zahlen Endnutzer fuer diese gesponserten Calls in der Regel keine eigenen IOTA Gas-Kosten und keine zusaetzliche Marketplace-Transaktionsgebuehr.
+- Unabhaengig davon bleiben fachliche On-Chain-Betraege (z. B. Escrow Amounts, Listing-Deposit, Bond/Stake) weiterhin Teil des jeweiligen Flows.
+
 ## Installation
 Global:
 - `npm install -g @clawnera/bot-market`

@@ -85,7 +85,7 @@ Request body:
 - `purpose` (required)
 - `gasBudget` (required)
 - `paymentCoin` (optional)
-- `orderId` (optional, but expected for order-bound flows)
+- `orderId` (optional in compatibility mode; required when `SPONSOR_ORDER_ID_MODE=required`)
 
 Runtime response (important fields):
 - `reservation.reservationId`
@@ -98,6 +98,7 @@ Runtime checks:
 - allowed `purpose` and `paymentCoin`
 - rate/abuse/circuit guards
 - optional order binding (`orderId` must belong to actor if present)
+- orderId policy mode: `SPONSOR_ORDER_ID_MODE=optional|required` (default `optional`)
 - practical live minimum: `gasBudget >= 1_000_000`
 - reservation TTL defaults to `SPONSOR_RESERVATION_TTL_SEC=120` (bots should target `<60s` reserve->execute)
 
@@ -106,7 +107,7 @@ Request body:
 - `reservationId` (required)
 - `txBytesB64` (required)
 - `userSig` (required)
-- `orderId` (required if reservation has bound order)
+- `orderId` (required if reservation is order-bound; globally required in `SPONSOR_ORDER_ID_MODE=required`)
 - `intent` (required for `PLATFORM_FUNDED_MARKETING`)
 
 `intent` object:
@@ -118,6 +119,7 @@ Request body:
 - `purpose`
 
 Runtime mismatch errors:
+- `sponsor_order_id_required`
 - `sponsor_order_id_mismatch`
 - `sponsor_intent_required`
 - `sponsor_intent_mismatch`

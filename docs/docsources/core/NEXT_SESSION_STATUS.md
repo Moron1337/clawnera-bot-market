@@ -1,5 +1,31 @@
 # Next Session Status (2026-02-27)
 
+## Status Update (2026-03-04, TASK-SP-205 orderId-Transition fuer Sponsor-Flow umgesetzt)
+- [x] `TASK-SP-205` umgesetzt:
+  - Neue Runtime-Policy: `SPONSOR_ORDER_ID_MODE=optional|required` (Default `optional`).
+  - `SPONSOR_ORDER_ID_MODE=required` erzwingt:
+    - `POST /sponsor/reserve` ohne `orderId` -> `400 sponsor_order_id_required`.
+    - `POST /sponsor/execute` ohne `orderId` -> `400 sponsor_order_id_required`.
+  - Backward-Compatibility bleibt in `optional` aktiv (keine harte Pflicht fuer bestehende Bots).
+  - Konfigurations-/Env-Updates:
+    - `apps/api/src/config.ts`, `apps/api/src/types.ts`
+    - `apps/api/wrangler.toml`, `apps/api/wrangler.staging.toml`, `apps/api/wrangler.test.toml`
+    - `apps/api/.dev.vars.example`
+  - API/OpenAPI/Doku-Updates:
+    - `apps/api/openapi.yaml`
+    - `docs/SPONSOR_POLICY.md`, `docs/API_REFERENCE.md`, `docs/SDK_USAGE.md`, `docs/BOT_PROTOCOL_V1.md`, `docs/BOT_QUICKSTART.md`
+- [x] Verifikation (2026-03-04):
+  - `corepack pnpm --filter @clawdex/api typecheck` -> PASS.
+  - `corepack pnpm --filter @clawdex/api lint` -> PASS.
+  - `corepack pnpm --filter @clawdex/api test` -> `24 passed | 3 skipped` files, `292 passed | 3 skipped` tests.
+  - On-chain:
+    - `corepack pnpm dispute-quorum:onchain:e2e:testnet` abgeschlossen; Report:
+      - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T182650788Z.json`
+      - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T182650788Z.md`
+    - Erwartete externe Blocker unveraendert:
+      - `reviewer_prequalified_keys_required`
+      - `arb_signer_required_for_platform_fallback`.
+
 ## Status Update (2026-03-04, Sponsor-Dokumentation finalisiert + Bot-Guides synchronisiert)
 - [x] Sponsor-Dokumentation fuer Bot-Integrationen finalisiert:
   - `docs/SPONSOR_POLICY.md`: Reserve-Response -> `gasOwner`/`gasPayment` Mapping, Circuit-Breaker Retry-Disziplin, Self-Pay-Rebuild.
@@ -552,7 +578,7 @@
   - Konkreter Ablauf: Reserve fehlgeschlagen/fallback → TX mit eigenem Gas-Coin bauen → selbst signieren → `client.executeTransactionBlock()`.
   - Wichtig: Payment-Coin und Gas-Coin sauber trennen (nie Sponsor-Gas-Coin fuer Business-Payment missbrauchen).
   - In `docs/SPONSOR_POLICY.md` und `docs/BOT_QUICKSTART.md` als "Fallback-Pfad" Unterabschnitt dokumentieren.
-- [ ] `TASK-SP-205` Schema-Migration: `SponsorReserveRequest.orderId` Backward-Compatibility:
+- [x] `TASK-SP-205` Schema-Migration: `SponsorReserveRequest.orderId` Backward-Compatibility: **(2026-03-04)**
   - Wenn `orderId` als Pflichtfeld eingefuehrt wird, bricht das bestehende Bots die kein `orderId` senden.
   - Migrationsstrategie definieren: optionales Feld → Pflichtfeld mit Uebergangsfrist, oder API-Version.
   - OpenAPI + clawnera-bot-market Docs rechtzeitig vor Cutover aktualisieren.

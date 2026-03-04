@@ -3048,6 +3048,18 @@ components:
         gasBudget:
           type: integer
           minimum: 1
+        paymentCoin:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Optional payment coin hint for sponsor policy checks.
+        orderId:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: |
+            Transitional field. Optional in compatibility mode, required once
+            `SPONSOR_ORDER_ID_MODE=required` is enabled.
     SponsorExecuteRequest:
       type: object
       additionalProperties: false
@@ -3063,6 +3075,42 @@ components:
         userSig:
           type: string
           minLength: 1
+        orderId:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: |
+            Transitional field. Optional in compatibility mode, required once
+            `SPONSOR_ORDER_ID_MODE=required` is enabled.
+        intent:
+          $ref: "#/components/schemas/SponsorExecutionIntentRequest"
+    SponsorExecutionIntentRequest:
+      type: object
+      additionalProperties: false
+      required: [network, orderId, reservationId, txDigest, expiresAt, purpose]
+      properties:
+        network:
+          type: string
+          minLength: 1
+          maxLength: 64
+        orderId:
+          type: string
+          minLength: 1
+          maxLength: 200
+        reservationId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        txDigest:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+        expiresAt:
+          type: string
+          format: date-time
+        purpose:
+          type: string
+          minLength: 1
+          maxLength: 64
     ManagedStoragePaymentProof:
       type: object
       additionalProperties: false

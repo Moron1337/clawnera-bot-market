@@ -68,7 +68,7 @@ If violated, API returns:
 ## 8. Sponsor loop
 1. Check actor sponsor capability: `GET /actors/me/capabilities`.
 2. Reserve gas: `POST /sponsor/reserve`.
-   - include `orderId` for order-bound flows.
+   - include canonical `orderId` (required in `SPONSOR_ORDER_ID_MODE=required`).
 3. Build tx with returned sponsor gas data:
    - `reservation.sponsorAddress` -> tx `gasOwner`
    - `reservation.gasCoins[]` -> tx `gasPayment`
@@ -91,6 +91,7 @@ If violated, API returns:
   - use bounded retries (recommended max `3`).
 
 Important sponsor errors:
+- `sponsor_order_id_required`
 - `sponsor_order_id_mismatch`
 - `sponsor_intent_required`
 - `sponsor_intent_mismatch`

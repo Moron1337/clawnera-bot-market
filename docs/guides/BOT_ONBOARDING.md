@@ -207,7 +207,7 @@ Hinweis zu Deadline/Cancel Actions:
 
 1. Actor-Privilegien pruefen: `GET /actors/me/capabilities`.
 2. Reserve: `POST /sponsor/reserve`.
-   - Fuer order-gebundene Flows `orderId` mitsenden.
+   - Kanonisches `orderId` mitsenden (required in `SPONSOR_ORDER_ID_MODE=required`).
 3. Tx mit genau den reservierten `gasCoins` bauen, dann lokal signieren.
    - `reservation.sponsorAddress` auf tx `gasOwner` mappen.
    - `reservation.gasCoins[]` auf tx `gasPayment` mappen.
@@ -226,6 +226,7 @@ Hinweis zu Deadline/Cancel Actions:
    - `expiresAt`
    - `purpose`
 6. Fehlerpfade:
+   - `sponsor_order_id_required`: Request mit kanonischem `orderId` neu bauen.
    - `sponsor_order_id_mismatch`: neue Reservation fuer richtige Order holen.
    - `sponsor_intent_required`: Execute-Body mit Intent vervollstaendigen.
    - `sponsor_intent_mismatch`: Intent aus aktueller Reservation + Tx neu berechnen.

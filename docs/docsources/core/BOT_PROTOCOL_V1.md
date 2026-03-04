@@ -109,17 +109,19 @@ Contract-side campaign gate:
 
 `POST /sponsor/reserve`:
 - required: `purpose`, `gasBudget`
-- optional: `paymentCoin`, `orderId`
+- optional: `paymentCoin`, `orderId` (until `SPONSOR_ORDER_ID_MODE=required`)
 
 `POST /sponsor/execute`:
 - required: `reservationId`, `txBytesB64`, `userSig`
 - conditional: `orderId` required when reservation is order-bound
+- policy: `orderId` globally required once `SPONSOR_ORDER_ID_MODE=required`
 - conditional: `intent` required for `PLATFORM_FUNDED_MARKETING`
 
 `intent` fields:
 - `network`, `orderId`, `reservationId`, `txDigest`, `expiresAt`, `purpose`
 
 Mismatch/guard errors:
+- `sponsor_order_id_required`
 - `sponsor_order_id_mismatch`
 - `sponsor_intent_required`
 - `sponsor_intent_mismatch`

@@ -121,7 +121,7 @@ Standard flow:
 4. Execute as self-pay or sponsor flow.
 
 Sponsor path details:
-1. `POST /sponsor/reserve` (include `orderId` for order-bound flows).
+1. `POST /sponsor/reserve` (send canonical `orderId`; required in `SPONSOR_ORDER_ID_MODE=required`).
 2. Map reserve response to tx gas fields (`gasOwner`, `gasPayment`).
 3. Build tx bytes and sign.
 4. `POST /sponsor/execute` with `reservationId`, `txBytesB64`, `userSig`, and (if required) `orderId`/`intent`.
@@ -173,9 +173,11 @@ Self-pay fallback build:
 - `packageId` and all object IDs match target environment.
 - Sender is correct actor for route/capability.
 - For sponsor execute, never reuse stale reservations.
+- For sponsor reserve/execute, prefer always sending canonical `orderId` (future-proof against required mode).
 - For sponsor reserve, stay at `gasBudget >= 1_000_000` in live flows.
 - For sponsor execute, respect reservation TTL (`SPONSOR_RESERVATION_TTL_SEC`, default `120`) and target `<60s` between reserve and execute.
 - For marketing sponsor execute, ensure full intent tuple is exact:
   - `network|orderId|reservationId|txDigest|expiresAt|purpose`.
+- On `400 sponsor_order_id_required`, rebuild request with canonical `orderId` (do not retry unchanged payload).
 - On `503 sponsor_temporarily_unavailable`, honor `Retry-After` plus jitter before retry.
 - On `409`, re-read order/dispute state before rebuilding tx.

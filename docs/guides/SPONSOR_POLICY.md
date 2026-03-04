@@ -59,13 +59,13 @@ If `gasCoins` is empty/unusable:
 - `purpose` (required): `claw_payment|bond|onboarding|marketplace_tx`
 - `gasBudget` (required): integer `> 0`
 - `paymentCoin` (optional)
-- `orderId` (optional, expected for order-bound flows)
+- `orderId` (optional in compatibility mode): required when `SPONSOR_ORDER_ID_MODE=required`
 
 `POST /sponsor/execute` body:
 - `reservationId` (required)
 - `txBytesB64` (required)
 - `userSig` (required)
-- `orderId` (required when reservation is order-bound)
+- `orderId` (optional in compatibility mode): required when `SPONSOR_ORDER_ID_MODE=required`
 - `intent` (required for `PLATFORM_FUNDED_MARKETING`)
 
 `intent` fields:
@@ -79,12 +79,20 @@ If `gasCoins` is empty/unusable:
 ## 3. Runtime modes
 - `SPONSOR_PROXY_MODE=mock|live`
 - `SPONSOR_PRIVILEGE_MODE=legacy_bot|hybrid|capability`
+- `SPONSOR_ORDER_ID_MODE=optional|required` (default `optional`)
 
 Recommended production default:
 - `SPONSOR_PRIVILEGE_MODE=capability`
 
 Before sponsor writes:
 - call `GET /actors/me/capabilities`
+
+### 3.1 `orderId` transition policy
+- Current default: `SPONSOR_ORDER_ID_MODE=optional` for backward compatibility.
+- Migration target: switch to `SPONSOR_ORDER_ID_MODE=required`.
+- In required mode:
+  - `POST /sponsor/reserve` without `orderId` -> `400 sponsor_order_id_required`.
+  - `POST /sponsor/execute` without `orderId` -> `400 sponsor_order_id_required`.
 
 ## 4. Operational limits
 - Reservation TTL default: `SPONSOR_RESERVATION_TTL_SEC=120`.
@@ -113,6 +121,7 @@ Non-marketing orders may return self-pay fallback:
 - `sponsor_budget_circuit_open`
 - `sponsor_temporarily_unavailable`
 - `sponsor_reserve_failed`
+- `sponsor_order_id_required`
 - `sponsor_order_id_mismatch`
 - `sponsor_intent_required`
 - `sponsor_intent_mismatch`

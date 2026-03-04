@@ -1,5 +1,19 @@
 # Next Session Status (2026-02-27)
 
+## Status Update (2026-03-04, Dispute-Quorum E2E alle Szenarien final durchgespielt)
+- [x] `replacement_no_show`-Flow bis finalem Settlement erweitert:
+  - `continueReplacementScenario` loest nach `replacement_round_started` jetzt ebenfalls den Fallback-Resolve on-chain aus (inkl. `escrow::resolve_dispute_with_quorum_ticket`), sobald `fallback_eligible_at_ms` erreicht ist.
+  - Report-Telemetrie erweitert (`replacement_no_show.fallbackEligibleAtMs`, `nextActionAt` fuer `waiting_fallback_eligible`).
+- [x] On-chain finaler Komplettlauf (stateful continue, gleiche State-Datei):
+  - state: `docs/reports/dispute-quorum-onchain-e2e-state-20260304-dispute-complete.json`
+  - finaler Report: `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T204546902Z.json`
+  - finale Szenario-States:
+    - `majority=finalized_and_escrow_resolved`
+    - `replacement_no_show=fallback_resolved_and_escrow_resolved`
+    - `fallback_timeout=fallback_resolved_and_escrow_resolved`
+- [x] Verifikation:
+  - `corepack pnpm --filter @clawdex/api test` -> PASS (`25 passed | 3 skipped` files, `299 passed | 3 skipped` tests).
+
 ## Status Update (2026-03-04, Dispute-Quorum E2E komplett entblockt + on-chain validiert)
 - [x] Runner-Hardening fuer stabile Dispute-Resumes umgesetzt (`apps/api/scripts/dispute-quorum-onchain-e2e-testnet.mjs`):
   - Shared-Objekte werden jetzt strikt auf `MARKETPLACE_PACKAGE_ID` validiert (keine Cross-Package-ID-Mischung mehr).

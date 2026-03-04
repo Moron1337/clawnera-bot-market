@@ -78,6 +78,21 @@
       - `reviewer_prequalified_keys_required`
       - `arb_signer_required_for_platform_fallback`.
 
+## Status Update (2026-03-04, API Deploy staging+prod + HTTP Go/No-Go Endpunktcheck abgeschlossen)
+- [x] API Deploy ausgefuehrt:
+  - `clawdex-api-staging` -> Version `8f55391c-e156-4761-9aa2-7c66b7e27a4d`
+  - `clawdex-api` -> Version `a8a59eb4-3dab-42bf-b0d0-725136fbf807`
+- [x] `/capabilities` Runtime-Felder live verifiziert (staging+prod):
+  - `interaction.privilegedSponsor.policy.platformFundedMarketing` liefert:
+    - `sponsorPreferred=true`
+    - `sponsorRequired=true`
+    - `selfPayFallback=false`
+    - `intentRequired=true`
+    - `intentSignatureRequired=true`
+- [x] Go/No-Go Endpunktcheck `test+prod` abgeschlossen:
+  - `GET /health`, `GET /ready`, `GET /listings`, `GET /policy/fees` jeweils `200`.
+  - Evidenz: `docs/reports/api-http-smoke-test-test-prod-20260304.md`.
+
 ## Status Update (2026-03-04, TASK-SP-205 orderId-Transition fuer Sponsor-Flow umgesetzt)
 - [x] `TASK-SP-205` umgesetzt:
   - Neue Runtime-Policy: `SPONSOR_ORDER_ID_MODE=optional|required` (Default `optional`).
@@ -1065,7 +1080,7 @@
 
 ### Go/No-Go fuer Production
 - [ ] Alle 10 Testschritte gruen, keine blocker warnings.
-- [ ] `GET /health`, `GET /ready`, `GET /listings`, `GET /policy/fees` auf test+prod liefern `200`.
+- [x] `GET /health`, `GET /ready`, `GET /listings`, `GET /policy/fees` auf test+prod liefern `200`. **(2026-03-04, siehe `docs/reports/api-http-smoke-test-test-prod-20260304.md`)**
 - [x] Mindestens ein realer 2-Parteien-Fall mit Dispute-Decision erfolgreich abgeschlossen und reportet.
 - [ ] Multisig Browser-Hardware-Signing Security-Backlog abarbeiten (kanonisch: `ops/multisig-cutover/SECURITY_OPEN_POINTS_AND_RECOMMENDATIONS.md`, Tasks `TASK-MSIG-001` bis `TASK-MSIG-009`).
 - [ ] Security-Cutover vor Mainnet: alle produktionsrelevanten Secrets rotieren (u. a. Pinata JWT, Bot API Key, Gas-Station Auth, Cloudflare Tokens), nur als Worker-Secrets/Datei-Secret setzen, niemals in Chat/Repo.

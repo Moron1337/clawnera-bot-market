@@ -135,6 +135,20 @@
 - [ ] Bewusst offen gelassen:
   - eigentliche Rotation/Execute wird erst im Startfenster ausgefuehrt, um Lockout-Risiko zu minimieren.
 
+## Status Update (2026-03-04, Security Hardening Hetzner + Cloudflare umgesetzt)
+- [x] Hetzner DB-Exposure gehaertet:
+  - Postgres `listen_addresses` von `*` auf `127.0.0.1,10.8.0.6` reduziert.
+  - Legacy-WireGuard-Regel fuer direkten DB-Zugriff entfernt:
+    - `ufw allow in on wg0 from 192.168.10.131 to any port 5432`.
+  - Public Direct-Port-Checks fuer `5432/9090/9527/9184` -> `blocked`.
+- [x] Cloudflare Signer-Guard gehaertet:
+  - `SIGNER_ALLOWED_CIDRS` von `0.0.0.0/0` auf begrenztes CIDR-Set:
+    - `31.17.208.0/24,49.13.114.125/32`
+  - `@clawdex/signer-web` lint/test/typecheck -> PASS.
+  - neue Signer-Version deployed (`wrangler versions upload` + `wrangler versions deploy`) ohne Trigger-Aenderung.
+- [x] Evidenz:
+  - `docs/reports/security-hardening-hetzner-cloudflare-20260304.md`
+
 ## Status Update (2026-03-04, TASK-SP-205 orderId-Transition fuer Sponsor-Flow umgesetzt)
 - [x] `TASK-SP-205` umgesetzt:
   - Neue Runtime-Policy: `SPONSOR_ORDER_ID_MODE=optional|required` (Default `optional`).

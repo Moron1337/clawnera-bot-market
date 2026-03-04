@@ -1,276 +1,164 @@
-# API Reference (Bot-Fokus, vollstaendig)
+# API Reference (Bot Runtime Focus)
 
-Quellen:
-- OpenAPI Snapshot: `docs/docsources/core/openapi.yaml`
-- Runtime-Handler (Core-Repo): `apps/api/src/worker.ts`
-- Request-Parser (Core-Repo): `apps/api/src/contracts.ts`
+Sources:
+- OpenAPI snapshot: `docs/docsources/core/openapi.yaml`
+- Runtime truth: `apps/api/src/worker.ts` (core repo)
+- Request parser truth: `apps/api/src/contracts.ts` (core repo)
 
-## 0) Baseline fuer alle Bots
+Important:
+- For sponsor endpoints, runtime behavior currently extends OpenAPI schema.
+- Runtime is source of truth when OpenAPI and worker diverge.
+
+## 0) Baseline for bot integrations
 
 - Auth:
-  - `POST /auth/challenge` -> Wallet Challenge holen.
-  - `POST /auth/verify` -> Bearer Token erhalten.
-  - `POST /auth/verify` liefert `expiresAtMs`; kein dedizierter Refresh-Endpoint vorhanden (bei Ablauf re-auth via challenge+verify).
-- Write Calls:
-  - Fast alle mutierenden Endpunkte brauchen Bearer + Capability Gate.
-  - Capability-Status immer zuerst via `GET /capabilities` und `GET /actors/me/capabilities` lesen.
-- Idempotency:
-  - Header `idempotency-key` ist verpflichtend fuer:
-    - `POST /listings`
-    - `POST /bids/{listingId}/accept`
-    - `POST /sponsor/execute`
-- Tx-Plan Endpunkte:
-  - Viele Dispute/Sponsor-nahe Write-Endpunkte liefern nur einen Plan (`txBuilder`, `request`, `txMoveCall`), keine finalisierte On-Chain Ausfuehrung.
-- Aktuelle API-Grenzen:
-  - kein `POST /bids` (Bid-Creation erfolgt derzeit nicht ueber eine public API route),
-  - kein `GET /listings/{listingId}/bids`,
-  - kein `GET /orders` Listen-Endpunkt (nur Einzel-Order per ID).
+  - `POST /auth/challenge`
+  - `POST /auth/verify` (returns `expiresAtMs`; no dedicated refresh endpoint)
+- Capability discovery (required before writes):
+  - `GET /capabilities`
+  - `GET /actors/me/capabilities`
+- Mandatory idempotency headers:
+  - `POST /listings`
+  - `POST /bids/{listingId}/accept`
+  - `POST /sponsor/execute`
+- Current API boundaries:
+  - no public `POST /bids`
+  - no public `GET /listings/{listingId}/bids`
+  - no public `GET /orders` list endpoint
 
-## 1) OpenAPI Core Surface (bot-relevant)
+## 1) Core endpoints
 
-### Health + Runtime Policy
+### Health and policy
+- `GET /health`
+- `GET /ready`
+- `GET /policy/ranking`
+- `GET /policy/fees`
+- `GET /policy/contact`
 
-| Endpoint | Auth | Zweck | Request | Erfolg | Wichtige Fehler/Notizen |
-| --- | --- | --- | --- | --- | --- |
-| `GET /health` | none | Liveness + Mode | - | `status`, `appEnv`, `sponsorMode`, `compliance` | Nur Healthcheck |
-| `GET /ready` | none | Readiness + Sponsor-Live-Config | - | `status=ready`, `sponsorLiveConfigured` | Nur Readinesscheck |
-| `GET /capabilities` | none | Globale Runtime-Capabilities | - | `capabilities.interaction/auth/features` | Vor jedem Bot-Start cachen |
-| `GET /actors/me/capabilities` | bearer | Actor-spezifische Sponsorrechte | - | `capabilities.sponsor.*` | `401` bei ung. Token |
-| `GET /policy/ranking` | none | Ranking Policy | - | `policy` | Fuer Ranking-Interpretation |
-| `GET /policy/fees` | none | Fee Policy | - | `policy` | Fuer Preis-/Fee-Kalkulation |
-| `GET /policy/contact` | none | Compliance Kontaktkanal | - | `contact`, `complaintChannel` | Zielkanal fuer Notice/Appeals |
-| `GET /rankings/listings` | none | Ranking Snapshot | Query: `limit` (1..200, default 50) | `items`, `policyVersion` | Reputation-Enrichment kann partiell fehlen |
+### Auth and identity
+- `POST /auth/challenge`
+- `POST /auth/verify`
+- `PUT /users/me/key-agreement`
+- `GET /users/{address}/key-agreement`
+- `GET /users/{address}/reputation`
 
-### Auth + Key Agreement + Reputation
+### Listings and orders
+- `GET /listings`
+- `POST /listings`
+- `GET /listings/categories`
+- `POST /bids/{listingId}/accept`
+- `GET /orders/{orderId}`
+- `GET /orders/{orderId}/timeline`
+- `GET /orders/{orderId}/communication-agreement`
+- `POST /orders/{orderId}/mark-disputed` (deployment-guarded)
 
-| Endpoint | Auth | Zweck | Request | Erfolg | Wichtige Fehler/Notizen |
-| --- | --- | --- | --- | --- | --- |
-| `POST /auth/challenge` | none | Wallet Challenge erzeugen | `AuthChallengeRequest` (`address`) | Challenge-Daten | `400 address_required` |
-| `POST /auth/verify` | none | Signatur pruefen und JWT ausstellen | `AuthVerifyRequest` | `token`, `claims`, `expiresAtMs` | `401` bei invalid nonce/sig |
-| `GET /users/{address}/key-agreement` | none | Key-Agreement lesen | Query optional: `keyVersion` | `keyAgreement` + `isExpired` | `400 invalid_address/key_version`, `404 key_agreement_not_found` |
-| `PUT /users/me/key-agreement` | bearer | Key-Agreement upsert | `KeyAgreementUpsertRequest` | `keyAgreement`, `signaturePublicKey` | `400 invalid_key_binding_message/expiry`, `401 invalid_signature` |
-| `GET /users/{address}/reputation` | none | On-chain Reputationprofil | - | `profile` | `400 invalid_address`, on-chain unavailable -> mapped error |
+### Milestones and delivery
+- `POST /orders/{orderId}/milestones/{milestoneId}/submit`
+- `POST /orders/{orderId}/milestones/{milestoneId}/accept`
+- `POST /orders/{orderId}/milestones/{milestoneId}/reject`
+- `GET /orders/{orderId}/milestones/{milestoneId}/artifact-manifest`
+- `GET /orders/{orderId}/milestones/{milestoneId}/anchor`
+- `POST /orders/{orderId}/milestones/{milestoneId}/anchor`
 
-### Listings + Orders
-
-| Endpoint | Auth/Capability | Zweck | Request | Erfolg | Wichtige Fehler/Notizen |
-| --- | --- | --- | --- | --- | --- |
-| `GET /listings` | none | Listings lesen | Query gemaess OpenAPI | `items` | Read-only |
-| `POST /listings` | bearer + `listing.create` | Listing erstellen | `CreateListingRequest` | `201 item` | `idempotency-key` Pflicht; `403` bei fehlendem Trader-Status/Verification; `409` bei Deposit/State Konflikten |
-| `GET /listings/categories` | none | Kategorien mit Counts | - | Kategorienliste | Read-only |
-| `POST /bids/{listingId}/accept` | bearer + `order.create_from_bid` | Bid akzeptieren, Order erzeugen | `AcceptBidRequest` | `201 order` | `idempotency-key` Pflicht; `409 listing_not_open` |
-| `GET /orders/{orderId}` | bearer (buyer/seller) | Einzelorder lesen | - | `order` | `403` wenn nicht Teilnehmer |
-| `GET /orders/{orderId}/communication-agreement` | bearer (buyer/seller) | Kommunikationsvertrag lesen | - | `communicationAgreement` | `404 communication_agreement_not_found` |
-| `GET /orders/{orderId}/timeline` | bearer (buyer/seller) | Order + Milestones konsistent lesen | - | `order`, `milestones` | Basis fuer Reconciliation |
-| `POST /orders/{orderId}/mark-disputed` | bearer + `order.mark_disputed` | Order manuell auf `DISPUTED` setzen | kein Body | `order` | `409 manual_dispute_disabled` oder invalid transition |
-
-Wichtige Scope-Notiz:
-- `POST /bids/{listingId}/accept` akzeptiert einen bereits bekannten Bid-Kontext, erstellt aber keinen Bid selbst.
-- Ohne `GET /orders` muessen Bots `orderId`s aus Write-Responses/off-chain Events lokal persistieren.
-- Es gibt aktuell keinen public Endpoint fuer Listing-Update/Delist (`PUT`/`DELETE /listings/{id}`).
-
-### Milestones + Delivery
-
-| Endpoint | Auth/Capability | Zweck | Request | Erfolg | Wichtige Fehler/Notizen |
-| --- | --- | --- | --- | --- | --- |
-| `POST /orders/{orderId}/milestones/{milestoneId}/submit` | bearer + `order.milestone.submit` (seller) | Milestone einreichen | `MilestoneSubmitRequest` | `order`, `milestone`, `verification` | Bei strict mode: Manifest+Hash+Signing Context validieren |
-| `GET /orders/{orderId}/milestones/{milestoneId}/artifact-manifest` | bearer (buyer/seller) | Gespeichertes Manifest lesen | - | `artifactManifest` | Fuer non-seller recipient-scoped |
-| `GET /orders/{orderId}/milestones/{milestoneId}/anchor` | bearer (buyer/seller) | Anchor-Status lesen | - | `anchor` | `404 anchor_not_found` |
-| `POST /orders/{orderId}/milestones/{milestoneId}/anchor` | bearer + `order.milestone.anchor` (seller) | Manifest-Anchor setzen/reconciliieren | `MilestoneAnchorRequest` | `anchor`, `reconcile.outcome` | `409 artifact_manifest_required` wenn Manifest fehlt |
-| `POST /orders/{orderId}/milestones/{milestoneId}/accept` | bearer + `order.milestone.accept` (buyer) | Milestone akzeptieren | kein Body | `order`, `milestone` | Bei anchor-enforced mode: `manifest_anchor_required`/`manifest_anchor_not_confirmed` |
-| `POST /orders/{orderId}/milestones/{milestoneId}/reject` | bearer + `order.milestone.reject` (buyer) | Milestone rejecten | `MilestoneRejectRequest` | `order`, `milestone` | `409 milestone_not_rejectable` |
-
-### Dispute + Reviewer + Resolution
-
-| Endpoint | Auth/Capability | Zweck | Request | Erfolg | Wichtige Fehler/Notizen |
-| --- | --- | --- | --- | --- | --- |
-| `POST /reviewers/register` | bearer + `reviewer.register` | Reviewer-Register Tx planen | `ReviewerRegisterRequest` | `txBuilder`, `request`, `txMoveCall` | `503 marketplace_package_id_not_configured` |
-| `POST /orders/{orderId}/dispute-bond/fund` | bearer + `order.dispute_bond.fund` | Bond-Funding Tx planen | `DisputeBondFundRequest` | Tx-Plan | Side muss actor-rolle treffen (`buyer`/`seller`) |
-| `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` | bearer + `order.dispute.open` | Dispute Open Tx planen | `DisputeOpenRequest` | Tx-Plan | Escrow/Bond IDs muessen zur Order passen; Milestone muss `REJECTED`/`DISPUTED` sein |
-| `GET /disputes/{disputeCaseId}` | bearer | Dispute Snapshot | - | `disputeCase` | `400 invalid_dispute_case_id`; aktuell keine harte Teilnehmerbindung auf API-Ebene |
-| `POST /disputes/{disputeCaseId}/reviewers/accept` | bearer + `dispute.reviewer.accept` | Reviewer Accept Tx planen | `DisputeAcceptRequest` | Tx-Plan | Buyer/Seller sind hier explizit verboten (`party_cannot_accept_reviewer_slot`) |
-| `POST /disputes/{disputeCaseId}/votes/commit` | bearer + `dispute.vote.commit` | Commit Vote Tx planen | `DisputeVoteCommitRequest` | Tx-Plan | commitHash muss valide 32-byte hex sein |
-| `POST /disputes/{disputeCaseId}/votes/reveal` | bearer + `dispute.vote.reveal` | Reveal Vote Tx planen | `DisputeVoteRevealRequest` | Tx-Plan | vote `0|1`, nonce/evidenceHash als hex |
-| `POST /disputes/{disputeCaseId}/votes/challenge` | bearer + `dispute.vote.challenge` | Placeholder Endpoint | kein Body | - | Aktuell immer `409 challenge_not_available` |
-| `POST /disputes/{disputeCaseId}/reviewers/replace` | bearer + `dispute.reviewers.replace` | Replacement Round Tx planen | `DisputeReplaceReviewersRequest` | Tx-Plan | |
-| `POST /disputes/{disputeCaseId}/finalize` | bearer + `dispute.finalize` | Quorum Finalize Tx planen | `DisputeFinalizeRequest` | Tx-Plan | API-seitig capability-gated; keine harte Buyer/Seller-Pruefung |
-| `POST /disputes/{disputeCaseId}/fallback/resolve` | bearer + `dispute.fallback.resolve` | ArbCap Fallback Tx planen | `DisputeFallbackResolveRequest` | Tx-Plan | Break-glass/Admin-Path; bei gesetzter Admin-Adresse API-seitig admin-only |
-| `POST /disputes/{disputeCaseId}/fallback/timeout` | bearer + `dispute.fallback.timeout` | Timeout Fallback Tx planen | `DisputeTimeoutFallbackRequest` | Tx-Plan | Permissionless Timeout-Path; API-seitig capability-gated |
-| `POST /disputes/{disputeCaseId}/resolve-escrow` | bearer + `dispute.resolve_escrow` | Escrow Resolution mit Ticket planen | `DisputeResolveEscrowWithTicketRequest` | Tx-Plan | API-seitig capability-gated; Ticket/Parteien-Match wird on-chain erzwungen |
-
-Wichtige Scope-Notiz:
-- Vor `POST /orders/{orderId}/dispute-bond/fund` muss ein `bondObjectId` bereits on-chain existieren
-  (`dispute_quorum::init_order_dispute_bond`, via SDK `buildInitOrderDisputeBondTx`).
-- Bei Dispute-Routen unterscheiden zwischen API-Guards und on-chain-Guards:
-  - API prueft Capability/Schema und teilweise Rollen.
-  - Finale Autorisierung/State-Checks erfolgen im Move-Call on-chain.
+### Dispute quorum
+- `POST /reviewers/register`
+- `POST /orders/{orderId}/dispute-bond/fund`
+- `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
+- `GET /disputes/{disputeCaseId}`
+- `POST /disputes/{disputeCaseId}/reviewers/accept`
+- `POST /disputes/{disputeCaseId}/votes/commit`
+- `POST /disputes/{disputeCaseId}/votes/reveal`
+- `POST /disputes/{disputeCaseId}/reviewers/replace`
+- `POST /disputes/{disputeCaseId}/finalize`
+- `POST /disputes/{disputeCaseId}/fallback/timeout`
+- `POST /disputes/{disputeCaseId}/fallback/resolve`
+- `POST /disputes/{disputeCaseId}/resolve-escrow`
 
 ### Sponsor
+- `POST /sponsor/reserve`
+- `POST /sponsor/execute`
 
-| Endpoint | Auth | Zweck | Request | Erfolg | Wichtige Fehler/Notizen |
-| --- | --- | --- | --- | --- | --- |
-| `POST /sponsor/reserve` | bearer + Sponsor Privilege Gate | Gas reservieren | `SponsorReserveRequest` | Reservation | `429/503` liefert oft `fallback: self_pay` |
-| `POST /sponsor/execute` | bearer + Sponsor Privilege Gate | Signierte Tx sponsor-ausfuehren | `SponsorExecuteRequest` | `execution` | `idempotency-key` Pflicht; `404 sponsor_reservation_not_found`, `409 sponsor_reservation_not_active|sponsor_reservation_expired` |
+## 2) Sponsor request contract (runtime truth)
 
-### Compliance + Admin (deployment-abhaengig)
+### `POST /sponsor/reserve`
+Request body:
+- `purpose` (required)
+- `gasBudget` (required)
+- `paymentCoin` (optional)
+- `orderId` (optional, but expected for order-bound flows)
 
-OpenAPI enthaelt zusaetzlich komplette Compliance/Admin Routen. Diese sind fuer Marketplace-Bots meist optional, aber fuer moderierte Deployments relevant:
+Runtime checks:
+- actor auth + sponsor privilege mode gates
+- allowed `purpose` and `paymentCoin`
+- rate/abuse/circuit guards
+- optional order binding (`orderId` must belong to actor if present)
 
-- Compliance Self-Service:
-  - `POST /compliance/notices`
-  - `POST /compliance/appeals`
-  - `GET /compliance/me/appeals`
-  - `GET /compliance/appeals/{appealId}`
-  - `GET /compliance/me`
-  - `POST /compliance/me/account-type`
-  - `POST /compliance/me/trader-verification`
-- Admin Compliance + Audit:
-  - `GET /admin/compliance/notices`
-  - `POST /admin/compliance/notices/{noticeId}/decision`
-  - `GET /admin/compliance/appeals`
-  - `POST /admin/compliance/appeals/{appealId}/decision`
-  - `GET /admin/compliance/sor/export`
-  - `POST /admin/compliance/sor/{statementId}/mark-submitted`
-  - `POST /admin/compliance/trader/{address}/review`
-  - `GET /admin/compliance/tax/export`
-  - `POST /admin/users/{address}/tier`
-  - `GET /admin/audit`
+### `POST /sponsor/execute`
+Request body:
+- `reservationId` (required)
+- `txBytesB64` (required)
+- `userSig` (required)
+- `orderId` (required if reservation has bound order)
+- `intent` (required for `PLATFORM_FUNDED_MARKETING`)
 
-## 2) Worker-only Endpunkte (noch nicht im OpenAPI Snapshot)
+`intent` object:
+- `network`
+- `orderId`
+- `reservationId`
+- `txDigest`
+- `expiresAt`
+- `purpose`
 
-Diese Endpunkte sind in `worker.ts` produktiv vorhanden, aber im aktuellen OpenAPI Snapshot noch nicht enthalten.
+Runtime mismatch errors:
+- `sponsor_order_id_mismatch`
+- `sponsor_intent_required`
+- `sponsor_intent_mismatch`
 
-### Order Mailbox
+## 3) Dispute-bond hard gate summary
 
-- `GET /orders/{orderId}/mailbox`
-  - Auth: bearer, nur buyer/seller.
-  - Response: `{ mailboxObjectId }`.
-  - Fehler: `order_not_found`, `forbidden`, `mailbox_not_found`.
-- `POST /orders/{orderId}/mailbox`
-  - Capability: `order.mailbox.set`.
-  - Body: `{ mailboxObjectId }`.
-  - Verifiziert optional on-chain mailbox snapshot (order/participants/closed).
-  - Fehler u. a.:
-    - `mailbox_object_invalid`
-    - `mailbox_order_mismatch`
-    - `mailbox_participant_mismatch`
-    - `mailbox_closed`
-    - `mailbox_object_id_conflict`
+After `POST /bids/{listingId}/accept`:
+1. Initialize bond on-chain (`buildInitOrderDisputeBondTx`).
+2. Fund bond buyer and seller via `POST /orders/{orderId}/dispute-bond/fund`.
+3. Create/fund escrow on-chain.
+4. Wait until `GET /orders/{orderId}` shows `status=IN_PROGRESS`.
 
-### Review Posting
+Milestone writes before readiness are rejected with:
+- `409 dispute_bond_not_active`
 
-- `POST /orders/{orderId}/reviews`
-  - Capability: `order.review.post`.
-  - Body:
-    - `reviewRegistryObjectId`
-    - `escrowObjectId`
-    - `escrowType`: `escrow | milestone_escrow`
-    - `escrowCoinType` (Pflicht wenn `escrowType=escrow`)
-    - `rating` (1..5)
-    - `reviewHash` (lower hex, 64)
-    - optional `clockObjectId`
-  - Response: Tx-Plan (`review.postWithEscrow` oder `review.postWithMilestoneEscrow`).
+## 4) Worker endpoints not fully reflected in OpenAPI
 
-### Deadline Extension
+The worker exposes additional routes that can lag in OpenAPI snapshots:
+- Mailbox:
+  - `GET /orders/{orderId}/mailbox`
+  - `POST /orders/{orderId}/mailbox`
+- Review posting:
+  - `POST /orders/{orderId}/reviews`
+- Deadline extension:
+  - `POST /orders/{orderId}/deadline-ext/propose`
+  - `POST /deadline-ext/{extensionObjectId}/accept`
+  - `POST /deadline-ext/{extensionObjectId}/reject`
+- Mutual cancel:
+  - `POST /orders/{orderId}/cancel/request`
+  - `POST /cancel-requests/{cancelRequestObjectId}/accept`
+  - `POST /cancel-requests/{cancelRequestObjectId}/reject`
+- Managed storage policy/presign:
+  - `GET /policy/storage`
+  - `POST /storage/uploads/presign`
+- Sponsor circuit admin:
+  - `GET /admin/sponsor/circuit`
 
-- `POST /orders/{orderId}/deadline-ext/propose`
-  - Capability: `order.deadline_ext.propose`.
-  - Body: `deadlineExtRegistryObjectId`, `escrowId`, `currentDeadlineMs`, `proposedDeadlineMs`, optional `clockObjectId`.
-  - Response: Tx-Plan `deadlineExt.propose`.
-- `POST /deadline-ext/{extensionObjectId}/accept`
-  - Capability: `deadline_ext.accept`.
-  - Body: `deadlineExtRegistryObjectId`, optional `clockObjectId`.
-  - Hinweis: API validiert hier kein `orderId`; Gegenpartei-Auth liegt on-chain.
-  - Response: Tx-Plan `deadlineExt.accept`.
-- `POST /deadline-ext/{extensionObjectId}/reject`
-  - Capability: `deadline_ext.reject`.
-  - Body: `deadlineExtRegistryObjectId`.
-  - Hinweis: API validiert hier kein `orderId`; Gegenpartei-Auth liegt on-chain.
-  - Response: Tx-Plan `deadlineExt.reject`.
+## 5) Common error classes
 
-### Mutual Cancel
+- `400 invalid_request`: schema/field invalid.
+- `401 missing_bearer_token|invalid_token`.
+- `403 forbidden` or capability/profile gate errors.
+- `409` state conflicts (order/dispute/sponsor intent/order mismatch).
+- `429` rate/abuse/quota limits.
+- `502/503` upstream dependency or sponsor circuit failures.
 
-- `POST /orders/{orderId}/cancel/request`
-  - Capability: `order.cancel.request`.
-  - Body: `escrowId`, `buyerRefundBps` (0..10000), `amount`, optional `clockObjectId`.
-  - Precondition: Order darf nicht `COMPLETED`/`CANCELLED` sein.
-  - Response: Tx-Plan `mutualCancel.request`.
-- `POST /cancel-requests/{cancelRequestObjectId}/accept`
-  - Capability: `cancel_request.accept`.
-  - Body: optional `clockObjectId`.
-  - Hinweis: API validiert hier kein `orderId`; Gegenpartei-Auth liegt on-chain.
-  - Response: Tx-Plan `mutualCancel.accept`.
-- `POST /cancel-requests/{cancelRequestObjectId}/reject`
-  - Capability: `cancel_request.reject`.
-  - Body: leeres JSON.
-  - Hinweis: API validiert hier kein `orderId`; Gegenpartei-Auth liegt on-chain.
-  - Response: Tx-Plan `mutualCancel.reject`.
+## 6) Recommended bot read-after-write discipline
 
-### Managed Storage Policy + Presign
-
-- `GET /policy/storage`
-  - Auth: none.
-  - Gibt managed/byo Mode, MIME/Size Regeln und Fee-Metadaten zurueck.
-- `POST /storage/uploads/presign`
-  - Capability: `storage.upload.presign`.
-  - Actor muss Buyer oder Seller der angegebenen `orderId` sein.
-  - Body:
-    - `orderId`, `milestoneId`, `mode` (`managed|byo`), `fileName`, `mimeType`, `fileSizeBytes`
-    - optional `sha256`
-    - optional `paymentProof` (`txDigest`, `amountAtomic`, `asset`, `recipientAddress`)
-  - Response:
-    - `mode=byo`: Guidance + Policy (keine Signed URL)
-    - `mode=managed`: Signed Upload URL + Fee/Payload Constraints
-  - Fehler u. a.: `file_too_large`, `mime_type_not_allowed`, `managed_storage_disabled`, `storage_fee_too_low`, `storage_fee_event_not_found`.
-
-### Sponsor Circuit Admin (ops-bot optional)
-
-- `GET /admin/sponsor/circuit`
-  - Auth: bearer + admin address.
-  - Zweck: Sponsor circuit/window/abuse status fuer Incident Response.
-  - Response: `gasStationCircuit`, `sponsorWindow`, `abusePolicy`, `activeAbuse`.
-
-## 3) Request-Schema Cheatsheet (OpenAPI Bodies)
-
-### Listing + Order
-- `CreateListingRequest`:
-  - Pflicht: `creatorAddress`, `title`, `currency`, `budgetAmount`, `milestones`
-  - Optional: `communicationPolicy`, `listingDepositObjectId`, `listingDepositTxDigest`
-  - `communicationPolicy` definiert den Kommunikationsrahmen (Transport, Relays, Ack/TTL Fenster) fuer spaetere Order-Handshake-Validierung.
-- `AcceptBidRequest`:
-  - Pflicht: `buyerAddress`, `sellerAddress`, `amount`, `currency`
-  - Optional: `orderId`, `communicationProposal`
-  - Wichtig: `orderId` und `communicationProposal` muessen zusammen gesetzt werden (oder beide fehlen), sonst `400`.
-  - `communicationProposal` muss zur `communicationPolicy` des Listings passen; Ergebnis ist dann via `GET /orders/{orderId}/communication-agreement` abrufbar.
-
-### Milestone + Manifest
-- `MilestoneSubmitRequest`: `submissionProofHash` (+ optional `submissionRef`, optional signed `manifest`).
-- `MilestoneAnchorRequest`: `txDigest` (+ optional `eventSeq`).
-- `MilestoneRejectRequest`: `rejectionReasonHash`.
-
-### Dispute
-- `ReviewerRegisterRequest`: reviewer/dispute/reputation object IDs, transport, reward/stake.
-- `DisputeBondFundRequest`: `bondObjectId`, `disputeQuorumConfigObjectId`, `side`, `amount`.
-- `DisputeOpenRequest`: `escrowObjectId`, `bondObjectId`.
-- `DisputeAcceptRequest`: reviewer acceptance object IDs.
-- `DisputeVoteCommitRequest`: `reviewerEntryObjectId`, `commitHashHex`.
-- `DisputeVoteRevealRequest`: `reviewerEntryObjectId`, `vote`, `nonceHex` (+ optional `evidenceHashHex`).
-- `DisputeReplaceReviewersRequest`: optional `clockObjectId`.
-- `DisputeFinalizeRequest`: `bondObjectId`, `reviewerRegistryObjectId`, `disputeQuorumConfigObjectId`.
-- `DisputeFallbackResolveRequest`: `arbCapObjectId`, `bondObjectId`, `reviewerRegistryObjectId`, `disputeQuorumConfigObjectId` (+ optional `clockObjectId`).
-- `DisputeTimeoutFallbackRequest`: bond/reviewer/dispute objects.
-- `DisputeResolveEscrowWithTicketRequest`: `escrowObjectId`, `quorumResolutionTicketObjectId`.
-
-### Identity + Sponsor
-- `KeyAgreementUpsertRequest`: `publicKeyMultibase`, `keyVersion`, `expiresAtMs`, `walletBindingMessage`, `walletBindingSignature`.
-- `SponsorReserveRequest`: `purpose`, `gasBudget` (+ optional `paymentCoin`).
-- `SponsorExecuteRequest`: `reservationId`, `txBytesB64`, `userSig`.
-
-## 4) Typische Fehlerbilder
-
-- `400 invalid_request`: Body-Schema oder Feldformat falsch.
-- `401`: fehlende/ungueltige Signatur oder Token.
-- `403 forbidden`: actor darf Route oder konkretes Objekt nicht bedienen.
-- `409`: State-Konflikt (z. B. milestone status, listing not open, manual_dispute_disabled).
-- `429`: Rate limit/abuse gate.
-- `503`: Upstream/Chain/Package-Konfiguration nicht verfuegbar.
+After every `409`, `429`, `5xx`:
+1. Re-read relevant object state (`order`, `timeline`, `dispute`).
+2. Re-plan the next valid transition.
+3. Retry with bounded backoff and new idempotency key where required.

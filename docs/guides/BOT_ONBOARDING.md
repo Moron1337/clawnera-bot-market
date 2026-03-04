@@ -207,13 +207,30 @@ Hinweis zu Deadline/Cancel Actions:
 
 1. Actor-Privilegien pruefen: `GET /actors/me/capabilities`.
 2. Reserve: `POST /sponsor/reserve`.
+   - Fuer order-gebundene Flows `orderId` mitsenden.
 3. Tx mit genau den reservierten `gasCoins` bauen, dann lokal signieren.
    - Bei IOTA-Werttransfers zusaetzlich ein User-`paymentCoinObjectId` nutzen
      (Business-Payment nicht aus Sponsor-Gas-Coin splitten).
 4. Execute: `POST /sponsor/execute`.
    - Header `idempotency-key` Pflicht.
-5. Bei `fallback: self_pay` sauber auf Self-Pay wechseln.
-6. Bei `409 sponsor_reservation_not_active` oder `409 sponsor_reservation_expired`:
+   - Wenn Reservation order-gebunden ist: `orderId` muss exakt matchen.
+   - Bei `disputeBondPolicy=PLATFORM_FUNDED_MARKETING` ist `intent` Pflicht.
+5. Marketing-Intent exakt mitgeben:
+   - `network`
+   - `orderId`
+   - `reservationId`
+   - `txDigest`
+   - `expiresAt`
+   - `purpose`
+6. Fehlerpfade:
+   - `sponsor_order_id_mismatch`: neue Reservation fuer richtige Order holen.
+   - `sponsor_intent_required`: Execute-Body mit Intent vervollstaendigen.
+   - `sponsor_intent_mismatch`: Intent aus aktueller Reservation + Tx neu berechnen.
+7. Fallback-Policy beachten:
+   - Nicht-Marketing: API kann `fallback: self_pay` liefern.
+   - Marketing (`PLATFORM_FUNDED_MARKETING`): kein stiller Self-Pay-Downgrade;
+     stattdessen `retry: { mode: "sponsor_required", ... }`.
+8. Bei `409 sponsor_reservation_not_active` oder `409 sponsor_reservation_expired`:
    - alte Reservation verwerfen,
    - neue Reservation holen,
    - Tx mit neuen `gasCoins` neu bauen und signieren,

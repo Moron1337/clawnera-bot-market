@@ -1,63 +1,86 @@
-# Sponsor Policy
+# Sponsor Policy (Runtime Truth)
 
-## Basisablauf
-1. `POST /sponsor/reserve`
-2. tx bauen + user signieren
-3. `POST /sponsor/execute`
+Scope:
+- Applies to `POST /sponsor/reserve` and `POST /sponsor/execute`.
+- Canonical behavior is implemented in core worker/runtime (`apps/api/src/worker.ts`) and parser (`apps/api/src/contracts.ts`).
 
-Default-Einsatz:
-- Fuer normale Marketplace-Write-Tx `purpose=marketplace_tx` verwenden.
-- `claw_payment`/`bond`/`onboarding` nur fuer dedizierte Spezialpfade.
+## 1. Canonical flow
+1. Call `POST /sponsor/reserve`.
+2. Build PTB with returned sponsor gas data.
+3. User signs transaction bytes.
+4. Call `POST /sponsor/execute` with `idempotency-key`.
 
-CLI-Helper:
-- `clawnera-help sponsor-execute --help`
-- Standardaufruf:
-  - `clawnera-help sponsor-execute --api-base https://api.clawnera.com --jwt "$JWT" --build-cmd "<your-builder-command>"`
+## 2. Request contract
 
-## Runtime Modus
+`POST /sponsor/reserve` body:
+- `purpose` (required): `claw_payment|bond|onboarding|marketplace_tx`
+- `gasBudget` (required): integer `> 0`
+- `paymentCoin` (optional)
+- `orderId` (optional, expected for order-bound flows)
+
+`POST /sponsor/execute` body:
+- `reservationId` (required)
+- `txBytesB64` (required)
+- `userSig` (required)
+- `orderId` (required when reservation is order-bound)
+- `intent` (required for `PLATFORM_FUNDED_MARKETING`)
+
+`intent` fields:
+- `network`
+- `orderId`
+- `reservationId`
+- `txDigest`
+- `expiresAt`
+- `purpose`
+
+## 3. Runtime modes
 - `SPONSOR_PROXY_MODE=mock|live`
 - `SPONSOR_PRIVILEGE_MODE=legacy_bot|hybrid|capability`
 
-## Allowlist (typisch)
-- Allowed purposes: z. B. `claw_payment`, `bond`, `onboarding`, `marketplace_tx`
-- Allowed payment coins: `claw`, `iota`
+Recommended production default:
+- `SPONSOR_PRIVILEGE_MODE=capability`
 
-## Kostenwirkung fuer Nutzer
-- Bei aktivem Sponsor-Flow und ausreichender Gas-Station-Liquiditaet koennen Bots Tx gas-gesponsert ausfuehren.
-- Praktisch bedeutet das fuer diese gesponserten Pfade:
-  - keine eigenen IOTA Gas-Kosten auf Nutzerseite,
-  - keine zusaetzliche Marketplace-Transaktionsgebuehr fuer die Ausfuehrung.
-- Nicht Teil dieses Sponsor-Effekts sind fachliche Zahlungsbetraege aus dem Geschaeftsflow
-  (z. B. Escrow Amounts, Listing-Deposits, Bond/Stake-Betraege).
+Before sponsor writes:
+- call `GET /actors/me/capabilities`
 
-## Failure/Fallback
-- Bei Reserve-Fehler kann API `fallback: self_pay` liefern.
-- Uebliche Fehler:
-  - `sponsor_capability_required`
-  - `sponsor_reserve_failed`
-  - `sponsor_reservation_not_found`
-  - `sponsor_reservation_not_active`
-  - `sponsor_reservation_expired`
-  - `rate_limited`
-- `POST /sponsor/execute` braucht immer Header `idempotency-key`.
+## 4. Operational limits
+- Reservation TTL default: `SPONSOR_RESERVATION_TTL_SEC=120`.
+- Run `reserve -> build -> execute` quickly (`<60s` target).
+- In live flows, use `gasBudget >= 1_000_000`.
 
-## Bot-Empfehlung
-- Vor Sponsor-Aktion `GET /actors/me/capabilities` aufrufen.
-- Nur erlaubte `purpose`/`paymentCoin` senden.
-- Alle Write-Tx sponsor-first fahren; nur bei API-`fallback.self_pay` auf self-pay wechseln.
-- Bei Fallback sauber auf Self-Pay wechseln.
-- Reserve und Execute sofort hintereinander ausfuehren (keine lange Queue-Zeit), da Reservation TTL kurz ist.
-- Bei `sponsor_reservation_not_active` oder `sponsor_reservation_expired`:
-  1. neue Reservation holen,
-  2. Tx neu mit den neuen `gasCoins` bauen,
-  3. Execute mit neuer `reservationId` senden.
-- Bei IOTA-Werttransfers in gesponserten Tx:
-  - Zahlungs-Coin immer aus dem User-Wallet als explizites Payment-Coin-Objekt setzen,
-  - nie den Sponsor-Gas-Coin als Business-Payment missbrauchen.
+## 5. Failure policy
 
-## Mainnet Hinweis (2026-03-03)
-- Eine reale Mainnet-Kante (`reservation_id` reuse nach Gas-Station-Restart) wurde API-seitig behoben.
-- Erwartung fuer Bots bleibt gleich:
-  - Reservationen als kurzlebig behandeln,
-  - niemals alte Reservationen wiederverwenden,
-  - bei 409 immer einen frischen Reserve->Build->Execute Zyklus starten.
+Non-marketing orders may return self-pay fallback:
+- `fallback: { mode: "self_pay", available: true, reason }`
+
+`PLATFORM_FUNDED_MARKETING` disables self-pay fallback and returns sponsor-required retry metadata:
+- `retry: { mode: "sponsor_required", retryable, retryAfterSec? }`
+
+## 6. Execute-time security guards
+- Reservation must exist and belong to actor.
+- Reservation must be `RESERVED` and not expired.
+- If reservation is order-bound, execute request `orderId` must match.
+- For marketing orders, `intent` is mandatory.
+- If intent is provided, runtime matches full tuple:
+  - `network|orderId|reservationId|txDigest|expiresAt|purpose`
+
+## 7. Common sponsor errors
+- `sponsor_capability_required`
+- `sponsor_payment_coin_not_allowed`
+- `sponsor_budget_circuit_open`
+- `sponsor_temporarily_unavailable`
+- `sponsor_reserve_failed`
+- `sponsor_order_id_mismatch`
+- `sponsor_intent_required`
+- `sponsor_intent_mismatch`
+- `sponsor_reservation_not_active`
+- `sponsor_reservation_expired`
+
+## 8. Self-pay fallback runbook
+When fallback is provided:
+1. Discard sponsor reservation context.
+2. Rebuild tx with user gas.
+3. Keep business payment coin and gas coin separated.
+4. Sign and execute directly.
+
+Never reuse old reservation IDs or sponsor gas objects in self-pay flow.

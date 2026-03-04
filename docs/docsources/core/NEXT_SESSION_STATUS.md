@@ -93,6 +93,30 @@
   - `GET /health`, `GET /ready`, `GET /listings`, `GET /policy/fees` jeweils `200`.
   - Evidenz: `docs/reports/api-http-smoke-test-test-prod-20260304.md`.
 
+## Status Update (2026-03-04, Anchor/Timeout Threshold Tuning nach 48h Produktionsfenster abgeschlossen)
+- [x] Produktionsdaten ausgewertet (Prometheus + `request_metrics`, 24h/48h Window):
+  - `backend_timeout_max_5m=1`
+  - `manifest_anchor_required_max_5m=0`
+  - `manifest_anchor_not_confirmed_max_5m=0`
+  - `anchor_poll_latency_p95_max_15m=554ms`
+  - `anchor_poll_total_max_15m=4`
+- [x] Dashboard-Default-Thresholds final getuned:
+  - `DASHBOARD_ALERT_MANIFEST_ANCHOR_REQUIRED_THRESHOLD=1` (vorher `5`)
+  - `DASHBOARD_ALERT_MANIFEST_ANCHOR_NOT_CONFIRMED_THRESHOLD=2` (vorher `5`)
+  - `DASHBOARD_ALERT_BACKEND_TIMEOUT_THRESHOLD=2` (vorher `3`)
+  - `DASHBOARD_ALERT_ANCHOR_POLL_P95_LATENCY_MS=1200` (vorher `5000`)
+  - `DASHBOARD_ALERT_ANCHOR_POLL_MIN_SAMPLES=3` (vorher `5`)
+- [x] Prometheus-Alerts final getuned:
+  - `ClawdexBackendTimeoutSpike`: `>2` (vorher `>3`)
+  - neu: `ClawdexAnchorRequiredSpike` (`>=1`)
+  - `ClawdexAnchorNotConfirmedSpike`: `>2` (vorher `>3`)
+- [x] Observability-Re-Deploy + Rule-Check erfolgreich:
+  - `deploy_observability_server_core.sh` ausgefuehrt
+  - Prometheus-Rules enthalten neue/angepasste Alerts
+  - kein aktiver firing-Alert fuer diese Regeln beim Check.
+- [x] Evidenz:
+  - `docs/reports/anchor-timeout-threshold-tuning-20260304.md`
+
 ## Status Update (2026-03-04, TASK-SP-205 orderId-Transition fuer Sponsor-Flow umgesetzt)
 - [x] `TASK-SP-205` umgesetzt:
   - Neue Runtime-Policy: `SPONSOR_ORDER_ID_MODE=optional|required` (Default `optional`).
@@ -641,7 +665,7 @@
   - Smoke (`/health`, `/ready`, `/listings`, `/policy/fees`) + dokumentierter Go/No-Go *(preflight_mainnet_readiness.sh)*.
 
 ### P1 - Stabilitaet und Betrieb
-- [ ] Monitoring-Thresholds fuer Anchor/Timeouts nach 24-48h Produktionsfenster final tunen.
+- [x] Monitoring-Thresholds fuer Anchor/Timeouts nach 24-48h Produktionsfenster final tunen. **(2026-03-04, siehe `docs/reports/anchor-timeout-threshold-tuning-20260304.md`)**
 - [ ] Security-Cutover ausfuehren (produktive Secrets rotieren + Post-Rotation-Verify). *(Tooling: `rotate_secrets_with_verify.sh` bereit)*
 - [x] Release-Gates in CI/Deploy verankern, damit die Test-/Abnahme-Reihenfolge nicht manuell vergessen werden kann. **(2026-03-02, config-drift in CI + release_gate_predeploy)**
 

@@ -116,15 +116,23 @@ Contract-side campaign gate:
 - conditional: `orderId` required when reservation is order-bound
 - policy: `orderId` globally required once `SPONSOR_ORDER_ID_MODE=required`
 - conditional: `intent` required for `PLATFORM_FUNDED_MARKETING`
+- conditional: `intentSig` required whenever `intent` is sent
 
 `intent` fields:
 - `network`, `orderId`, `reservationId`, `txDigest`, `expiresAt`, `purpose`
+
+`intentSig` signing format:
+- first line: `CLAWDEX Sponsor Execute Intent v1`
+- second line:
+  - `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`
 
 Mismatch/guard errors:
 - `sponsor_order_id_required`
 - `sponsor_order_id_mismatch`
 - `sponsor_intent_required`
 - `sponsor_intent_mismatch`
+- `sponsor_intent_signature_required`
+- `sponsor_intent_signature_invalid`
 - `sponsor_temporarily_unavailable` (`503` + `Retry-After`)
 
 Operational constraints:

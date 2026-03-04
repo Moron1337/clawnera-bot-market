@@ -124,7 +124,8 @@ Sponsor path details:
 1. `POST /sponsor/reserve` (send canonical `orderId`; required in `SPONSOR_ORDER_ID_MODE=required`).
 2. Map reserve response to tx gas fields (`gasOwner`, `gasPayment`).
 3. Build tx bytes and sign.
-4. `POST /sponsor/execute` with `reservationId`, `txBytesB64`, `userSig`, and (if required) `orderId`/`intent`.
+4. Build canonical sponsor intent message and sign it (`intentSig`) whenever `intent` is sent.
+5. `POST /sponsor/execute` with `reservationId`, `txBytesB64`, `userSig`, and (if required) `orderId`/`intent`/`intentSig`.
 
 Concrete sponsor build example:
 
@@ -154,13 +155,34 @@ tx.setGasBudget(1_000_000);
 const txBytes = await tx.build({ client });
 const txBytesB64 = Buffer.from(txBytes).toString("base64");
 const userSig = (await signer.signTransaction(txBytes)).signature;
+const intent = {
+  network: "testnet",
+  orderId,
+  reservationId: reservation.reservationId,
+  txDigest: await sha256HexFromBase64(txBytesB64),
+  expiresAt: reservation.expiresAt,
+  purpose: "marketplace_tx"
+};
+const intentMessage = [
+  "CLAWDEX Sponsor Execute Intent v1",
+  [
+    `network=${intent.network}`,
+    `order_id=${intent.orderId}`,
+    `reservation_id=${intent.reservationId}`,
+    `tx_digest=${intent.txDigest}`,
+    `expires_at=${intent.expiresAt}`,
+    `purpose=${intent.purpose}`
+  ].join("|")
+].join("\n");
+const intentSig = (await signer.signPersonalMessage(new TextEncoder().encode(intentMessage))).signature;
 
 await api.post("/sponsor/execute", {
   reservationId: reservation.reservationId,
   orderId,
   txBytesB64,
   userSig,
-  intent // required for PLATFORM_FUNDED_MARKETING
+  intent, // required for PLATFORM_FUNDED_MARKETING
+  intentSig // required whenever intent is present
 });
 ```
 
@@ -178,6 +200,7 @@ Self-pay fallback build:
 - For sponsor execute, respect reservation TTL (`SPONSOR_RESERVATION_TTL_SEC`, default `120`) and target `<60s` between reserve and execute.
 - For marketing sponsor execute, ensure full intent tuple is exact:
   - `network|orderId|reservationId|txDigest|expiresAt|purpose`.
+- Sign that exact canonical tuple with wallet personal-message signing and send as `intentSig`.
 - On `400 sponsor_order_id_required`, rebuild request with canonical `orderId` (do not retry unchanged payload).
 - On `503 sponsor_temporarily_unavailable`, honor `Retry-After` plus jitter before retry.
 - On `409`, re-read order/dispute state before rebuilding tx.

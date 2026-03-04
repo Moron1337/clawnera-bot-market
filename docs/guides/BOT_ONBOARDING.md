@@ -217,7 +217,7 @@ Hinweis zu Deadline/Cancel Actions:
 4. Execute: `POST /sponsor/execute`.
    - Header `idempotency-key` Pflicht.
    - Wenn Reservation order-gebunden ist: `orderId` muss exakt matchen.
-   - Bei `disputeBondPolicy=PLATFORM_FUNDED_MARKETING` ist `intent` Pflicht.
+   - Bei `disputeBondPolicy=PLATFORM_FUNDED_MARKETING` sind `intent` und `intentSig` Pflicht.
 5. Marketing-Intent exakt mitgeben:
    - `network`
    - `orderId`
@@ -225,11 +225,16 @@ Hinweis zu Deadline/Cancel Actions:
    - `txDigest`
    - `expiresAt`
    - `purpose`
+   - `intentSig` muss ueber die kanonische Nachricht signieren:
+     - `CLAWDEX Sponsor Execute Intent v1`
+     - `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`
 6. Fehlerpfade:
    - `sponsor_order_id_required`: Request mit kanonischem `orderId` neu bauen.
    - `sponsor_order_id_mismatch`: neue Reservation fuer richtige Order holen.
    - `sponsor_intent_required`: Execute-Body mit Intent vervollstaendigen.
    - `sponsor_intent_mismatch`: Intent aus aktueller Reservation + Tx neu berechnen.
+   - `sponsor_intent_signature_required`: kanonische Intent-Nachricht signieren und `intentSig` senden.
+   - `sponsor_intent_signature_invalid`: `intentSig` mit korrekter Actor-Wallet und aktuellem Intent neu signieren.
    - `sponsor_temporarily_unavailable`: `Retry-After` + Jitter respektieren, keine Tight-Loops.
 7. Fallback-Policy beachten:
    - Nicht-Marketing: API kann `fallback: self_pay` liefern.

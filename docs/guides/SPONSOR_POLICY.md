@@ -67,6 +67,7 @@ If `gasCoins` is empty/unusable:
 - `userSig` (required)
 - `orderId` (optional in compatibility mode): required when `SPONSOR_ORDER_ID_MODE=required`
 - `intent` (required for `PLATFORM_FUNDED_MARKETING`)
+- `intentSig` (required whenever `intent` is sent; mandatory for marketing orders)
 
 `intent` fields:
 - `network`
@@ -75,6 +76,11 @@ If `gasCoins` is empty/unusable:
 - `txDigest`
 - `expiresAt`
 - `purpose`
+
+Canonical signing message (for `intentSig`):
+- Prefix line: `CLAWDEX Sponsor Execute Intent v1`
+- Tuple line (strict order):
+  - `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`
 
 ## 3. Runtime modes
 - `SPONSOR_PROXY_MODE=mock|live`
@@ -114,6 +120,7 @@ Non-marketing orders may return self-pay fallback:
 - For marketing orders, `intent` is mandatory.
 - If intent is provided, runtime matches full tuple:
   - `network|orderId|reservationId|txDigest|expiresAt|purpose`
+- If `intent` is present, API requires `intentSig` and verifies that the actor wallet signed the canonical intent message.
 
 ## 7. Common sponsor errors
 - `sponsor_capability_required`
@@ -125,6 +132,8 @@ Non-marketing orders may return self-pay fallback:
 - `sponsor_order_id_mismatch`
 - `sponsor_intent_required`
 - `sponsor_intent_mismatch`
+- `sponsor_intent_signature_required`
+- `sponsor_intent_signature_invalid`
 - `sponsor_reservation_not_active`
 - `sponsor_reservation_expired`
 

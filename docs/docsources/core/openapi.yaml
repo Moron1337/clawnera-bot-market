@@ -3084,6 +3084,15 @@ components:
             `SPONSOR_ORDER_ID_MODE=required` is enabled.
         intent:
           $ref: "#/components/schemas/SponsorExecutionIntentRequest"
+        intentSig:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          description: |
+            Serialized wallet personal-message signature over the canonical
+            sponsor intent string:
+            `network|order_id|reservation_id|tx_digest|expires_at|purpose`.
+            Required whenever `intent` is provided.
     SponsorExecutionIntentRequest:
       type: object
       additionalProperties: false

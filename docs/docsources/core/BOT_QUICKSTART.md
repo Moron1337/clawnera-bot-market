@@ -76,7 +76,10 @@ If violated, API returns:
 4. Sign tx bytes.
 5. Execute: `POST /sponsor/execute` with `idempotency-key`.
    - if reservation is order-bound: pass matching `orderId`.
-   - if `disputeBondPolicy=PLATFORM_FUNDED_MARKETING`: pass full `intent` object.
+   - if `disputeBondPolicy=PLATFORM_FUNDED_MARKETING`: pass full `intent` object plus `intentSig`.
+   - whenever `intent` is sent, `intentSig` must sign canonical message:
+     - `CLAWDEX Sponsor Execute Intent v1`
+     - `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`
 6. Timing discipline:
    - reservation TTL default is `120s`
    - target `<60s` between reserve and execute.
@@ -95,6 +98,8 @@ Important sponsor errors:
 - `sponsor_order_id_mismatch`
 - `sponsor_intent_required`
 - `sponsor_intent_mismatch`
+- `sponsor_intent_signature_required`
+- `sponsor_intent_signature_invalid`
 - `sponsor_reservation_not_active`
 - `sponsor_reservation_expired`
 

@@ -109,6 +109,7 @@ Request body:
 - `userSig` (required)
 - `orderId` (required if reservation is order-bound; globally required in `SPONSOR_ORDER_ID_MODE=required`)
 - `intent` (required for `PLATFORM_FUNDED_MARKETING`)
+- `intentSig` (required whenever `intent` is present)
 
 `intent` object:
 - `network`
@@ -118,11 +119,18 @@ Request body:
 - `expiresAt`
 - `purpose`
 
+Canonical signing string for `intentSig`:
+- first line: `CLAWDEX Sponsor Execute Intent v1`
+- second line:
+  - `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`
+
 Runtime mismatch errors:
 - `sponsor_order_id_required`
 - `sponsor_order_id_mismatch`
 - `sponsor_intent_required`
 - `sponsor_intent_mismatch`
+- `sponsor_intent_signature_required`
+- `sponsor_intent_signature_invalid`
 
 Operational circuit behavior:
 - on `503 sponsor_temporarily_unavailable`, API returns `Retry-After` header (and retry metadata payload)

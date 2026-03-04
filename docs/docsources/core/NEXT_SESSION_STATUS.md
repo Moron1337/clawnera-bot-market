@@ -1,5 +1,32 @@
 # Next Session Status (2026-02-27)
 
+## Status Update (2026-03-04, Sponsor Intent Signature Domain-Separation finalisiert)
+- [x] Sponsor Execute Intent kryptografisch gehaertet:
+  - Neues Feld `intentSig` im `POST /sponsor/execute` Request (Parser/OpenAPI/Doku aktualisiert).
+  - Kanonische Signier-Message eingefuehrt:
+    - `CLAWDEX Sponsor Execute Intent v1`
+    - `network|order_id|reservation_id|tx_digest|expires_at|purpose`
+  - API verifiziert `intentSig` gegen Actor-Wallet (`verifySignedMessageForAddress`) und lehnt bei Abweichung ab.
+  - Neue Guard-Fehler:
+    - `sponsor_intent_signature_required`
+    - `sponsor_intent_signature_invalid`
+- [x] Negative Security-Tests erweitert:
+  - Replay mit alter Reservation -> `sponsor_reservation_not_active`
+  - Replay auf andere Order/Reservation -> `sponsor_intent_mismatch`
+  - Mutation von `txBytesB64` bei sonst gueltigem Intent -> `sponsor_intent_mismatch` (`tx_digest`)
+- [x] Verifikation (2026-03-04):
+  - `corepack pnpm --filter @clawdex/api typecheck` -> PASS.
+  - `corepack pnpm --filter @clawdex/api lint` -> PASS.
+  - `corepack pnpm --filter @clawdex/api test` -> `25 passed | 3 skipped` files, `298 passed | 3 skipped` tests.
+  - On-chain:
+    - `corepack pnpm dispute-quorum:onchain:e2e:testnet` (zweimal) -> extern `faucet_failed_500` (Testnet-Faucet).
+    - `DQ_ENABLE_FAUCET=0 corepack pnpm dispute-quorum:onchain:e2e:testnet` abgeschlossen; Report:
+      - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T184111431Z.json`
+      - `docs/reports/dispute-quorum-onchain-e2e-testnet-20260304T184111431Z.md`
+    - Erwartete externe Blocker unveraendert:
+      - `reviewer_prequalified_keys_required`
+      - `arb_signer_required_for_platform_fallback`.
+
 ## Status Update (2026-03-04, TASK-SP-205 orderId-Transition fuer Sponsor-Flow umgesetzt)
 - [x] `TASK-SP-205` umgesetzt:
   - Neue Runtime-Policy: `SPONSOR_ORDER_ID_MODE=optional|required` (Default `optional`).
@@ -587,7 +614,7 @@
   - Option A: `GET /actors/me/capabilities` um `sponsor.quotaRemaining`/`sponsor.quotaTier` erweitern.
   - Option B: Neuer Endpoint `GET /sponsor/quota` mit `remaining`, `limit`, `resetAt`.
   - Ziel: Bots koennen pre-flight pruefen ob Sponsoring verfuegbar ist, statt blind Reserve aufzurufen.
-- [ ] Signatur-/Intent-Domain-Separation fuer Sponsor-Flow:
+- [x] Signatur-/Intent-Domain-Separation fuer Sponsor-Flow: **(2026-03-04)**
   - User-Signatur muss einen kanonischen Intent decken: `network|order_id|reservation_id|tx_digest|expires_at|purpose`.
   - Execute akzeptiert nur, wenn Intent frisch/gueltig ist und exakt zum reservierten Kontext passt.
   - Negative Tests: replay mit alter reservation, replay auf anderer order, mutation von `txBytesB64`.

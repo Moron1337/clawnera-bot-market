@@ -66,6 +66,7 @@ copy_if_exists "$MARKETPLACE_SOURCE_ROOT/docs/NEXT_SESSION_STATUS.md" "$OUT_DIR/
 
 # API + contract machine-readable references
 copy_if_exists "$MARKETPLACE_SOURCE_ROOT/apps/api/openapi.yaml" "$OUT_DIR/core/openapi.yaml"
+copy_if_exists "$MARKETPLACE_SOURCE_ROOT/packages/sdk/src/generated/apiContract.json" "$OUT_DIR/core/apiContract.json"
 copy_if_exists "$MARKETPLACE_SOURCE_ROOT/contracts/claw_marketplace/ci/callable_surface.snapshot" "$OUT_DIR/core/callable_surface.snapshot"
 
 # CLAW ecosystem docs

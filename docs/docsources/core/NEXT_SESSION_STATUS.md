@@ -44,6 +44,15 @@ Older session history stays in git and under `docs/reports/`.
   - `POST /auth/logout`
   - rotating refresh token bound to persisted session state
   - legacy sid-less access tokens remain readable during rollout
+- OpenAPI/runtime parity is now CI-gated and exported as a generated SDK contract:
+  - generator: `apps/api/scripts/openapi-contract-artifacts.mjs`
+  - artifacts:
+    - `packages/sdk/src/generated/apiContract.ts`
+    - `packages/sdk/src/generated/apiContract.json`
+  - CI gate:
+    - route + method parity
+    - request required-field snapshots
+    - response/error-class snapshots
 - Signer hardening in repo is largely complete:
   - audit sink
   - review UI
@@ -60,6 +69,7 @@ Older session history stays in git and under `docs/reports/`.
 - `docs/reports/live-bot-flows-reverify-20260306.md`
 - `docs/reports/auth-session-refresh-20260306.md`
 - `docs/reports/mailbox-ergonomics-live-proof-20260306.md`
+- `docs/reports/openapi-runtime-parity-20260306.md`
 - `docs/reports/signing-queue-audit-sink-20260306.md`
 - `docs/reports/signer-review-ui-20260306.md`
 - `docs/reports/signer-signing-packet-20260306.md`
@@ -82,16 +92,12 @@ The marketplace is only "best in class" when all of the following are true:
 
 These are the real gaps, ordered by impact on bot adoption:
 
-1. OpenAPI parity is still incomplete.
-   - Runtime is the source of truth in several areas.
-   - Result: third-party integrators still have to cross-read worker code.
-
-2. Sponsor/Gas-Station reliability is good, but not yet fully productized.
+1. Sponsor/Gas-Station reliability is good, but not yet fully productized.
    - Budget estimation, strict/optional policy exposure, and fallback behavior still need more ergonomic surfaces.
 
-3. `prod` managed storage is still on public Pinata while test/staging are already private.
+2. `prod` managed storage is still on public Pinata while test/staging are already private.
 
-4. Multisig cutover is code-ready but not operationally finished.
+3. Multisig cutover is code-ready but not operationally finished.
    - Real hardware pubkeys and a real dry-run are still outstanding.
 
 ## 4. Recommended Execution Order
@@ -107,6 +113,7 @@ This is the recommended order for implementation. Follow it unless a production 
 4. `TASK-MKT-004`: JWT/session refresh for long-lived bot runtimes
    - status: completed on `2026-03-06`
 5. `TASK-MKT-005`: OpenAPI/runtime parity and generated client contracts
+   - status: completed on `2026-03-06`
 6. `TASK-MKT-006`: Sponsor reliability and tx-planning ergonomics
 7. `TASK-MKT-007`: Production private managed-storage cutover
 8. `TASK-MKT-008`: Search/ranking/discovery quality for serious bot usage
@@ -326,6 +333,21 @@ Acceptance:
 Goal:
 - There must be one trustworthy machine-readable API contract.
 
+Status:
+- Completed on `2026-03-06`.
+- Delivered:
+  - generated contract artifacts:
+    - `packages/sdk/src/generated/apiContract.ts`
+    - `packages/sdk/src/generated/apiContract.json`
+  - generator and freshness gate:
+    - `apps/api/scripts/openapi-contract-artifacts.mjs`
+    - `pnpm ci:openapi-contracts`
+  - stronger parity coverage:
+    - route + method parity against runtime
+    - request required-field snapshots
+    - response/error-class snapshots for auth, sponsor, review, deadline, and cancel flows
+  - bot-market sync now mirrors the generated contract artifact alongside `openapi.yaml`
+
 Implementation:
 - Bring every live runtime route into `openapi.yaml`.
 - Add CI drift checks:
@@ -348,6 +370,11 @@ Primary files:
 Acceptance:
 - Integrators no longer need worker source to understand runtime behavior.
 - OpenAPI drift becomes a CI failure, not a documentation accident.
+- Contract fulfilled on `2026-03-06`:
+  - `apps/api` OpenAPI artifact freshness tests green
+  - `apps/api` route/method drift tests green
+  - `packages/sdk` generated contract tests green
+  - `ci` includes `OpenAPI contract drift check`
 
 ### `TASK-MKT-006`: Sponsor reliability and tx-planning ergonomics
 
@@ -554,21 +581,21 @@ Acceptance:
 
 ## 6. What To Do First
 
-Start with `TASK-MKT-005`.
+Start with `TASK-MKT-006`.
 
 Reason:
 - `TASK-MKT-001` is closed enough to stop digging.
 - `TASK-MKT-002` is closed enough to stop digging.
-- `TASK-MKT-004` is now closed with a persisted rotating refresh/session model.
-- OpenAPI/runtime parity is the next biggest trust and integration gap.
-- It removes the need for third-party bots to keep cross-reading worker internals.
+- `TASK-MKT-005` is now closed with generated contract artifacts and CI drift gates.
+- Sponsor reliability is now the highest remaining bot-runtime product gap.
+- It is the next place where operator knowledge still leaks into integrations.
 
-Immediate sub-steps for `TASK-MKT-005`:
-1. Bring every remaining live runtime route and major response shape into `openapi.yaml`.
-2. Add stronger route/request/response drift checks in CI.
-3. Generate typed contract artifacts for SDK/docs reuse.
-4. Close remaining runtime-vs-doc mismatches in sponsor, deadline, cancel, and review flows.
-5. Keep `clawnera-bot-market` synced from those machine-readable artifacts.
+Immediate sub-steps for `TASK-MKT-006`:
+1. Add canonical gas-budget estimation helpers for common tx families.
+2. Expose clearer sponsor diagnostics and strict-vs-optional policy surfaces in capabilities/policy responses.
+3. Add a contract-documented sponsor dry-run or preflight path where runtime cost permits.
+4. Harden sponsor metrics and alerting around reserve/execute latency, failure rate, and fallback rate.
+5. Keep `clawnera-bot-market` aligned with those runtime-visible sponsor policies.
 
 ## 7. Things To Avoid
 
@@ -598,7 +625,7 @@ Persistent terminal:
 
 ## 9. Decision
 
-The next real work should start on stricter OpenAPI parity, then sponsor ergonomics, then production private managed storage.
+The next real work should start on sponsor ergonomics, then production private managed storage, then search/ranking quality.
 
 The contract core is no longer the main bottleneck.
 The main bottleneck is now product integration friction.

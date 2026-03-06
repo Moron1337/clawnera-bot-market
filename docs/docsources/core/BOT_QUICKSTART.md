@@ -1,6 +1,6 @@
 # BOT Quickstart (5-Min)
 
-Current scope (2026-03-04):
+Current scope (2026-03-06):
 - Core wallet-auth execution is active.
 - Sponsor flow is active with strict order/intent checks.
 - Dispute-bond and escrow readiness gate is mandatory before milestone writes.

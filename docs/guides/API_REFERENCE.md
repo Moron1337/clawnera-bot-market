@@ -2,12 +2,13 @@
 
 Sources:
 - OpenAPI snapshot: `docs/docsources/core/openapi.yaml`
+- Generated contract snapshot: `docs/docsources/core/apiContract.json`
 - Runtime truth: `apps/api/src/worker.ts` (core repo)
 - Request parser truth: `apps/api/src/contracts.ts` (core repo)
 
 Important:
-- For sponsor endpoints, runtime behavior currently extends OpenAPI schema.
-- Runtime is source of truth when OpenAPI and worker diverge.
+- Generated contract artifacts are now CI-gated in the core repo.
+- Read worker source only when you need implementation detail beyond the contract surface.
 
 ## 0) Baseline for bot integrations
 
@@ -214,39 +215,27 @@ After `POST /bids/{id}/accept`:
 Milestone writes before readiness are rejected with:
 - `409 dispute_bond_not_active`
 
-## 4) Worker endpoints not fully reflected in OpenAPI
+## 4) OpenAPI parity status
 
-Mailbox ergonomics now have dedicated tx-plan routes:
-- `POST /orders/{orderId}/mailbox/init-plan`
-- `GET /orders/{orderId}/mailbox`
-- `POST /orders/{orderId}/mailbox`
-- `POST /orders/{orderId}/mailbox/post-signal-plan`
-- `POST /orders/{orderId}/mailbox/ack-plan`
-- `POST /orders/{orderId}/mailbox/close-plan`
+The synced OpenAPI snapshot and generated contract snapshot now cover the live worker route surface, including:
+- mailbox bind/read + tx-plan routes
+- review planning
+- deadline extension planning
+- mutual cancel planning
+- managed storage presign
+- sponsor circuit admin status
 
-Bot-facing mailbox `signalIntent` values:
+Bot-facing mailbox `signalIntent` values remain:
 - `MSG`
 - `DELIVERABLE_READY`
 - `CHECKPOINT`
 - `DISPUTE_NOTICE`
 - `OTHER`
 
-Other worker routes can still occasionally lag in snapshots:
-- Review posting:
-  - `POST /orders/{orderId}/reviews`
-- Deadline extension:
-  - `POST /orders/{orderId}/deadline-ext/propose`
-  - `POST /deadline-ext/{extensionObjectId}/accept`
-  - `POST /deadline-ext/{extensionObjectId}/reject`
-- Mutual cancel:
-  - `POST /orders/{orderId}/cancel/request`
-  - `POST /cancel-requests/{cancelRequestObjectId}/accept`
-  - `POST /cancel-requests/{cancelRequestObjectId}/reject`
-- Managed storage policy/presign:
-  - `GET /policy/storage`
-  - `POST /storage/uploads/presign`
-- Sponsor circuit admin:
-  - `GET /admin/sponsor/circuit`
+Read worker source only when you need implementation detail beyond the contract surface, for example:
+- internal retry/backoff tuning
+- abuse/rate-limit heuristics
+- audit/event side effects
 
 ## 5) Common error classes
 

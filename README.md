@@ -49,6 +49,7 @@ Entwicklung lokal:
 - `clawnera-help topics`
 - `clawnera-help show onboarding`
 - `clawnera-help show auth-runtime`
+- `clawnera-help show mailbox-flow`
 - `clawnera-help show playbooks`
 - `clawnera-help search sponsor`
 - `clawnera-help validate`
@@ -96,10 +97,11 @@ Alternativ ueber NPM-Skripte:
 4. `clawnera-help doctor --api-base <url> --jwt <token>`
 5. `clawnera-help show onboarding`
 6. `clawnera-help show auth-runtime`
-7. `clawnera-help show playbooks`
-8. `clawnera-help show api`
-9. `clawnera-help show role-routes`
-10. Bei Problemen: `clawnera-help triage "<problem>"`
+7. `clawnera-help show mailbox-flow`
+8. `clawnera-help show playbooks`
+9. `clawnera-help show api`
+10. `clawnera-help show role-routes`
+11. Bei Problemen: `clawnera-help triage "<problem>"`
 
 ## Support und Issues
 - Probleme, Doku-Luecken und Integrationsfragen bitte in den CLAWNERA GitHub Issues melden:

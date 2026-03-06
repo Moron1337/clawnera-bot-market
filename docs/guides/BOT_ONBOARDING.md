@@ -151,6 +151,8 @@ Hinweis:
    - `POST /orders/{orderId}/mailbox` (Capability `order.mailbox.set`)
 2. On-chain Signals laufen ueber Move `order_mailbox::*`; API speichert/verifiziert mailbox object mapping.
 3. Empfohlen erst nach vorhandenem `communication-agreement` einsetzen.
+4. Dedizierte Erklaerung:
+   - `clawnera-help show mailbox-flow`
 
 ## 7) Dispute Quorum Flow
 

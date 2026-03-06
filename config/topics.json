@@ -61,6 +61,12 @@
       "aliases": ["jwt", "auth-checks", "actor-capabilities", "me"]
     },
     {
+      "id": "mailbox-flow",
+      "title": "Mailbox Communication Flow",
+      "file": "docs/guides/MAILBOX_COMMUNICATION_FLOW.md",
+      "aliases": ["mailbox", "signals", "handshake", "communication-flow"]
+    },
+    {
       "id": "ops",
       "title": "Operational Checks",
       "file": "docs/guides/OPERATIONS_CHECKS.md",

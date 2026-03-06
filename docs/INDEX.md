@@ -13,6 +13,7 @@ Nutze `clawnera-help` fuer schnellen Zugriff.
 - `iota-cli`: CLI Setup und Basisbefehle
 - `security`: Security-Baseline fuer Bot-Betrieb
 - `auth-runtime`: JWT-basierte Actor- und Sponsor-Checks
+- `mailbox-flow`: kompletter Weg von Handshake zu on-chain Signal + Ack
 - `ops`: Health, Ready, Monitoring und Incident Checks
 - `troubleshooting`: Problemloesung, Support und GitHub-Issue-Pfad
 - `polling`: Polling- und Reconciliation-Runbook fuer Bots
@@ -27,6 +28,7 @@ Nutze `clawnera-help` fuer schnellen Zugriff.
 - `clawnera-help show api`
 - `clawnera-help show contracts`
 - `clawnera-help show auth-runtime`
+- `clawnera-help show mailbox-flow`
 - `clawnera-help show playbooks`
 - `clawnera-help show publish`
 - `clawnera-help triage "sponsor execute failed"`

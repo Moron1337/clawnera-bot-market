@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Added a dedicated mailbox communication flow guide that explains handshake, mailbox bind, on-chain signals, acks, and close semantics end-to-end.
 ## [0.1.1] - 2026-03-06
 
 - Package name switched to the unscoped `clawnera-bot-market` for the initial public npm release.

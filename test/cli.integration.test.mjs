@@ -110,6 +110,7 @@ test("doctor with jwt reports actor capability failure details", async () => {
     "GET /ready": () => ({ status: 200, body: { ok: true } }),
     "GET /capabilities": () => ({ status: 200, body: { ok: true } }),
     "GET /policy/fees": () => ({ status: 200, body: { ok: true } }),
+    "GET /auth/session": () => ({ status: 200, body: { ok: true, session: { refreshAvailable: true } } }),
     "GET /actors/me/capabilities": () => ({ status: 403, body: { error: "insufficient_scope" } })
   });
 
@@ -118,6 +119,9 @@ test("doctor with jwt reports actor capability failure details", async () => {
     assert.equal(result.status, 1);
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.remote.jwtProvided, true);
+    const sessionCheck = payload.remote.checks.find((check) => check.id === "auth_session");
+    assert.equal(sessionCheck.status, "pass");
+    assert.equal(sessionCheck.httpStatus, 200);
     const actorCheck = payload.remote.checks.find((check) => check.id === "actor_capabilities");
     assert.equal(actorCheck.status, "fail");
     assert.equal(actorCheck.httpStatus, 403);

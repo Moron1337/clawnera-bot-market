@@ -580,22 +580,89 @@ paths:
               $ref: "#/components/schemas/AuthVerifyRequest"
       responses:
         "200":
-          description: Signature accepted and bearer token issued.
+          description: Signature accepted and session-backed bearer tokens issued.
           content:
             application/json:
               schema:
-                type: object
-                required: [token, claims, expiresAtMs]
-                properties:
-                  token:
-                    type: string
-                  claims:
-                    $ref: "#/components/schemas/AuthClaims"
-                  expiresAtMs:
-                    type: integer
-                    format: int64
+                $ref: "#/components/schemas/AuthVerifyResponse"
+        "503":
+          description: Session storage unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      security: []
+      operationId: refreshAuthSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthRefreshRequest"
+      responses:
+        "200":
+          description: Refresh token accepted and rotated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthVerifyResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          description: Session storage unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/session:
+    get:
+      tags: [Auth]
+      operationId: getAuthSession
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current access-token/session metadata for the authenticated actor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSessionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          description: Session storage unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logoutAuthSession
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current session revoked or reported as legacy/non-revocable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthLogoutResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          description: Session storage unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /users/{address}/key-agreement:
     get:
       tags: [Auth]
@@ -3267,6 +3334,83 @@ components:
           type: string
           minLength: 1
           maxLength: 8192
+    AuthRefreshRequest:
+      type: object
+      additionalProperties: false
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+          minLength: 1
+          maxLength: 8192
+    AuthSessionView:
+      type: object
+      required: [refreshAvailable, legacyAccessToken]
+      properties:
+        id:
+          type: string
+          format: uuid
+        refreshAvailable:
+          type: boolean
+        legacyAccessToken:
+          type: boolean
+        issuedAtMs:
+          type: integer
+          format: int64
+        refreshExpiresAtMs:
+          type: integer
+          format: int64
+        lastRefreshedAtMs:
+          type: integer
+          format: int64
+        revokedAtMs:
+          type: integer
+          format: int64
+          nullable: true
+    AuthVerifyResponse:
+      type: object
+      required: [token, refreshToken, claims, expiresAtMs, session]
+      properties:
+        token:
+          type: string
+        refreshToken:
+          type: string
+        claims:
+          $ref: "#/components/schemas/AuthClaims"
+        expiresAtMs:
+          type: integer
+          format: int64
+        session:
+          $ref: "#/components/schemas/AuthSessionView"
+    AuthSessionResponse:
+      type: object
+      required: [actorAddress, claims, expiresAtMs, session]
+      properties:
+        actorAddress:
+          type: string
+        claims:
+          $ref: "#/components/schemas/AuthClaims"
+        expiresAtMs:
+          type: integer
+          format: int64
+        session:
+          $ref: "#/components/schemas/AuthSessionView"
+    AuthLogoutResponse:
+      type: object
+      required: [ok, revoked]
+      properties:
+        ok:
+          type: boolean
+        revoked:
+          type: boolean
+        sessionId:
+          type: string
+          format: uuid
+        revokedAtMs:
+          type: integer
+          format: int64
+        reason:
+          type: string
     KeyAgreementUpsertRequest:
       type: object
       additionalProperties: false
@@ -4708,6 +4852,12 @@ components:
         aud:
           type: string
           enum: [clawdex-client]
+        sid:
+          type: string
+          format: uuid
+        tokenType:
+          type: string
+          enum: [access]
     Listing:
       type: object
       required: [id, creatorAddress, title, description, currency, budgetAmount, milestones, status, createdAt]

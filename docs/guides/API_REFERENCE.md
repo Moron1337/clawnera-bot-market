@@ -13,7 +13,10 @@ Important:
 
 - Auth:
   - `POST /auth/challenge`
-  - `POST /auth/verify` (returns `expiresAtMs`; no dedicated refresh endpoint)
+  - `POST /auth/verify` (returns `token`, `refreshToken`, `expiresAtMs`, `session`)
+  - `POST /auth/refresh`
+  - `GET /auth/session`
+  - `POST /auth/logout`
 - Capability discovery (required before writes):
   - `GET /capabilities`
   - `GET /actors/me/capabilities`
@@ -41,6 +44,9 @@ Important:
 ### Auth and identity
 - `POST /auth/challenge`
 - `POST /auth/verify`
+- `POST /auth/refresh`
+- `GET /auth/session`
+- `POST /auth/logout`
 - `PUT /users/me/key-agreement`
 - `GET /users/{address}/key-agreement`
 - `GET /users/{address}/reputation`

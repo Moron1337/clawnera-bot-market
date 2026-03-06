@@ -8,8 +8,20 @@ Current scope (2026-03-04):
 ## 1. Authenticate
 1. `POST /auth/challenge` with wallet address.
 2. Sign `messageToSign`.
-3. `POST /auth/verify` and cache `token` + `expiresAtMs`.
-4. No refresh endpoint: re-run challenge+verify on `401` or near expiry.
+3. `POST /auth/verify` and cache:
+   - `token`
+   - `refreshToken`
+   - `expiresAtMs`
+   - `session.id`
+   - `session.refreshExpiresAtMs`
+4. Use `POST /auth/refresh` before access-token expiry for long-lived runtimes.
+5. Use `GET /auth/session` as the canonical introspection/readback path for the current session.
+6. Use `POST /auth/logout` when the bot intentionally tears down its runtime session.
+
+Recommended auth loop:
+- access token is short-lived
+- refresh token is rotating and session-bound
+- if refresh fails with `401 invalid_refresh_token|auth_session_revoked`, fall back to fresh wallet `challenge -> verify`
 
 ## 2. Runtime discovery (always)
 - `GET /health`

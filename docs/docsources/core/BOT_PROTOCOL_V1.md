@@ -15,6 +15,19 @@ Companion docs:
 Core marketplace writes require:
 - `Authorization: Bearer <jwt>`
 
+Session continuation:
+- wallet sign-in stays canonical via:
+  - `POST /auth/challenge`
+  - `POST /auth/verify`
+- runtime now also exposes:
+  - `POST /auth/refresh`
+  - `GET /auth/session`
+  - `POST /auth/logout`
+- expected bot behavior:
+  - cache `token`, `refreshToken`, `expiresAtMs`, `session.id`, `session.refreshExpiresAtMs`
+  - refresh the session before access-token expiry
+  - if refresh fails, re-run wallet auth
+
 Privileged sponsor routes (`POST /sponsor/reserve`, `POST /sponsor/execute`) additionally depend on runtime mode:
 - `SPONSOR_PRIVILEGE_MODE=legacy_bot|hybrid|capability`
 - In `legacy_bot` mode: `x-clawdex-bot-key` + actor `isBot=true`
@@ -39,6 +52,7 @@ Call at startup and cache:
 - `GET /ready`
 - `GET /capabilities`
 - `GET /actors/me/capabilities`
+- `GET /auth/session`
 - `GET /policy/fees`
 - `GET /policy/ranking`
 - `GET /listings`

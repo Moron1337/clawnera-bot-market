@@ -999,7 +999,8 @@ async function collectRemoteDoctor(apiBase, jwt, timeoutMs) {
     { id: "ready", path: "/ready", requiresJwt: false },
     { id: "capabilities", path: "/capabilities", requiresJwt: false },
     { id: "policy_fees", path: "/policy/fees", requiresJwt: false },
-    { id: "actor_capabilities", path: "/actors/me/capabilities", requiresJwt: true }
+    { id: "actor_capabilities", path: "/actors/me/capabilities", requiresJwt: true },
+    { id: "auth_session", path: "/auth/session", requiresJwt: true }
   ];
 
   const checks = [];

@@ -38,6 +38,12 @@ Older session history stays in git and under `docs/reports/`.
   - `POST /orders/{orderId}/mailbox/close-plan`
   - SDK builder: `buildOrderMailboxTxFromPlan(...)`
   - live proof: `init -> bind -> post -> ack -> post -> ack -> close -> close`
+- Long-lived bot auth is now live and documented:
+  - `POST /auth/refresh`
+  - `GET /auth/session`
+  - `POST /auth/logout`
+  - rotating refresh token bound to persisted session state
+  - legacy sid-less access tokens remain readable during rollout
 - Signer hardening in repo is largely complete:
   - audit sink
   - review UI
@@ -52,6 +58,7 @@ Older session history stays in git and under `docs/reports/`.
 - `docs/reports/proof-artifact-cleanup-20260306.md`
 - `docs/reports/reputation-api-timeout-fix-20260306.md`
 - `docs/reports/live-bot-flows-reverify-20260306.md`
+- `docs/reports/auth-session-refresh-20260306.md`
 - `docs/reports/mailbox-ergonomics-live-proof-20260306.md`
 - `docs/reports/signing-queue-audit-sink-20260306.md`
 - `docs/reports/signer-review-ui-20260306.md`
@@ -75,20 +82,16 @@ The marketplace is only "best in class" when all of the following are true:
 
 These are the real gaps, ordered by impact on bot adoption:
 
-1. Bot auth is workable but not ideal for long-lived runtimes.
-   - No dedicated refresh/session continuation endpoint.
-   - Result: bots need full wallet-auth renewal more often than necessary.
-
-2. OpenAPI parity is still incomplete.
+1. OpenAPI parity is still incomplete.
    - Runtime is the source of truth in several areas.
    - Result: third-party integrators still have to cross-read worker code.
 
-3. Sponsor/Gas-Station reliability is good, but not yet fully productized.
+2. Sponsor/Gas-Station reliability is good, but not yet fully productized.
    - Budget estimation, strict/optional policy exposure, and fallback behavior still need more ergonomic surfaces.
 
-4. `prod` managed storage is still on public Pinata while test/staging are already private.
+3. `prod` managed storage is still on public Pinata while test/staging are already private.
 
-5. Multisig cutover is code-ready but not operationally finished.
+4. Multisig cutover is code-ready but not operationally finished.
    - Real hardware pubkeys and a real dry-run are still outstanding.
 
 ## 4. Recommended Execution Order
@@ -102,6 +105,7 @@ This is the recommended order for implementation. Follow it unless a production 
 3. `TASK-MKT-003`: Mailbox send/ack ergonomics for bots
    - status: completed on `2026-03-06`
 4. `TASK-MKT-004`: JWT/session refresh for long-lived bot runtimes
+   - status: completed on `2026-03-06`
 5. `TASK-MKT-005`: OpenAPI/runtime parity and generated client contracts
 6. `TASK-MKT-006`: Sponsor reliability and tx-planning ergonomics
 7. `TASK-MKT-007`: Production private managed-storage cutover
@@ -281,6 +285,17 @@ Acceptance:
 Goal:
 - Long-lived bot operators should not be forced into frequent full wallet re-auth.
 
+Status:
+- Completed on `2026-03-06`.
+- Delivered:
+  - persisted session-backed auth flow
+  - rotating refresh token via `POST /auth/refresh`
+  - session introspection via `GET /auth/session`
+  - session revocation via `POST /auth/logout`
+  - immediate invalidation of revoked session-backed access tokens
+  - rollout compatibility for older sid-less access tokens
+  - updated `clawnera-bot-market` doctor/playbooks
+
 Implementation:
 - Design and implement a secure refresh/session continuation path.
 - Keep wallet-auth as root-of-trust.
@@ -300,6 +315,11 @@ Primary files:
 Acceptance:
 - A bot can stay authenticated across long runs without full wallet challenge on every cycle.
 - Security model remains explicit and test-covered.
+- Contract fulfilled on `2026-03-06`:
+  - focused worker/OpenAPI tests green
+  - session rotation, revocation, introspection, and legacy-token compatibility covered
+- Remaining upgrade for this area:
+  - optional future multi-session admin controls or session listing, not required for baseline bot ergonomics
 
 ### `TASK-MKT-005`: OpenAPI/runtime parity and generated client contracts
 
@@ -534,21 +554,21 @@ Acceptance:
 
 ## 6. What To Do First
 
-Start with `TASK-MKT-004`.
+Start with `TASK-MKT-005`.
 
 Reason:
 - `TASK-MKT-001` is closed enough to stop digging.
 - `TASK-MKT-002` is closed enough to stop digging.
-- `TASK-MKT-003` is now closed with a live mailbox plan proof.
-- Long-lived bot auth is the next biggest runtime friction.
-- It unlocks stable operators after discovery, eventing, and mailbox ergonomics are already in place.
+- `TASK-MKT-004` is now closed with a persisted rotating refresh/session model.
+- OpenAPI/runtime parity is the next biggest trust and integration gap.
+- It removes the need for third-party bots to keep cross-reading worker internals.
 
-Immediate sub-steps for `TASK-MKT-004`:
-1. Define the refresh/session model that keeps wallet-auth as root-of-trust.
-2. Decide whether refresh is token-pair based or wallet-signed continuation based.
-3. Add explicit revocation, expiry introspection, and rotation semantics.
-4. Cover refresh success, revocation, expiry, and actor-binding failure paths in worker tests.
-5. Update `clawnera-bot-market` with one canonical long-lived bot auth loop.
+Immediate sub-steps for `TASK-MKT-005`:
+1. Bring every remaining live runtime route and major response shape into `openapi.yaml`.
+2. Add stronger route/request/response drift checks in CI.
+3. Generate typed contract artifacts for SDK/docs reuse.
+4. Close remaining runtime-vs-doc mismatches in sponsor, deadline, cancel, and review flows.
+5. Keep `clawnera-bot-market` synced from those machine-readable artifacts.
 
 ## 7. Things To Avoid
 
@@ -578,7 +598,7 @@ Persistent terminal:
 
 ## 9. Decision
 
-The next real work should start on long-lived bot auth, then stricter OpenAPI parity, then sponsor ergonomics.
+The next real work should start on stricter OpenAPI parity, then sponsor ergonomics, then production private managed storage.
 
 The contract core is no longer the main bottleneck.
 The main bottleneck is now product integration friction.

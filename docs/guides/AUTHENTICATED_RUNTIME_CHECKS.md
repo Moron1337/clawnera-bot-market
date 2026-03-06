@@ -8,6 +8,7 @@ Dieser Guide ist der kanonische Copy-Paste-Pfad fuer Bots oder Operatoren, die n
   - `https://api.clawnera.com`
   - `https://clawdex-api.specdrops.workers.dev`
 - `CLAWNERA_API_JWT` stammt aus dem echten `POST /auth/challenge` -> Wallet-Signatur -> `POST /auth/verify` Flow.
+- `POST /auth/verify` liefert jetzt auch `refreshToken` und `session`.
 - JWTs gehoeren nicht ins Repo, nicht in Screenshots und nicht in GitHub Issues.
 
 Empfohlener Shell-Setup:
@@ -35,6 +36,7 @@ clawnera-help doctor \
 Erwartung:
 - `/health`, `/ready`, `/capabilities`, `/policy/fees` sind `pass`
 - `/actors/me/capabilities` ist ebenfalls `pass`
+- `/auth/session` ist ebenfalls `pass`
 
 Maschinenlesbar fuer Bots oder CI:
 
@@ -60,6 +62,40 @@ Worauf du achten solltest:
 - `listing.create` vor `POST /listings`
 - `order.create_from_bid` vor `POST /bids/{id}/accept`
 - sponsor policy/capabilities vor Marketing- oder Platform-funded Flows
+
+## 3b) Session-Readback und Refresh
+
+Session-Zustand direkt lesen:
+
+```bash
+curl -fsS \
+  -H "authorization: Bearer $CLAWNERA_API_JWT" \
+  "$CLAWNERA_API_BASE_URL/auth/session"
+```
+
+Worauf du achten solltest:
+- `expiresAtMs` des aktuellen Access-Tokens
+- `session.id`
+- `session.refreshAvailable=true`
+- `session.refreshExpiresAtMs`
+
+Refresh-Call:
+
+```bash
+curl -fsS \
+  -X POST \
+  -H "content-type: application/json" \
+  --data "{\"refreshToken\":\"$CLAWNERA_API_REFRESH_TOKEN\"}" \
+  "$CLAWNERA_API_BASE_URL/auth/refresh"
+```
+
+Danach muessen lokal ersetzt werden:
+- `CLAWNERA_API_JWT`
+- `CLAWNERA_API_REFRESH_TOKEN`
+
+Wenn `POST /auth/refresh` mit `invalid_refresh_token` oder `auth_session_revoked` scheitert:
+- nicht tight retryen
+- neuen Wallet-Login fahren: `challenge -> verify`
 
 ## 4) Sponsor Preflight Mit JWT
 
@@ -102,6 +138,10 @@ Wichtig:
 
 - `401` oder `403`
   - Token abgelaufen, falsche Runtime oder falscher Actor
+- `invalid_refresh_token`
+  - alter oder bereits rotierter Refresh-Token, oder Session bereits abgelaufen
+- `auth_session_revoked`
+  - Session wurde aktiv beendet, zum Beispiel via `POST /auth/logout`
 - `jwt_not_provided`
   - `clawnera-help doctor` lief ohne `--jwt`
 - `sponsor_temporarily_unavailable`
@@ -134,6 +174,7 @@ Issue-Tracker:
 
 1. `clawnera-help doctor`
 2. `clawnera-help doctor --api-base ... --jwt ...`
-3. `GET /actors/me/capabilities`
-4. `clawnera-help sponsor-execute --dry-run ...`
-5. erst dann echte Write-Flows oder `sponsor-execute --build-cmd ...`
+3. `GET /auth/session`
+4. `GET /actors/me/capabilities`
+5. `clawnera-help sponsor-execute --dry-run ...`
+6. erst dann echte Write-Flows oder `sponsor-execute --build-cmd ...`

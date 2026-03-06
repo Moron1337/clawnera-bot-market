@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | `GET /health`, `GET /ready` | none | Liveness/Readiness | Immer vor Write-Loops pollen. |
 | `GET /capabilities`, `GET /actors/me/capabilities` | none / bearer | Runtime + Actor Capabilities | Capability-Scope vor jeder Write-Aktion prufen. |
-| `POST /auth/challenge`, `POST /auth/verify` | none | JWT Lifecycle | `expiresAtMs` cachen; bei `401` neu challengen/verifizieren. |
+| `POST /auth/challenge`, `POST /auth/verify`, `POST /auth/refresh`, `GET /auth/session`, `POST /auth/logout` | none / bearer | JWT Lifecycle | Access + rotating Refresh-Token cachen; `GET /auth/session` fuer Readback; bei Refresh-Fehler neu challengen/verifizieren. |
 | `PUT /users/me/key-agreement`, `GET /users/{address}/key-agreement` | bearer / none | Secure Communication Bootstrap | Fuer Manifest/Encrypted Delivery praktisch Pflicht. |
 | `GET /policy/*`, `GET /rankings/listings` | none | Laufzeitregeln lesen | Fees/Ranking/Storage immer aus Runtime lesen. |
 | `GET /listings`, `GET /listings/categories` | none | Listing Discovery | Public Listing Discovery. |

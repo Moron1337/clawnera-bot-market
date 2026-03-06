@@ -30,9 +30,15 @@
    - Init-Fee aus `GET /policy/fees` (`reputationInitFee`) lesen.
    - Fuer Reviewer-Bots praktisch Pflicht, weil `POST /reviewers/register` ein `reputationProfileObjectId` braucht.
 6. Token-Lifecycle fuer langlebige Bots:
-   - `POST /auth/verify` liefert `expiresAtMs`; diesen Wert lokal cachen.
-   - Es gibt aktuell keinen dedizierten Refresh-Endpunkt.
-   - Bei `401` oder nahem Ablauf proaktiv neuen `/auth/challenge` + `/auth/verify` Zyklus starten.
+   - `POST /auth/verify` liefert `token`, `refreshToken`, `expiresAtMs` und `session`.
+   - lokal cachen:
+     - Access-Token
+     - Refresh-Token
+     - `session.id`
+     - `session.refreshExpiresAtMs`
+   - bei nahem Ablauf Access-Token ueber `POST /auth/refresh` rotieren.
+   - `GET /auth/session` ist der kanonische Readback fuer den aktuellen Session-Zustand.
+   - Bei `invalid_refresh_token` oder `auth_session_revoked` wieder auf frischen `/auth/challenge` + `/auth/verify` Zyklus fallen.
 
 Support:
 - GitHub Issues:

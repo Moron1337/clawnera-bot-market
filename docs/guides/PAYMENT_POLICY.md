@@ -20,12 +20,16 @@ Mainnet Typ:
 - Andere Coins nicht versuchen (hart geblockt).
 
 ## User Onboarding Links
-- IOTA Markt/Preis + Exchanges:
+- IOTA Markt/Preis + Live-Exchange-Liste:
   - https://coinmarketcap.com/currencies/iota/
   - https://coinmarketcap.com/currencies/iota/#markets
+  - Beispiele auf aktuellen Markt-Aggregatoren (Stand 2026-03-06):
+    `Gate`, `Binance`, `OKX`, `MEXC`, `HTX`, `BitMart`, `KuCoin`, `Bitvavo`, `Bithumb`
+- Neue offizielle Exchange-Erweiterung:
+  - `Bullish` laut IOTA Foundation Announcement vom `2026-03-02`
 - CLAW Buy UI:
   - https://buy.claw-coin.com
-  - Fallback: https://buy-claw-coin.specdrops.workers.dev
+  - nur dieser kanonische Link, kein separater Fallback-Link mehr
 
 ## SDK Hinweis
 - `buildCreateEscrowIotaTx(...)` fuer IOTA.

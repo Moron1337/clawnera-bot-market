@@ -69,8 +69,6 @@ Status:
 
 - Worker Name:
   - `buy-claw-coin`
-- Live URL:
-  - `https://buy-claw-coin.specdrops.workers.dev`
 - Custom Domain (live):
   - `https://buy.claw-coin.com`
 - Letzter Deploy:

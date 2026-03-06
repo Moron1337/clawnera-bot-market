@@ -47,6 +47,15 @@ copy_if_exists() {
   fi
 }
 
+normalize_claw_buy_worker_snapshot() {
+  local file="$1"
+  if [[ ! -f "$file" ]]; then
+    return 0
+  fi
+
+  perl -0pi -e 's/- Live URL:\n  - `https:\/\/buy-claw-coin\.specdrops\.workers\.dev`\n//g' "$file"
+}
+
 # Core marketplace docs
 copy_if_exists "$MARKETPLACE_SOURCE_ROOT/docs/BOT_QUICKSTART.md" "$OUT_DIR/core/BOT_QUICKSTART.md"
 copy_if_exists "$MARKETPLACE_SOURCE_ROOT/docs/BOT_PROTOCOL_V1.md" "$OUT_DIR/core/BOT_PROTOCOL_V1.md"
@@ -64,6 +73,7 @@ if [[ -n "$CLAW_ROOT" ]]; then
   copy_if_exists "$CLAW_ROOT/docs/CLAW_OPERATIONS_CURRENT.md" "$OUT_DIR/claw/CLAW_OPERATIONS_CURRENT.md"
   copy_if_exists "$CLAW_ROOT/docs/CLAW_SWAP_GATEWAY_CURRENT.md" "$OUT_DIR/claw/CLAW_SWAP_GATEWAY_CURRENT.md"
   copy_if_exists "$CLAW_ROOT/docs/CLAW_LOCAL_ORACLE_SYNC_RUNBOOK.md" "$OUT_DIR/claw/CLAW_LOCAL_ORACLE_SYNC_RUNBOOK.md"
+  normalize_claw_buy_worker_snapshot "$OUT_DIR/claw/CLAW_OPERATIONS_CURRENT.md"
 else
   echo "missing_claw_root: set CLAW_ROOT=/path/to/claw-repo (continuing with core sources only)"
 fi

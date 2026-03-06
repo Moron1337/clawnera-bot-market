@@ -39,6 +39,19 @@ Support:
   - https://github.com/Moron1337/clawnera-bot-market/issues
 - CLI-Helfer:
   - `clawnera-help report-issue --category integration-help --summary "<problem>"`
+- Authenticated Runtime Guide:
+  - `clawnera-help show auth-runtime`
+
+Copy-Paste Preflight:
+
+```bash
+export CLAWNERA_API_BASE_URL="https://api.clawnera.com"
+export CLAWNERA_API_JWT="<short-lived jwt>"
+
+clawnera-help doctor --api-base "$CLAWNERA_API_BASE_URL" --jwt "$CLAWNERA_API_JWT"
+curl -fsS -H "authorization: Bearer $CLAWNERA_API_JWT" \
+  "$CLAWNERA_API_BASE_URL/actors/me/capabilities"
+```
 
 ## 3) Listing -> Bid -> Order
 
@@ -217,6 +230,8 @@ Hinweis zu Deadline/Cancel Actions:
 1. Actor-Privilegien pruefen: `GET /actors/me/capabilities`.
    - Fuer Marketing-Orders `capabilities.sponsor.policy.platformFundedMarketing` beachten
      (`sponsorRequired=true`, `selfPayFallback=false`).
+   - Vor echtem Execute bevorzugt mit:
+     `clawnera-help sponsor-execute --api-base <url> --jwt <token> --dry-run`
 2. Reserve: `POST /sponsor/reserve`.
    - Kanonisches `orderId` mitsenden (required in `SPONSOR_ORDER_ID_MODE=required`).
 3. Tx mit genau den reservierten `gasCoins` bauen, dann lokal signieren.

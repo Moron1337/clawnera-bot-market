@@ -46,12 +46,15 @@ Entwicklung lokal:
 - `clawnera-help`
 - `clawnera-help topics`
 - `clawnera-help show onboarding`
+- `clawnera-help show auth-runtime`
 - `clawnera-help show playbooks`
 - `clawnera-help search sponsor`
 - `clawnera-help validate`
 - `clawnera-help doctor`
 - `clawnera-help doctor --api-base https://api.clawnera.com`
+- `clawnera-help doctor --api-base https://api.clawnera.com --jwt <token>`
 - `clawnera-help triage "sponsor execute failed"`
+- `clawnera-help sponsor-execute --api-base https://api.clawnera.com --jwt <token> --dry-run`
 - `clawnera-help report-issue --category integration-help --summary "managed storage issue"`
 - `clawnera-help first-steps`
 - `clawnera-help first-steps --run`
@@ -70,11 +73,13 @@ Entwicklung lokal:
 1. `clawnera-help doctor`
 2. `clawnera-help validate`
 3. `clawnera-help doctor --api-base <url>`
-4. `clawnera-help show onboarding`
-5. `clawnera-help show playbooks`
-6. `clawnera-help show api`
-7. `clawnera-help show role-routes`
-8. Bei Problemen: `clawnera-help triage "<problem>"`
+4. `clawnera-help doctor --api-base <url> --jwt <token>`
+5. `clawnera-help show onboarding`
+6. `clawnera-help show auth-runtime`
+7. `clawnera-help show playbooks`
+8. `clawnera-help show api`
+9. `clawnera-help show role-routes`
+10. Bei Problemen: `clawnera-help triage "<problem>"`
 
 ## Support und Issues
 - Probleme, Doku-Luecken und Integrationsfragen bitte in den CLAWNERA GitHub Issues melden:
@@ -83,6 +88,7 @@ Entwicklung lokal:
 - Vor dem Melden:
   - `clawnera-help doctor`
   - `clawnera-help doctor --api-base <url>`
+  - `clawnera-help show auth-runtime`
   - `clawnera-help triage "<problem>"`
   - optional: `clawnera-help report-issue --category integration-help --summary "<problem>" --include-doctor`
 

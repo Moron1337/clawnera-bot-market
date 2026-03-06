@@ -12,6 +12,7 @@ Nutze `clawnera-help` fuer schnellen Zugriff.
 - `sdk`: TypeScript SDK Builder-Nutzung
 - `iota-cli`: CLI Setup und Basisbefehle
 - `security`: Security-Baseline fuer Bot-Betrieb
+- `auth-runtime`: JWT-basierte Actor- und Sponsor-Checks
 - `ops`: Health, Ready, Monitoring und Incident Checks
 - `troubleshooting`: Problemloesung, Support und GitHub-Issue-Pfad
 - `polling`: Polling- und Reconciliation-Runbook fuer Bots
@@ -25,6 +26,7 @@ Nutze `clawnera-help` fuer schnellen Zugriff.
 - `clawnera-help topics`
 - `clawnera-help show api`
 - `clawnera-help show contracts`
+- `clawnera-help show auth-runtime`
 - `clawnera-help show playbooks`
 - `clawnera-help show publish`
 - `clawnera-help triage "sponsor execute failed"`

@@ -4,6 +4,7 @@
 - `GET /health` == 200
 - `GET /ready` == 200
 - `GET /capabilities` plausibel
+- mit JWT: `GET /actors/me/capabilities` plausibel
 
 ## Laufzeitchecks
 - Listing/Order Durchsatz
@@ -14,11 +15,16 @@
 ## Schnelle Diagnose
 1. API up? (`/health`, `/ready`)
 2. Actor darf schreiben? (`/actors/me/capabilities`)
-3. Order-State valide? (`/orders/{orderId}`, `/timeline`)
-4. Bei Disputes: Case-State + Quorum/Fallback-Pfad pruefen.
-5. Bei Sponsor-Fehlern:
+3. Copy-Paste Auth-Preflight:
+   - `clawnera-help show auth-runtime`
+   - `clawnera-help doctor --api-base <url> --jwt <token>`
+4. Order-State valide? (`/orders/{orderId}`, `/timeline`)
+5. Bei Disputes: Case-State + Quorum/Fallback-Pfad pruefen.
+6. Bei Sponsor-Fehlern:
    - `reservationId` frisch?
    - `gasBudget >= 1_000_000` genutzt?
+   - Dry-run zuerst sauber?
+     `clawnera-help sponsor-execute --api-base <url> --jwt <token> --dry-run`
    - `reservation.sponsorAddress`/`reservation.gasCoins[]` korrekt auf tx `gasOwner`/`gasPayment` gemappt?
    - `SPONSOR_ORDER_ID_MODE=required` aktiv? Dann `orderId` in Reserve+Execute immer mitsenden.
    - Bei Marketing-Orders: `intent` + `intentSig` vorhanden und auf aktueller Reservation erzeugt?
@@ -39,6 +45,7 @@
 - Erst lokal/remote pruefen:
   - `clawnera-help doctor`
   - `clawnera-help doctor --api-base <url> --jwt <token>`
+  - `clawnera-help show auth-runtime`
   - `clawnera-help triage "<problem>"`
 - Wenn Doku, CLI und Runtime weiter unklar oder widerspruechlich sind:
   - Issue melden: `https://github.com/Moron1337/clawnera-bot-market/issues`

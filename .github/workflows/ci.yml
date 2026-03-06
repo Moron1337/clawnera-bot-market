@@ -39,6 +39,7 @@ jobs:
           node ./bin/clawnera-help.mjs --help
           node ./bin/clawnera-help.mjs topics
           node ./bin/clawnera-help.mjs show onboarding >/dev/null
+          node ./bin/clawnera-help.mjs show auth-runtime >/dev/null
           node ./bin/clawnera-help.mjs search sponsor >/dev/null
           node ./bin/clawnera-help.mjs doctor --json >/dev/null
           node ./bin/clawnera-help.mjs triage "sponsor execute failed" >/dev/null

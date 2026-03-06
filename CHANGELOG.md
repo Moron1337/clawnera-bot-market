@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Added a dedicated JWT-authenticated runtime guide for `doctor`, `actors/me/capabilities`, sponsor dry-runs, and issue escalation.
 - Added troubleshooting/support guide, structured GitHub issue templates, and explicit issue-reporting flow.
 - Added CLI support for `triage`, `report-issue`, and remote `doctor --api-base ...` checks.
 - Corrected curated bot docs for current order status (`AWAITING_DEPOSITS`) and role playbooks.

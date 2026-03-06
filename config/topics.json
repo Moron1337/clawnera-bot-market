@@ -55,6 +55,12 @@
       "aliases": ["hardening", "safe"]
     },
     {
+      "id": "auth-runtime",
+      "title": "Authenticated Runtime Checks",
+      "file": "docs/guides/AUTHENTICATED_RUNTIME_CHECKS.md",
+      "aliases": ["jwt", "auth-checks", "actor-capabilities", "me"]
+    },
+    {
       "id": "ops",
       "title": "Operational Checks",
       "file": "docs/guides/OPERATIONS_CHECKS.md",

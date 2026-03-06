@@ -31,7 +31,15 @@ test("topics command includes onboarding topic", () => {
   const result = runCli(["topics"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /onboarding: Bot Onboarding/);
+  assert.match(result.stdout, /auth-runtime: Authenticated Runtime Checks/);
   assert.match(result.stdout, /playbooks: Role Playbooks/);
+});
+
+test("show auth-runtime topic works", () => {
+  const result = runCli(["show", "auth-runtime"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Authenticated Runtime Checks/);
+  assert.match(result.stdout, /sponsor-execute/);
 });
 
 test("show with unknown topic fails", () => {

@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-03-06
+
 - Refined token/exchange links: removed the deprecated `buy-claw` fallback URL and added current IOTA exchange guidance plus the Bullish listing note.
 - Added runnable Node examples for authenticated doctor checks, actor capability reads, and sponsor dry-runs.
 - Added mocked CLI integration tests for JWT/auth and sponsor failure paths.

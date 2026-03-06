@@ -30,6 +30,7 @@
 | `GET /orders/{orderId}` | - | buyer/seller only | Einzel-Read fuer konkrete Order. |
 | `GET /orders/{orderId}/timeline` | - | buyer/seller only | Primäre Reconciliation-Quelle. |
 | `GET /orders/{orderId}/communication-agreement` | - | buyer/seller only | Optionales Handshake-Artefakt; `404` wenn nicht gesetzt. |
+| `POST /orders/{orderId}/mailbox/init-plan` | `order.mailbox.init.plan` | buyer/seller only | Liefert kanonischen Tx-Plan fuer `init_order_mailbox`; `409 mailbox_already_bound` bei bestehender Bindung. |
 | `GET /orders/{orderId}/mailbox` | - | buyer/seller only | Liefert Mapping zum on-chain Mailbox-Objekt. |
 | `GET /orders/{orderId}/milestones/{milestoneId}/artifact-manifest` | - | buyer/seller only | Buyer sieht nur eigene Recipient-Records. |
 | `GET /orders/{orderId}/milestones/{milestoneId}/anchor` | - | buyer/seller only | Anchor-Status fuer manifest-basierte Deliveries. |
@@ -46,6 +47,9 @@
 | `POST /cancel-requests/{cancelRequestObjectId}/reject` | `cancel_request.reject` | capability-only | API ohne `orderId`-Check; Gegenpartei-Auth wird on-chain erzwungen. |
 | `POST /orders/{orderId}/reviews` | `order.review.post` | buyer/seller only | `rating` 1..5, `reviewHash` lower-hex(64). |
 | `POST /orders/{orderId}/mailbox` | `order.mailbox.set` | buyer/seller only | Mailbox-Snapshot wird on-chain verifiziert (order/participants/open). |
+| `POST /orders/{orderId}/mailbox/post-signal-plan` | `order.mailbox.post_signal.plan` | buyer/seller only | Gebundene offene Mailbox Pflicht; Bot-`signalIntent` wird auf on-chain Signaltyp gemappt. |
+| `POST /orders/{orderId}/mailbox/ack-plan` | `order.mailbox.ack.plan` | buyer/seller only | Gebundene offene Mailbox Pflicht; `ackedSeq` numerisch > 0. |
+| `POST /orders/{orderId}/mailbox/close-plan` | `order.mailbox.close.plan` | buyer/seller only | Gebundene offene Mailbox Pflicht; final `closed` erst nach Buyer+Seller-Approve on-chain. |
 | `POST /storage/uploads/presign` | `storage.upload.presign` | buyer/seller only fuer `orderId` | Milestone darf nicht terminal (`SETTLED`/`REFUNDED`) sein; MIME/Size/Ext Regeln aktiv. |
 | `POST /orders/{orderId}/mark-disputed` | `order.mark_disputed` | buyer/seller only | Nur wenn Runtime `enableManualDispute=true`; DB-only Notfallpfad. |
 

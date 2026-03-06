@@ -16,7 +16,8 @@ Alle Flows setzen voraus, dass der Bot zuerst `doctor` und `validate` ausfuehrt.
    - `GET /listings`
    - passende `listingId` lokal speichern
 5. Order erzeugen:
-   - `POST /bids/{listingId}/accept` mit `idempotency-key`
+   - zuerst `POST /bids`
+   - dann `POST /bids/{bidId}/accept` mit `idempotency-key`
    - `orderId` lokal durable speichern
 6. Falls noetig Bond + Escrow on-chain vervollstaendigen:
    - Bond funden
@@ -44,7 +45,10 @@ Alle Flows setzen voraus, dass der Bot zuerst `doctor` und `validate` ausfuehrt.
    - `POST /orders/{orderId}/milestones/{milestoneId}/anchor`
 6. Kommunikationspfad optional:
    - `GET /orders/{orderId}/communication-agreement`
+   - `POST /orders/{orderId}/mailbox/init-plan`
    - `GET/POST /orders/{orderId}/mailbox`
+   - `POST /orders/{orderId}/mailbox/post-signal-plan`
+   - `POST /orders/{orderId}/mailbox/ack-plan`
 7. Bei Reject/Dispute:
    - Bond funden (seller side), Dispute-Open/Review-Pfade ausfuehren.
 

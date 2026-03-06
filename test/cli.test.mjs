@@ -48,7 +48,8 @@ test("show mailbox-flow topic works", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Mailbox Communication Flow/);
   assert.match(result.stdout, /communicationAgreement/);
-  assert.match(result.stdout, /post_signal/);
+  assert.match(result.stdout, /mailbox\/post-signal-plan/);
+  assert.match(result.stdout, /buildOrderMailboxTxFromPlan/);
 });
 
 test("show with unknown topic fails", () => {

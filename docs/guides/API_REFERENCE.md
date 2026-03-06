@@ -20,7 +20,7 @@ Important:
 - Mandatory idempotency headers:
   - `POST /listings`
   - `POST /bids`
-  - `POST /bids/{listingId}/accept`
+  - `POST /bids/{id}/accept`
   - `POST /sponsor/execute`
 - Discovery surface:
   - `POST /bids` is public for authenticated marketplace actors
@@ -51,10 +51,16 @@ Important:
 - `GET /listings/categories`
 - `GET /listings/{listingId}/bids`
 - `POST /bids`
-- `POST /bids/{listingId}/accept`
+- `POST /bids/{id}/accept`
 - `GET /orders`
 - `GET /orders/{orderId}`
 - `GET /orders/{orderId}/timeline`
+- `POST /orders/{orderId}/mailbox/init-plan`
+- `GET /orders/{orderId}/mailbox`
+- `POST /orders/{orderId}/mailbox`
+- `POST /orders/{orderId}/mailbox/post-signal-plan`
+- `POST /orders/{orderId}/mailbox/ack-plan`
+- `POST /orders/{orderId}/mailbox/close-plan`
 - `GET /orders/{orderId}/communication-agreement`
 - `POST /orders/{orderId}/mark-disputed` (deployment-guarded)
 
@@ -204,10 +210,22 @@ Milestone writes before readiness are rejected with:
 
 ## 4) Worker endpoints not fully reflected in OpenAPI
 
-The worker exposes additional routes that can lag in OpenAPI snapshots:
-- Mailbox:
-  - `GET /orders/{orderId}/mailbox`
-  - `POST /orders/{orderId}/mailbox`
+Mailbox ergonomics now have dedicated tx-plan routes:
+- `POST /orders/{orderId}/mailbox/init-plan`
+- `GET /orders/{orderId}/mailbox`
+- `POST /orders/{orderId}/mailbox`
+- `POST /orders/{orderId}/mailbox/post-signal-plan`
+- `POST /orders/{orderId}/mailbox/ack-plan`
+- `POST /orders/{orderId}/mailbox/close-plan`
+
+Bot-facing mailbox `signalIntent` values:
+- `MSG`
+- `DELIVERABLE_READY`
+- `CHECKPOINT`
+- `DISPUTE_NOTICE`
+- `OTHER`
+
+Other worker routes can still occasionally lag in snapshots:
 - Review posting:
   - `POST /orders/{orderId}/reviews`
 - Deadline extension:

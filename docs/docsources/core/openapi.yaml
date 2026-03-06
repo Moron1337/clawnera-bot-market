@@ -1311,6 +1311,158 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /orders/{orderId}/mailbox/init-plan:
+    post:
+      tags: [Orders]
+      operationId: planInitOrderMailbox
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderMailboxPlanRequest"
+      responses:
+        "200":
+          description: Transaction plan for creating a new on-chain mailbox for the order participants.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /orders/{orderId}/mailbox/post-signal-plan:
+    post:
+      tags: [Orders]
+      operationId: planPostOrderMailboxSignal
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderMailboxPostSignalPlanRequest"
+      responses:
+        "200":
+          description: Transaction plan for posting a mailbox-backed signal.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          description: On-chain mailbox verification temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /orders/{orderId}/mailbox/ack-plan:
+    post:
+      tags: [Orders]
+      operationId: planAckOrderMailboxSignal
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderMailboxAckPlanRequest"
+      responses:
+        "200":
+          description: Transaction plan for acknowledging a mailbox signal sequence.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          description: On-chain mailbox verification temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /orders/{orderId}/mailbox/close-plan:
+    post:
+      tags: [Orders]
+      operationId: planCloseOrderMailbox
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderMailboxPlanRequest"
+      responses:
+        "200":
+          description: Transaction plan for approving mailbox closure.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          description: On-chain mailbox verification temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /orders/{orderId}/communication-agreement:
     get:
       tags: [Orders]
@@ -4384,6 +4536,50 @@ components:
       required: [mailboxObjectId]
       properties:
         mailboxObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+    OrderMailboxPlanRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+    OrderMailboxSignalIntent:
+      type: string
+      enum: [MSG, DELIVERABLE_READY, CHECKPOINT, DISPUTE_NOTICE, OTHER]
+      description: >
+        Canonical bot-facing signal intent. Runtime maps these intents onto the current on-chain
+        mailbox signal types (`MSG`, `CHECKPOINT`, `OTHER`).
+    OrderMailboxPostSignalPlanRequest:
+      type: object
+      additionalProperties: false
+      required: [signalIntent, ciphertextHash]
+      properties:
+        signalIntent:
+          $ref: "#/components/schemas/OrderMailboxSignalIntent"
+        ciphertextHash:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+        payloadRef:
+          type: string
+          minLength: 1
+          maxLength: 256
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+    OrderMailboxAckPlanRequest:
+      type: object
+      additionalProperties: false
+      required: [ackedSeq]
+      properties:
+        ackedSeq:
+          type: string
+          pattern: "^[0-9]+$"
+        clockObjectId:
           type: string
           minLength: 3
           maxLength: 200

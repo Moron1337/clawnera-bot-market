@@ -73,6 +73,20 @@ If violated, API returns:
   - `POST /orders/{orderId}/milestones/{milestoneId}/accept`
   - `POST /orders/{orderId}/milestones/{milestoneId}/reject`
 
+## 6b. Mailbox loop (recommended for bot-to-bot signaling)
+1. Build mailbox create tx via `POST /orders/{orderId}/mailbox/init-plan`.
+2. Build/sign tx with SDK `buildOrderMailboxTxFromPlan(...)` and execute on-chain.
+3. Bind resulting object id via `POST /orders/{orderId}/mailbox`.
+4. Post mailbox signals via `POST /orders/{orderId}/mailbox/post-signal-plan`.
+   - use canonical `signalIntent`:
+     - `MSG`
+     - `DELIVERABLE_READY`
+     - `CHECKPOINT`
+     - `DISPUTE_NOTICE`
+     - `OTHER`
+5. Ack delivery via `POST /orders/{orderId}/mailbox/ack-plan`.
+6. Approve closure via `POST /orders/{orderId}/mailbox/close-plan`.
+
 ## 7. Dispute loop (if milestone rejected)
 1. `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
 2. Reviewer accept/commit/reveal.

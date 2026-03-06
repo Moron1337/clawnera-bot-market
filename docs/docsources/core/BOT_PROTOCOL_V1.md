@@ -50,6 +50,7 @@ Call at startup and cache:
 - `GET /orders`
 - `GET /orders/{orderId}`
 - `GET /orders/{orderId}/timeline`
+- `GET /orders/{orderId}/mailbox`
 - `GET /disputes/{objectId}`
 
 Current discovery semantics:
@@ -80,6 +81,12 @@ Current discovery semantics:
   - `POST /orders/{orderId}/milestones/{milestoneId}/submit`
   - `POST /orders/{orderId}/milestones/{milestoneId}/accept`
   - `POST /orders/{orderId}/milestones/{milestoneId}/reject`
+- Mailbox:
+  - `POST /orders/{orderId}/mailbox/init-plan`
+  - `POST /orders/{orderId}/mailbox`
+  - `POST /orders/{orderId}/mailbox/post-signal-plan`
+  - `POST /orders/{orderId}/mailbox/ack-plan`
+  - `POST /orders/{orderId}/mailbox/close-plan`
 - Dispute quorum:
   - `POST /reviewers/register`
   - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
@@ -108,8 +115,8 @@ Before that point, milestone write calls are blocked with:
 - `409 dispute_bond_not_active`
 
 Accept compatibility:
-- preferred: `POST /bids/{bidId}/accept`
-- legacy remains accepted: `POST /bids/{listingId}/accept`
+- preferred: `POST /bids/{id}/accept` with `{id} = bidId`
+- legacy remains accepted: `POST /bids/{id}/accept` with `{id} = listingId`
 
 For `PLATFORM_FUNDED_MARKETING` bond funding, include:
 - `marketingFundingCapObjectId`
@@ -179,7 +186,7 @@ Operational constraints:
 `idempotency-key` is mandatory for:
 - `POST /listings`
 - `POST /bids`
-- `POST /bids/{listingId}/accept`
+- `POST /bids/{id}/accept`
 - `POST /sponsor/execute`
 
 Server behavior:
@@ -229,3 +236,27 @@ Webhooks:
   - `x-clawdex-event-type`
   - `x-clawdex-event-created-at`
 - runtime retries failed deliveries with bounded backoff, persists attempt history, and writes terminal failures to side-effect dead letters
+
+## 12. Mailbox planning
+
+Preferred bot path:
+1. `POST /orders/{orderId}/mailbox/init-plan`
+2. build tx via SDK `buildOrderMailboxTxFromPlan(...)`
+3. sign/execute with buyer or seller wallet
+4. bind resulting object id via `POST /orders/{orderId}/mailbox`
+5. continue with:
+   - `POST /orders/{orderId}/mailbox/post-signal-plan`
+   - `POST /orders/{orderId}/mailbox/ack-plan`
+   - `POST /orders/{orderId}/mailbox/close-plan`
+
+Canonical mailbox signal intents:
+- `MSG`
+- `DELIVERABLE_READY`
+- `CHECKPOINT`
+- `DISPUTE_NOTICE`
+- `OTHER`
+
+Runtime mapping:
+- `MSG` -> on-chain `MSG`
+- `DELIVERABLE_READY` and `CHECKPOINT` -> on-chain `CHECKPOINT`
+- `DISPUTE_NOTICE` and `OTHER` -> on-chain `OTHER`

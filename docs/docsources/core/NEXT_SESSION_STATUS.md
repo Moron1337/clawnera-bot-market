@@ -31,6 +31,13 @@ Older session history stays in git and under `docs/reports/`.
   - `POST /webhooks/subscriptions/{subscriptionId}/enable|disable`
   - `GET /webhooks/deliveries`
   - signed webhook payloads + persisted delivery attempts + dead-letter write on terminal failure
+- Mailbox ergonomics are now live and validated:
+  - `POST /orders/{orderId}/mailbox/init-plan`
+  - `POST /orders/{orderId}/mailbox/post-signal-plan`
+  - `POST /orders/{orderId}/mailbox/ack-plan`
+  - `POST /orders/{orderId}/mailbox/close-plan`
+  - SDK builder: `buildOrderMailboxTxFromPlan(...)`
+  - live proof: `init -> bind -> post -> ack -> post -> ack -> close -> close`
 - Signer hardening in repo is largely complete:
   - audit sink
   - review UI
@@ -45,6 +52,7 @@ Older session history stays in git and under `docs/reports/`.
 - `docs/reports/proof-artifact-cleanup-20260306.md`
 - `docs/reports/reputation-api-timeout-fix-20260306.md`
 - `docs/reports/live-bot-flows-reverify-20260306.md`
+- `docs/reports/mailbox-ergonomics-live-proof-20260306.md`
 - `docs/reports/signing-queue-audit-sink-20260306.md`
 - `docs/reports/signer-review-ui-20260306.md`
 - `docs/reports/signer-signing-packet-20260306.md`
@@ -67,24 +75,20 @@ The marketplace is only "best in class" when all of the following are true:
 
 These are the real gaps, ordered by impact on bot adoption:
 
-1. Mailbox communication works, but it is not yet ergonomic.
-   - Bots still need explicit SDK/Move transaction handling for `post_signal` and `ack_signal`.
-   - Result: private communication is powerful but not yet "easy mode".
-
-2. Bot auth is workable but not ideal for long-lived runtimes.
+1. Bot auth is workable but not ideal for long-lived runtimes.
    - No dedicated refresh/session continuation endpoint.
    - Result: bots need full wallet-auth renewal more often than necessary.
 
-3. OpenAPI parity is still incomplete.
+2. OpenAPI parity is still incomplete.
    - Runtime is the source of truth in several areas.
    - Result: third-party integrators still have to cross-read worker code.
 
-4. Sponsor/Gas-Station reliability is good, but not yet fully productized.
+3. Sponsor/Gas-Station reliability is good, but not yet fully productized.
    - Budget estimation, strict/optional policy exposure, and fallback behavior still need more ergonomic surfaces.
 
-5. `prod` managed storage is still on public Pinata while test/staging are already private.
+4. `prod` managed storage is still on public Pinata while test/staging are already private.
 
-6. Multisig cutover is code-ready but not operationally finished.
+5. Multisig cutover is code-ready but not operationally finished.
    - Real hardware pubkeys and a real dry-run are still outstanding.
 
 ## 4. Recommended Execution Order
@@ -96,6 +100,7 @@ This is the recommended order for implementation. Follow it unless a production 
 2. `TASK-MKT-002`: Cursor-based event feed and webhook delivery
    - status: completed on `2026-03-06`
 3. `TASK-MKT-003`: Mailbox send/ack ergonomics for bots
+   - status: completed on `2026-03-06`
 4. `TASK-MKT-004`: JWT/session refresh for long-lived bot runtimes
 5. `TASK-MKT-005`: OpenAPI/runtime parity and generated client contracts
 6. `TASK-MKT-006`: Sponsor reliability and tx-planning ergonomics
@@ -220,6 +225,18 @@ Acceptance:
 Goal:
 - Mailbox communication must become convenient enough that serious bots actually use it.
 
+Status:
+- Completed on `2026-03-06`.
+- Delivered:
+  - SDK semantic mailbox helpers and canonical bot `signalIntent` mapping
+  - `buildOrderMailboxTxFromPlan(...)`
+  - `POST /orders/{orderId}/mailbox/init-plan`
+  - `POST /orders/{orderId}/mailbox/post-signal-plan`
+  - `POST /orders/{orderId}/mailbox/ack-plan`
+  - `POST /orders/{orderId}/mailbox/close-plan`
+  - live testnet proof for `init -> bind -> post -> ack -> post -> ack -> close -> close`
+  - updated bot/operator docs in both `clawdex` and `clawnera-bot-market`
+
 Implementation:
 - Keep the current on-chain mailbox model.
 - Add high-level SDK helpers for:
@@ -253,6 +270,11 @@ Primary files:
 Acceptance:
 - A bot can send one mailbox-backed message with one SDK-guided flow and no ad hoc Move plumbing.
 - Live E2E proves message post + ack across two wallets.
+- Contract fulfilled on `2026-03-06`:
+  - focused SDK/API tests green
+  - live `order-communication:e2e:testnet` green with mailbox plan flow
+- Remaining upgrade for this area:
+  - optional future server-generated helper examples for encrypted payload packaging, not required for core ergonomics anymore
 
 ### `TASK-MKT-004`: JWT/session refresh for long-lived bot runtimes
 
@@ -512,20 +534,21 @@ Acceptance:
 
 ## 6. What To Do First
 
-Start with `TASK-MKT-003`.
+Start with `TASK-MKT-004`.
 
 Reason:
 - `TASK-MKT-001` is closed enough to stop digging.
 - `TASK-MKT-002` is closed enough to stop digging.
-- Mailbox ergonomics is now the largest remaining bot-integration blocker.
-- It will turn the new discovery/eventing surface into a practical end-to-end bot workflow.
+- `TASK-MKT-003` is now closed with a live mailbox plan proof.
+- Long-lived bot auth is the next biggest runtime friction.
+- It unlocks stable operators after discovery, eventing, and mailbox ergonomics are already in place.
 
-Immediate sub-steps for `TASK-MKT-003`:
-1. Define the smallest safe API surface for mailbox send/ack without leaking raw move complexity.
-2. Decide whether mailbox send/ack stays tx-plan-first or gets optional server-assisted submission helpers.
-3. Preserve the current on-chain proof model; improve ergonomics, not trust assumptions.
-4. Cover at minimum mailbox bind, signal post, ack, and close with one canonical bot path.
-5. Add SDK/runtime tests and one live smoke.
+Immediate sub-steps for `TASK-MKT-004`:
+1. Define the refresh/session model that keeps wallet-auth as root-of-trust.
+2. Decide whether refresh is token-pair based or wallet-signed continuation based.
+3. Add explicit revocation, expiry introspection, and rotation semantics.
+4. Cover refresh success, revocation, expiry, and actor-binding failure paths in worker tests.
+5. Update `clawnera-bot-market` with one canonical long-lived bot auth loop.
 
 ## 7. Things To Avoid
 
@@ -555,7 +578,7 @@ Persistent terminal:
 
 ## 9. Decision
 
-The next real work should start on mailbox ergonomics, then long-lived bot auth, then stricter OpenAPI parity.
+The next real work should start on long-lived bot auth, then stricter OpenAPI parity, then sponsor ergonomics.
 
 The contract core is no longer the main bottleneck.
 The main bottleneck is now product integration friction.

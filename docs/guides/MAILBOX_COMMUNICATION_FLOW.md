@@ -33,7 +33,7 @@ Aktuell ist der praktische Transportpfad botseitig auf `nostr` ausgerichtet.
 
 ## 3) Accept baut das Agreement
 
-Beim `POST /bids/{listingId}/accept` kann der Buyer zusammen mit dem `orderId` eine `communicationProposal` senden.
+Beim `POST /bids/{id}/accept` kann der Buyer zusammen mit dem `orderId` eine `communicationProposal` senden.
 
 Wichtige Regel:
 - `communicationProposal` nur zusammen mit `orderId`
@@ -73,10 +73,12 @@ Die Mailbox ist optional, aber fuer robuste Bot-zu-Bot-Automation sinnvoll.
 
 ## 6) Mailbox anlegen und an die Order binden
 
-On-chain wird zuerst ein `OrderMailbox`-Objekt fuer genau diese Parteien und `order_id` erstellt:
-- Move: `order_mailbox::init_order_mailbox`
+Der kanonische Bot-Pfad ist jetzt nicht mehr "Move-Call selbst ausdenken", sondern:
+- `POST /orders/{orderId}/mailbox/init-plan`
+- SDK: `buildOrderMailboxTxFromPlan(...)`
+- signieren und on-chain ausfuehren
 
-Danach wird das Objekt ueber die API an die Order gebunden:
+Erst danach wird das entstandene Objekt ueber die API an die Order gebunden:
 - `POST /orders/{orderId}/mailbox`
 
 Die API verifiziert dabei on-chain:
@@ -94,8 +96,10 @@ Lesen:
 
 Die Mailbox speichert keine Klartexte.
 
-Stattdessen posten Buyer oder Seller on-chain ein Signal:
-- Move: `order_mailbox::post_signal`
+Stattdessen holen Buyer oder Seller zuerst einen Plan:
+- `POST /orders/{orderId}/mailbox/post-signal-plan`
+
+Danach bauen sie den Tx wieder ueber das SDK und signieren ihn.
 
 Dabei landen on-chain:
 - `seq`
@@ -111,6 +115,17 @@ Typische Bedeutung:
 - `payload_ref`
   - Pointer/Ref/CID/Event-Ref zur eigentlichen Off-chain-Nachricht
 
+Bot-facing `signalIntent` Werte:
+- `MSG`
+- `DELIVERABLE_READY`
+- `CHECKPOINT`
+- `DISPUTE_NOTICE`
+- `OTHER`
+
+Wichtig:
+- diese Bot-Intents werden von der Runtime auf die aktuellen on-chain Signaltypen gemappt
+- dadurch muessen Bots die heutige `MSG/CHECKPOINT/OTHER`-Abbildung nicht selbst hart verdrahten
+
 Wichtig:
 - nur Buyer oder Seller duerfen posten
 - Mailbox muss offen sein
@@ -118,8 +133,10 @@ Wichtig:
 
 ## 8) Empfang bestaetigen
 
-Die Gegenseite bestaetigt Signale ueber:
-- Move: `order_mailbox::ack_signal`
+Die Gegenseite holt zuerst:
+- `POST /orders/{orderId}/mailbox/ack-plan`
+
+Danach signiert sie den geplanten Ack-Tx.
 
 Das Ack enthaelt:
 - wer bestaetigt hat
@@ -137,7 +154,8 @@ Damit koennen Bots beweisbar sagen:
 ## 9) Mailbox schliessen
 
 Wenn der Kommunikationsabschnitt vorbei ist:
-- Move: `order_mailbox::close_order_mailbox`
+- `POST /orders/{orderId}/mailbox/close-plan`
+- danach den geplanten Tx signieren und ausfuehren
 
 Die Mailbox wird erst final `closed`, wenn beide Parteien zugestimmt haben.
 
@@ -149,13 +167,14 @@ Danach ist optional Cleanup moeglich:
 1. Seller setzt `communicationPolicy` im Listing.
 2. Buyer akzeptiert mit `orderId + communicationProposal`.
 3. Beide lesen `GET /orders/{orderId}/communication-agreement`.
-4. Eine Partei erzeugt on-chain `OrderMailbox`.
-5. Buyer oder Seller bindet sie per `POST /orders/{orderId}/mailbox`.
-6. Beide Bots lesen `GET /orders/{orderId}/mailbox`.
-7. Off-chain Payload wird verschluesselt und abgelegt.
-8. On-chain folgt `post_signal(ciphertext_hash, payload_ref)`.
-9. Gegenseite reagiert off-chain und bestaetigt on-chain mit `ack_signal(seq)`.
-10. Nach Ende beide Seiten `close_order_mailbox`.
+4. Eine Partei holt `POST /orders/{orderId}/mailbox/init-plan`.
+5. SDK baut den Tx via `buildOrderMailboxTxFromPlan(...)`; Wallet signiert und fuehrt aus.
+6. Buyer oder Seller bindet die entstandene Object-ID per `POST /orders/{orderId}/mailbox`.
+7. Beide Bots lesen `GET /orders/{orderId}/mailbox`.
+8. Off-chain Payload wird verschluesselt und abgelegt.
+9. Sender holt `POST /orders/{orderId}/mailbox/post-signal-plan` und fuehrt den geplanten Tx aus.
+10. Gegenseite reagiert off-chain und bestaetigt ueber `POST /orders/{orderId}/mailbox/ack-plan`.
+11. Nach Ende approven beide Seiten die Schliessung ueber `POST /orders/{orderId}/mailbox/close-plan`.
 
 ## 11) Was die API macht und was nicht
 
@@ -163,13 +182,14 @@ Die API:
 - verwaltet das Order-Mapping zur Mailbox
 - verifiziert das Mailbox-Objekt on-chain vor dem Speichern
 - blockiert Nicht-Teilnehmer beim Lesen/Setzen
+- liefert jetzt auch den bevorzugten Tx-Plan fuer `init`, `post`, `ack` und `close`
 
 Die API macht nicht:
 - keine Klartext-Chat-Speicherung
-- kein Erzeugen der on-chain Signale selbst
-- keine automatische Mailbox-Erstellung
+- kein serverseitiges Signieren oder Ausfuehren der on-chain Signale
+- keine automatische Mailbox-Erstellung ohne Wallet-Signatur
 
-Das eigentliche Signalposting bleibt ein Move-/SDK- bzw. Wallet-Tx-Thema.
+Die letzte Autorisierung bleibt also bewusst beim Wallet, aber der Bot muss die Move-Ziele nicht mehr selbst zusammenbauen.
 
 ## 12) Wichtige Bot-Regeln
 

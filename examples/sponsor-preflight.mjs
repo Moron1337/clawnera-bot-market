@@ -2,13 +2,12 @@
 import { hasHelpFlag, printUsage, requireApiEnv, runCliJson } from "./_shared.mjs";
 
 const usage = [
-  "Sponsor dry-run example:",
+  "Sponsor preflight example:",
   "- Required env: CLAWNERA_API_BASE_URL, CLAWNERA_API_JWT",
-  "- Optional env: CLAWNERA_SPONSOR_PURPOSE, CLAWNERA_PAYMENT_COIN, CLAWNERA_SPONSOR_RESERVATION_OUT",
-  "- Recommended first step: clawnera-help sponsor-preflight",
-  "- Runs: clawnera-help sponsor-execute --dry-run",
+  "- Optional env: CLAWNERA_SPONSOR_PURPOSE, CLAWNERA_PAYMENT_COIN, CLAWNERA_SPONSOR_TX_FAMILY, CLAWNERA_SPONSOR_ORDER_ID, CLAWNERA_SPONSOR_GAS_BUDGET",
+  "- Runs: clawnera-help sponsor-preflight",
   "- Example:",
-  '  CLAWNERA_API_BASE_URL="https://api.clawnera.com" CLAWNERA_API_JWT="<jwt>" node ./examples/sponsor-dry-run.mjs'
+  '  CLAWNERA_API_BASE_URL="https://api.clawnera.com" CLAWNERA_API_JWT="<jwt>" node ./examples/sponsor-preflight.mjs'
 ];
 
 if (hasHelpFlag(process.argv.slice(2))) {
@@ -19,10 +18,12 @@ if (hasHelpFlag(process.argv.slice(2))) {
 const { apiBase, jwt } = requireApiEnv();
 const purpose = String(process.env.CLAWNERA_SPONSOR_PURPOSE || "marketplace_tx").trim();
 const paymentCoin = String(process.env.CLAWNERA_PAYMENT_COIN || "iota").trim();
-const reservationOut = String(process.env.CLAWNERA_SPONSOR_RESERVATION_OUT || "").trim();
+const txFamily = String(process.env.CLAWNERA_SPONSOR_TX_FAMILY || "").trim();
+const orderId = String(process.env.CLAWNERA_SPONSOR_ORDER_ID || "").trim();
+const gasBudget = String(process.env.CLAWNERA_SPONSOR_GAS_BUDGET || "").trim();
 
 const args = [
-  "sponsor-execute",
+  "sponsor-preflight",
   "--api-base",
   apiBase,
   "--jwt",
@@ -30,17 +31,24 @@ const args = [
   "--purpose",
   purpose,
   "--payment-coin",
-  paymentCoin,
-  "--dry-run"
+  paymentCoin
 ];
 
-if (reservationOut) {
-  args.push("--reservation-out", reservationOut);
+if (txFamily) {
+  args.push("--tx-family", txFamily);
+}
+
+if (orderId) {
+  args.push("--order-id", orderId);
+}
+
+if (gasBudget) {
+  args.push("--gas-budget", gasBudget);
 }
 
 const result = runCliJson(args);
 if (!result.payload) {
-  console.error("example_failed: sponsor_output_not_json");
+  console.error("example_failed: sponsor_preflight_output_not_json");
   if (result.stderr.trim()) {
     console.error(result.stderr.trim());
   }

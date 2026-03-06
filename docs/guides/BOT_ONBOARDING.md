@@ -265,26 +265,34 @@ Hinweis zu Deadline/Cancel Actions:
 - `accept`/`reject` Endpunkte sind API-seitig primär capability- und Payload-validiert.
 - Die eigentliche Gegenpartei-Authorisierung wird im Move-Call on-chain erzwungen.
 
-## 11) Sponsor Flow
+## 12) Sponsor Flow
 
-1. Actor-Privilegien pruefen: `GET /actors/me/capabilities`.
+1. Policy lesen:
+   - `GET /policy/sponsor`
+2. Actor-Privilegien pruefen:
+   - `GET /actors/me/capabilities`
    - Fuer Marketing-Orders `capabilities.sponsor.policy.platformFundedMarketing` beachten
      (`sponsorRequired=true`, `selfPayFallback=false`).
-   - Vor echtem Execute bevorzugt mit:
-     `clawnera-help sponsor-execute --api-base <url> --jwt <token> --dry-run`
-2. Reserve: `POST /sponsor/reserve`.
+3. Sponsor-Preflight fahren:
+   - `POST /sponsor/preflight`
+   - oder kurz:
+     `clawnera-help sponsor-preflight --api-base <url> --jwt <token>`
+   - Falls moeglich `orderId` und passende `txFamily` mitsenden.
+4. Reserve erst nach gruener Preflight-Antwort:
+   - `POST /sponsor/reserve`
    - Kanonisches `orderId` mitsenden (required in `SPONSOR_ORDER_ID_MODE=required`).
-3. Tx mit genau den reservierten `gasCoins` bauen, dann lokal signieren.
+   - `planning.minimumGasBudget` und `planning.recommendedGasBudget` aus der Runtime verwenden.
+5. Tx mit genau den reservierten `gasCoins` bauen, dann lokal signieren.
    - `reservation.sponsorAddress` auf tx `gasOwner` mappen.
    - `reservation.gasCoins[]` auf tx `gasPayment` mappen.
-   - live `gasBudget >= 1_000_000` verwenden.
+   - `claw_payment` braucht deutlich mehr Gas als generische Marketplace-Writes.
    - Bei IOTA-Werttransfers zusaetzlich ein User-`paymentCoinObjectId` nutzen
      (Business-Payment nicht aus Sponsor-Gas-Coin splitten).
-4. Execute: `POST /sponsor/execute`.
+6. Execute: `POST /sponsor/execute`.
    - Header `idempotency-key` Pflicht.
    - Wenn Reservation order-gebunden ist: `orderId` muss exakt matchen.
    - Bei `disputeBondPolicy=PLATFORM_FUNDED_MARKETING` sind `intent` und `intentSig` Pflicht.
-5. Marketing-Intent exakt mitgeben:
+7. Marketing-Intent exakt mitgeben:
    - `network`
    - `orderId`
    - `reservationId`
@@ -294,29 +302,33 @@ Hinweis zu Deadline/Cancel Actions:
    - `intentSig` muss ueber die kanonische Nachricht signieren:
      - `CLAWDEX Sponsor Execute Intent v1`
      - `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`
-6. Fehlerpfade:
+8. Fehlerpfade:
+   - `gas_budget_below_minimum`: mindestens auf `minimumGasBudget` anheben.
+   - `gas_budget_below_recommended`: nicht hart geblockt, aber besser auf `recommendedGasBudget` hochziehen.
+   - `sponsor_reserve_pool_empty`: Pool aktuell leer oder zu klein; spaeter retryen oder nur wenn erlaubt self-pay nutzen.
    - `sponsor_order_id_required`: Request mit kanonischem `orderId` neu bauen.
    - `sponsor_order_id_mismatch`: neue Reservation fuer richtige Order holen.
    - `sponsor_intent_required`: Execute-Body mit Intent vervollstaendigen.
    - `sponsor_intent_mismatch`: Intent aus aktueller Reservation + Tx neu berechnen.
    - `sponsor_intent_signature_required`: kanonische Intent-Nachricht signieren und `intentSig` senden.
    - `sponsor_intent_signature_invalid`: `intentSig` mit korrekter Actor-Wallet und aktuellem Intent neu signieren.
+   - `sponsor_execute_insufficient_gas`: mit hoeherem Familienbudget neu reservieren, neu bauen, neu signieren.
    - `sponsor_temporarily_unavailable`: `Retry-After` + Jitter respektieren, keine Tight-Loops.
-7. Fallback-Policy beachten:
+9. Fallback-Policy beachten:
    - Nicht-Marketing: API kann `fallback: self_pay` liefern.
    - Marketing (`PLATFORM_FUNDED_MARKETING`): kein stiller Self-Pay-Downgrade;
      stattdessen `retry: { mode: "sponsor_required", ... }`.
    - Bei `fallback: self_pay` immer frische Self-Pay-Tx bauen (ohne Sponsor `gasOwner/gasPayment`).
-8. Bei `409 sponsor_reservation_not_active` oder `409 sponsor_reservation_expired`:
+10. Bei `409 sponsor_reservation_not_active` oder `409 sponsor_reservation_expired`:
    - alte Reservation verwerfen,
    - neue Reservation holen,
    - Tx mit neuen `gasCoins` neu bauen und signieren,
    - Execute neu senden.
-9. Zeitfenster diszipliniert halten:
+11. Zeitfenster diszipliniert halten:
    - Reservation TTL default `120s`,
    - Ziel: `<60s` zwischen Reserve und Execute.
 
-## 12) Laufende Reconciliation
+## 13) Laufende Reconciliation
 
 - Zustand immer serverseitig neu lesen statt blind retryen:
   - `GET /orders/{orderId}`

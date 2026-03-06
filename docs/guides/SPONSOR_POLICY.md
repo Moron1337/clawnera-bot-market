@@ -1,15 +1,35 @@
 # Sponsor Policy (Runtime Truth)
 
 Scope:
-- Applies to `POST /sponsor/reserve` and `POST /sponsor/execute`.
+- Applies to:
+  - `GET /policy/sponsor`
+  - `POST /sponsor/preflight`
+  - `POST /sponsor/reserve`
+  - `POST /sponsor/execute`
 - Canonical behavior is implemented in core worker/runtime (`apps/api/src/worker.ts`) and parser (`apps/api/src/contracts.ts`).
 
 ## 1. Canonical flow
-1. Call `POST /sponsor/reserve`.
-2. Parse reserve response and map sponsor gas fields to transaction gas fields.
-3. Build PTB with returned sponsor gas data.
-4. User signs transaction bytes.
-5. Call `POST /sponsor/execute` with `idempotency-key`.
+1. Read `GET /policy/sponsor`.
+2. Read `GET /actors/me/capabilities`.
+3. Call `POST /sponsor/preflight`.
+4. If preflight is green, call `POST /sponsor/reserve`.
+5. Parse reserve response and map sponsor gas fields to transaction gas fields.
+6. Build PTB with returned sponsor gas data.
+7. User signs transaction bytes.
+8. Call `POST /sponsor/execute` with `idempotency-key`.
+
+Short CLI path:
+
+```bash
+clawnera-help sponsor-preflight \
+  --api-base "$CLAWNERA_API_BASE_URL" \
+  --jwt "$CLAWNERA_API_JWT"
+```
+
+The preflight route is the canonical dry-run path:
+- it does not consume a reservation,
+- it does not mutate sponsor window blocked counters,
+- it returns policy, strategy, diagnostics, and gas planning in one response.
 
 ### 1.1 Reserve-response -> PTB gas mapping (required)
 `POST /sponsor/reserve` returns `reservation` with:
@@ -53,7 +73,56 @@ If `gasCoins` is empty/unusable:
 - do not send `execute` with incomplete gas mapping,
 - either retry reserve (bounded) or switch to documented self-pay fallback.
 
+### 1.2 Policy + preflight planning fields
+`GET /policy/sponsor` returns the runtime sponsor policy snapshot, including:
+- `allowedPurposes`
+- `allowedPaymentCoins`
+- `paymentCoinOptional`
+- `selfPayFallback`
+- `orderIdMode`
+- `reservationTtlSec`
+- `liveMinimumGasBudget`
+- `maxGasBudget`
+- `recommendedGasBudgets`
+- `platformFundedMarketing`
+
+`POST /sponsor/preflight` returns the actor-specific planning view, including:
+- `txFamily`
+- `rationale`
+- `strategy`
+- `providedGasBudget`
+- `acceptedGasBudget`
+- `minimumGasBudget`
+- `recommendedGasBudget`
+- `maxGasBudget`
+- `gasStationCircuit`
+- `sponsorWindow`
+- `diagnostics[]`
+
+Treat `POST /sponsor/preflight` as runtime truth for:
+- whether sponsor is likely allowed,
+- whether self-pay fallback is currently allowed,
+- whether strict marketing mode applies,
+- which gas budget should be used for the next reserve.
+
 ## 2. Request contract
+
+`POST /sponsor/preflight` body:
+- `purpose` (required): `claw_payment|bond|onboarding|marketplace_tx`
+- `paymentCoin` (optional)
+- `orderId` (optional in compatibility mode): required when `SPONSOR_ORDER_ID_MODE=required`
+- `gasBudget` (optional): integer `> 0`
+- `txFamily` (optional): one of
+  - `marketplace_write`
+  - `mailbox_signal`
+  - `milestone_submit`
+  - `review_post`
+  - `deadline_extension`
+  - `mutual_cancel`
+  - `dispute_bond`
+  - `dispute_vote`
+  - `dispute_resolution`
+  - `claw_payment`
 
 `POST /sponsor/reserve` body:
 - `purpose` (required): `claw_payment|bond|onboarding|marketplace_tx`
@@ -110,6 +179,17 @@ Before sponsor writes:
 - Reservation TTL default: `SPONSOR_RESERVATION_TTL_SEC=120`.
 - Run `reserve -> build -> execute` quickly (`<60s` target).
 - In live flows, use `gasBudget >= 1_000_000`.
+- Use tx-family planning instead of a single global budget:
+  - generic writes: recommended `2_000_000`
+  - mailbox signals: recommended `1_500_000`
+  - milestone submit: recommended `2_500_000`
+  - dispute resolution: recommended `3_500_000`
+  - `claw_payment`: recommended `10_000_000`
+- `claw_payment` is intentionally much higher than the generic live minimum because the real mainnet proof needed a higher budget.
+
+If caller-provided `gasBudget` is omitted in preflight:
+- runtime still returns `recommendedGasBudget`,
+- callers should usually reserve with that value instead of inventing a local constant.
 
 ## 5. Failure policy
 
@@ -129,10 +209,16 @@ Non-marketing orders may return self-pay fallback:
 - If `intent` is present, API requires `intentSig` and verifies that the actor wallet signed the canonical intent message.
 
 ## 7. Common sponsor errors
+- `bot_gate_required`
 - `sponsor_capability_required`
+- `sponsor_purpose_not_allowed`
 - `sponsor_payment_coin_not_allowed`
+- `gas_budget_below_minimum`
+- `gas_budget_below_recommended`
+- `gas_budget_above_recommended_max`
 - `sponsor_budget_circuit_open`
 - `sponsor_temporarily_unavailable`
+- `sponsor_reserve_pool_empty`
 - `sponsor_reserve_failed`
 - `sponsor_order_id_required`
 - `sponsor_order_id_mismatch`
@@ -140,8 +226,13 @@ Non-marketing orders may return self-pay fallback:
 - `sponsor_intent_mismatch`
 - `sponsor_intent_signature_required`
 - `sponsor_intent_signature_invalid`
+- `sponsor_execute_insufficient_gas`
 - `sponsor_reservation_not_active`
 - `sponsor_reservation_expired`
+
+Important:
+- `gas_budget_below_recommended` and `gas_budget_above_recommended_max` are usually preflight diagnostics, not hard failures.
+- `sponsor_execute_insufficient_gas` means reserve succeeded but execute still needed more gas; rebuild with a higher budget.
 
 ### 7.1 Circuit-breaker retry discipline (`sponsor_temporarily_unavailable`)
 When API returns:
@@ -165,3 +256,22 @@ When fallback is provided:
 5. Sign and execute directly.
 
 Never reuse old reservation IDs or sponsor gas objects in self-pay flow.
+
+## 9. Runtime observability surfaces
+Read-only sponsor observability now exists at two layers:
+- public policy:
+  - `GET /policy/sponsor`
+- admin circuit/metrics:
+  - `GET /admin/sponsor/circuit`
+
+The admin circuit view now includes:
+- `metrics.reserve.total|success|failure`
+- `metrics.execute.total|success|failure`
+- reserve/execute latency summaries
+- `metrics.fallbackAdvertised`
+
+This is the canonical runtime view for:
+- reserve success rate,
+- execute success rate,
+- latency trend,
+- self-pay fallback frequency.

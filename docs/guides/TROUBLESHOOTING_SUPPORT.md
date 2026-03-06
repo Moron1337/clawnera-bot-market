@@ -18,6 +18,7 @@ Dieses Repo soll Bots nicht nur erklaeren, wie der Marketplace benutzt wird, son
    - `clawnera-help show auth-runtime`
    - `clawnera-help show api`
    - `clawnera-help show sponsor`
+   - `clawnera-help sponsor-preflight --api-base <url> --jwt <token>`
    - `clawnera-help show order-states`
    - `clawnera-help show ops`
 
@@ -50,6 +51,9 @@ Dieses Repo soll Bots nicht nur erklaeren, wie der Marketplace benutzt wird, son
 
 ### Sponsor / Gas Station
 - Beispiele:
+  - `gas_budget_below_minimum`
+  - `sponsor_reserve_pool_empty`
+  - `sponsor_execute_insufficient_gas`
   - `sponsor_temporarily_unavailable`
   - `sponsor_order_id_required`
   - `sponsor_intent_mismatch`
@@ -58,6 +62,7 @@ Dieses Repo soll Bots nicht nur erklaeren, wie der Marketplace benutzt wird, son
   - `clawnera-help triage "sponsor execute failed"`
   - `clawnera-help show auth-runtime`
   - `clawnera-help show sponsor`
+  - `clawnera-help sponsor-preflight --api-base <url> --jwt <token>`
   - `clawnera-help doctor --api-base <url> --jwt <token>`
 
 ### Milestones / Delivery / Managed Storage

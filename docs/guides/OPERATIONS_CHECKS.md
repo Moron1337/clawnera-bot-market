@@ -21,9 +21,11 @@
 4. Order-State valide? (`/orders/{orderId}`, `/timeline`)
 5. Bei Disputes: Case-State + Quorum/Fallback-Pfad pruefen.
 6. Bei Sponsor-Fehlern:
+   - `GET /policy/sponsor` plausibel?
+   - `clawnera-help sponsor-preflight --api-base <url> --jwt <token>` zuerst gruen?
    - `reservationId` frisch?
-   - `gasBudget >= 1_000_000` genutzt?
-   - Dry-run zuerst sauber?
+   - `minimumGasBudget`/`recommendedGasBudget` aus dem Preflight uebernommen?
+   - Dry-run danach sauber?
      `clawnera-help sponsor-execute --api-base <url> --jwt <token> --dry-run`
    - `reservation.sponsorAddress`/`reservation.gasCoins[]` korrekt auf tx `gasOwner`/`gasPayment` gemappt?
    - `SPONSOR_ORDER_ID_MODE=required` aktiv? Dann `orderId` in Reserve+Execute immer mitsenden.
@@ -32,6 +34,9 @@
      - `CLAWDEX Sponsor Execute Intent v1`
      - `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`
    - `idempotency-key` bei `/sponsor/execute` gesetzt?
+   - `gas_budget_below_minimum` -> mindestens auf `minimumGasBudget` anheben.
+   - `sponsor_reserve_pool_empty` -> Pool leer/zu klein; spaeter retryen oder nur wenn erlaubt self-pay nutzen.
+   - `sponsor_execute_insufficient_gas` -> mit hoeherem Familienbudget neu reservieren.
    - `sponsor_reservation_not_active`/`expired` -> neuen Reserve->Build->Execute Zyklus fahren.
    - `503 sponsor_temporarily_unavailable` -> `Retry-After` + Jitter respektieren (keine Tight-Loops, max. bounded retries).
    - Reserve->Execute deutlich innerhalb TTL halten (Default `SPONSOR_RESERVATION_TTL_SEC=120`, Ziel <60s).

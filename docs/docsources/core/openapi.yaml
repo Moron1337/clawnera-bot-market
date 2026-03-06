@@ -118,49 +118,7 @@ paths:
                               requiresBotProfile:
                                 type: boolean
                               policy:
-                                type: object
-                                required:
-                                  [
-                                    allowedPurposes,
-                                    allowedPaymentCoins,
-                                    paymentCoinOptional,
-                                    selfPayFallback,
-                                    platformFundedMarketing
-                                  ]
-                                properties:
-                                  allowedPurposes:
-                                    type: array
-                                    items:
-                                      type: string
-                                  allowedPaymentCoins:
-                                    type: array
-                                    items:
-                                      type: string
-                                  paymentCoinOptional:
-                                    type: boolean
-                                  selfPayFallback:
-                                    type: boolean
-                                  platformFundedMarketing:
-                                    type: object
-                                    required:
-                                      [
-                                        sponsorPreferred,
-                                        sponsorRequired,
-                                        selfPayFallback,
-                                        intentRequired,
-                                        intentSignatureRequired
-                                      ]
-                                    properties:
-                                      sponsorPreferred:
-                                        type: boolean
-                                      sponsorRequired:
-                                        type: boolean
-                                      selfPayFallback:
-                                        type: boolean
-                                      intentRequired:
-                                        type: boolean
-                                      intentSignatureRequired:
-                                        type: boolean
+                                $ref: "#/components/schemas/SponsorPolicySnapshot"
                       auth:
                         type: object
                         required: [bearerToken, botHeader]
@@ -284,49 +242,7 @@ paths:
                             type: string
                             format: date-time
                           policy:
-                            type: object
-                            required:
-                              [
-                                allowedPurposes,
-                                allowedPaymentCoins,
-                                paymentCoinOptional,
-                                selfPayFallback,
-                                platformFundedMarketing
-                              ]
-                            properties:
-                              allowedPurposes:
-                                type: array
-                                items:
-                                  type: string
-                              allowedPaymentCoins:
-                                type: array
-                                items:
-                                  type: string
-                              paymentCoinOptional:
-                                type: boolean
-                              selfPayFallback:
-                                type: boolean
-                              platformFundedMarketing:
-                                type: object
-                                required:
-                                  [
-                                    sponsorPreferred,
-                                    sponsorRequired,
-                                    selfPayFallback,
-                                    intentRequired,
-                                    intentSignatureRequired
-                                  ]
-                                properties:
-                                  sponsorPreferred:
-                                    type: boolean
-                                  sponsorRequired:
-                                    type: boolean
-                                  selfPayFallback:
-                                    type: boolean
-                                  intentRequired:
-                                    type: boolean
-                                  intentSignatureRequired:
-                                    type: boolean
+                            $ref: "#/components/schemas/SponsorPolicySnapshot"
         "401":
           description: Missing or invalid bearer token.
   /policy/ranking:
@@ -361,6 +277,22 @@ paths:
                 properties:
                   policy:
                     $ref: "#/components/schemas/FeePolicy"
+  /policy/sponsor:
+    get:
+      tags: [Policy, Sponsor]
+      security: []
+      operationId: getSponsorPolicy
+      responses:
+        "200":
+          description: Canonical sponsor policy and recommended gas budget table.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [policy]
+                properties:
+                  policy:
+                    $ref: "#/components/schemas/SponsorPolicySnapshot"
   /policy/storage:
     get:
       tags: [Policy]
@@ -2527,6 +2459,43 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /sponsor/preflight:
+    post:
+      tags: [Sponsor]
+      operationId: preflightSponsorTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SponsorPreflightRequest"
+      responses:
+        "200":
+          description: Dry-run sponsor planning response without consuming reservation or quota state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SponsorPreflightResponse"
+        "400":
+          description: Invalid sponsor preflight request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SponsorFailureResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Order exists but the caller is not a party to it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SponsorFailureResponse"
+        "404":
+          description: Referenced order not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SponsorFailureResponse"
   /sponsor/reserve:
     post:
       tags: [Sponsor]
@@ -3872,6 +3841,175 @@ components:
       oneOf:
         - $ref: "#/components/schemas/AcceptBidByListingRequest"
         - $ref: "#/components/schemas/AcceptStoredBidRequest"
+    SponsorTxFamily:
+      type: string
+      enum:
+        [
+          marketplace_write,
+          mailbox_signal,
+          milestone_submit,
+          review_post,
+          deadline_extension,
+          mutual_cancel,
+          dispute_bond,
+          dispute_vote,
+          dispute_resolution,
+          claw_payment
+        ]
+    SponsorGasEstimate:
+      type: object
+      additionalProperties: false
+      required: [txFamily, purpose, minimumGasBudget, recommendedGasBudget, maxGasBudget, rationale]
+      properties:
+        txFamily:
+          $ref: "#/components/schemas/SponsorTxFamily"
+        purpose:
+          type: string
+        minimumGasBudget:
+          type: integer
+          minimum: 1
+        recommendedGasBudget:
+          type: integer
+          minimum: 1
+        maxGasBudget:
+          type: integer
+          minimum: 1
+        rationale:
+          type: string
+    SponsorPolicySnapshot:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          version,
+          allowedPurposes,
+          allowedPaymentCoins,
+          paymentCoinOptional,
+          selfPayFallback,
+          orderIdMode,
+          reservationTtlSec,
+          liveMinimumGasBudget,
+          maxGasBudget,
+          reserve,
+          execute,
+          platformFundedMarketing,
+          recommendedGasBudgets
+        ]
+      properties:
+        version:
+          type: string
+          enum: [sponsor_policy.v2]
+        allowedPurposes:
+          type: array
+          items:
+            type: string
+        allowedPaymentCoins:
+          type: array
+          items:
+            type: string
+        paymentCoinOptional:
+          type: boolean
+        selfPayFallback:
+          type: boolean
+        orderIdMode:
+          type: string
+          enum: [optional, required]
+        reservationTtlSec:
+          type: integer
+          minimum: 1
+        liveMinimumGasBudget:
+          type: integer
+          minimum: 1
+        maxGasBudget:
+          type: integer
+          minimum: 1
+        reserve:
+          type: object
+          additionalProperties: false
+          required: [orderIdRequired, rateLimitPerMin, windowSec, windowTxCap, windowGasCap]
+          properties:
+            orderIdRequired:
+              type: boolean
+            rateLimitPerMin:
+              type: integer
+              minimum: 1
+            windowSec:
+              type: integer
+              minimum: 1
+            windowTxCap:
+              type: integer
+              minimum: 1
+            windowGasCap:
+              type: integer
+              minimum: 1
+        execute:
+          type: object
+          additionalProperties: false
+          required:
+            [idempotencyHeader, intentSupported, intentRequiredForPlatformFundedMarketing, intentSignatureRequiredForPlatformFundedMarketing]
+          properties:
+            idempotencyHeader:
+              type: string
+              enum: [idempotency-key]
+            intentSupported:
+              type: boolean
+            intentRequiredForPlatformFundedMarketing:
+              type: boolean
+            intentSignatureRequiredForPlatformFundedMarketing:
+              type: boolean
+        platformFundedMarketing:
+          type: object
+          additionalProperties: false
+          required:
+            [sponsorPreferred, sponsorRequired, selfPayFallback, intentRequired, intentSignatureRequired]
+          properties:
+            sponsorPreferred:
+              type: boolean
+            sponsorRequired:
+              type: boolean
+            selfPayFallback:
+              type: boolean
+            intentRequired:
+              type: boolean
+            intentSignatureRequired:
+              type: boolean
+        recommendedGasBudgets:
+          type: object
+          additionalProperties: false
+          required:
+            [
+              marketplace_write,
+              mailbox_signal,
+              milestone_submit,
+              review_post,
+              deadline_extension,
+              mutual_cancel,
+              dispute_bond,
+              dispute_vote,
+              dispute_resolution,
+              claw_payment
+            ]
+          properties:
+            marketplace_write:
+              $ref: "#/components/schemas/SponsorGasEstimate"
+            mailbox_signal:
+              $ref: "#/components/schemas/SponsorGasEstimate"
+            milestone_submit:
+              $ref: "#/components/schemas/SponsorGasEstimate"
+            review_post:
+              $ref: "#/components/schemas/SponsorGasEstimate"
+            deadline_extension:
+              $ref: "#/components/schemas/SponsorGasEstimate"
+            mutual_cancel:
+              $ref: "#/components/schemas/SponsorGasEstimate"
+            dispute_bond:
+              $ref: "#/components/schemas/SponsorGasEstimate"
+            dispute_vote:
+              $ref: "#/components/schemas/SponsorGasEstimate"
+            dispute_resolution:
+              $ref: "#/components/schemas/SponsorGasEstimate"
+            claw_payment:
+              $ref: "#/components/schemas/SponsorGasEstimate"
     SponsorReserveRequest:
       type: object
       additionalProperties: false
@@ -3895,6 +4033,27 @@ components:
           description: |
             Transitional field. Optional in compatibility mode, required once
             `SPONSOR_ORDER_ID_MODE=required` is enabled.
+    SponsorPreflightRequest:
+      type: object
+      additionalProperties: false
+      required: [purpose]
+      properties:
+        purpose:
+          type: string
+          enum: [claw_payment, bond, onboarding, marketplace_tx]
+        paymentCoin:
+          type: string
+          minLength: 1
+          maxLength: 128
+        orderId:
+          type: string
+          minLength: 1
+          maxLength: 200
+        gasBudget:
+          type: integer
+          minimum: 1
+        txFamily:
+          $ref: "#/components/schemas/SponsorTxFamily"
     SponsorExecuteRequest:
       type: object
       additionalProperties: false
@@ -4000,7 +4159,7 @@ components:
     SponsorReserveResponse:
       type: object
       additionalProperties: false
-      required: [reservation, usage, caps, sponsorWindow, paymentCoin, tier, fastLane]
+      required: [reservation, usage, caps, sponsorWindow, paymentCoin, tier, fastLane, planning]
       properties:
         reservation:
           $ref: "#/components/schemas/SponsorReservationResponse"
@@ -4039,6 +4198,22 @@ components:
           minimum: 0
         fastLane:
           type: boolean
+        planning:
+          type: object
+          additionalProperties: false
+          required: [txFamily, minimumGasBudget, recommendedGasBudget, maxGasBudget]
+          properties:
+            txFamily:
+              $ref: "#/components/schemas/SponsorTxFamily"
+            minimumGasBudget:
+              type: integer
+              minimum: 1
+            recommendedGasBudget:
+              type: integer
+              minimum: 1
+            maxGasBudget:
+              type: integer
+              minimum: 1
     SponsorExecuteResult:
       type: object
       additionalProperties: false
@@ -4060,6 +4235,233 @@ components:
       properties:
         execution:
           $ref: "#/components/schemas/SponsorExecuteResult"
+    SponsorPreflightResponse:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          actorAddress,
+          purpose,
+          paymentCoin,
+          orderId,
+          order,
+          sponsorProxyMode,
+          txFamily,
+          rationale,
+          strategy,
+          providedGasBudget,
+          acceptedGasBudget,
+          minimumGasBudget,
+          recommendedGasBudget,
+          maxGasBudget,
+          reservationTtlSec,
+          capabilities,
+          policy,
+          gasStationCircuit,
+          sponsorWindow,
+          diagnostics
+        ]
+      properties:
+        actorAddress:
+          type: string
+        purpose:
+          type: string
+        paymentCoin:
+          type: string
+          nullable: true
+        orderId:
+          type: string
+          nullable: true
+        order:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [id, status, buyerAddress, sellerAddress, disputeBondPolicy]
+          properties:
+            id:
+              type: string
+            status:
+              type: string
+            buyerAddress:
+              type: string
+            sellerAddress:
+              type: string
+            disputeBondPolicy:
+              type: string
+        sponsorProxyMode:
+          type: string
+          enum: [mock, live]
+        txFamily:
+          $ref: "#/components/schemas/SponsorTxFamily"
+        rationale:
+          type: string
+        strategy:
+          type: object
+          additionalProperties: false
+          required:
+            [sponsorLikelyAllowed, selfPayFallbackAvailable, strictMode, intentRequired, intentSignatureRequired, authGate]
+          properties:
+            sponsorLikelyAllowed:
+              type: boolean
+            selfPayFallbackAvailable:
+              type: boolean
+            strictMode:
+              type: boolean
+            intentRequired:
+              type: boolean
+            intentSignatureRequired:
+              type: boolean
+            authGate:
+              type: object
+              additionalProperties: false
+              required: [mode, requiresBotKey, requiresBotProfile]
+              properties:
+                mode:
+                  type: string
+                  enum: [legacy_bot, hybrid, capability]
+                requiresBotKey:
+                  type: boolean
+                requiresBotProfile:
+                  type: boolean
+        providedGasBudget:
+          type: integer
+          nullable: true
+          minimum: 1
+        acceptedGasBudget:
+          type: integer
+          nullable: true
+          minimum: 1
+        minimumGasBudget:
+          type: integer
+          minimum: 1
+        recommendedGasBudget:
+          type: integer
+          minimum: 1
+        maxGasBudget:
+          type: integer
+          minimum: 1
+        reservationTtlSec:
+          type: integer
+          minimum: 1
+        capabilities:
+          type: object
+          additionalProperties: true
+        policy:
+          $ref: "#/components/schemas/SponsorPolicySnapshot"
+        gasStationCircuit:
+          type: object
+          additionalProperties: false
+          required: [open, retryAfterSec]
+          properties:
+            open:
+              type: boolean
+            retryAfterSec:
+              type: integer
+              minimum: 0
+        sponsorWindow:
+          type: object
+          additionalProperties: false
+          required: [allowed, usage, caps]
+          properties:
+            allowed:
+              type: boolean
+            retryAfterSec:
+              type: integer
+              minimum: 0
+            usage:
+              type: object
+              additionalProperties: false
+              required: [txCount, gasTotal, blockedCount]
+              properties:
+                txCount:
+                  type: integer
+                  minimum: 0
+                gasTotal:
+                  type: integer
+                  minimum: 0
+                blockedCount:
+                  type: integer
+                  minimum: 0
+            caps:
+              type: object
+              additionalProperties: false
+              required: [windowSec, maxTxCount, maxGasPerWindow]
+              properties:
+                windowSec:
+                  type: integer
+                  minimum: 1
+                maxTxCount:
+                  type: integer
+                  minimum: 1
+                maxGasPerWindow:
+                  type: integer
+                  minimum: 1
+        diagnostics:
+          type: array
+          items:
+            $ref: "#/components/schemas/SponsorFailureDiagnostic"
+    SponsorFailureDiagnostic:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          stage,
+          issue,
+          txFamily,
+          minimumGasBudget,
+          recommendedGasBudget,
+          maxGasBudget,
+          orderIdRequired,
+          strictMode,
+          intentRequired,
+          intentSignatureRequired,
+          selfPayFallbackAvailable,
+          reservationTtlSec
+        ]
+      properties:
+        stage:
+          type: string
+          enum: [preflight, reserve, execute]
+        issue:
+          type: string
+        txFamily:
+          $ref: "#/components/schemas/SponsorTxFamily"
+        minimumGasBudget:
+          type: integer
+          minimum: 1
+        recommendedGasBudget:
+          type: integer
+          minimum: 1
+        maxGasBudget:
+          type: integer
+          minimum: 1
+        providedGasBudget:
+          type: integer
+          minimum: 1
+        orderIdRequired:
+          type: boolean
+        strictMode:
+          type: boolean
+        intentRequired:
+          type: boolean
+        intentSignatureRequired:
+          type: boolean
+        selfPayFallbackAvailable:
+          type: boolean
+        reservationTtlSec:
+          type: integer
+          minimum: 1
+        retryAfterSec:
+          type: integer
+          minimum: 0
+        upstreamStatus:
+          type: integer
+          minimum: 100
+          maximum: 599
+        upstreamDetail:
+          type: string
+        hint:
+          type: string
     SponsorFallbackPolicy:
       type: object
       additionalProperties: false
@@ -4125,6 +4527,10 @@ components:
           type: array
           items:
             type: string
+        diagnostics:
+          type: array
+          items:
+            $ref: "#/components/schemas/SponsorFailureDiagnostic"
     ManagedStoragePaymentProof:
       type: object
       additionalProperties: false
@@ -5366,7 +5772,7 @@ components:
     SponsorCircuitStatusResponse:
       type: object
       required:
-        [generatedAt, sponsorProxyMode, gasStationCircuit, sponsorWindow, abusePolicy, activeAbuse]
+        [generatedAt, sponsorProxyMode, gasStationCircuit, sponsorWindow, abusePolicy, capabilityPolicy, metrics, activeAbuse]
       properties:
         generatedAt:
           type: string
@@ -5416,6 +5822,62 @@ components:
             windowSec:
               type: integer
             strikesMax:
+              type: integer
+        capabilityPolicy:
+          type: object
+          required: [fastLaneMinTier, fastLaneRateLimitBps, autoRevokeSec]
+          properties:
+            fastLaneMinTier:
+              type: integer
+            fastLaneRateLimitBps:
+              type: integer
+            autoRevokeSec:
+              type: integer
+        metrics:
+          type: object
+          required: [reserve, execute, fallbackAdvertised]
+          properties:
+            reserve:
+              type: object
+              required: [total, success, failure, latency]
+              properties:
+                total:
+                  type: integer
+                success:
+                  type: integer
+                failure:
+                  type: integer
+                latency:
+                  type: object
+                  required: [count, medianMs, p95Ms]
+                  properties:
+                    count:
+                      type: integer
+                    medianMs:
+                      type: integer
+                    p95Ms:
+                      type: integer
+            execute:
+              type: object
+              required: [total, success, failure, latency]
+              properties:
+                total:
+                  type: integer
+                success:
+                  type: integer
+                failure:
+                  type: integer
+                latency:
+                  type: object
+                  required: [count, medianMs, p95Ms]
+                  properties:
+                    count:
+                      type: integer
+                    medianMs:
+                      type: integer
+                    p95Ms:
+                      type: integer
+            fallbackAdvertised:
               type: integer
         activeAbuse:
           type: object

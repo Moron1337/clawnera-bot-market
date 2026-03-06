@@ -69,6 +69,7 @@ const TRIAGE_RULES = Object.freeze([
       "clawnera-help show sponsor",
       "clawnera-help show api",
       "clawnera-help doctor --api-base <url> --jwt <token>",
+      "clawnera-help sponsor-preflight --api-base <url> --jwt <token>",
       "clawnera-help sponsor-execute --help"
     ],
     issueCategory: "integration-help"
@@ -148,6 +149,7 @@ function printUsage() {
   console.log("  clawnera-help report-issue [options]      Generate a structured GitHub issue scaffold");
   console.log("  clawnera-help path                        Print repository path");
   console.log("  clawnera-help first-steps [--run]         Show or run IOTA first-step bootstrap");
+  console.log("  clawnera-help sponsor-preflight [options] Read sponsor policy/strategy/diagnostics");
   console.log("  clawnera-help sponsor-execute [options]   Reserve->sign->execute sponsor helper");
   console.log("  clawnera-help validate [--strict]         Validate topic/docs consistency");
   console.log("  clawnera-help sync                        Sync local source snapshots");
@@ -745,6 +747,122 @@ function sponsorExecuteUsageLines() {
     "- Build command must output JSON with fields: txBytesB64, userSig",
     "- For sponsored IOTA value tx: use user payment coin object for business amount; sponsor coins are gas-only."
   ];
+}
+
+function sponsorPreflightUsageLines() {
+  return [
+    "Sponsor preflight helper:",
+    "- Required: --api-base <url> --jwt <token>",
+    "- Defaults: --purpose marketplace_tx --payment-coin iota",
+    "- Optional: --gas-budget <int> --tx-family <family> --order-id <id> --timeout-ms <ms>",
+    "- Runtime returns strategy, diagnostics, tx family, and gas recommendations without consuming a reservation.",
+    "- Use this before sponsor reserve/execute for actor-scoped dry-run planning."
+  ];
+}
+
+async function runSponsorPreflight(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: sponsorPreflightUsageLines()
+    };
+  }
+
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals
+    };
+  }
+
+  const apiBase = normalizeApiBase(options["api-base"] || process.env.CLAWNERA_API_BASE_URL);
+  if (!apiBase) {
+    return {
+      ok: false,
+      error: "missing_or_invalid_api_base",
+      hint: "set --api-base or CLAWNERA_API_BASE_URL"
+    };
+  }
+
+  const jwt = String(options.jwt || process.env.CLAWNERA_API_JWT || "").trim();
+  if (!jwt) {
+    return {
+      ok: false,
+      error: "missing_jwt",
+      hint: "set --jwt or CLAWNERA_API_JWT"
+    };
+  }
+
+  const purpose = String(options.purpose || "marketplace_tx").trim().toLowerCase();
+  const paymentCoinRaw = options["payment-coin"];
+  const paymentCoin = paymentCoinRaw === undefined ? "iota" : String(paymentCoinRaw).trim().toLowerCase();
+  const orderId = typeof options["order-id"] === "string" ? options["order-id"].trim() : "";
+  const txFamily = typeof options["tx-family"] === "string" ? options["tx-family"].trim() : "";
+
+  try {
+    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+    const gasBudgetRaw = options["gas-budget"];
+    const gasBudget =
+      gasBudgetRaw === undefined || gasBudgetRaw === null || gasBudgetRaw === ""
+        ? null
+        : parsePositiveIntOption(gasBudgetRaw, "gas_budget", 0);
+
+    const preflightBody = {
+      purpose,
+      ...(paymentCoin ? { paymentCoin } : {}),
+      ...(orderId ? { orderId } : {}),
+      ...(txFamily ? { txFamily } : {}),
+      ...(gasBudget ? { gasBudget } : {})
+    };
+
+    const preflightResult = await requestJson(
+      `${apiBase}/sponsor/preflight`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${jwt}`,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify(preflightBody)
+      },
+      timeoutMs
+    );
+
+    if (!preflightResult.ok) {
+      return {
+        ok: false,
+        error: preflightResult.error || "sponsor_preflight_failed",
+        status: preflightResult.status,
+        response: preflightResult.body
+      };
+    }
+
+    const response = preflightResult.body || {};
+    return {
+      ok: true,
+      mode: "preflight",
+      purpose,
+      paymentCoin: response.paymentCoin ?? paymentCoin ?? null,
+      orderId: response.orderId ?? (orderId || null),
+      txFamily: response.txFamily || null,
+      sponsorLikelyAllowed: response.strategy?.sponsorLikelyAllowed ?? null,
+      selfPayFallbackAvailable: response.strategy?.selfPayFallbackAvailable ?? null,
+      strictMode: response.strategy?.strictMode ?? null,
+      minimumGasBudget: response.minimumGasBudget ?? null,
+      recommendedGasBudget: response.recommendedGasBudget ?? null,
+      maxGasBudget: response.maxGasBudget ?? null,
+      diagnosticCount: Array.isArray(response.diagnostics) ? response.diagnostics.length : 0,
+      response
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "sponsor_preflight_helper_failed"
+    };
+  }
 }
 
 async function runSponsorExecute(commandArgs) {
@@ -1377,6 +1495,7 @@ const topics = loadTopics();
 const aliasCommands = new Map([
   ["list", "topics"],
   ["sponsor-run", "sponsor-execute"],
+  ["sponsor-plan", "sponsor-preflight"],
   ["ask", "triage"],
   ["support", "triage"],
   ["issue", "report-issue"]
@@ -1398,6 +1517,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "report-issue",
         "path",
         "first-steps",
+        "sponsor-preflight",
         "sponsor-execute",
         "validate",
         "sync",
@@ -1569,6 +1689,32 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (!result.ok) {
       process.exitCode = 1;
     }
+  }
+} else if (effectiveCommand === "sponsor-preflight") {
+  const result = await runSponsorPreflight(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`sponsor_preflight_ok tx_family=${result.txFamily || "unknown"}`);
+    console.log(`recommended_gas_budget=${result.recommendedGasBudget ?? "unknown"}`);
+    console.log(`minimum_gas_budget=${result.minimumGasBudget ?? "unknown"}`);
+    console.log(`max_gas_budget=${result.maxGasBudget ?? "unknown"}`);
+    console.log(`strict_mode=${String(result.strictMode)}`);
+    console.log(`self_pay_fallback_available=${String(result.selfPayFallbackAvailable)}`);
+    console.log(`diagnostic_count=${result.diagnosticCount}`);
+  } else {
+    console.error(`sponsor_preflight_helper_error: ${result.error}`);
+    if (result.status) {
+      console.error(`http_status=${result.status}`);
+    }
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
   }
 } else if (effectiveCommand === "sponsor-execute") {
   const result = await runSponsorExecute(commandArgs);

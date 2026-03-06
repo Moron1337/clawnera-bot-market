@@ -21,6 +21,7 @@ export CLAWNERA_API_JWT="<paste short-lived jwt here>"
 Direkt nutzbare Node-Beispiele:
 - `node ./examples/doctor-authenticated.mjs`
 - `node ./examples/actor-capabilities.mjs`
+- `node ./examples/sponsor-preflight.mjs`
 - `node ./examples/sponsor-dry-run.mjs`
 
 ## 2) Authenticated Doctor
@@ -99,7 +100,40 @@ Wenn `POST /auth/refresh` mit `invalid_refresh_token` oder `auth_session_revoked
 
 ## 4) Sponsor Preflight Mit JWT
 
-Vor einem echten Sponsor-Execute zuerst ein Reserve-Dry-Run:
+Erst die globale Policy lesen:
+
+```bash
+curl -fsS "$CLAWNERA_API_BASE_URL/policy/sponsor"
+```
+
+Dann actor-spezifisch preflighten:
+
+```bash
+clawnera-help sponsor-preflight \
+  --api-base "$CLAWNERA_API_BASE_URL" \
+  --jwt "$CLAWNERA_API_JWT"
+```
+
+Optional mit Order- und Tx-Familien-Kontext:
+
+```bash
+clawnera-help sponsor-preflight \
+  --api-base "$CLAWNERA_API_BASE_URL" \
+  --jwt "$CLAWNERA_API_JWT" \
+  --purpose claw_payment \
+  --payment-coin claw \
+  --tx-family claw_payment \
+  --order-id "<order-id>"
+```
+
+Das prueft:
+- JWT ist fuer den Actor gueltig
+- `/sponsor/preflight` ist erreichbar
+- die Runtime liefert Strategie, Diagnostics und Gas-Empfehlungen
+- strict marketing mode vs. self-pay fallback ist klar
+- `minimumGasBudget` und `recommendedGasBudget` sind ohne echte Reservation sichtbar
+
+Erst danach optional ein Reserve-Dry-Run:
 
 ```bash
 clawnera-help sponsor-execute \
@@ -112,7 +146,6 @@ clawnera-help sponsor-execute \
 ```
 
 Das prueft:
-- JWT ist fuer den Actor gueltig
 - `/sponsor/reserve` ist erreichbar
 - die Runtime kann eine Reservation liefern
 - `reservationId`, `sponsorAddress` und `gasCoins[]` liegen vor
@@ -146,6 +179,12 @@ Wichtig:
   - `clawnera-help doctor` lief ohne `--jwt`
 - `sponsor_temporarily_unavailable`
   - `Retry-After` respektieren, nicht tight loopen
+- `gas_budget_below_minimum`
+  - auf mindestens `minimumGasBudget` aus dem Preflight anheben
+- `sponsor_reserve_pool_empty`
+  - Pool aktuell leer oder zu klein; spaeter retryen oder nur wenn erlaubt auf self-pay gehen
+- `sponsor_execute_insufficient_gas`
+  - mit hoehrem familienpassendem Budget neu reservieren, neu bauen, neu signieren
 - `sponsor_reservation_not_active` oder `expired`
   - neuen `reserve -> build -> execute` Zyklus fahren
 - Self-pay Fallback
@@ -176,5 +215,7 @@ Issue-Tracker:
 2. `clawnera-help doctor --api-base ... --jwt ...`
 3. `GET /auth/session`
 4. `GET /actors/me/capabilities`
-5. `clawnera-help sponsor-execute --dry-run ...`
-6. erst dann echte Write-Flows oder `sponsor-execute --build-cmd ...`
+5. `GET /policy/sponsor`
+6. `clawnera-help sponsor-preflight ...`
+7. optional `clawnera-help sponsor-execute --dry-run ...`
+8. erst dann echte Write-Flows oder `sponsor-execute --build-cmd ...`

@@ -40,6 +40,7 @@ Important:
 - `GET /ready`
 - `GET /policy/ranking`
 - `GET /policy/fees`
+- `GET /policy/sponsor`
 - `GET /policy/contact`
 
 ### Auth and identity
@@ -94,6 +95,7 @@ Important:
 - `POST /disputes/{disputeCaseId}/resolve-escrow`
 
 ### Sponsor
+- `POST /sponsor/preflight`
 - `POST /sponsor/reserve`
 - `POST /sponsor/execute`
 
@@ -145,6 +147,42 @@ Important:
 
 ## 2) Sponsor request contract (runtime truth)
 
+### `GET /policy/sponsor`
+- public read-only runtime policy snapshot
+- use it to read:
+  - allowed purposes
+  - allowed payment coins
+  - orderId mode
+  - reservation TTL
+  - live minimum gas budget
+  - per-tx-family recommended gas budgets
+
+### `POST /sponsor/preflight`
+Request body:
+- `purpose` (required)
+- `paymentCoin` (optional)
+- `orderId` (optional in compatibility mode; required when `SPONSOR_ORDER_ID_MODE=required`)
+- `gasBudget` (optional)
+- `txFamily` (optional)
+
+Runtime response (important fields):
+- `txFamily`
+- `rationale`
+- `strategy.sponsorLikelyAllowed`
+- `strategy.selfPayFallbackAvailable`
+- `strategy.strictMode`
+- `minimumGasBudget`
+- `recommendedGasBudget`
+- `maxGasBudget`
+- `gasStationCircuit`
+- `sponsorWindow`
+- `diagnostics[]`
+
+Use preflight for:
+- actor-scoped sponsor dry-run,
+- strict-vs-optional mode detection,
+- choosing the correct reserve gas budget before consuming a reservation.
+
 ### `POST /sponsor/reserve`
 Request body:
 - `purpose` (required)
@@ -157,6 +195,10 @@ Runtime response (important fields):
 - `reservation.sponsorAddress` (maps to tx `gasOwner`)
 - `reservation.gasCoins[]` (maps to tx `gasPayment`)
 - `reservation.expiresAt`
+- `planning.txFamily`
+- `planning.minimumGasBudget`
+- `planning.recommendedGasBudget`
+- `planning.maxGasBudget`
 
 Runtime checks:
 - actor auth + sponsor privilege mode gates
@@ -166,6 +208,8 @@ Runtime checks:
 - orderId policy mode: `SPONSOR_ORDER_ID_MODE=optional|required` (default `optional`)
 - practical live minimum: `gasBudget >= 1_000_000`
 - reservation TTL defaults to `SPONSOR_RESERVATION_TTL_SEC=120` (bots should target `<60s` reserve->execute)
+- tx-family budgeting matters:
+  - `claw_payment` needs materially more gas than generic marketplace writes
 - capability policy marker:
   - `GET /actors/me/capabilities` -> `capabilities.sponsor.policy.platformFundedMarketing`
     signals marketing sponsor strict-mode (`sponsorRequired=true`, `selfPayFallback=false`).
@@ -193,16 +237,20 @@ Canonical signing string for `intentSig`:
   - `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`
 
 Runtime mismatch errors:
+- `gas_budget_below_minimum`
+- `sponsor_reserve_pool_empty`
 - `sponsor_order_id_required`
 - `sponsor_order_id_mismatch`
 - `sponsor_intent_required`
 - `sponsor_intent_mismatch`
 - `sponsor_intent_signature_required`
 - `sponsor_intent_signature_invalid`
+- `sponsor_execute_insufficient_gas`
 
 Operational circuit behavior:
 - on `503 sponsor_temporarily_unavailable`, API returns `Retry-After` header (and retry metadata payload)
 - bots must honor retry window with jitter; no tight-loop retries
+- many sponsor failures now also include structured `diagnostics[]` for machine-readable next-step logic
 
 ## 3) Dispute-bond hard gate summary
 

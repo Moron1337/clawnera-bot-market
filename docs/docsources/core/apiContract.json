@@ -89,11 +89,39 @@
           "200": {
             "status": "200",
             "reusableResponseRef": null,
-            "schemaRef": null,
-            "schemaName": null,
+            "schemaRef": "#/components/schemas/SponsorPolicySnapshot",
+            "schemaName": "SponsorPolicySnapshot",
             "requiredFields": [],
-            "optionalFields": [],
-            "propertyNames": []
+            "optionalFields": [
+              "version",
+              "allowedPurposes",
+              "allowedPaymentCoins",
+              "paymentCoinOptional",
+              "selfPayFallback",
+              "orderIdMode",
+              "reservationTtlSec",
+              "liveMinimumGasBudget",
+              "maxGasBudget",
+              "reserve",
+              "execute",
+              "platformFundedMarketing",
+              "recommendedGasBudgets"
+            ],
+            "propertyNames": [
+              "version",
+              "allowedPurposes",
+              "allowedPaymentCoins",
+              "paymentCoinOptional",
+              "selfPayFallback",
+              "orderIdMode",
+              "reservationTtlSec",
+              "liveMinimumGasBudget",
+              "maxGasBudget",
+              "reserve",
+              "execute",
+              "platformFundedMarketing",
+              "recommendedGasBudgets"
+            ]
           }
         }
       }
@@ -116,11 +144,39 @@
           "200": {
             "status": "200",
             "reusableResponseRef": null,
-            "schemaRef": null,
-            "schemaName": null,
+            "schemaRef": "#/components/schemas/SponsorPolicySnapshot",
+            "schemaName": "SponsorPolicySnapshot",
             "requiredFields": [],
-            "optionalFields": [],
-            "propertyNames": []
+            "optionalFields": [
+              "version",
+              "allowedPurposes",
+              "allowedPaymentCoins",
+              "paymentCoinOptional",
+              "selfPayFallback",
+              "orderIdMode",
+              "reservationTtlSec",
+              "liveMinimumGasBudget",
+              "maxGasBudget",
+              "reserve",
+              "execute",
+              "platformFundedMarketing",
+              "recommendedGasBudgets"
+            ],
+            "propertyNames": [
+              "version",
+              "allowedPurposes",
+              "allowedPaymentCoins",
+              "paymentCoinOptional",
+              "selfPayFallback",
+              "orderIdMode",
+              "reservationTtlSec",
+              "liveMinimumGasBudget",
+              "maxGasBudget",
+              "reserve",
+              "execute",
+              "platformFundedMarketing",
+              "recommendedGasBudgets"
+            ]
           },
           "401": {
             "status": "401",
@@ -205,6 +261,62 @@
               "listingFee",
               "listingDeposit",
               "reputationInitFee"
+            ]
+          }
+        }
+      }
+    },
+    "/policy/sponsor": {
+      "get": {
+        "path": "/policy/sponsor",
+        "method": "get",
+        "operationId": "getSponsorPolicy",
+        "tags": [
+          "Policy",
+          "Sponsor"
+        ],
+        "parameters": {
+          "path": [],
+          "query": [],
+          "header": []
+        },
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/SponsorPolicySnapshot",
+            "schemaName": "SponsorPolicySnapshot",
+            "requiredFields": [],
+            "optionalFields": [
+              "version",
+              "allowedPurposes",
+              "allowedPaymentCoins",
+              "paymentCoinOptional",
+              "selfPayFallback",
+              "orderIdMode",
+              "reservationTtlSec",
+              "liveMinimumGasBudget",
+              "maxGasBudget",
+              "reserve",
+              "execute",
+              "platformFundedMarketing",
+              "recommendedGasBudgets"
+            ],
+            "propertyNames": [
+              "version",
+              "allowedPurposes",
+              "allowedPaymentCoins",
+              "paymentCoinOptional",
+              "selfPayFallback",
+              "orderIdMode",
+              "reservationTtlSec",
+              "liveMinimumGasBudget",
+              "maxGasBudget",
+              "reserve",
+              "execute",
+              "platformFundedMarketing",
+              "recommendedGasBudgets"
             ]
           }
         }
@@ -6687,6 +6799,240 @@
         }
       }
     },
+    "/sponsor/preflight": {
+      "post": {
+        "path": "/sponsor/preflight",
+        "method": "post",
+        "operationId": "preflightSponsorTransaction",
+        "tags": [
+          "Sponsor"
+        ],
+        "parameters": {
+          "path": [],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/SponsorPreflightRequest",
+          "schemaName": "SponsorPreflightRequest",
+          "requiredFields": [
+            "purpose"
+          ],
+          "optionalFields": [
+            "paymentCoin",
+            "orderId",
+            "gasBudget",
+            "txFamily"
+          ],
+          "propertyNames": [
+            "purpose",
+            "paymentCoin",
+            "orderId",
+            "gasBudget",
+            "txFamily"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/SponsorPreflightResponse",
+            "schemaName": "SponsorPreflightResponse",
+            "requiredFields": [],
+            "optionalFields": [
+              "actorAddress",
+              "purpose",
+              "paymentCoin",
+              "orderId",
+              "order",
+              "sponsorProxyMode",
+              "txFamily",
+              "rationale",
+              "strategy",
+              "providedGasBudget",
+              "acceptedGasBudget",
+              "minimumGasBudget",
+              "recommendedGasBudget",
+              "maxGasBudget",
+              "reservationTtlSec",
+              "capabilities",
+              "policy",
+              "gasStationCircuit",
+              "sponsorWindow",
+              "diagnostics"
+            ],
+            "propertyNames": [
+              "actorAddress",
+              "purpose",
+              "paymentCoin",
+              "orderId",
+              "order",
+              "sponsorProxyMode",
+              "txFamily",
+              "rationale",
+              "strategy",
+              "providedGasBudget",
+              "acceptedGasBudget",
+              "minimumGasBudget",
+              "recommendedGasBudget",
+              "maxGasBudget",
+              "reservationTtlSec",
+              "capabilities",
+              "policy",
+              "gasStationCircuit",
+              "sponsorWindow",
+              "diagnostics"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/SponsorFailureResponse",
+            "schemaName": "SponsorFailureResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [
+              "detail",
+              "field",
+              "endpoint",
+              "mode",
+              "retryAfterSec",
+              "fallback",
+              "retry",
+              "usage",
+              "caps",
+              "tier",
+              "actorStrikes",
+              "ipStrikes",
+              "autoRevokedUntil",
+              "fields",
+              "diagnostics"
+            ],
+            "propertyNames": [
+              "error",
+              "detail",
+              "field",
+              "endpoint",
+              "mode",
+              "retryAfterSec",
+              "fallback",
+              "retry",
+              "usage",
+              "caps",
+              "tier",
+              "actorStrikes",
+              "ipStrikes",
+              "autoRevokedUntil",
+              "fields",
+              "diagnostics"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/SponsorFailureResponse",
+            "schemaName": "SponsorFailureResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [
+              "detail",
+              "field",
+              "endpoint",
+              "mode",
+              "retryAfterSec",
+              "fallback",
+              "retry",
+              "usage",
+              "caps",
+              "tier",
+              "actorStrikes",
+              "ipStrikes",
+              "autoRevokedUntil",
+              "fields",
+              "diagnostics"
+            ],
+            "propertyNames": [
+              "error",
+              "detail",
+              "field",
+              "endpoint",
+              "mode",
+              "retryAfterSec",
+              "fallback",
+              "retry",
+              "usage",
+              "caps",
+              "tier",
+              "actorStrikes",
+              "ipStrikes",
+              "autoRevokedUntil",
+              "fields",
+              "diagnostics"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/SponsorFailureResponse",
+            "schemaName": "SponsorFailureResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [
+              "detail",
+              "field",
+              "endpoint",
+              "mode",
+              "retryAfterSec",
+              "fallback",
+              "retry",
+              "usage",
+              "caps",
+              "tier",
+              "actorStrikes",
+              "ipStrikes",
+              "autoRevokedUntil",
+              "fields",
+              "diagnostics"
+            ],
+            "propertyNames": [
+              "error",
+              "detail",
+              "field",
+              "endpoint",
+              "mode",
+              "retryAfterSec",
+              "fallback",
+              "retry",
+              "usage",
+              "caps",
+              "tier",
+              "actorStrikes",
+              "ipStrikes",
+              "autoRevokedUntil",
+              "fields",
+              "diagnostics"
+            ]
+          }
+        }
+      }
+    },
     "/sponsor/reserve": {
       "post": {
         "path": "/sponsor/reserve",
@@ -6732,7 +7078,8 @@
               "sponsorWindow",
               "paymentCoin",
               "tier",
-              "fastLane"
+              "fastLane",
+              "planning"
             ],
             "optionalFields": [],
             "propertyNames": [
@@ -6742,7 +7089,8 @@
               "sponsorWindow",
               "paymentCoin",
               "tier",
-              "fastLane"
+              "fastLane",
+              "planning"
             ]
           },
           "400": {
@@ -6767,7 +7115,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ],
             "propertyNames": [
               "error",
@@ -6784,7 +7133,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ]
           },
           "401": {
@@ -6822,7 +7172,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ],
             "propertyNames": [
               "error",
@@ -6839,7 +7190,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ]
           },
           "404": {
@@ -6864,7 +7216,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ],
             "propertyNames": [
               "error",
@@ -6881,7 +7234,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ]
           },
           "429": {
@@ -6906,7 +7260,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ],
             "propertyNames": [
               "error",
@@ -6923,7 +7278,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ]
           },
           "502": {
@@ -6948,7 +7304,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ],
             "propertyNames": [
               "error",
@@ -6965,7 +7322,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ]
           },
           "503": {
@@ -6990,7 +7348,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ],
             "propertyNames": [
               "error",
@@ -7007,7 +7366,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ]
           }
         }
@@ -7091,7 +7451,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ],
             "propertyNames": [
               "error",
@@ -7108,7 +7469,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ]
           },
           "401": {
@@ -7146,7 +7508,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ],
             "propertyNames": [
               "error",
@@ -7163,7 +7526,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ]
           },
           "404": {
@@ -7188,7 +7552,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ],
             "propertyNames": [
               "error",
@@ -7205,7 +7570,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ]
           },
           "409": {
@@ -7230,7 +7596,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ],
             "propertyNames": [
               "error",
@@ -7247,7 +7614,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ]
           },
           "429": {
@@ -7272,7 +7640,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ],
             "propertyNames": [
               "error",
@@ -7289,7 +7658,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ]
           },
           "502": {
@@ -7314,7 +7684,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ],
             "propertyNames": [
               "error",
@@ -7331,7 +7702,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ]
           },
           "503": {
@@ -7356,7 +7728,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ],
             "propertyNames": [
               "error",
@@ -7373,7 +7746,8 @@
               "actorStrikes",
               "ipStrikes",
               "autoRevokedUntil",
-              "fields"
+              "fields",
+              "diagnostics"
             ]
           }
         }
@@ -9089,6 +9463,8 @@
               "gasStationCircuit",
               "sponsorWindow",
               "abusePolicy",
+              "capabilityPolicy",
+              "metrics",
               "activeAbuse"
             ],
             "propertyNames": [
@@ -9097,6 +9473,8 @@
               "gasStationCircuit",
               "sponsorWindow",
               "abusePolicy",
+              "capabilityPolicy",
+              "metrics",
               "activeAbuse"
             ]
           },
@@ -9279,11 +9657,39 @@
         "200": {
           "status": "200",
           "reusableResponseRef": null,
-          "schemaRef": null,
-          "schemaName": null,
+          "schemaRef": "#/components/schemas/SponsorPolicySnapshot",
+          "schemaName": "SponsorPolicySnapshot",
           "requiredFields": [],
-          "optionalFields": [],
-          "propertyNames": []
+          "optionalFields": [
+            "version",
+            "allowedPurposes",
+            "allowedPaymentCoins",
+            "paymentCoinOptional",
+            "selfPayFallback",
+            "orderIdMode",
+            "reservationTtlSec",
+            "liveMinimumGasBudget",
+            "maxGasBudget",
+            "reserve",
+            "execute",
+            "platformFundedMarketing",
+            "recommendedGasBudgets"
+          ],
+          "propertyNames": [
+            "version",
+            "allowedPurposes",
+            "allowedPaymentCoins",
+            "paymentCoinOptional",
+            "selfPayFallback",
+            "orderIdMode",
+            "reservationTtlSec",
+            "liveMinimumGasBudget",
+            "maxGasBudget",
+            "reserve",
+            "execute",
+            "platformFundedMarketing",
+            "recommendedGasBudgets"
+          ]
         }
       }
     },
@@ -9303,11 +9709,39 @@
         "200": {
           "status": "200",
           "reusableResponseRef": null,
-          "schemaRef": null,
-          "schemaName": null,
+          "schemaRef": "#/components/schemas/SponsorPolicySnapshot",
+          "schemaName": "SponsorPolicySnapshot",
           "requiredFields": [],
-          "optionalFields": [],
-          "propertyNames": []
+          "optionalFields": [
+            "version",
+            "allowedPurposes",
+            "allowedPaymentCoins",
+            "paymentCoinOptional",
+            "selfPayFallback",
+            "orderIdMode",
+            "reservationTtlSec",
+            "liveMinimumGasBudget",
+            "maxGasBudget",
+            "reserve",
+            "execute",
+            "platformFundedMarketing",
+            "recommendedGasBudgets"
+          ],
+          "propertyNames": [
+            "version",
+            "allowedPurposes",
+            "allowedPaymentCoins",
+            "paymentCoinOptional",
+            "selfPayFallback",
+            "orderIdMode",
+            "reservationTtlSec",
+            "liveMinimumGasBudget",
+            "maxGasBudget",
+            "reserve",
+            "execute",
+            "platformFundedMarketing",
+            "recommendedGasBudgets"
+          ]
         },
         "401": {
           "status": "401",
@@ -9386,6 +9820,59 @@
             "listingFee",
             "listingDeposit",
             "reputationInitFee"
+          ]
+        }
+      }
+    },
+    "getSponsorPolicy": {
+      "path": "/policy/sponsor",
+      "method": "get",
+      "tags": [
+        "Policy",
+        "Sponsor"
+      ],
+      "parameters": {
+        "path": [],
+        "query": [],
+        "header": []
+      },
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/SponsorPolicySnapshot",
+          "schemaName": "SponsorPolicySnapshot",
+          "requiredFields": [],
+          "optionalFields": [
+            "version",
+            "allowedPurposes",
+            "allowedPaymentCoins",
+            "paymentCoinOptional",
+            "selfPayFallback",
+            "orderIdMode",
+            "reservationTtlSec",
+            "liveMinimumGasBudget",
+            "maxGasBudget",
+            "reserve",
+            "execute",
+            "platformFundedMarketing",
+            "recommendedGasBudgets"
+          ],
+          "propertyNames": [
+            "version",
+            "allowedPurposes",
+            "allowedPaymentCoins",
+            "paymentCoinOptional",
+            "selfPayFallback",
+            "orderIdMode",
+            "reservationTtlSec",
+            "liveMinimumGasBudget",
+            "maxGasBudget",
+            "reserve",
+            "execute",
+            "platformFundedMarketing",
+            "recommendedGasBudgets"
           ]
         }
       }
@@ -15686,6 +16173,237 @@
         }
       }
     },
+    "preflightSponsorTransaction": {
+      "path": "/sponsor/preflight",
+      "method": "post",
+      "tags": [
+        "Sponsor"
+      ],
+      "parameters": {
+        "path": [],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/SponsorPreflightRequest",
+        "schemaName": "SponsorPreflightRequest",
+        "requiredFields": [
+          "purpose"
+        ],
+        "optionalFields": [
+          "paymentCoin",
+          "orderId",
+          "gasBudget",
+          "txFamily"
+        ],
+        "propertyNames": [
+          "purpose",
+          "paymentCoin",
+          "orderId",
+          "gasBudget",
+          "txFamily"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/SponsorPreflightResponse",
+          "schemaName": "SponsorPreflightResponse",
+          "requiredFields": [],
+          "optionalFields": [
+            "actorAddress",
+            "purpose",
+            "paymentCoin",
+            "orderId",
+            "order",
+            "sponsorProxyMode",
+            "txFamily",
+            "rationale",
+            "strategy",
+            "providedGasBudget",
+            "acceptedGasBudget",
+            "minimumGasBudget",
+            "recommendedGasBudget",
+            "maxGasBudget",
+            "reservationTtlSec",
+            "capabilities",
+            "policy",
+            "gasStationCircuit",
+            "sponsorWindow",
+            "diagnostics"
+          ],
+          "propertyNames": [
+            "actorAddress",
+            "purpose",
+            "paymentCoin",
+            "orderId",
+            "order",
+            "sponsorProxyMode",
+            "txFamily",
+            "rationale",
+            "strategy",
+            "providedGasBudget",
+            "acceptedGasBudget",
+            "minimumGasBudget",
+            "recommendedGasBudget",
+            "maxGasBudget",
+            "reservationTtlSec",
+            "capabilities",
+            "policy",
+            "gasStationCircuit",
+            "sponsorWindow",
+            "diagnostics"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/SponsorFailureResponse",
+          "schemaName": "SponsorFailureResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [
+            "detail",
+            "field",
+            "endpoint",
+            "mode",
+            "retryAfterSec",
+            "fallback",
+            "retry",
+            "usage",
+            "caps",
+            "tier",
+            "actorStrikes",
+            "ipStrikes",
+            "autoRevokedUntil",
+            "fields",
+            "diagnostics"
+          ],
+          "propertyNames": [
+            "error",
+            "detail",
+            "field",
+            "endpoint",
+            "mode",
+            "retryAfterSec",
+            "fallback",
+            "retry",
+            "usage",
+            "caps",
+            "tier",
+            "actorStrikes",
+            "ipStrikes",
+            "autoRevokedUntil",
+            "fields",
+            "diagnostics"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/SponsorFailureResponse",
+          "schemaName": "SponsorFailureResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [
+            "detail",
+            "field",
+            "endpoint",
+            "mode",
+            "retryAfterSec",
+            "fallback",
+            "retry",
+            "usage",
+            "caps",
+            "tier",
+            "actorStrikes",
+            "ipStrikes",
+            "autoRevokedUntil",
+            "fields",
+            "diagnostics"
+          ],
+          "propertyNames": [
+            "error",
+            "detail",
+            "field",
+            "endpoint",
+            "mode",
+            "retryAfterSec",
+            "fallback",
+            "retry",
+            "usage",
+            "caps",
+            "tier",
+            "actorStrikes",
+            "ipStrikes",
+            "autoRevokedUntil",
+            "fields",
+            "diagnostics"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/SponsorFailureResponse",
+          "schemaName": "SponsorFailureResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [
+            "detail",
+            "field",
+            "endpoint",
+            "mode",
+            "retryAfterSec",
+            "fallback",
+            "retry",
+            "usage",
+            "caps",
+            "tier",
+            "actorStrikes",
+            "ipStrikes",
+            "autoRevokedUntil",
+            "fields",
+            "diagnostics"
+          ],
+          "propertyNames": [
+            "error",
+            "detail",
+            "field",
+            "endpoint",
+            "mode",
+            "retryAfterSec",
+            "fallback",
+            "retry",
+            "usage",
+            "caps",
+            "tier",
+            "actorStrikes",
+            "ipStrikes",
+            "autoRevokedUntil",
+            "fields",
+            "diagnostics"
+          ]
+        }
+      }
+    },
     "reserveSponsorGas": {
       "path": "/sponsor/reserve",
       "method": "post",
@@ -15729,7 +16447,8 @@
             "sponsorWindow",
             "paymentCoin",
             "tier",
-            "fastLane"
+            "fastLane",
+            "planning"
           ],
           "optionalFields": [],
           "propertyNames": [
@@ -15739,7 +16458,8 @@
             "sponsorWindow",
             "paymentCoin",
             "tier",
-            "fastLane"
+            "fastLane",
+            "planning"
           ]
         },
         "400": {
@@ -15764,7 +16484,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ],
           "propertyNames": [
             "error",
@@ -15781,7 +16502,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ]
         },
         "401": {
@@ -15819,7 +16541,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ],
           "propertyNames": [
             "error",
@@ -15836,7 +16559,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ]
         },
         "404": {
@@ -15861,7 +16585,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ],
           "propertyNames": [
             "error",
@@ -15878,7 +16603,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ]
         },
         "429": {
@@ -15903,7 +16629,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ],
           "propertyNames": [
             "error",
@@ -15920,7 +16647,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ]
         },
         "502": {
@@ -15945,7 +16673,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ],
           "propertyNames": [
             "error",
@@ -15962,7 +16691,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ]
         },
         "503": {
@@ -15987,7 +16717,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ],
           "propertyNames": [
             "error",
@@ -16004,7 +16735,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ]
         }
       }
@@ -16085,7 +16817,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ],
           "propertyNames": [
             "error",
@@ -16102,7 +16835,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ]
         },
         "401": {
@@ -16140,7 +16874,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ],
           "propertyNames": [
             "error",
@@ -16157,7 +16892,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ]
         },
         "404": {
@@ -16182,7 +16918,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ],
           "propertyNames": [
             "error",
@@ -16199,7 +16936,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ]
         },
         "409": {
@@ -16224,7 +16962,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ],
           "propertyNames": [
             "error",
@@ -16241,7 +16980,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ]
         },
         "429": {
@@ -16266,7 +17006,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ],
           "propertyNames": [
             "error",
@@ -16283,7 +17024,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ]
         },
         "502": {
@@ -16308,7 +17050,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ],
           "propertyNames": [
             "error",
@@ -16325,7 +17068,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ]
         },
         "503": {
@@ -16350,7 +17094,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ],
           "propertyNames": [
             "error",
@@ -16367,7 +17112,8 @@
             "actorStrikes",
             "ipStrikes",
             "autoRevokedUntil",
-            "fields"
+            "fields",
+            "diagnostics"
           ]
         }
       }
@@ -18032,6 +18778,8 @@
             "gasStationCircuit",
             "sponsorWindow",
             "abusePolicy",
+            "capabilityPolicy",
+            "metrics",
             "activeAbuse"
           ],
           "propertyNames": [
@@ -18040,6 +18788,8 @@
             "gasStationCircuit",
             "sponsorWindow",
             "abusePolicy",
+            "capabilityPolicy",
+            "metrics",
             "activeAbuse"
           ]
         },
@@ -18671,6 +19421,66 @@
       "requiredFields": [],
       "optionalFields": []
     },
+    "SponsorTxFamily": {
+      "name": "SponsorTxFamily",
+      "propertyNames": [],
+      "requiredFields": [],
+      "optionalFields": []
+    },
+    "SponsorGasEstimate": {
+      "name": "SponsorGasEstimate",
+      "propertyNames": [
+        "txFamily",
+        "purpose",
+        "minimumGasBudget",
+        "recommendedGasBudget",
+        "maxGasBudget",
+        "rationale"
+      ],
+      "requiredFields": [
+        "txFamily",
+        "purpose",
+        "minimumGasBudget",
+        "recommendedGasBudget",
+        "maxGasBudget",
+        "rationale"
+      ],
+      "optionalFields": []
+    },
+    "SponsorPolicySnapshot": {
+      "name": "SponsorPolicySnapshot",
+      "propertyNames": [
+        "version",
+        "allowedPurposes",
+        "allowedPaymentCoins",
+        "paymentCoinOptional",
+        "selfPayFallback",
+        "orderIdMode",
+        "reservationTtlSec",
+        "liveMinimumGasBudget",
+        "maxGasBudget",
+        "reserve",
+        "execute",
+        "platformFundedMarketing",
+        "recommendedGasBudgets"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "version",
+        "allowedPurposes",
+        "allowedPaymentCoins",
+        "paymentCoinOptional",
+        "selfPayFallback",
+        "orderIdMode",
+        "reservationTtlSec",
+        "liveMinimumGasBudget",
+        "maxGasBudget",
+        "reserve",
+        "execute",
+        "platformFundedMarketing",
+        "recommendedGasBudgets"
+      ]
+    },
     "SponsorReserveRequest": {
       "name": "SponsorReserveRequest",
       "propertyNames": [
@@ -18686,6 +19496,25 @@
       "optionalFields": [
         "paymentCoin",
         "orderId"
+      ]
+    },
+    "SponsorPreflightRequest": {
+      "name": "SponsorPreflightRequest",
+      "propertyNames": [
+        "purpose",
+        "paymentCoin",
+        "orderId",
+        "gasBudget",
+        "txFamily"
+      ],
+      "requiredFields": [
+        "purpose"
+      ],
+      "optionalFields": [
+        "paymentCoin",
+        "orderId",
+        "gasBudget",
+        "txFamily"
       ]
     },
     "SponsorExecuteRequest": {
@@ -18775,7 +19604,8 @@
         "sponsorWindow",
         "paymentCoin",
         "tier",
-        "fastLane"
+        "fastLane",
+        "planning"
       ],
       "requiredFields": [
         "reservation",
@@ -18784,7 +19614,8 @@
         "sponsorWindow",
         "paymentCoin",
         "tier",
-        "fastLane"
+        "fastLane",
+        "planning"
       ],
       "optionalFields": []
     },
@@ -18811,6 +19642,96 @@
         "execution"
       ],
       "optionalFields": []
+    },
+    "SponsorPreflightResponse": {
+      "name": "SponsorPreflightResponse",
+      "propertyNames": [
+        "actorAddress",
+        "purpose",
+        "paymentCoin",
+        "orderId",
+        "order",
+        "sponsorProxyMode",
+        "txFamily",
+        "rationale",
+        "strategy",
+        "providedGasBudget",
+        "acceptedGasBudget",
+        "minimumGasBudget",
+        "recommendedGasBudget",
+        "maxGasBudget",
+        "reservationTtlSec",
+        "capabilities",
+        "policy",
+        "gasStationCircuit",
+        "sponsorWindow",
+        "diagnostics"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "actorAddress",
+        "purpose",
+        "paymentCoin",
+        "orderId",
+        "order",
+        "sponsorProxyMode",
+        "txFamily",
+        "rationale",
+        "strategy",
+        "providedGasBudget",
+        "acceptedGasBudget",
+        "minimumGasBudget",
+        "recommendedGasBudget",
+        "maxGasBudget",
+        "reservationTtlSec",
+        "capabilities",
+        "policy",
+        "gasStationCircuit",
+        "sponsorWindow",
+        "diagnostics"
+      ]
+    },
+    "SponsorFailureDiagnostic": {
+      "name": "SponsorFailureDiagnostic",
+      "propertyNames": [
+        "stage",
+        "issue",
+        "txFamily",
+        "minimumGasBudget",
+        "recommendedGasBudget",
+        "maxGasBudget",
+        "providedGasBudget",
+        "orderIdRequired",
+        "strictMode",
+        "intentRequired",
+        "intentSignatureRequired",
+        "selfPayFallbackAvailable",
+        "reservationTtlSec",
+        "retryAfterSec",
+        "upstreamStatus",
+        "upstreamDetail",
+        "hint"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "stage",
+        "issue",
+        "txFamily",
+        "minimumGasBudget",
+        "recommendedGasBudget",
+        "maxGasBudget",
+        "providedGasBudget",
+        "orderIdRequired",
+        "strictMode",
+        "intentRequired",
+        "intentSignatureRequired",
+        "selfPayFallbackAvailable",
+        "reservationTtlSec",
+        "retryAfterSec",
+        "upstreamStatus",
+        "upstreamDetail",
+        "hint"
+      ]
     },
     "SponsorFallbackPolicy": {
       "name": "SponsorFallbackPolicy",
@@ -18858,7 +19779,8 @@
         "actorStrikes",
         "ipStrikes",
         "autoRevokedUntil",
-        "fields"
+        "fields",
+        "diagnostics"
       ],
       "requiredFields": [
         "error"
@@ -18877,7 +19799,8 @@
         "actorStrikes",
         "ipStrikes",
         "autoRevokedUntil",
-        "fields"
+        "fields",
+        "diagnostics"
       ]
     },
     "ManagedStoragePaymentProof": {
@@ -20001,6 +20924,8 @@
         "gasStationCircuit",
         "sponsorWindow",
         "abusePolicy",
+        "capabilityPolicy",
+        "metrics",
         "activeAbuse"
       ],
       "requiredFields": [],
@@ -20010,6 +20935,8 @@
         "gasStationCircuit",
         "sponsorWindow",
         "abusePolicy",
+        "capabilityPolicy",
+        "metrics",
         "activeAbuse"
       ]
     },

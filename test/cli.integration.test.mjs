@@ -152,6 +152,150 @@ test("sponsor dry-run surfaces reserve auth failures", async () => {
   }
 });
 
+test("sponsor preflight returns strategy and diagnostics", async () => {
+  const mock = await startMockServer({
+    "POST /sponsor/preflight": (request) => {
+      assert.equal(request.headers.authorization, "Bearer test-jwt");
+      assert.equal(request.body?.purpose, "marketplace_tx");
+      assert.equal(request.body?.paymentCoin, "iota");
+      assert.equal(request.body?.txFamily, "marketplace_write");
+      return {
+        status: 200,
+        body: {
+          actorAddress: "0xabc",
+          purpose: "marketplace_tx",
+          paymentCoin: "iota",
+          orderId: null,
+          order: null,
+          sponsorProxyMode: "live",
+          txFamily: "marketplace_write",
+          rationale: "General marketplace writes should clear the live Gas-Station minimum with retry headroom.",
+          strategy: {
+            sponsorLikelyAllowed: true,
+            selfPayFallbackAvailable: true,
+            strictMode: false,
+            intentRequired: false,
+            intentSignatureRequired: false,
+            authGate: {
+              mode: "capability",
+              requiresBotKey: false,
+              requiresBotProfile: true
+            }
+          },
+          providedGasBudget: null,
+          acceptedGasBudget: null,
+          minimumGasBudget: 1000000,
+          recommendedGasBudget: 2000000,
+          maxGasBudget: 5000000,
+          reservationTtlSec: 120,
+          capabilities: {},
+          policy: {
+            version: "sponsor_policy.v2",
+            allowedPurposes: ["marketplace_tx"],
+            allowedPaymentCoins: ["iota"],
+            paymentCoinOptional: true,
+            selfPayFallback: true,
+            orderIdMode: "optional",
+            reservationTtlSec: 120,
+            liveMinimumGasBudget: 1000000,
+            maxGasBudget: 12000000,
+            reserve: {
+              orderIdRequired: false,
+              rateLimitPerMin: 30,
+              windowSec: 120,
+              windowTxCap: 3,
+              windowGasCap: 6000000
+            },
+            execute: {
+              idempotencyHeader: true,
+              intentSupported: true,
+              intentRequiredForPlatformFundedMarketing: true,
+              intentSignatureRequiredForPlatformFundedMarketing: true
+            },
+            platformFundedMarketing: {
+              sponsorPreferred: true,
+              sponsorRequired: true,
+              selfPayFallback: false,
+              intentRequired: true,
+              intentSignatureRequired: true
+            },
+            recommendedGasBudgets: {
+              marketplace_write: {
+                minimumGasBudget: 1000000,
+                recommendedGasBudget: 2000000,
+                maxGasBudget: 5000000,
+                rationale: "General marketplace writes should clear the live Gas-Station minimum with retry headroom."
+              }
+            }
+          },
+          gasStationCircuit: {
+            open: false,
+            retryAfterSec: 0
+          },
+          sponsorWindow: {
+            allowed: true,
+            usage: {
+              txCount: 0,
+              gasTotal: 0,
+              blockedCount: 0
+            },
+            caps: {
+              windowSec: 120,
+              maxTxCount: 3,
+              maxGasPerWindow: 6000000
+            }
+          },
+          diagnostics: []
+        }
+      };
+    }
+  });
+
+  try {
+    const result = await runCli([
+      "sponsor-preflight",
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      "test-jwt",
+      "--tx-family",
+      "marketplace_write",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.txFamily, "marketplace_write");
+    assert.equal(payload.recommendedGasBudget, 2000000);
+    assert.equal(payload.strictMode, false);
+    assert.equal(payload.diagnosticCount, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("sponsor preflight surfaces runtime failures", async () => {
+  const mock = await startMockServer({
+    "POST /sponsor/preflight": () => ({
+      status: 403,
+      body: {
+        error: "sponsor_capability_required"
+      }
+    })
+  });
+
+  try {
+    const result = await runCli(["sponsor-preflight", "--api-base", mock.baseUrl, "--jwt", "test-jwt", "--json"]);
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "sponsor_preflight_failed");
+    assert.equal(payload.status, 403);
+    assert.equal(payload.response.error, "sponsor_capability_required");
+  } finally {
+    await mock.close();
+  }
+});
+
 test("sponsor execute surfaces execute-side failures after successful reserve", async () => {
   const mock = await startMockServer({
     "POST /sponsor/reserve": (request) => {

@@ -40,6 +40,7 @@ test("show auth-runtime topic works", () => {
   const result = runCli(["show", "auth-runtime"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Authenticated Runtime Checks/);
+  assert.match(result.stdout, /sponsor-preflight/);
   assert.match(result.stdout, /sponsor-execute/);
 });
 
@@ -118,8 +119,21 @@ test("sponsor-execute help prints usage", () => {
   assert.match(result.stdout, /reserve -> run --build-cmd -> execute/);
 });
 
+test("sponsor-preflight help prints usage", () => {
+  const result = runCli(["sponsor-preflight", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Sponsor preflight helper/);
+  assert.match(result.stdout, /strategy, diagnostics, tx family, and gas recommendations/);
+});
+
 test("sponsor-execute fails without api base and jwt", () => {
   const result = runCli(["sponsor-execute", "--dry-run"]);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /sponsor_execute_helper_error/);
+});
+
+test("sponsor-preflight fails without api base and jwt", () => {
+  const result = runCli(["sponsor-preflight"]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /sponsor_preflight_helper_error/);
 });

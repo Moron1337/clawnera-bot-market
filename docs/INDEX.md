@@ -32,6 +32,7 @@ Nutze `clawnera-help` fuer schnellen Zugriff.
 - `clawnera-help show eventing`
 - `clawnera-help show contracts`
 - `clawnera-help show auth-runtime`
+- `clawnera-help sponsor-preflight --api-base <url> --jwt <token>`
 - `clawnera-help show mailbox-flow`
 - `clawnera-help show playbooks`
 - `clawnera-help show publish`

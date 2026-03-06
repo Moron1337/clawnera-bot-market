@@ -53,6 +53,14 @@ Older session history stays in git and under `docs/reports/`.
     - route + method parity
     - request required-field snapshots
     - response/error-class snapshots
+- Sponsor reliability and tx-planning ergonomics are now live and documented:
+  - `GET /policy/sponsor`
+  - `POST /sponsor/preflight`
+  - tx-family gas estimation with runtime recommendations
+  - structured sponsor diagnostics for preflight/reserve/execute
+  - `planning` block on reserve responses
+  - sponsor circuit metrics for reserve/execute latency and fallback rate
+  - smoke runner uses canonical budget estimation
 - Signer hardening in repo is largely complete:
   - audit sink
   - review UI
@@ -70,6 +78,7 @@ Older session history stays in git and under `docs/reports/`.
 - `docs/reports/auth-session-refresh-20260306.md`
 - `docs/reports/mailbox-ergonomics-live-proof-20260306.md`
 - `docs/reports/openapi-runtime-parity-20260306.md`
+- `docs/reports/sponsor-reliability-tx-planning-20260306.md`
 - `docs/reports/signing-queue-audit-sink-20260306.md`
 - `docs/reports/signer-review-ui-20260306.md`
 - `docs/reports/signer-signing-packet-20260306.md`
@@ -92,13 +101,13 @@ The marketplace is only "best in class" when all of the following are true:
 
 These are the real gaps, ordered by impact on bot adoption:
 
-1. Sponsor/Gas-Station reliability is good, but not yet fully productized.
-   - Budget estimation, strict/optional policy exposure, and fallback behavior still need more ergonomic surfaces.
+1. `prod` managed storage is still on public Pinata while test/staging are already private.
 
-2. `prod` managed storage is still on public Pinata while test/staging are already private.
-
-3. Multisig cutover is code-ready but not operationally finished.
+2. Multisig cutover is code-ready but not operationally finished.
    - Real hardware pubkeys and a real dry-run are still outstanding.
+
+3. Search/ranking/discovery quality is still functional rather than category-leading.
+   - Bots can transact now, but discovery quality is not yet a differentiator.
 
 ## 4. Recommended Execution Order
 
@@ -115,6 +124,7 @@ This is the recommended order for implementation. Follow it unless a production 
 5. `TASK-MKT-005`: OpenAPI/runtime parity and generated client contracts
    - status: completed on `2026-03-06`
 6. `TASK-MKT-006`: Sponsor reliability and tx-planning ergonomics
+   - status: completed on `2026-03-06`
 7. `TASK-MKT-007`: Production private managed-storage cutover
 8. `TASK-MKT-008`: Search/ranking/discovery quality for serious bot usage
 9. `TASK-MKT-009`: Trust, reviewer, dispute, and reputation excellence
@@ -381,6 +391,18 @@ Acceptance:
 Goal:
 - Sponsorship should feel like a default execution layer, not an expert-only path.
 
+Status:
+- Completed on `2026-03-06`.
+- Delivered:
+  - `GET /policy/sponsor`
+  - `POST /sponsor/preflight`
+  - tx-family gas estimation and runtime recommendation surfaces
+  - structured sponsor diagnostics for preflight/reserve/execute
+  - `planning` block on reserve responses
+  - reserve/execute/fallback metrics on `GET /admin/sponsor/circuit`
+  - smoke-runner auto-estimation via tx-family budgets
+  - aligned sponsor docs in `clawdex` and `clawnera-bot-market`
+
 Implementation:
 - Add canonical gas-budget estimation helpers for common tx families.
 - Add sponsor dry-run / validation helper if runtime cost permits.
@@ -407,6 +429,10 @@ Primary files:
 Acceptance:
 - Bots can choose the correct sponsor strategy from capabilities/policy alone.
 - Live sponsor smoke plus mainnet `CLAW` proof remain green with lower operator tuning.
+- Contract fulfilled on `2026-03-06`:
+  - `apps/api` sponsor/parser/worker/OpenAPI tests green
+  - generated contract artifacts refreshed
+  - bot-facing docs updated to the policy -> preflight -> reserve -> execute sequence
 
 ### `TASK-MKT-007`: Production private managed-storage cutover
 
@@ -581,27 +607,28 @@ Acceptance:
 
 ## 6. What To Do First
 
-Start with `TASK-MKT-006`.
+Start with `TASK-MKT-007`.
 
 Reason:
 - `TASK-MKT-001` is closed enough to stop digging.
 - `TASK-MKT-002` is closed enough to stop digging.
 - `TASK-MKT-005` is now closed with generated contract artifacts and CI drift gates.
-- Sponsor reliability is now the highest remaining bot-runtime product gap.
-- It is the next place where operator knowledge still leaks into integrations.
+- `TASK-MKT-006` is now closed with runtime-visible planning and diagnostics.
+- The next biggest user-visible gap is still production managed delivery privacy.
 
-Immediate sub-steps for `TASK-MKT-006`:
-1. Add canonical gas-budget estimation helpers for common tx families.
-2. Expose clearer sponsor diagnostics and strict-vs-optional policy surfaces in capabilities/policy responses.
-3. Add a contract-documented sponsor dry-run or preflight path where runtime cost permits.
-4. Harden sponsor metrics and alerting around reserve/execute latency, failure rate, and fallback rate.
-5. Keep `clawnera-bot-market` aligned with those runtime-visible sponsor policies.
+Immediate sub-steps for `TASK-MKT-007`:
+1. Mirror the private Pinata/gateway path from staging into production runtime config.
+2. Keep participant-authenticated retrieval through the API proxy as the primary path.
+3. Run a real production proof and capture `source=pinata_private_link`.
+4. Extend availability/retention probes after cutover.
+5. Keep bot-facing delivery docs aligned with the new production default.
 
 ## 7. Things To Avoid
 
 - Do not reopen already-green sponsor, dispute, or mailbox core logic without a new failing proof.
 - Do not spend the next session on testnet `verify-source` tooling mismatch first.
-- Do not add more docs-first polish before the discovery/eventing gaps are fixed.
+- Do not spend another session on sponsor ergonomics unless a new live/runtime proof breaks.
+- Do not add docs-first polish ahead of the production private-storage cutover and multisig finish.
 - Do not introduce new UX sugar that increases API/runtime drift.
 
 ## 8. Operational References

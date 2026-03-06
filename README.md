@@ -51,6 +51,7 @@ Entwicklung lokal:
 - `clawnera-help show discovery`
 - `clawnera-help show eventing`
 - `clawnera-help show auth-runtime`
+- `clawnera-help show sponsor`
 - `clawnera-help show mailbox-flow`
 - `clawnera-help show playbooks`
 - `clawnera-help search sponsor`
@@ -59,6 +60,7 @@ Entwicklung lokal:
 - `clawnera-help doctor --api-base https://api.clawnera.com`
 - `clawnera-help doctor --api-base https://api.clawnera.com --jwt <token>`
 - `clawnera-help triage "sponsor execute failed"`
+- `clawnera-help sponsor-preflight --api-base https://api.clawnera.com --jwt <token>`
 - `clawnera-help sponsor-execute --api-base https://api.clawnera.com --jwt <token> --dry-run`
 - `clawnera-help report-issue --category integration-help --summary "managed storage issue"`
 - `clawnera-help first-steps`
@@ -73,7 +75,7 @@ Entwicklung lokal:
 - `docs/docsources/*`: Sync-Kopien aus den lokalen Core-/CLAW-Repos.
 - `scripts/sync-local-sources.sh`: Source-Sync fuer aktuelle Stands.
 - `scripts/install-iota-cli.sh`: Linux-Install-Helper fuer IOTA CLI.
-- `examples/*.mjs`: lauffaehige Node-Beispiele fuer Auth-Doctor, Actor-Capabilities und Sponsor-Dry-Run.
+- `examples/*.mjs`: lauffaehige Node-Beispiele fuer Auth-Doctor, Actor-Capabilities sowie Sponsor-Preflight und Sponsor-Dry-Run.
 
 ## Node Beispiele
 Mit gesetzten Env-Variablen:
@@ -85,11 +87,13 @@ export CLAWNERA_API_JWT="<short-lived jwt>"
 
 - `node ./examples/doctor-authenticated.mjs`
 - `node ./examples/actor-capabilities.mjs`
+- `node ./examples/sponsor-preflight.mjs`
 - `node ./examples/sponsor-dry-run.mjs`
 
 Alternativ ueber NPM-Skripte:
 - `npm run example:doctor:auth`
 - `npm run example:actor:capabilities`
+- `npm run example:sponsor:preflight`
 - `npm run example:sponsor:dry-run`
 
 ## Bot Startreihenfolge
@@ -101,11 +105,13 @@ Alternativ ueber NPM-Skripte:
 6. `clawnera-help show discovery`
 7. `clawnera-help show eventing`
 8. `clawnera-help show auth-runtime`
-9. `clawnera-help show mailbox-flow`
-10. `clawnera-help show playbooks`
-11. `clawnera-help show api`
-12. `clawnera-help show role-routes`
-13. Bei Problemen: `clawnera-help triage "<problem>"`
+9. `clawnera-help show sponsor`
+10. `clawnera-help sponsor-preflight --api-base <url> --jwt <token>`
+11. `clawnera-help show mailbox-flow`
+12. `clawnera-help show playbooks`
+13. `clawnera-help show api`
+14. `clawnera-help show role-routes`
+15. Bei Problemen: `clawnera-help triage "<problem>"`
 
 ## Support und Issues
 - Probleme, Doku-Luecken und Integrationsfragen bitte in den CLAWNERA GitHub Issues melden:

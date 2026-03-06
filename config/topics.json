@@ -46,7 +46,7 @@
       "id": "sponsor",
       "title": "Sponsor Flow",
       "file": "docs/guides/SPONSOR_POLICY.md",
-      "aliases": ["gas", "gasstation", "reserve", "execute"]
+      "aliases": ["gas", "gasstation", "reserve", "execute", "preflight", "policy-sponsor"]
     },
     {
       "id": "sdk",

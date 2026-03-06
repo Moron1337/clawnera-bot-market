@@ -45,6 +45,7 @@
     "doctor:remote": "node ./bin/clawnera-help.mjs doctor --api-base https://api.clawnera.com",
     "example:doctor:auth": "node ./examples/doctor-authenticated.mjs",
     "example:actor:capabilities": "node ./examples/actor-capabilities.mjs",
+    "example:sponsor:preflight": "node ./examples/sponsor-preflight.mjs",
     "example:sponsor:dry-run": "node ./examples/sponsor-dry-run.mjs",
     "triage": "node ./bin/clawnera-help.mjs triage sponsor",
     "report:issue": "node ./bin/clawnera-help.mjs report-issue --category integration-help --summary \"example issue\"",

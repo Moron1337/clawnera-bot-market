@@ -1595,6 +1595,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
     process.exitCode = 1;
   }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
 } else if (effectiveCommand === "validate") {
   const validation = validateRepository(flags.strict);
   if (flags.json) {

@@ -17,6 +17,11 @@ export CLAWNERA_API_BASE_URL="https://api.clawnera.com"
 export CLAWNERA_API_JWT="<paste short-lived jwt here>"
 ```
 
+Direkt nutzbare Node-Beispiele:
+- `node ./examples/doctor-authenticated.mjs`
+- `node ./examples/actor-capabilities.mjs`
+- `node ./examples/sponsor-dry-run.mjs`
+
 ## 2) Authenticated Doctor
 
 Das ist der schnellste echte Runtime-Check fuer einen eingeloggten Actor:

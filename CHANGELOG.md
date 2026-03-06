@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Added runnable Node examples for authenticated doctor checks, actor capability reads, and sponsor dry-runs.
+- Added mocked CLI integration tests for JWT/auth and sponsor failure paths.
 - Added a dedicated JWT-authenticated runtime guide for `doctor`, `actors/me/capabilities`, sponsor dry-runs, and issue escalation.
 - Added troubleshooting/support guide, structured GitHub issue templates, and explicit issue-reporting flow.
 - Added CLI support for `triage`, `report-issue`, and remote `doctor --api-base ...` checks.

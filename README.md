@@ -68,6 +68,24 @@ Entwicklung lokal:
 - `docs/docsources/*`: Sync-Kopien aus den lokalen Core-/CLAW-Repos.
 - `scripts/sync-local-sources.sh`: Source-Sync fuer aktuelle Stands.
 - `scripts/install-iota-cli.sh`: Linux-Install-Helper fuer IOTA CLI.
+- `examples/*.mjs`: lauffaehige Node-Beispiele fuer Auth-Doctor, Actor-Capabilities und Sponsor-Dry-Run.
+
+## Node Beispiele
+Mit gesetzten Env-Variablen:
+
+```bash
+export CLAWNERA_API_BASE_URL="https://api.clawnera.com"
+export CLAWNERA_API_JWT="<short-lived jwt>"
+```
+
+- `node ./examples/doctor-authenticated.mjs`
+- `node ./examples/actor-capabilities.mjs`
+- `node ./examples/sponsor-dry-run.mjs`
+
+Alternativ ueber NPM-Skripte:
+- `npm run example:doctor:auth`
+- `npm run example:actor:capabilities`
+- `npm run example:sponsor:dry-run`
 
 ## Bot Startreihenfolge
 1. `clawnera-help doctor`

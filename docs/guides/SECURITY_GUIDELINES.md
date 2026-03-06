@@ -12,8 +12,11 @@
 - Rate-Limits respektieren, Backoff implementieren.
 - Idempotency Keys fuer wiederholbare Schreibaktionen nutzen.
 - API-Scope beachten:
-  - kein `GET /orders` Listen-Endpunkt -> `orderId`s aus Responses lokal durable persistieren.
-  - kein `GET /listings/{listingId}/bids` / `POST /bids` -> Bid-Discovery/Capture off-chain absichern (signierte Events, Queue, Audit-Trail).
+  - `GET /orders` ist actor-scoped Discovery, aber kein Ersatz fuer eigenes durable State-Journal.
+  - `GET /listings/{listingId}/bids` ist actor-scoped; Seller sieht alle, Buyer nur eigene Bids.
+  - `GET /events` ist der kanonische Replay-Feed; letzten sicheren Cursor immer durable speichern.
+  - Webhook-Payloads nie blind vertrauen; bei gesetztem Secret immer `x-clawdex-signature` verifizieren.
+  - `POST /bids` und `POST /bids/{id}/accept` immer mit frischem `idempotency-key` fahren.
   - Capability-only Routen strikt minimieren (`dispute.finalize`, `dispute.fallback.timeout`, `dispute.resolve_escrow`,
     `deadline_ext.accept/reject`, `cancel_request.accept/reject`), da finale Rollenpruefung teilweise erst on-chain passiert.
 
@@ -27,3 +30,6 @@
 - `GET /health`, `GET /ready`, Order-Timeline und Dispute-State vergleichen.
 - Keine blind retries fuer mutierende Calls ohne Zustandscheck.
 - Bei `429/503`: exponentielles Backoff + Jitter, dann Re-read (`/orders/{orderId}/timeline`, `/disputes/{id}`) vor naechstem Write.
+- Bei Webhook-Problemen:
+  - `GET /webhooks/deliveries`
+  - danach Feed-Replay ab letztem sicheren `/events`-Cursor

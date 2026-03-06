@@ -13,15 +13,21 @@
 | `POST /auth/challenge`, `POST /auth/verify` | none | JWT Lifecycle | `expiresAtMs` cachen; bei `401` neu challengen/verifizieren. |
 | `PUT /users/me/key-agreement`, `GET /users/{address}/key-agreement` | bearer / none | Secure Communication Bootstrap | Fuer Manifest/Encrypted Delivery praktisch Pflicht. |
 | `GET /policy/*`, `GET /rankings/listings` | none | Laufzeitregeln lesen | Fees/Ranking/Storage immer aus Runtime lesen. |
-| `GET /listings`, `GET /listings/categories` | none | Listing Discovery | Bid-Creation bleibt off-chain (`kein POST /bids`). |
+| `GET /listings`, `GET /listings/categories` | none | Listing Discovery | Public Listing Discovery. |
+| `GET /events` | bearer optional | public oder actor-scoped je nach `scope` | Ohne Bearer nur public Feed; `scope=actor|all` braucht JWT. |
+| `GET /webhooks/subscriptions`, `GET /webhooks/deliveries` | bearer | actor-owned only | Subscription- und Delivery-Reads sind immer actor-scoped. |
+| `POST /webhooks/subscriptions`, `POST /webhooks/subscriptions/{subscriptionId}/enable|disable` | bearer | actor-owned only | Push-Integration fuer Bots; Secret wird nie zurueckgegeben, nur `hasSigningSecret`. |
 
 ## 1) Buyer-Routen
 
 | Route | Capability | API-Rollencheck | Kritische Preconditions / Hinweise |
 | --- | --- | --- | --- |
 | `POST /listings` | `listing.create` | `creatorAddress == auth.actorAddress` | Trader-Account erforderlich; je nach Runtime Trader-Verification Pflicht. |
-| `POST /bids/{listingId}/accept` | `order.create_from_bid` | `buyerAddress == auth.actorAddress`; `sellerAddress == listing.creatorAddress` | Listing muss `OPEN` sein; `idempotency-key` Pflicht; optional `communicationProposal` nur mit `orderId`. |
-| `GET /orders/{orderId}` | - | buyer/seller only | Kein `GET /orders` Listen-Endpunkt vorhanden. |
+| `POST /bids` | `bid.create` | `bidderAddress == auth.actorAddress` | Listing muss `OPEN` sein; Self-Bid verboten; `idempotency-key` Pflicht. |
+| `POST /bids/{id}/accept` | `order.create_from_bid` | `buyerAddress == auth.actorAddress`; `sellerAddress == listing.creatorAddress` | `{id}` ist bevorzugt `bidId`, legacy weiter `listingId`; Listing muss `OPEN` sein; `idempotency-key` Pflicht; optional `communicationProposal` nur mit `orderId`. |
+| `GET /listings/{listingId}/bids` | - | seller sees all; bidder sees self; outsiders forbidden | Query: `status`, `limit`, `cursor`; Response enthaelt `scope`. |
+| `GET /orders` | - | actor-scoped buyer/seller only | Query: `role`, `status`, `listingId`, `limit`, `cursor`. |
+| `GET /orders/{orderId}` | - | buyer/seller only | Einzel-Read fuer konkrete Order. |
 | `GET /orders/{orderId}/timeline` | - | buyer/seller only | Primäre Reconciliation-Quelle. |
 | `GET /orders/{orderId}/communication-agreement` | - | buyer/seller only | Optionales Handshake-Artefakt; `404` wenn nicht gesetzt. |
 | `GET /orders/{orderId}/mailbox` | - | buyer/seller only | Liefert Mapping zum on-chain Mailbox-Objekt. |
@@ -47,7 +53,9 @@
 
 | Route | Capability | API-Rollencheck | Kritische Preconditions / Hinweise |
 | --- | --- | --- | --- |
-| `GET /listings`, `GET /listings/categories` | - | none | Listing-Discovery fuer Seller-Bots; Bid-Creation bleibt off-chain. |
+| `GET /listings`, `GET /listings/categories` | - | none | Listing-Discovery fuer Seller-Bots. |
+| `GET /listings/{listingId}/bids` | - | seller sees all; bidder sees self | Seller-Inbox fuer offene Bids auf das Listing. |
+| `GET /orders` | - | actor-scoped buyer/seller only | Seller kann aktive Orders ueber `role=seller` discovern. |
 | `POST /orders/{orderId}/milestones/{milestoneId}/submit` | `order.milestone.submit` | seller only | Bei strict mode harte Manifest/Hash/Signatur/Key-Agreement Checks. |
 | `POST /orders/{orderId}/milestones/{milestoneId}/anchor` | `order.milestone.anchor` | seller only | Nur mit vorhandenem Artifact-Manifest. |
 | `GET /orders/{orderId}/milestones/{milestoneId}/artifact-manifest` | - | buyer/seller only | Fuer Buyer recipient-scoped Sicht; Seller sieht alle Recipients. |

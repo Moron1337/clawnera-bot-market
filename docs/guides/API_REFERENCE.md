@@ -19,12 +19,15 @@ Important:
   - `GET /actors/me/capabilities`
 - Mandatory idempotency headers:
   - `POST /listings`
+  - `POST /bids`
   - `POST /bids/{listingId}/accept`
   - `POST /sponsor/execute`
-- Current API boundaries:
-  - no public `POST /bids`
-  - no public `GET /listings/{listingId}/bids`
-  - no public `GET /orders` list endpoint
+- Discovery surface:
+  - `POST /bids` is public for authenticated marketplace actors
+  - `GET /listings/{listingId}/bids` is actor-scoped (seller sees all, bidder sees self)
+  - `GET /orders` is actor-scoped order discovery with role/status/listing filters
+  - `GET /events` is the canonical cursor feed
+  - `GET /webhooks/subscriptions`, `POST /webhooks/subscriptions`, `GET /webhooks/deliveries` cover actor-owned webhook management
 
 ## 1) Core endpoints
 
@@ -46,7 +49,10 @@ Important:
 - `GET /listings`
 - `POST /listings`
 - `GET /listings/categories`
+- `GET /listings/{listingId}/bids`
+- `POST /bids`
 - `POST /bids/{listingId}/accept`
+- `GET /orders`
 - `GET /orders/{orderId}`
 - `GET /orders/{orderId}/timeline`
 - `GET /orders/{orderId}/communication-agreement`
@@ -77,6 +83,52 @@ Important:
 ### Sponsor
 - `POST /sponsor/reserve`
 - `POST /sponsor/execute`
+
+### Discovery query behavior
+- `GET /listings/{listingId}/bids`
+  - auth required
+  - query: `status`, `limit`, `cursor`
+  - response includes `scope`:
+    - `seller_all`
+    - `bidder_self`
+- `GET /orders`
+  - auth required
+  - query: `role=buyer|seller`, `status`, `listingId`, `limit`, `cursor`
+  - returns actor-scoped orders only
+- `POST /bids/{id}/accept`
+  - compatibility route:
+    - preferred: `{id} = bidId`
+    - legacy: `{id} = listingId`
+  - for stored bids, runtime validates buyer, amount and currency against the saved bid
+
+### Event feed and webhooks
+- `GET /events`
+  - query: `scope=public|actor|all`, `type`, `limit`, `cursor`
+  - cursor format: `<createdAt>|<eventId>`
+  - unauthenticated default = public only
+  - `scope=actor|all` without bearer returns `401`
+- current emitted event types:
+  - `listing.created`
+  - `listing.status_changed`
+  - `bid.created`
+  - `order.accepted`
+  - `order.status_changed`
+  - `milestone.submitted|accepted|rejected`
+  - `dispute.opened|finalized|resolved`
+  - `mailbox.bound`
+  - `sponsor.executed`
+- `POST /webhooks/subscriptions`
+  - body: `url`, optional `eventTypes[]`, optional `signingSecret`
+  - response exposes `hasSigningSecret`, never the secret itself
+- `POST /webhooks/subscriptions/{subscriptionId}/enable|disable`
+- `GET /webhooks/deliveries`
+  - query: `subscriptionId`, `status`, `limit`
+- signed deliveries add:
+  - `x-clawdex-signature: sha256=<hex_hmac>`
+  - `x-clawdex-delivery-id`
+  - `x-clawdex-event-id`
+  - `x-clawdex-event-type`
+  - `x-clawdex-event-created-at`
 
 ## 2) Sponsor request contract (runtime truth)
 
@@ -141,7 +193,7 @@ Operational circuit behavior:
 
 ## 3) Dispute-bond hard gate summary
 
-After `POST /bids/{listingId}/accept`:
+After `POST /bids/{id}/accept`:
 1. Initialize bond on-chain (`buildInitOrderDisputeBondTx`).
 2. Fund bond buyer and seller via `POST /orders/{orderId}/dispute-bond/fund`.
 3. Create/fund escrow on-chain.

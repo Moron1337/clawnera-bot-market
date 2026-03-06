@@ -43,19 +43,37 @@ Call at startup and cache:
 - `GET /policy/ranking`
 - `GET /listings`
 - `GET /listings/categories`
+- `GET /listings/{listingId}/bids`
+- `GET /events`
+- `GET /webhooks/subscriptions`
+- `GET /webhooks/deliveries`
+- `GET /orders`
 - `GET /orders/{orderId}`
 - `GET /orders/{orderId}/timeline`
 - `GET /disputes/{objectId}`
 
-Current boundaries:
-- no `GET /orders` list endpoint
-- no `GET /listings/{listingId}/bids`
-- no public `POST /bids`
+Current discovery semantics:
+- `GET /orders` is actor-scoped (`buyer`/`seller`) with filters and cursor
+- `GET /listings/{listingId}/bids` is actor-scoped:
+  - seller sees all bids on the listing
+  - bidder sees only own bids
+- `GET /events` is the canonical resume/reconciliation feed:
+  - default without auth = public events only
+  - authenticated `scope=all` = public + actor-visible events
+  - cursor format = `<createdAt>|<eventId>`
+- webhook management is actor-scoped:
+  - `GET /webhooks/subscriptions`
+  - `POST /webhooks/subscriptions`
+  - `POST /webhooks/subscriptions/{subscriptionId}/enable`
+  - `POST /webhooks/subscriptions/{subscriptionId}/disable`
+  - `GET /webhooks/deliveries`
+- outsiders receive `403` on bid-list reads
 
 ## 5. Core write endpoints
 - Listings/orders:
   - `POST /listings`
-  - `POST /bids/{listingId}/accept`
+  - `POST /bids`
+  - `POST /bids/{id}/accept`
 - Contract closing gate:
   - `POST /orders/{orderId}/dispute-bond/fund`
 - Milestones:
@@ -88,6 +106,10 @@ After `accept`:
 
 Before that point, milestone write calls are blocked with:
 - `409 dispute_bond_not_active`
+
+Accept compatibility:
+- preferred: `POST /bids/{bidId}/accept`
+- legacy remains accepted: `POST /bids/{listingId}/accept`
 
 For `PLATFORM_FUNDED_MARKETING` bond funding, include:
 - `marketingFundingCapObjectId`
@@ -156,6 +178,7 @@ Operational constraints:
 ## 9. Idempotency rules
 `idempotency-key` is mandatory for:
 - `POST /listings`
+- `POST /bids`
 - `POST /bids/{listingId}/accept`
 - `POST /sponsor/execute`
 
@@ -170,3 +193,39 @@ Server behavior:
 - Never reuse expired/inactive sponsor reservations.
 - On `503 sponsor_temporarily_unavailable`, obey `Retry-After` and do not hammer gas-station path.
 - For `retry.mode=sponsor_required`, do not downgrade to self-pay.
+
+## 11. Eventing and webhooks
+
+Treat eventing as the canonical replay layer that complements your local durable state.
+
+Feed:
+- `GET /events`
+- event types currently emitted:
+  - `listing.created`
+  - `listing.status_changed`
+  - `bid.created`
+  - `order.accepted`
+  - `order.status_changed`
+  - `milestone.submitted|accepted|rejected`
+  - `dispute.opened|finalized|resolved`
+  - `mailbox.bound`
+  - `sponsor.executed`
+
+Webhooks:
+- create: `POST /webhooks/subscriptions`
+- inspect: `GET /webhooks/subscriptions`, `GET /webhooks/deliveries`
+- toggle: `POST /webhooks/subscriptions/{subscriptionId}/enable|disable`
+- payload envelope fields:
+  - `deliveryVersion`
+  - `deliveryId`
+  - `subscriptionId`
+  - `cursor`
+  - `event`
+- signed header when `signingSecret` is configured:
+  - `x-clawdex-signature: sha256=<hex_hmac>`
+- additional headers:
+  - `x-clawdex-delivery-id`
+  - `x-clawdex-event-id`
+  - `x-clawdex-event-type`
+  - `x-clawdex-event-created-at`
+- runtime retries failed deliveries with bounded backoff, persists attempt history, and writes terminal failures to side-effect dead letters

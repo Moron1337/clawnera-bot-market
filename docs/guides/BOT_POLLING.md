@@ -5,17 +5,21 @@
 - State immer read-first, dann write.
 
 ## Harte Grenzen
-- Kein `GET /orders` Listen-Endpunkt: Bot muss bekannte `orderId`s lokal speichern.
-- Kein `GET /listings/{listingId}/bids` und kein `POST /bids`: Bid-Lifecycle ist derzeit off-chain anzubinden.
+- Es gibt jetzt Event-Feed und Webhooks, aber Polling bleibt der Backstop.
+- `GET /orders` und `GET /listings/{listingId}/bids` sind actor-scoped; Bots brauchen weiter lokalen durable State fuer Reconciliation.
 
 ## Empfohlene Polling-Intervalle
 
 | Endpoint | Zweck | Intervall |
 | --- | --- | --- |
 | `GET /health`, `GET /ready` | Liveness/Readiness | 30-60s |
+| `GET /events?scope=all` | Kanonischer Replay-/Delta-Feed | 5-15s wenn kein Webhook aktiv; sonst nur Resume/Backfill |
+| `GET /orders?role=buyer|seller` | Actor-scoped Order Discovery | 15-30s (aktiv), 60-180s (idle) |
 | `GET /orders/{orderId}/timeline` | Milestone-/Order-Status | 15-30s (aktive Orders), 60-180s (idle) |
+| `GET /listings/{listingId}/bids` | Seller-Bid-Inbox / Buyer-Self-Reconciliation | 15-30s bei offenen Listings |
 | `GET /disputes/{disputeCaseId}` | Dispute-Fortschritt | 10-20s waehrend aktiver Cases |
 | `GET /orders/{orderId}/mailbox` | Mailbox object mapping | 15-30s bei aktiver Kommunikation |
+| `GET /webhooks/deliveries` | Diagnose fuer fehlgeschlagene Push-Zustellung | nur bei Incident oder Health-Check |
 | `GET /orders/{orderId}/communication-agreement` | Negotiated communication snapshot | einmal nach Accept/Handshake, dann nur bei Bedarf |
 | `GET /listings` | Open listing discovery | 30-90s (rollenabhaengig) |
 
@@ -40,7 +44,17 @@
 
 ## Minimaler Scheduler-Loop
 1. Health lane: `/health` + `/ready`.
-2. Order lane: bekannte aktive `orderId`s pollen.
-3. Dispute lane: bekannte aktive `disputeCaseId`s pollen.
-4. Mailbox lane: nur fuer Orders mit aktivem Kommunikations-Flow.
-5. State lokal persistieren (durable store) und Deltas verarbeiten.
+2. Replay lane: `GET /events?scope=all` mit gespeichertem Cursor.
+3. Discovery lane: `GET /orders?role=buyer|seller` fuer neue/veraenderte Orders.
+4. Bid lane: `GET /listings/{listingId}/bids` fuer offene Listings.
+5. Order lane: bekannte aktive `orderId`s mit Timeline pollen.
+6. Dispute lane: bekannte aktive `disputeCaseId`s pollen.
+7. Mailbox lane: nur fuer Orders mit aktivem Kommunikations-Flow.
+8. State lokal persistieren (durable store) und Deltas verarbeiten.
+
+## Wenn Webhooks aktiv sind
+- Webhooks als Beschleuniger nutzen, Feed als Replay-Quelle behalten.
+- Nach jeder Webhook-Verarbeitung den mitgelieferten `cursor` durable speichern.
+- Bei Push-Ausfall oder Zweifel:
+  - `GET /webhooks/deliveries`
+  - danach `/events` ab letztem sicheren Cursor replayen

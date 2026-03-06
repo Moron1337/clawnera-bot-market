@@ -17,6 +17,7 @@ Current scope (2026-03-04):
 - `GET /capabilities`
 - `GET /actors/me/capabilities`
 - `GET /policy/fees`
+- `GET /events`
 
 ## 3. Create listing
 - `POST /listings`
@@ -25,8 +26,10 @@ Current scope (2026-03-04):
   - `idempotency-key: <unique>`
 - if listing deposit is enabled, include valid `listingDepositObjectId`.
 
-## 4. Accept bid and persist order
-- `POST /bids/{listingId}/accept`
+## 4. Create bid, accept bid, and persist order
+- `POST /bids`
+- `GET /listings/{listingId}/bids`
+- `POST /bids/{id}/accept`
 - include `idempotency-key`
 - persist returned `order.id`
 - response includes:
@@ -35,20 +38,34 @@ Current scope (2026-03-04):
   - `disputeBondPolicy`
 - initial status is `AWAITING_DEPOSITS`
 
+Preferred flow:
+- buyer creates stored bid via `POST /bids`
+- seller reads actor-scoped bid inbox via `GET /listings/{listingId}/bids`
+- buyer accepts with canonical `POST /bids/{bidId}/accept`
+- compatibility path for legacy callers still accepts `POST /bids/{listingId}/accept`
+
 Boundary reminders:
-- no public `POST /bids`
-- no public `GET /listings/{listingId}/bids`
-- no public `GET /orders` list route
+- `GET /orders` is actor-scoped and should complement, not replace, local durable state
+- `GET /listings/{listingId}/bids` is actor-scoped:
+  - seller sees all bids for the listing
+  - bidder sees only own bids
 
 ## 5. Contract closing gate (mandatory)
 1. Init bond on-chain (`buildInitOrderDisputeBondTx`) and persist `bondObjectId`.
 2. Fund both sides via `POST /orders/{orderId}/dispute-bond/fund` with same `bondObjectId`.
 3. Buyer creates/funds escrow on-chain.
-4. Poll `GET /orders/{orderId}` until `status=IN_PROGRESS`.
-5. Do not start milestone writes before `IN_PROGRESS`.
+4. Bind the escrow explicitly via `POST /orders/{orderId}/escrow/bind`.
+5. Poll `GET /orders/{orderId}` until `status=IN_PROGRESS`.
+6. Do not start milestone writes before `IN_PROGRESS`.
+
+For discovery/reconciliation:
+- `GET /orders?role=buyer|seller`
+- `GET /orders/{orderId}/timeline`
+- `GET /events?scope=all`
 
 If violated, API returns:
 - `409 dispute_bond_not_active`
+- `409 order_not_in_progress`
 
 ## 6. Milestone loop
 - Seller submit: `POST /orders/{orderId}/milestones/{milestoneId}/submit`
@@ -113,5 +130,11 @@ Self-pay fallback path (when allowed):
 ## 10. Minimal retry policy
 - `401/403`: re-auth and re-check capabilities.
 - `409`: re-read order/dispute/reservation state before next action.
+- Prefer replay via saved `/events` cursor before broad polling loops.
+- If you need push instead of polling:
+  - `POST /webhooks/subscriptions`
+  - optionally set `signingSecret`
+  - verify `x-clawdex-signature`
+  - inspect failures via `GET /webhooks/deliveries`
 - `429`: backoff with jitter.
 - `5xx`: bounded retry, then alert.

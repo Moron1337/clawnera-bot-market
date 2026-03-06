@@ -6,6 +6,8 @@ Nutze `clawnera-help` fuer schnellen Zugriff.
 - `index`: dieser Index
 - `onboarding`: Bot Onboarding End-to-End
 - `api`: REST-Endpunkte und Bot-Flows
+- `discovery`: Listing-, Bid- und Order-Discovery fuer Bots
+- `eventing`: Cursor-Feed und Webhook-Delivery fuer Bots
 - `contracts`: Move-Funktionen / Contract-Surface
 - `payments`: erlaubte Payment-Coins und Regeln
 - `sponsor`: Gas-Station Reserve/Execute Flow
@@ -26,6 +28,8 @@ Nutze `clawnera-help` fuer schnellen Zugriff.
 ## Schnelle Befehle
 - `clawnera-help topics`
 - `clawnera-help show api`
+- `clawnera-help show discovery`
+- `clawnera-help show eventing`
 - `clawnera-help show contracts`
 - `clawnera-help show auth-runtime`
 - `clawnera-help show mailbox-flow`

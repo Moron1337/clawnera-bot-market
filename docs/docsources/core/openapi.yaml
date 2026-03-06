@@ -818,6 +818,86 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/ListingCategoryCount"
+  /listings/{listingId}/bids:
+    get:
+      tags: [Listings]
+      operationId: listListingBids
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/BidStatus"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Composite cursor `<createdAt>|<bidId>`.
+      responses:
+        "200":
+          description: Listing bids visible to the listing creator or to the calling bidder for their own bids.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BidListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /bids:
+    post:
+      tags: [Orders]
+      operationId: createBid
+      parameters:
+        - name: idempotency-key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBidRequest"
+      responses:
+        "201":
+          description: Bid created for a listing.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bid]
+                properties:
+                  bid:
+                    $ref: "#/components/schemas/Bid"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /bids/{listingId}/accept:
     post:
       tags: [Orders]
@@ -828,6 +908,7 @@ paths:
           required: true
           schema:
             type: string
+          description: Stored bid id or legacy listing id.
         - name: idempotency-key
           in: header
           required: true
@@ -866,6 +947,227 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+  /orders:
+    get:
+      tags: [Orders]
+      operationId: listOrders
+      parameters:
+        - name: role
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [buyer, seller]
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [AWAITING_DEPOSITS, IN_PROGRESS, DISPUTED, COMPLETED, CANCELLED]
+        - name: listingId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Composite cursor `<updatedAt>|<orderId>`.
+      responses:
+        "200":
+          description: Orders visible to the authenticated actor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /events:
+    get:
+      tags: [Events]
+      security:
+        - bearerAuth: []
+        - {}
+      operationId: listMarketplaceEvents
+      parameters:
+        - name: scope
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/MarketplaceEventFeedScope"
+        - name: type
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/MarketplaceEventType"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Composite cursor `<createdAt>|<eventId>`.
+      responses:
+        "200":
+          description: Cursor-based marketplace event feed with public and actor-scoped visibility.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketplaceEventListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /webhooks/subscriptions:
+    get:
+      tags: [Events]
+      operationId: listWebhookSubscriptions
+      parameters:
+        - name: activeOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Actor-owned webhook subscriptions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookSubscriptionListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Events]
+      operationId: createWebhookSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWebhookSubscriptionRequest"
+      responses:
+        "201":
+          description: Webhook subscription created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [subscription]
+                properties:
+                  subscription:
+                    $ref: "#/components/schemas/WebhookSubscription"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /webhooks/subscriptions/{subscriptionId}/enable:
+    post:
+      tags: [Events]
+      operationId: enableWebhookSubscription
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Webhook subscription re-enabled.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [subscription]
+                properties:
+                  subscription:
+                    $ref: "#/components/schemas/WebhookSubscription"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /webhooks/subscriptions/{subscriptionId}/disable:
+    post:
+      tags: [Events]
+      operationId: disableWebhookSubscription
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Webhook subscription disabled.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [subscription]
+                properties:
+                  subscription:
+                    $ref: "#/components/schemas/WebhookSubscription"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /webhooks/deliveries:
+    get:
+      tags: [Events]
+      operationId: listWebhookDeliveries
+      parameters:
+        - name: subscriptionId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/WebhookDeliveryStatus"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          description: Recorded webhook delivery attempts for the authenticated actor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookDeliveryListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /orders/{orderId}:
     get:
       tags: [Orders]
@@ -893,6 +1195,51 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /orders/{orderId}/escrow/bind:
+    post:
+      tags: [Orders]
+      operationId: bindOrderEscrow
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderEscrowBindRequest"
+      responses:
+        "200":
+          description: Escrow object verified and attached to order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [order, escrowObjectId]
+                properties:
+                  order:
+                    $ref: "#/components/schemas/Order"
+                  escrowObjectId:
+                    type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          description: On-chain escrow verification temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /orders/{orderId}/mailbox:
     get:
       tags: [Orders]
@@ -1100,6 +1447,55 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /orders/{orderId}/milestones/{milestoneId}/artifact-manifest/content:
+    get:
+      tags: [Orders]
+      operationId: getMilestoneArtifactManifestContent
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: milestoneId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Resolve and return the stored manifest JSON via the managed-storage provider path first, then configured gateway fallbacks.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [artifactManifest, resolvedManifest]
+                properties:
+                  artifactManifest:
+                    $ref: "#/components/schemas/MilestoneArtifactManifest"
+                  resolvedManifest:
+                    type: object
+                    required: [source, gatewayBaseUrl, sourceUrl, payload]
+                    properties:
+                      source:
+                        type: string
+                      network:
+                        type: string
+                      gatewayBaseUrl:
+                        type: string
+                      sourceUrl:
+                        type: string
+                      payload:
+                        type: object
+                        additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          description: Managed-storage manifest retrieval failed across configured gateways.
   /orders/{orderId}/milestones/{milestoneId}/anchor:
     get:
       tags: [Orders]
@@ -1901,7 +2297,7 @@ paths:
               $ref: "#/components/schemas/DisputeResolveEscrowWithTicketRequest"
       responses:
         "200":
-          description: Transaction plan for `escrow::resolve_dispute_with_quorum_ticket`.
+          description: Transaction plan for `order_escrow::resolve_dispute_with_quorum_ticket`.
           content:
             application/json:
               schema:
@@ -1928,48 +2324,45 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [reservation, usage, caps, tier]
-                properties:
-                  reservation:
-                    type: object
-                    required: [reservationId, gasBudget, expiresAt]
-                    properties:
-                      reservationId:
-                        type: string
-                      gasBudget:
-                        type: integer
-                      expiresAt:
-                        type: string
-                        format: date-time
-                  usage:
-                    $ref: "#/components/schemas/SponsorUsage"
-                  caps:
-                    type: object
-                    required: [maxTxCount, maxGasPerDay]
-                    properties:
-                      maxTxCount:
-                        type: integer
-                      maxGasPerDay:
-                        type: integer
-                  tier:
-                    type: integer
+                $ref: "#/components/schemas/SponsorReserveResponse"
         "400":
-          $ref: "#/components/responses/BadRequest"
+          description: Invalid sponsor reserve request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SponsorFailureResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Sponsor policy denied the request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SponsorFailureResponse"
+        "404":
+          description: Bound order not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SponsorFailureResponse"
         "429":
           description: Rate or quota limit exceeded.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/SponsorFailureResponse"
+        "502":
+          description: Gas-Station reserve call failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SponsorFailureResponse"
         "503":
           description: Sponsor service temporarily unavailable (circuit breaker open).
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/SponsorFailureResponse"
   /sponsor/execute:
     post:
       tags: [Sponsor]
@@ -1992,37 +2385,51 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [execution]
-                properties:
-                  execution:
-                    type: object
-                    required: [reservationId, txDigest]
-                    properties:
-                      reservationId:
-                        type: string
-                      txDigest:
-                        type: string
+                $ref: "#/components/schemas/SponsorExecuteResponse"
         "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          description: Reservation inactive or expired.
+          description: Invalid sponsor execute request.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/SponsorFailureResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Sponsor execute denied by actor or order policy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SponsorFailureResponse"
+        "404":
+          description: Reservation not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SponsorFailureResponse"
+        "409":
+          description: Reservation, order, or intent state mismatch.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SponsorFailureResponse"
+        "429":
+          description: Abuse limiter or quota policy denied execution.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SponsorFailureResponse"
+        "502":
+          description: Gas-Station execute call failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SponsorFailureResponse"
         "503":
           description: Sponsor service temporarily unavailable (circuit breaker open).
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/SponsorFailureResponse"
   /compliance/notices:
     post:
       tags: [Compliance]
@@ -3106,7 +3513,27 @@ components:
           format: date-time
         policySnapshot:
           $ref: "#/components/schemas/ListingCommunicationPolicy"
-    AcceptBidRequest:
+    CreateBidRequest:
+      type: object
+      additionalProperties: false
+      required: [listingId, bidderAddress, amount, currency]
+      properties:
+        listingId:
+          type: string
+          format: uuid
+        bidderAddress:
+          type: string
+        amount:
+          type: string
+          pattern: "^[0-9]+$"
+        currency:
+          type: string
+          enum: [IOTA, CLAW]
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1000
+    AcceptBidByListingRequest:
       type: object
       additionalProperties: false
       required: [buyerAddress, sellerAddress, amount, currency]
@@ -3126,6 +3553,29 @@ components:
           format: uuid
         communicationProposal:
           $ref: "#/components/schemas/OrderCommunicationProposalRequest"
+    AcceptStoredBidRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        buyerAddress:
+          type: string
+        sellerAddress:
+          type: string
+        amount:
+          type: string
+          pattern: "^[0-9]+$"
+        currency:
+          type: string
+          enum: [IOTA, CLAW]
+        orderId:
+          type: string
+          format: uuid
+        communicationProposal:
+          $ref: "#/components/schemas/OrderCommunicationProposalRequest"
+    AcceptBidRequest:
+      oneOf:
+        - $ref: "#/components/schemas/AcceptBidByListingRequest"
+        - $ref: "#/components/schemas/AcceptStoredBidRequest"
     SponsorReserveRequest:
       type: object
       additionalProperties: false
@@ -3179,8 +3629,9 @@ components:
           maxLength: 8192
           description: |
             Serialized wallet personal-message signature over the canonical
-            sponsor intent string:
-            `network|order_id|reservation_id|tx_digest|expires_at|purpose`.
+            sponsor intent message:
+            first line `CLAWDEX Sponsor Execute Intent v1`, second line
+            `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`.
             Required whenever `intent` is provided.
     SponsorExecutionIntentRequest:
       type: object
@@ -3209,6 +3660,175 @@ components:
           type: string
           minLength: 1
           maxLength: 64
+    SponsorGasCoinRef:
+      type: object
+      additionalProperties: false
+      required: [objectId, version, digest]
+      properties:
+        objectId:
+          type: string
+          minLength: 1
+        version:
+          type: integer
+          minimum: 1
+        digest:
+          type: string
+          minLength: 1
+    SponsorReservationResponse:
+      type: object
+      additionalProperties: false
+      required: [reservationId, sponsorAddress, gasBudget, purpose, gasCoins, expiresAt]
+      properties:
+        reservationId:
+          type: string
+          minLength: 1
+        sponsorAddress:
+          type: string
+          minLength: 1
+        gasBudget:
+          type: integer
+          minimum: 1
+        purpose:
+          type: string
+          enum: [claw_payment, bond, onboarding, marketplace_tx]
+        gasCoins:
+          type: array
+          items:
+            $ref: "#/components/schemas/SponsorGasCoinRef"
+        orderId:
+          type: string
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+    SponsorReserveResponse:
+      type: object
+      additionalProperties: false
+      required: [reservation, usage, caps, sponsorWindow, paymentCoin, tier, fastLane]
+      properties:
+        reservation:
+          $ref: "#/components/schemas/SponsorReservationResponse"
+        usage:
+          $ref: "#/components/schemas/SponsorUsage"
+        caps:
+          type: object
+          additionalProperties: false
+          required: [maxTxCount, maxGasPerDay]
+          properties:
+            maxTxCount:
+              type: integer
+              minimum: 0
+            maxGasPerDay:
+              type: integer
+              minimum: 0
+        sponsorWindow:
+          type: object
+          additionalProperties: false
+          required: [windowSec, txCount, gasTotal]
+          properties:
+            windowSec:
+              type: integer
+              minimum: 1
+            txCount:
+              type: integer
+              minimum: 0
+            gasTotal:
+              type: integer
+              minimum: 0
+        paymentCoin:
+          type: string
+          nullable: true
+        tier:
+          type: integer
+          minimum: 0
+        fastLane:
+          type: boolean
+    SponsorExecuteResult:
+      type: object
+      additionalProperties: false
+      required: [reservationId, status, txDigest]
+      properties:
+        reservationId:
+          type: string
+          minLength: 1
+        status:
+          type: string
+          enum: [submitted, accepted]
+        txDigest:
+          type: string
+          minLength: 1
+    SponsorExecuteResponse:
+      type: object
+      additionalProperties: false
+      required: [execution]
+      properties:
+        execution:
+          $ref: "#/components/schemas/SponsorExecuteResult"
+    SponsorFallbackPolicy:
+      type: object
+      additionalProperties: false
+      required: [mode, available, reason]
+      properties:
+        mode:
+          type: string
+          enum: [self_pay]
+        available:
+          type: boolean
+        reason:
+          type: string
+    SponsorRetryPolicy:
+      type: object
+      additionalProperties: false
+      required: [mode, retryable]
+      properties:
+        mode:
+          type: string
+          enum: [sponsor_required]
+        retryable:
+          type: boolean
+        retryAfterSec:
+          type: integer
+          minimum: 0
+    SponsorFailureResponse:
+      type: object
+      required: [error]
+      additionalProperties: true
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+        field:
+          type: string
+        endpoint:
+          type: string
+        mode:
+          type: string
+        retryAfterSec:
+          type: integer
+          minimum: 0
+        fallback:
+          $ref: "#/components/schemas/SponsorFallbackPolicy"
+        retry:
+          $ref: "#/components/schemas/SponsorRetryPolicy"
+        usage:
+          $ref: "#/components/schemas/SponsorUsage"
+        caps:
+          type: object
+          additionalProperties: true
+        tier:
+          type: integer
+        actorStrikes:
+          type: integer
+        ipStrikes:
+          type: integer
+        autoRevokedUntil:
+          type: string
+          format: date-time
+        fields:
+          type: array
+          items:
+            type: string
     ManagedStoragePaymentProof:
       type: object
       additionalProperties: false
@@ -3767,6 +4387,15 @@ components:
           type: string
           minLength: 3
           maxLength: 200
+    OrderEscrowBindRequest:
+      type: object
+      additionalProperties: false
+      required: [escrowObjectId]
+      properties:
+        escrowObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
     ReviewPostRequest:
       type: object
       additionalProperties: false
@@ -3782,12 +4411,12 @@ components:
           maxLength: 200
         escrowType:
           type: string
-          enum: [escrow, milestone_escrow]
+          enum: [order_escrow, milestone_escrow]
         escrowCoinType:
           type: string
           minLength: 5
           maxLength: 500
-          description: Required when `escrowType=escrow`.
+          description: Legacy simple escrow coin type. No longer accepted for `order_escrow`.
         rating:
           type: integer
           minimum: 1
@@ -3923,6 +4552,47 @@ components:
         createdAt:
           type: string
           format: date-time
+    BidStatus:
+      type: string
+      enum: [OPEN, ACCEPTED, REJECTED, WITHDRAWN]
+    Bid:
+      type: object
+      required: [id, listingId, bidderAddress, amount, currency, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        listingId:
+          type: string
+          format: uuid
+        bidderAddress:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+          enum: [IOTA, CLAW]
+        message:
+          type: string
+        status:
+          $ref: "#/components/schemas/BidStatus"
+        createdAt:
+          type: string
+          format: date-time
+    BidListResponse:
+      type: object
+      required: [items, nextCursor, scope]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bid"
+        nextCursor:
+          type: string
+          nullable: true
+        scope:
+          type: string
+          enum: [seller_all, bidder_self]
     OrderDisputeBondPolicy:
       type: string
       enum: [DUAL_BOND_REQUIRED, PLATFORM_FUNDED_MARKETING]
@@ -3942,7 +4612,8 @@ components:
           disputeBondPolicy,
           disputeBondState,
           status,
-          createdAt
+          createdAt,
+          updatedAt
         ]
       properties:
         id:
@@ -3984,6 +4655,186 @@ components:
         createdAt:
           type: string
           format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    OrderListResponse:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        nextCursor:
+          type: string
+          nullable: true
+    MarketplaceEventFeedScope:
+      type: string
+      enum: [public, actor, all]
+    MarketplaceEventType:
+      type: string
+      enum:
+        [
+          listing.created,
+          listing.status_changed,
+          bid.created,
+          order.accepted,
+          order.status_changed,
+          milestone.submitted,
+          milestone.accepted,
+          milestone.rejected,
+          dispute.opened,
+          dispute.finalized,
+          dispute.resolved,
+          mailbox.bound,
+          sponsor.executed
+        ]
+    MarketplaceEventEntityType:
+      type: string
+      enum: [listing, bid, order, milestone, dispute, mailbox, sponsor]
+    MarketplaceEvent:
+      type: object
+      required: [id, eventType, scope, actorAddresses, payloadJson, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventType:
+          $ref: "#/components/schemas/MarketplaceEventType"
+        scope:
+          type: string
+          enum: [PUBLIC, ACTOR]
+        actorAddresses:
+          type: array
+          items:
+            type: string
+        entityType:
+          $ref: "#/components/schemas/MarketplaceEventEntityType"
+        entityId:
+          type: string
+        payloadJson:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+    MarketplaceEventListResponse:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MarketplaceEvent"
+        nextCursor:
+          type: string
+          nullable: true
+    CreateWebhookSubscriptionRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+        eventTypes:
+          type: array
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/MarketplaceEventType"
+        signingSecret:
+          type: string
+          minLength: 8
+          maxLength: 256
+    WebhookSubscription:
+      type: object
+      required: [id, actorAddress, url, eventTypes, active, hasSigningSecret, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        actorAddress:
+          type: string
+        url:
+          type: string
+          format: uri
+        eventTypes:
+          type: array
+          items:
+            $ref: "#/components/schemas/MarketplaceEventType"
+        active:
+          type: boolean
+        hasSigningSecret:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastDeliveryAt:
+          type: string
+          format: date-time
+    WebhookSubscriptionListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/WebhookSubscription"
+    WebhookDeliveryStatus:
+      type: string
+      enum: [PENDING, DELIVERED, FAILED]
+    WebhookDelivery:
+      type: object
+      required:
+        [id, subscriptionId, eventId, actorAddress, targetUrl, eventType, attempts, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        subscriptionId:
+          type: string
+          format: uuid
+        eventId:
+          type: string
+          format: uuid
+        actorAddress:
+          type: string
+        targetUrl:
+          type: string
+          format: uri
+        eventType:
+          $ref: "#/components/schemas/MarketplaceEventType"
+        attempts:
+          type: integer
+          minimum: 0
+        status:
+          $ref: "#/components/schemas/WebhookDeliveryStatus"
+        responseStatus:
+          type: integer
+        responseBodyExcerpt:
+          type: string
+        lastError:
+          type: string
+        deliveredAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    WebhookDeliveryListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/WebhookDelivery"
     OrderMilestone:
       type: object
       required:

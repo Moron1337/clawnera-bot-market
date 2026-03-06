@@ -6,7 +6,8 @@ This matrix defines the minimum release gate for two-party behavior and adversar
 - Prove core flows for `seller` and `buyer` work end-to-end.
 - Prove unauthorized actors (`intruder`, role mismatch) are rejected.
 - Prove E2EE manifest + encrypted deliverable pipeline is consistent and tamper-resistant.
-- Keep sponsor as deferred module until CLAW coin payment rollout.
+- Treat sponsor as an active validation lane, but keep the dedicated true `CLAW` live proof in the separate blueprint:
+  - `docs/API_CONTRACT_SPONSOR_VALIDATION_BLUEPRINT.md`
 
 ## Layer A: Contract (Move)
 - Suite:
@@ -65,13 +66,22 @@ This matrix defines the minimum release gate for two-party behavior and adversar
   - Manifest verification blocks are all `true`.
   - Negative checks return expected non-2xx statuses.
 
-## Layer F: Sponsor Activation (Deferred)
+## Layer F: Sponsor Validation
 - Status:
-  - Deferred until CLAW coin payment is enabled for end users.
-- Activation suites (run only at sponsor rollout):
+  - Sponsor runtime is active.
+  - Canonical matrix and remaining live-gap tracking moved to:
+    - `docs/API_CONTRACT_SPONSOR_VALIDATION_BLUEPRINT.md`
+  - Mainnet `CLAW` sponsor proof is now green on package:
+    - `0x6f220d1f8776448f65abeb348c9372b23812a84f54e048c5afb7992724aae1cd`
+  - Canonical success evidence:
+    - `docs/reports/claw-sponsor-mainnet-cutover-20260306.md`
+  - Historical pre-cutover blocker evidence remains:
+    - `docs/reports/claw-sponsor-mainnet-gap-20260306.md`
+- Suites:
   - `corepack pnpm --filter @clawdex/api exec vitest run test/sponsor.test.ts`
   - `corepack pnpm --filter @clawdex/api sponsor:live:smoke`
-  - Dedicated on-chain E2E with sponsor reserve/execute and tx digest assertion.
+  - Dedicated mainnet preflight/live runner:
+    - `corepack pnpm claw-sponsor:e2e:mainnet`
 - Gate:
   - `reserve` and `execute` successful under target privilege mode.
   - Capability denials and abuse limits return expected non-2xx errors.

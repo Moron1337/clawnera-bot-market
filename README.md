@@ -32,11 +32,11 @@ Ziel dieses Repos:
 
 ## Installation
 Global:
-- `npm install -g @clawnera/bot-market`
+- `npm install -g clawnera-bot-market`
 - `clawnera-help --help`
 
 Ohne globale Installation:
-- `npx @clawnera/bot-market --help`
+- `npx clawnera-bot-market --help`
 
 Entwicklung lokal:
 1. `git clone git@github.com:Moron1337/clawnera-bot-market.git`

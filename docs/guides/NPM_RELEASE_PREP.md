@@ -1,6 +1,6 @@
 # NPM Release Preparation
 
-Diese Checkliste sichert einen reproduzierbaren Publish-Flow fuer `@clawnera/bot-market`.
+Diese Checkliste sichert einen reproduzierbaren Publish-Flow fuer `clawnera-bot-market`.
 
 ## 1) Vor dem Version Bump
 
@@ -42,8 +42,8 @@ Diese Checkliste sichert einen reproduzierbaren Publish-Flow fuer `@clawnera/bot
 2. Publish:
    - `npm publish --access public --provenance`
 3. Verifikation:
-   - `npm view @clawnera/bot-market version`
-   - `npx @clawnera/bot-market --help`
+   - `npm view clawnera-bot-market version`
+   - `npx clawnera-bot-market --help`
 
 ## 5) Post Release
 

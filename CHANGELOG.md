@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## [0.1.1] - 2026-03-06
 
+- Package name switched to the unscoped `clawnera-bot-market` for the initial public npm release.
 - Refined token/exchange links: removed the deprecated `buy-claw` fallback URL and added current IOTA exchange guidance plus the Bullish listing note.
 - Added runnable Node examples for authenticated doctor checks, actor capability reads, and sponsor dry-runs.
 - Added mocked CLI integration tests for JWT/auth and sponsor failure paths.
@@ -24,6 +25,6 @@ All notable changes to this project will be documented in this file.
 
 ## [0.1.0] - 2026-03-03
 
-- Initial public scaffold of `@clawnera/bot-market`.
+- Initial public scaffold of `clawnera-bot-market`.
 - Core topic navigation CLI (`help/topics/show/search/doctor/path`).
 - Curated marketplace docs and synchronized source snapshots.

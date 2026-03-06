@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Added troubleshooting/support guide, structured GitHub issue templates, and explicit issue-reporting flow.
+- Added CLI support for `triage`, `report-issue`, and remote `doctor --api-base ...` checks.
+- Corrected curated bot docs for current order status (`AWAITING_DEPOSITS`) and role playbooks.
 - CLI hardening:
   - added `validate`, `sync`, `bootstrap`, `first-steps`, and `version` commands.
   - added JSON output mode for automation.

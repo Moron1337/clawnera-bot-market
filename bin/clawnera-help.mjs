@@ -18,6 +18,108 @@ const syncScript = path.join(repoRoot, "scripts", "sync-local-sources.sh");
 const iotaFirstStepsScript = path.join(repoRoot, "scripts", "bootstrap-iota-first-steps.sh");
 const ABSOLUTE_PATH_PATTERN = /(?:^|[\s`("'])\/home\/[^\s`)"']+/;
 const TOPIC_INDEX_ENTRY_PATTERN = /^-\s+`([a-z0-9-]+)`:/;
+const ISSUE_TRACKER_URL = "https://github.com/Moron1337/clawnera-bot-market/issues";
+const ISSUE_NEW_URL = `${ISSUE_TRACKER_URL}/new/choose`;
+const ISSUE_CATEGORY_CONFIG = Object.freeze({
+  bug: {
+    template: "bug_report.md",
+    label: "bug",
+    titlePrefix: "bug"
+  },
+  "integration-help": {
+    template: "integration_help.md",
+    label: "integration-help",
+    titlePrefix: "integration-help"
+  },
+  docs: {
+    template: "docs_gap.md",
+    label: "documentation",
+    titlePrefix: "docs"
+  }
+});
+const TRIAGE_RULES = Object.freeze([
+  {
+    id: "auth",
+    keywords: ["auth", "jwt", "token", "challenge", "verify", "401", "403"],
+    topics: ["onboarding", "api", "security"],
+    commands: [
+      "clawnera-help show onboarding",
+      "clawnera-help show api",
+      "clawnera-help doctor --api-base <url> --jwt <token>"
+    ],
+    issueCategory: "integration-help"
+  },
+  {
+    id: "listing",
+    keywords: ["listing", "deposit", "creator_mismatch", "seller_mismatch", "accept", "awaiting_deposits"],
+    topics: ["onboarding", "api", "sdk", "order-states"],
+    commands: [
+      "clawnera-help show onboarding",
+      "clawnera-help show api",
+      "clawnera-help show order-states",
+      "clawnera-help doctor --api-base <url> --jwt <token>"
+    ],
+    issueCategory: "bug"
+  },
+  {
+    id: "sponsor",
+    keywords: ["sponsor", "gas", "gasstation", "reserve", "execute", "retry-after", "self_pay", "intent"],
+    topics: ["sponsor", "api", "ops"],
+    commands: [
+      "clawnera-help show sponsor",
+      "clawnera-help show api",
+      "clawnera-help doctor --api-base <url> --jwt <token>",
+      "clawnera-help sponsor-execute --help"
+    ],
+    issueCategory: "integration-help"
+  },
+  {
+    id: "milestone",
+    keywords: ["milestone", "manifest", "anchor", "artifact", "storage", "pinata", "submit", "accept", "reject"],
+    topics: ["onboarding", "api", "sdk", "ops"],
+    commands: [
+      "clawnera-help show onboarding",
+      "clawnera-help show api",
+      "clawnera-help show sdk",
+      "clawnera-help doctor --api-base <url> --jwt <token>"
+    ],
+    issueCategory: "integration-help"
+  },
+  {
+    id: "dispute",
+    keywords: ["dispute", "quorum", "reviewer", "bond", "fallback", "vote", "resolve-escrow"],
+    topics: ["order-states", "role-routes", "contracts", "playbooks"],
+    commands: [
+      "clawnera-help show order-states",
+      "clawnera-help show role-routes",
+      "clawnera-help show contracts",
+      "clawnera-help doctor --api-base <url> --jwt <token>"
+    ],
+    issueCategory: "bug"
+  },
+  {
+    id: "polling",
+    keywords: ["poll", "reconcile", "409", "timeline", "state", "scheduler", "backoff"],
+    topics: ["polling", "order-states", "ops"],
+    commands: [
+      "clawnera-help show polling",
+      "clawnera-help show order-states",
+      "clawnera-help show ops"
+    ],
+    issueCategory: "integration-help"
+  },
+  {
+    id: "docs",
+    keywords: ["docs", "documentation", "unclear", "missing", "guide", "stale", "wrong"],
+    topics: ["troubleshooting", "sources", "index"],
+    commands: [
+      "clawnera-help show troubleshooting",
+      "clawnera-help show sources",
+      "clawnera-help report-issue --category docs --summary \"describe the docs gap\""
+    ],
+    issueCategory: "docs"
+  }
+]);
 
 function readPackageVersion() {
   const raw = fs.readFileSync(packageJsonFile, "utf8");
@@ -41,6 +143,9 @@ function printUsage() {
   console.log("  clawnera-help search <keyword>            Search keyword in curated docs");
   console.log("  clawnera-help search <keyword> --all      Include docsources in search");
   console.log("  clawnera-help doctor                      Check local toolchain");
+  console.log("  clawnera-help doctor --api-base <url>     Probe live API health/policy/capabilities");
+  console.log("  clawnera-help triage <problem>            Suggest docs, commands, and escalation path");
+  console.log("  clawnera-help report-issue [options]      Generate a structured GitHub issue scaffold");
   console.log("  clawnera-help path                        Print repository path");
   console.log("  clawnera-help first-steps [--run]         Show or run IOTA first-step bootstrap");
   console.log("  clawnera-help sponsor-execute [options]   Reserve->sign->execute sponsor helper");
@@ -141,6 +246,21 @@ function searchKeyword(keyword, includeAllDocs) {
     process.exitCode = 1;
     return [];
   }
+  const hits = collectSearchHits(term, includeAllDocs);
+  for (const hit of hits) {
+    console.log(`${hit.file}:${hit.line}: ${hit.text}`);
+  }
+  if (hits.length === 0) {
+    console.log(`no_hits_for: ${term}`);
+  }
+  return hits;
+}
+
+function collectSearchHits(keyword, includeAllDocs) {
+  const term = String(keyword || "").trim();
+  if (!term) {
+    return [];
+  }
   const files = includeAllDocs ? allMarkdownFiles() : curatedMarkdownFiles();
   const lower = term.toLowerCase();
   const hits = [];
@@ -151,12 +271,8 @@ function searchKeyword(keyword, includeAllDocs) {
       const line = lines[i];
       if (line.toLowerCase().includes(lower)) {
         hits.push({ file: rel, line: i + 1, text: line });
-        console.log(`${rel}:${i + 1}: ${line}`);
       }
     }
-  }
-  if (hits.length === 0) {
-    console.log(`no_hits_for: ${term}`);
   }
   return hits;
 }
@@ -826,6 +942,397 @@ async function runSponsorExecute(commandArgs) {
   }
 }
 
+function doctorUsageLines() {
+  return [
+    "Doctor helper:",
+    "- Default: local toolchain only",
+    "- Optional remote checks: --api-base <url>",
+    "- Optional auth check: --jwt <token>",
+    "- Optional timeout override: --timeout-ms <ms>",
+    `- If unresolved after doctor, report in GitHub Issues: ${ISSUE_TRACKER_URL}`
+  ];
+}
+
+function triageUsageLines() {
+  return [
+    "Triage helper:",
+    '- Usage: clawnera-help triage "<problem or error>"',
+    "- Example: clawnera-help triage \"sponsor execute failed\"",
+    "- Suggests likely topics, commands, and GitHub issue escalation path"
+  ];
+}
+
+function reportIssueUsageLines() {
+  return [
+    "Issue report helper:",
+    "- Usage: clawnera-help report-issue --category <bug|integration-help|docs> --summary <text>",
+    "- Optional fields: --title, --api-base, --jwt, --order-id, --listing-id, --dispute-case-id, --reservation-id, --error, --command",
+    "- Add remote doctor snapshot with: --include-doctor",
+    `- Opens/targets GitHub issues here: ${ISSUE_NEW_URL}`
+  ];
+}
+
+function summarizeApiFailure(result) {
+  if (!result || typeof result !== "object") {
+    return "unknown_error";
+  }
+  if (result.error) {
+    return result.error;
+  }
+  if (result.body && typeof result.body === "object" && !Array.isArray(result.body)) {
+    if (typeof result.body.error === "string" && result.body.error.trim()) {
+      return result.body.error.trim();
+    }
+    if (typeof result.body.detail === "string" && result.body.detail.trim()) {
+      return result.body.detail.trim();
+    }
+  }
+  if (typeof result.raw === "string" && result.raw.trim()) {
+    return result.raw.trim().slice(0, 240);
+  }
+  return "unexpected_response";
+}
+
+async function collectRemoteDoctor(apiBase, jwt, timeoutMs) {
+  const probes = [
+    { id: "health", path: "/health", requiresJwt: false },
+    { id: "ready", path: "/ready", requiresJwt: false },
+    { id: "capabilities", path: "/capabilities", requiresJwt: false },
+    { id: "policy_fees", path: "/policy/fees", requiresJwt: false },
+    { id: "actor_capabilities", path: "/actors/me/capabilities", requiresJwt: true }
+  ];
+
+  const checks = [];
+  for (const probe of probes) {
+    if (probe.requiresJwt && !jwt) {
+      checks.push({
+        id: probe.id,
+        path: probe.path,
+        status: "skipped",
+        ok: true,
+        httpStatus: null,
+        detail: "jwt_not_provided"
+      });
+      continue;
+    }
+
+    const result = await requestJson(
+      `${apiBase}${probe.path}`,
+      {
+        method: "GET",
+        headers: probe.requiresJwt
+          ? {
+              authorization: `Bearer ${jwt}`
+            }
+          : undefined
+      },
+      timeoutMs
+    );
+    const ok = result.ok && result.status === 200;
+    checks.push({
+      id: probe.id,
+      path: probe.path,
+      status: ok ? "pass" : "fail",
+      ok,
+      httpStatus: result.status || null,
+      detail: ok ? "ok" : summarizeApiFailure(result)
+    });
+  }
+
+  return {
+    apiBase,
+    jwtProvided: Boolean(jwt),
+    ok: checks.every((check) => check.ok),
+    checks
+  };
+}
+
+async function runDoctorCommand(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: doctorUsageLines()
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals
+    };
+  }
+
+  const report = {
+    ok: true,
+    ...doctorData()
+  };
+
+  const apiBase = normalizeApiBase(options["api-base"] || process.env.CLAWNERA_API_BASE_URL);
+  const jwt = typeof options.jwt === "string" ? String(options.jwt).trim() : String(process.env.CLAWNERA_API_JWT || "").trim();
+  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 8000);
+
+  if (apiBase) {
+    report.remote = await collectRemoteDoctor(apiBase, jwt, timeoutMs);
+    report.ok = report.remote.ok;
+  } else {
+    report.remote = null;
+  }
+
+  return report;
+}
+
+function printDoctorReport(report) {
+  console.log("Toolchain doctor:");
+  for (const [name, version] of Object.entries(report.tools || {})) {
+    console.log(`- ${name}: ${version}`);
+  }
+  console.log(`- repo: ${report.repo}`);
+  console.log(`- topics: ${report.topics}`);
+
+  if (report.remote) {
+    console.log("Remote API doctor:");
+    console.log(`- apiBase: ${report.remote.apiBase}`);
+    console.log(`- jwtProvided: ${report.remote.jwtProvided ? "yes" : "no"}`);
+    for (const check of report.remote.checks) {
+      const httpText = check.httpStatus ? ` http=${check.httpStatus}` : "";
+      console.log(`- [${check.status}] ${check.path}:${httpText} ${check.detail}`);
+    }
+  } else {
+    console.log("- remote: skipped (set --api-base <url> to probe live runtime)");
+  }
+}
+
+function scoreTriageRule(query, rule) {
+  const normalized = String(query || "").trim().toLowerCase();
+  if (!normalized) {
+    return 0;
+  }
+  return rule.keywords.reduce((score, keyword) => {
+    return normalized.includes(String(keyword).toLowerCase()) ? score + 1 : score;
+  }, 0);
+}
+
+function uniqueStrings(values) {
+  return [...new Set(values.filter(Boolean).map((value) => String(value)))];
+}
+
+function topicDescriptorById(topics, id) {
+  return topics.find((topic) => topic.id === id) || null;
+}
+
+function buildTriageReport(topics, query) {
+  const normalizedQuery = String(query || "").trim();
+  if (!normalizedQuery) {
+    return {
+      ok: false,
+      error: "missing_triage_problem"
+    };
+  }
+
+  const rankedRules = TRIAGE_RULES.map((rule) => ({
+    ...rule,
+    score: scoreTriageRule(normalizedQuery, rule)
+  }))
+    .filter((rule) => rule.score > 0)
+    .sort((left, right) => right.score - left.score);
+
+  const suggestedTopicIds = uniqueStrings(
+    (rankedRules.length > 0
+      ? rankedRules.flatMap((rule) => rule.topics)
+      : ["troubleshooting", "onboarding", "api"])
+  );
+  const suggestedTopics = suggestedTopicIds
+    .map((id) => topicDescriptorById(topics, id))
+    .filter(Boolean)
+    .map((topic) => ({
+      id: topic.id,
+      title: topic.title,
+      file: topic.file
+    }));
+
+  const hits = collectSearchHits(normalizedQuery, false).slice(0, 8);
+  const recommendedCommands = uniqueStrings([
+    ...(rankedRules.length > 0 ? rankedRules.flatMap((rule) => rule.commands) : []),
+    `clawnera-help search "${normalizedQuery}"`,
+    `clawnera-help report-issue --category ${
+      rankedRules[0]?.issueCategory || "integration-help"
+    } --summary "${normalizedQuery}" --include-doctor`
+  ]);
+
+  return {
+    ok: true,
+    query: normalizedQuery,
+    matchedRules: rankedRules.map((rule) => ({
+      id: rule.id,
+      score: rule.score,
+      issueCategory: rule.issueCategory
+    })),
+    suggestedTopics,
+    recommendedCommands,
+    hits,
+    issueReporting: {
+      category: rankedRules[0]?.issueCategory || "integration-help",
+      url: ISSUE_NEW_URL,
+      tracker: ISSUE_TRACKER_URL
+    }
+  };
+}
+
+function printTriageReport(report) {
+  console.log(`Triage for: ${report.query}`);
+  console.log("Likely topics:");
+  for (const topic of report.suggestedTopics) {
+    console.log(`- ${topic.id}: ${topic.title}`);
+  }
+
+  if (report.hits.length > 0) {
+    console.log("Relevant doc hits:");
+    for (const hit of report.hits) {
+      console.log(`- ${hit.file}:${hit.line}: ${hit.text}`);
+    }
+  }
+
+  console.log("Next commands:");
+  for (const command of report.recommendedCommands) {
+    console.log(`- ${command}`);
+  }
+
+  console.log("Need more help?");
+  console.log(`- GitHub issues: ${report.issueReporting.tracker}`);
+  console.log(`- New issue: ${report.issueReporting.url}`);
+}
+
+function buildIssueBody(input) {
+  const lines = [];
+  lines.push("## Summary");
+  lines.push("");
+  lines.push(input.summary || "describe the problem");
+  lines.push("");
+  lines.push("## Context");
+  lines.push("");
+  lines.push(`- category: ${input.category}`);
+  if (input.apiBase) {
+    lines.push(`- apiBase: ${input.apiBase}`);
+  }
+  if (input.command) {
+    lines.push(`- command: ${input.command}`);
+  }
+  if (input.error) {
+    lines.push(`- error: ${input.error}`);
+  }
+  if (input.orderId) {
+    lines.push(`- orderId: ${input.orderId}`);
+  }
+  if (input.listingId) {
+    lines.push(`- listingId: ${input.listingId}`);
+  }
+  if (input.disputeCaseId) {
+    lines.push(`- disputeCaseId: ${input.disputeCaseId}`);
+  }
+  if (input.reservationId) {
+    lines.push(`- reservationId: ${input.reservationId}`);
+  }
+  lines.push("");
+  lines.push("## What I already checked");
+  lines.push("");
+  lines.push("- `clawnera-help doctor`");
+  if (input.apiBase) {
+    lines.push(`- \`clawnera-help doctor --api-base ${input.apiBase}${input.jwtIncluded ? " --jwt <redacted>" : ""}\``);
+  }
+  lines.push(`- \`clawnera-help triage \"${input.summary || "problem"}\"\``);
+  lines.push("");
+
+  if (input.doctor) {
+    lines.push("## Doctor snapshot");
+    lines.push("");
+    lines.push("```json");
+    lines.push(JSON.stringify(input.doctor, null, 2));
+    lines.push("```");
+    lines.push("");
+  }
+
+  lines.push("## Extra details");
+  lines.push("");
+  lines.push("Add exact responses, tx digests, object ids, or reproduction steps here.");
+  return lines.join("\n");
+}
+
+function buildIssueUrl(category, title, body) {
+  const config = ISSUE_CATEGORY_CONFIG[category];
+  const url = new URL(ISSUE_NEW_URL);
+  url.searchParams.set("template", config.template);
+  url.searchParams.set("title", title);
+  url.searchParams.set("labels", config.label);
+  url.searchParams.set("body", body);
+  return url.toString();
+}
+
+async function runReportIssue(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: reportIssueUsageLines()
+    };
+  }
+
+  const rawCategory =
+    typeof options.category === "string" ? options.category.trim().toLowerCase() : "integration-help";
+  const category = ISSUE_CATEGORY_CONFIG[rawCategory] ? rawCategory : null;
+  if (!category) {
+    return {
+      ok: false,
+      error: "invalid_issue_category"
+    };
+  }
+
+  const summary =
+    typeof options.summary === "string" && options.summary.trim()
+      ? options.summary.trim()
+      : positionals.join(" ").trim();
+  const title =
+    (typeof options.title === "string" && options.title.trim()) ||
+    `${ISSUE_CATEGORY_CONFIG[category].titlePrefix}: ${summary || "describe the problem"}`;
+  const apiBase = normalizeApiBase(options["api-base"] || process.env.CLAWNERA_API_BASE_URL);
+  const jwt = typeof options.jwt === "string" ? String(options.jwt).trim() : String(process.env.CLAWNERA_API_JWT || "").trim();
+  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 8000);
+  const includeDoctor = Boolean(options["include-doctor"]);
+
+  const doctor = includeDoctor ? await runDoctorCommand([
+    ...(apiBase ? ["--api-base", apiBase] : []),
+    ...(jwt ? ["--jwt", jwt] : []),
+    "--timeout-ms",
+    String(timeoutMs)
+  ]) : null;
+
+  const body = buildIssueBody({
+    category,
+    summary,
+    apiBase,
+    command: typeof options.command === "string" ? options.command.trim() : "",
+    error: typeof options.error === "string" ? options.error.trim() : "",
+    orderId: typeof options["order-id"] === "string" ? options["order-id"].trim() : "",
+    listingId: typeof options["listing-id"] === "string" ? options["listing-id"].trim() : "",
+    disputeCaseId: typeof options["dispute-case-id"] === "string" ? options["dispute-case-id"].trim() : "",
+    reservationId: typeof options["reservation-id"] === "string" ? options["reservation-id"].trim() : "",
+    doctor,
+    jwtIncluded: Boolean(jwt)
+  });
+
+  return {
+    ok: true,
+    category,
+    title,
+    issueUrl: buildIssueUrl(category, title, body),
+    trackerUrl: ISSUE_TRACKER_URL,
+    body,
+    doctorIncluded: Boolean(doctor)
+  };
+}
+
 function parseArgs(argv) {
   const flags = {
     json: false,
@@ -868,7 +1375,10 @@ const { flags, command: parsedCommand, commandArgs } = parseArgs(process.argv.sl
 const topics = loadTopics();
 const aliasCommands = new Map([
   ["list", "topics"],
-  ["sponsor-run", "sponsor-execute"]
+  ["sponsor-run", "sponsor-execute"],
+  ["ask", "triage"],
+  ["support", "triage"],
+  ["issue", "report-issue"]
 ]);
 const effectiveCommand = aliasCommands.get(parsedCommand) || parsedCommand;
 
@@ -883,6 +1393,8 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "show",
         "search",
         "doctor",
+        "triage",
+        "report-issue",
         "path",
         "first-steps",
         "sponsor-execute",
@@ -936,17 +1448,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
       process.exitCode = 1;
     } else {
       const hits = [];
-      const files = flags.all ? allMarkdownFiles() : curatedMarkdownFiles();
-      const lower = keyword.toLowerCase();
-      for (const file of files) {
-        const rel = path.relative(repoRoot, file);
-        const lines = fs.readFileSync(file, "utf8").split(/\r?\n/);
-        for (let i = 0; i < lines.length; i += 1) {
-          if (lines[i].toLowerCase().includes(lower)) {
-            hits.push({ file: rel, line: i + 1, text: lines[i] });
-          }
-        }
-      }
+      hits.push(...collectSearchHits(keyword, flags.all));
       printJson({
         ok: true,
         keyword,
@@ -959,13 +1461,68 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     searchKeyword(keyword, flags.all);
   }
 } else if (effectiveCommand === "doctor") {
+  const report = await runDoctorCommand(commandArgs);
   if (flags.json) {
-    printJson({
-      ok: true,
-      ...doctorData()
-    });
+    printJson(report);
+  } else if (report.help && Array.isArray(report.usage)) {
+    for (const line of report.usage) {
+      console.log(line);
+    }
+  } else if (report.ok || report.remote) {
+    printDoctorReport(report);
   } else {
-    printDoctor();
+    console.error(`doctor_error: ${report.error}`);
+    process.exitCode = 1;
+  }
+  if (!report.ok && !report.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "triage") {
+  const query = commandArgs.join(" ").trim();
+  if (query === "--help" || query === "-h") {
+    const usage = triageUsageLines();
+    if (flags.json) {
+      printJson({ ok: true, help: true, usage });
+    } else {
+      for (const line of usage) {
+        console.log(line);
+      }
+    }
+  } else {
+    const report = buildTriageReport(topics, query);
+    if (flags.json) {
+      printJson(report);
+    } else if (report.ok) {
+      printTriageReport(report);
+    } else {
+      console.error(report.error);
+      process.exitCode = 1;
+    }
+    if (!report.ok) {
+      process.exitCode = 1;
+    }
+  }
+} else if (effectiveCommand === "report-issue") {
+  const report = await runReportIssue(commandArgs);
+  if (flags.json) {
+    printJson(report);
+  } else if (report.help && Array.isArray(report.usage)) {
+    for (const line of report.usage) {
+      console.log(line);
+    }
+  } else if (report.ok) {
+    console.log(`issue_category=${report.category}`);
+    console.log(`issue_url=${report.issueUrl}`);
+    console.log(`tracker_url=${report.trackerUrl}`);
+    console.log("issue_body_start");
+    console.log(report.body);
+    console.log("issue_body_end");
+  } else {
+    console.error(`report_issue_error: ${report.error}`);
+    process.exitCode = 1;
+  }
+  if (!report.ok && !report.help) {
+    process.exitCode = 1;
   }
 } else if (effectiveCommand === "path") {
   if (flags.json) {

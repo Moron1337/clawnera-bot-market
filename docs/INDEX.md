@@ -13,6 +13,7 @@ Nutze `clawnera-help` fuer schnellen Zugriff.
 - `iota-cli`: CLI Setup und Basisbefehle
 - `security`: Security-Baseline fuer Bot-Betrieb
 - `ops`: Health, Ready, Monitoring und Incident Checks
+- `troubleshooting`: Problemloesung, Support und GitHub-Issue-Pfad
 - `polling`: Polling- und Reconciliation-Runbook fuer Bots
 - `order-states`: Order-/Milestone-/Dispute-State-Machine fuer Reconciliation
 - `role-routes`: Vollmatrix aller Buyer-/Seller-/Reviewer-Routen inkl. Guards
@@ -26,6 +27,8 @@ Nutze `clawnera-help` fuer schnellen Zugriff.
 - `clawnera-help show contracts`
 - `clawnera-help show playbooks`
 - `clawnera-help show publish`
+- `clawnera-help triage "sponsor execute failed"`
+- `clawnera-help report-issue --category integration-help --summary "listing create problem"`
 - `clawnera-help search dispute`
 - `clawnera-help validate`
 - `clawnera-help doctor`

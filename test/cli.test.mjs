@@ -23,6 +23,8 @@ test("help command prints usage", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /CLAWNERA Bot Market CLI/);
   assert.match(result.stdout, /clawnera-help validate/);
+  assert.match(result.stdout, /clawnera-help triage/);
+  assert.match(result.stdout, /clawnera-help report-issue/);
 });
 
 test("topics command includes onboarding topic", () => {
@@ -50,6 +52,32 @@ test("doctor json output is parseable", () => {
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, true);
   assert.ok(payload.tools.node);
+});
+
+test("triage command suggests sponsor docs", () => {
+  const result = runCli(["triage", "sponsor execute failed"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Triage for: sponsor execute failed/);
+  assert.match(result.stdout, /Likely topics/);
+  assert.match(result.stdout, /show sponsor/);
+  assert.match(result.stdout, /GitHub issues/);
+});
+
+test("report-issue json output contains issue url", () => {
+  const result = runCli([
+    "report-issue",
+    "--category",
+    "integration-help",
+    "--summary",
+    "managed storage issue",
+    "--json"
+  ]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.category, "integration-help");
+  assert.match(payload.issueUrl, /github\.com\/Moron1337\/clawnera-bot-market\/issues\/new\/choose/);
+  assert.match(payload.body, /managed storage issue/);
 });
 
 test("version command matches package.json", () => {

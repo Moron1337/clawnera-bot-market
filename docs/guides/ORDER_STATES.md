@@ -6,14 +6,14 @@
 ## 1) Order-Status (API)
 
 Statuswerte:
-- `AWAITING_ESCROW`
+- `AWAITING_DEPOSITS`
 - `IN_PROGRESS`
 - `DISPUTED`
 - `COMPLETED`
 - `CANCELLED`
 
 Zulaessige Transitionen (laut `canTransitionOrderStatus`):
-- `AWAITING_ESCROW` -> `IN_PROGRESS` | `DISPUTED` | `COMPLETED` | `CANCELLED`
+- `AWAITING_DEPOSITS` -> `IN_PROGRESS` | `CANCELLED`
 - `IN_PROGRESS` -> `DISPUTED` | `COMPLETED` | `CANCELLED`
 - `DISPUTED` -> `COMPLETED` | `CANCELLED`
 - `COMPLETED` / `CANCELLED` -> terminal (keine weiteren Transitionen)
@@ -54,6 +54,10 @@ Settlement-Path (`settlement_path`):
 2. Bei Dispute-Schritten zusaetzlich `GET /disputes/{disputeCaseId}` lesen.
 3. Nur naechsten zulaessigen Schritt senden.
 4. Bei `409` niemals blind retryen; State neu lesen und neu planen.
+
+Wichtig:
+- Solange eine Order `AWAITING_DEPOSITS` ist, sind Bond/Escrow noch nicht komplett reconciled.
+- In diesem Zustand keine Milestone-Writes senden.
 
 ## 5) Route -> State Trigger (API)
 

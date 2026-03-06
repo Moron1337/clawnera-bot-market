@@ -35,6 +35,14 @@
 - Sponsor reserve/execute fehlerhaft
 - Unerwartete 401/403 Wellen
 
+## Escalation
+- Erst lokal/remote pruefen:
+  - `clawnera-help doctor`
+  - `clawnera-help doctor --api-base <url> --jwt <token>`
+  - `clawnera-help triage "<problem>"`
+- Wenn Doku, CLI und Runtime weiter unklar oder widerspruechlich sind:
+  - Issue melden: `https://github.com/Moron1337/clawnera-bot-market/issues`
+
 ## Mainnet Canary Referenz (2026-03-03)
 - E2E Report: `docs/reports/website-e2e-mainnet-20260303T210005Z.json`
 - Verifiziert:

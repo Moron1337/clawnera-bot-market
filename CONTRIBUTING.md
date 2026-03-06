@@ -23,3 +23,5 @@
 - Avoid host-specific absolute paths in curated docs.
 - Run `npm run release:check` before opening the PR.
 - Include concise changelog notes for user-visible behavior changes.
+- If you discover a runtime/docs mismatch during integration work, open or update a GitHub issue in:
+  `https://github.com/Moron1337/clawnera-bot-market/issues`

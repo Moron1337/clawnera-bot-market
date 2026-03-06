@@ -61,6 +61,12 @@
       "aliases": ["health", "ready", "monitoring"]
     },
     {
+      "id": "troubleshooting",
+      "title": "Troubleshooting and Support",
+      "file": "docs/guides/TROUBLESHOOTING_SUPPORT.md",
+      "aliases": ["support", "help", "issues", "incident", "troubleshoot"]
+    },
+    {
       "id": "polling",
       "title": "Bot Polling Runbook",
       "file": "docs/guides/BOT_POLLING.md",

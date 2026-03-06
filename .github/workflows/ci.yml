@@ -41,6 +41,8 @@ jobs:
           node ./bin/clawnera-help.mjs show onboarding >/dev/null
           node ./bin/clawnera-help.mjs search sponsor >/dev/null
           node ./bin/clawnera-help.mjs doctor --json >/dev/null
+          node ./bin/clawnera-help.mjs triage "sponsor execute failed" >/dev/null
+          node ./bin/clawnera-help.mjs report-issue --category integration-help --summary "ci smoke" --json >/dev/null
 
       - name: Package dry run
         run: npm run pack:dry-run

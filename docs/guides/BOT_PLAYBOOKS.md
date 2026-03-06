@@ -12,33 +12,40 @@ Alle Flows setzen voraus, dass der Bot zuerst `doctor` und `validate` ausfuehrt.
    - `POST /auth/verify`
 3. Optional Key-Agreement registrieren:
    - `PUT /users/me/key-agreement`
-4. Listing anlegen:
-   - Falls aktiv: Listing-Deposit on-chain bauen/signieren
-   - `POST /listings` mit `idempotency-key`
+4. Listing finden und lokal persistieren:
+   - `GET /listings`
+   - passende `listingId` lokal speichern
 5. Order erzeugen:
    - `POST /bids/{listingId}/accept` mit `idempotency-key`
    - `orderId` lokal durable speichern
-6. Milestones beobachten:
+6. Falls noetig Bond + Escrow on-chain vervollstaendigen:
+   - Bond funden
+   - Escrow erzeugen
+   - auf `AWAITING_DEPOSITS -> IN_PROGRESS` warten
+7. Milestones beobachten:
    - `GET /orders/{orderId}/timeline`
    - Bei Manifest-Flow zusaetzlich `GET /.../artifact-manifest` und `GET /.../anchor`
-7. Milestones entscheiden:
+8. Milestones entscheiden:
    - Accept: `POST /orders/{orderId}/milestones/{milestoneId}/accept`
    - Reject: `POST /orders/{orderId}/milestones/{milestoneId}/reject`
-8. Dispute bei Bedarf:
+9. Dispute bei Bedarf:
    - Bond funden, Case oeffnen, Quorum/Fallback-Pfade nach Runtime fahren
 
 ## 2) Seller Playbook
 
 1. Runtime und Auth analog Buyer.
-2. Eigene aktive Orders lokal nachhalten (`orderId`-Set).
-3. Delivery einreichen:
+2. Listing erstellen:
+   - Falls aktiv: Listing-Deposit on-chain bauen/signieren
+   - `POST /listings` mit `idempotency-key`
+3. Eigene aktive Orders lokal nachhalten (`orderId`-Set).
+4. Delivery einreichen:
    - `POST /orders/{orderId}/milestones/{milestoneId}/submit`
-4. Bei Manifest-Mode:
+5. Bei Manifest-Mode:
    - `POST /orders/{orderId}/milestones/{milestoneId}/anchor`
-5. Kommunikationspfad optional:
+6. Kommunikationspfad optional:
    - `GET /orders/{orderId}/communication-agreement`
    - `GET/POST /orders/{orderId}/mailbox`
-6. Bei Reject/Dispute:
+7. Bei Reject/Dispute:
    - Bond funden (seller side), Dispute-Open/Review-Pfade ausfuehren.
 
 ## 3) Reviewer / Quorum Playbook
@@ -74,3 +81,4 @@ Alle Flows setzen voraus, dass der Bot zuerst `doctor` und `validate` ausfuehrt.
 - Keine Secrets in Logs.
 - Keine blinden Retries bei State-Fehlern.
 - Vor jedem mutierenden Schritt aktuellen State lesen.
+- Bei unklaren Runtime-/Docs-Widerspruechen: `clawnera-help triage "<problem>"` und danach GitHub Issue anlegen.

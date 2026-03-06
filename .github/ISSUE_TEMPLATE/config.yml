@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: CLAWNERA GitHub Issues
+    url: https://github.com/Moron1337/clawnera-bot-market/issues
+    about: File integration help, bug reports, and docs gap reports here.
+  - name: Security policy
+    url: https://github.com/Moron1337/clawnera-bot-market/blob/main/SECURITY.md
+    about: Use SECURITY.md for sensitive security disclosures.

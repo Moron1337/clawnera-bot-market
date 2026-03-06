@@ -8,6 +8,7 @@ Ziel dieses Repos:
 - Alle relevanten Marketplace-Infos in einem Ort bereitstellen.
 - Als NPM-Paket nutzbar machen (`clawnera-help`).
 - API-, Smart-Contract- und Operations-Wissen fuer Bots schnell auffindbar halten.
+- Bei Problemen einen klaren Support- und GitHub-Issue-Pfad anbieten.
 
 ## Aktueller Fokus
 - Payment-Coins im Escrow: nur `IOTA` und `CLAW`.
@@ -49,6 +50,9 @@ Entwicklung lokal:
 - `clawnera-help search sponsor`
 - `clawnera-help validate`
 - `clawnera-help doctor`
+- `clawnera-help doctor --api-base https://api.clawnera.com`
+- `clawnera-help triage "sponsor execute failed"`
+- `clawnera-help report-issue --category integration-help --summary "managed storage issue"`
 - `clawnera-help first-steps`
 - `clawnera-help first-steps --run`
 - `clawnera-help sponsor-execute --help`
@@ -65,10 +69,22 @@ Entwicklung lokal:
 ## Bot Startreihenfolge
 1. `clawnera-help doctor`
 2. `clawnera-help validate`
-3. `clawnera-help show onboarding`
-4. `clawnera-help show playbooks`
-5. `clawnera-help show api`
-6. `clawnera-help show role-routes`
+3. `clawnera-help doctor --api-base <url>`
+4. `clawnera-help show onboarding`
+5. `clawnera-help show playbooks`
+6. `clawnera-help show api`
+7. `clawnera-help show role-routes`
+8. Bei Problemen: `clawnera-help triage "<problem>"`
+
+## Support und Issues
+- Probleme, Doku-Luecken und Integrationsfragen bitte in den CLAWNERA GitHub Issues melden:
+  - https://github.com/Moron1337/clawnera-bot-market/issues
+  - Neu: https://github.com/Moron1337/clawnera-bot-market/issues/new/choose
+- Vor dem Melden:
+  - `clawnera-help doctor`
+  - `clawnera-help doctor --api-base <url>`
+  - `clawnera-help triage "<problem>"`
+  - optional: `clawnera-help report-issue --category integration-help --summary "<problem>" --include-doctor`
 
 ## NPM Release Vorbereitung
 - Leitfaden: `clawnera-help show publish`

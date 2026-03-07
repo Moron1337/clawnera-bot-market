@@ -12,6 +12,9 @@ Dieses Repo ist der bot-orientierte Knowledge-Layer.
 ## Sync
 - `bash scripts/sync-local-sources.sh`
 - Ausgabe nach: `docs/docsources/`
+- Maintainer-only: normale Nutzer brauchen diesen Schritt nicht.
+- `clawnera-help sync` ueberspringt fehlende Quell-Repos standardmaessig.
+- Fuer harten Fehler: `clawnera-help sync --require-sources` oder `CLAWNERA_SYNC_STRICT=1`.
 
 ## Wichtige kopierte Dateien
 - `docs/docsources/core/openapi.yaml`

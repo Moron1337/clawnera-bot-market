@@ -11,10 +11,14 @@ const repoRoot = path.resolve(__dirname, "..");
 const cliFile = path.join(repoRoot, "bin", "clawnera-help.mjs");
 const packageJson = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
 
-function runCli(args = []) {
+function runCli(args = [], options = {}) {
   return spawnSync(process.execPath, [cliFile, ...args], {
     cwd: repoRoot,
-    encoding: "utf8"
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      ...options.env
+    }
   });
 }
 
@@ -136,4 +140,38 @@ test("sponsor-preflight fails without api base and jwt", () => {
   const result = runCli(["sponsor-preflight"]);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /sponsor_preflight_helper_error/);
+});
+
+test("sync skips cleanly without maintainer source repos", () => {
+  const result = runCli(["sync"], {
+    env: {
+      HOME: "/tmp/clawnera-no-sources-home"
+    }
+  });
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /sync_skipped: local source repos not found/);
+  assert.match(result.stdout, /This command is for maintainers/);
+});
+
+test("sync fails in strict mode when maintainer source repos are missing", () => {
+  const result = runCli(["sync", "--require-sources"], {
+    env: {
+      HOME: "/tmp/clawnera-no-sources-home"
+    }
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /missing_marketplace_source_root/);
+  assert.match(result.stderr, /sync_failed_exit_1/);
+});
+
+test("bootstrap with sync still succeeds when maintainer sources are missing", () => {
+  const result = runCli(["bootstrap", "--sync"], {
+    env: {
+      HOME: "/tmp/clawnera-no-sources-home"
+    }
+  });
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Bootstrap checks:/);
+  assert.match(result.stdout, /sync_skipped: local source repos not found/);
+  assert.match(result.stdout, /bootstrap_ok/);
 });

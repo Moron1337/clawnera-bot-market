@@ -77,6 +77,7 @@ Local development:
 - `clawnera-help first-steps --run`
 - `clawnera-help sponsor-execute --help`
 - `clawnera-help bootstrap --sync`
+- `clawnera-help sync --require-sources`
 
 ## Structure
 - `bin/clawnera-help.mjs`: CLI for topic navigation.
@@ -84,6 +85,7 @@ Local development:
 - `docs/guides/*`: Curated core documentation for bots.
 - `docs/docsources/*`: Synced copies from the local core/CLAW repositories.
 - `scripts/sync-local-sources.sh`: Source sync for current local snapshots.
+  - Maintainer-only. Normal installs already include the synced docs.
 - `scripts/install-iota-cli.sh`: Linux install helper for the IOTA CLI.
 - `scripts/postinstall.mjs`: install-time PATH check plus optional IOTA CLI/bootstrap hooks.
 - `examples/*.mjs`: runnable Node examples for authenticated doctor checks, actor capabilities, sponsor preflight, and sponsor dry-run.

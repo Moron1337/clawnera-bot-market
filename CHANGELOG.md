@@ -8,6 +8,11 @@ All notable changes to this project will be documented in this file.
 - Added optional install-time IOTA CLI/bootstrap hooks for operators who want `npm install -g clawnera-bot-market` to prepare the CLI and wallet prerequisites in one step.
 - Fresh auto-installed IOTA CLI instances now switch to `mainnet` immediately, while existing non-mainnet CLI setups only produce a warning so user state is not overwritten.
 
+## [0.1.5] - 2026-03-07
+
+- `clawnera-help sync` now skips missing local source repos by default and explains that the command is maintainer-only.
+- Added strict sync mode for maintainers via `--require-sources` or `CLAWNERA_SYNC_STRICT=1`.
+
 ## [0.1.3] - 2026-03-07
 
 - Translated the public README, docs index, and source-mirror intro to English so the GitHub and npm package landing pages read cleanly for international users.

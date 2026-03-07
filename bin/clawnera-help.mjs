@@ -152,8 +152,8 @@ function printUsage() {
   console.log("  clawnera-help sponsor-preflight [options] Read sponsor policy/strategy/diagnostics");
   console.log("  clawnera-help sponsor-execute [options]   Reserve->sign->execute sponsor helper");
   console.log("  clawnera-help validate [--strict]         Validate topic/docs consistency");
-  console.log("  clawnera-help sync                        Sync local source snapshots");
-  console.log("  clawnera-help bootstrap [--sync]          Run doctor + validate (+ optional sync)");
+  console.log("  clawnera-help sync [--require-sources]    Sync local source snapshots (maintainer only)");
+  console.log("  clawnera-help bootstrap [--sync] [--require-sources]  Run doctor + validate (+ optional maintainer sync)");
   console.log("  clawnera-help version                     Print CLI package version");
   console.log("  clawnera-help <command> --json            Emit machine-readable JSON");
 }
@@ -482,10 +482,37 @@ function printValidation(result) {
   }
 }
 
-function runSyncSources() {
+function envFlagEnabled(name) {
+  const normalized = String(process.env[name] || "").trim().toLowerCase();
+  return Boolean(normalized) && !new Set(["0", "false", "off", "no"]).has(normalized);
+}
+
+function syncRequiresSources(flags) {
+  return Boolean(flags && flags.requireSources) || envFlagEnabled("CLAWNERA_SYNC_STRICT");
+}
+
+function buildSkippedSyncResult(output) {
+  return {
+    ok: true,
+    skipped: true,
+    maintainerOnly: true,
+    reason: "missing_marketplace_source_root",
+    output:
+      [
+        "sync_skipped: local source repos not found.",
+        "This command is for maintainers.",
+        "Set MARKETPLACE_SOURCE_ROOT=/path/to/marketplace-core-repo and optional CLAW_ROOT=/path/to/claw-repo to run it."
+      ].join(" "),
+    details: output,
+    error: ""
+  };
+}
+
+function runSyncSources(options = {}) {
   if (!fs.existsSync(syncScript)) {
     return {
       ok: false,
+      skipped: false,
       output: "",
       error: `missing_sync_script: ${path.relative(repoRoot, syncScript)}`
     };
@@ -498,8 +525,14 @@ function runSyncSources() {
   });
 
   const output = `${result.stdout || ""}${result.stderr || ""}`.trim();
+  const missingSources = output.includes("missing_marketplace_source_root:");
+  if (result.status !== 0 && missingSources && !options.requireSources) {
+    return buildSkippedSyncResult(output);
+  }
+
   return {
     ok: result.status === 0,
+    skipped: false,
     output,
     error: result.status === 0 ? "" : `sync_failed_exit_${result.status ?? "unknown"}`
   };
@@ -1457,7 +1490,8 @@ function parseArgs(argv) {
     json: false,
     all: false,
     strict: false,
-    sync: false
+    sync: false,
+    requireSources: false
   };
   const positionals = [];
 
@@ -1476,6 +1510,10 @@ function parseArgs(argv) {
     }
     if (arg === "--sync") {
       flags.sync = true;
+      continue;
+    }
+    if (arg === "--require-sources") {
+      flags.requireSources = true;
       continue;
     }
     positionals.push(arg);
@@ -1756,12 +1794,15 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     process.exitCode = 1;
   }
 } else if (effectiveCommand === "sync") {
-  const result = runSyncSources();
+  const result = runSyncSources({ requireSources: syncRequiresSources(flags) });
   if (flags.json) {
     printJson(result);
   } else {
     if (result.output) {
       console.log(result.output);
+    }
+    if (result.skipped && result.details) {
+      console.log(result.details);
     }
     if (!result.ok && result.error) {
       console.error(result.error);
@@ -1773,7 +1814,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
 } else if (effectiveCommand === "bootstrap") {
   const doctor = doctorData();
   const validation = validateRepository(flags.strict);
-  const syncResult = flags.sync ? runSyncSources() : null;
+  const syncResult = flags.sync ? runSyncSources({ requireSources: syncRequiresSources(flags) }) : null;
   const success = validation.success && (!syncResult || syncResult.ok);
 
   if (flags.json) {
@@ -1793,6 +1834,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
       console.log("Sync:");
       if (syncResult && syncResult.output) {
         console.log(syncResult.output);
+      }
+      if (syncResult && syncResult.skipped && syncResult.details) {
+        console.log(syncResult.details);
       }
       if (syncResult && !syncResult.ok && syncResult.error) {
         console.error(syncResult.error);

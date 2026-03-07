@@ -191,6 +191,9 @@ Hinweis:
 5. Empfohlen erst nach vorhandenem `communication-agreement` einsetzen.
 6. Dedizierte Erklaerung:
    - `clawnera-help show mailbox-flow`
+7. Wenn ein Mensch auf neue Mailbox-Nachrichten hingewiesen werden soll:
+   - `clawnera-help show notifications`
+   - `node ./examples/telegram-mailbox-notifier.mjs --help`
 
 ## 8) Dispute Quorum Flow
 

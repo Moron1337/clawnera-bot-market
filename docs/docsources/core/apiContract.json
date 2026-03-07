@@ -105,6 +105,7 @@
               "reserve",
               "execute",
               "platformFundedMarketing",
+              "onboardingIotaTopup",
               "recommendedGasBudgets"
             ],
             "propertyNames": [
@@ -120,6 +121,7 @@
               "reserve",
               "execute",
               "platformFundedMarketing",
+              "onboardingIotaTopup",
               "recommendedGasBudgets"
             ]
           }
@@ -160,6 +162,7 @@
               "reserve",
               "execute",
               "platformFundedMarketing",
+              "onboardingIotaTopup",
               "recommendedGasBudgets"
             ],
             "propertyNames": [
@@ -175,6 +178,7 @@
               "reserve",
               "execute",
               "platformFundedMarketing",
+              "onboardingIotaTopup",
               "recommendedGasBudgets"
             ]
           },
@@ -301,6 +305,7 @@
               "reserve",
               "execute",
               "platformFundedMarketing",
+              "onboardingIotaTopup",
               "recommendedGasBudgets"
             ],
             "propertyNames": [
@@ -316,7 +321,147 @@
               "reserve",
               "execute",
               "platformFundedMarketing",
+              "onboardingIotaTopup",
               "recommendedGasBudgets"
+            ]
+          }
+        }
+      }
+    },
+    "/onboarding/iota-topup": {
+      "post": {
+        "path": "/onboarding/iota-topup",
+        "method": "post",
+        "operationId": "claimOnboardingIotaTopup",
+        "tags": [
+          "Sponsor"
+        ],
+        "parameters": {
+          "path": [],
+          "query": [],
+          "header": []
+        },
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/OnboardingIotaTopupResponse",
+            "schemaName": "OnboardingIotaTopupResponse",
+            "requiredFields": [
+              "funded",
+              "amount",
+              "senderAddress",
+              "maxEligibleBalance"
+            ],
+            "optionalFields": [
+              "alreadyClaimed",
+              "txDigest",
+              "completedAt",
+              "balanceBefore"
+            ],
+            "propertyNames": [
+              "funded",
+              "alreadyClaimed",
+              "amount",
+              "txDigest",
+              "senderAddress",
+              "completedAt",
+              "balanceBefore",
+              "maxEligibleBalance"
+            ]
+          },
+          "201": {
+            "status": "201",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/OnboardingIotaTopupResponse",
+            "schemaName": "OnboardingIotaTopupResponse",
+            "requiredFields": [
+              "funded",
+              "amount",
+              "senderAddress",
+              "maxEligibleBalance"
+            ],
+            "optionalFields": [
+              "alreadyClaimed",
+              "txDigest",
+              "completedAt",
+              "balanceBefore"
+            ],
+            "propertyNames": [
+              "funded",
+              "alreadyClaimed",
+              "amount",
+              "txDigest",
+              "senderAddress",
+              "completedAt",
+              "balanceBefore",
+              "maxEligibleBalance"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": "#/components/responses/Conflict",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "502": {
+            "status": "502",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
             ]
           }
         }
@@ -5627,6 +5772,7 @@
             "amount"
           ],
           "optionalFields": [
+            "paymentCoinObjectId",
             "marketingFundingCapObjectId",
             "marketingFundingCustodyProof",
             "clockObjectId"
@@ -5636,6 +5782,7 @@
             "disputeQuorumConfigObjectId",
             "side",
             "amount",
+            "paymentCoinObjectId",
             "marketingFundingCapObjectId",
             "marketingFundingCustodyProof",
             "clockObjectId"
@@ -9673,6 +9820,7 @@
             "reserve",
             "execute",
             "platformFundedMarketing",
+            "onboardingIotaTopup",
             "recommendedGasBudgets"
           ],
           "propertyNames": [
@@ -9688,6 +9836,7 @@
             "reserve",
             "execute",
             "platformFundedMarketing",
+            "onboardingIotaTopup",
             "recommendedGasBudgets"
           ]
         }
@@ -9725,6 +9874,7 @@
             "reserve",
             "execute",
             "platformFundedMarketing",
+            "onboardingIotaTopup",
             "recommendedGasBudgets"
           ],
           "propertyNames": [
@@ -9740,6 +9890,7 @@
             "reserve",
             "execute",
             "platformFundedMarketing",
+            "onboardingIotaTopup",
             "recommendedGasBudgets"
           ]
         },
@@ -9857,6 +10008,7 @@
             "reserve",
             "execute",
             "platformFundedMarketing",
+            "onboardingIotaTopup",
             "recommendedGasBudgets"
           ],
           "propertyNames": [
@@ -9872,7 +10024,144 @@
             "reserve",
             "execute",
             "platformFundedMarketing",
+            "onboardingIotaTopup",
             "recommendedGasBudgets"
+          ]
+        }
+      }
+    },
+    "claimOnboardingIotaTopup": {
+      "path": "/onboarding/iota-topup",
+      "method": "post",
+      "tags": [
+        "Sponsor"
+      ],
+      "parameters": {
+        "path": [],
+        "query": [],
+        "header": []
+      },
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/OnboardingIotaTopupResponse",
+          "schemaName": "OnboardingIotaTopupResponse",
+          "requiredFields": [
+            "funded",
+            "amount",
+            "senderAddress",
+            "maxEligibleBalance"
+          ],
+          "optionalFields": [
+            "alreadyClaimed",
+            "txDigest",
+            "completedAt",
+            "balanceBefore"
+          ],
+          "propertyNames": [
+            "funded",
+            "alreadyClaimed",
+            "amount",
+            "txDigest",
+            "senderAddress",
+            "completedAt",
+            "balanceBefore",
+            "maxEligibleBalance"
+          ]
+        },
+        "201": {
+          "status": "201",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/OnboardingIotaTopupResponse",
+          "schemaName": "OnboardingIotaTopupResponse",
+          "requiredFields": [
+            "funded",
+            "amount",
+            "senderAddress",
+            "maxEligibleBalance"
+          ],
+          "optionalFields": [
+            "alreadyClaimed",
+            "txDigest",
+            "completedAt",
+            "balanceBefore"
+          ],
+          "propertyNames": [
+            "funded",
+            "alreadyClaimed",
+            "amount",
+            "txDigest",
+            "senderAddress",
+            "completedAt",
+            "balanceBefore",
+            "maxEligibleBalance"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": "#/components/responses/Conflict",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "502": {
+          "status": "502",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
           ]
         }
       }
@@ -15035,6 +15324,7 @@
           "amount"
         ],
         "optionalFields": [
+          "paymentCoinObjectId",
           "marketingFundingCapObjectId",
           "marketingFundingCustodyProof",
           "clockObjectId"
@@ -15044,6 +15334,7 @@
           "disputeQuorumConfigObjectId",
           "side",
           "amount",
+          "paymentCoinObjectId",
           "marketingFundingCapObjectId",
           "marketingFundingCustodyProof",
           "clockObjectId"
@@ -19462,6 +19753,7 @@
         "reserve",
         "execute",
         "platformFundedMarketing",
+        "onboardingIotaTopup",
         "recommendedGasBudgets"
       ],
       "requiredFields": [],
@@ -19478,7 +19770,33 @@
         "reserve",
         "execute",
         "platformFundedMarketing",
+        "onboardingIotaTopup",
         "recommendedGasBudgets"
+      ]
+    },
+    "OnboardingIotaTopupResponse": {
+      "name": "OnboardingIotaTopupResponse",
+      "propertyNames": [
+        "funded",
+        "alreadyClaimed",
+        "amount",
+        "txDigest",
+        "senderAddress",
+        "completedAt",
+        "balanceBefore",
+        "maxEligibleBalance"
+      ],
+      "requiredFields": [
+        "funded",
+        "amount",
+        "senderAddress",
+        "maxEligibleBalance"
+      ],
+      "optionalFields": [
+        "alreadyClaimed",
+        "txDigest",
+        "completedAt",
+        "balanceBefore"
       ]
     },
     "SponsorReserveRequest": {
@@ -19912,6 +20230,7 @@
         "disputeQuorumConfigObjectId",
         "side",
         "amount",
+        "paymentCoinObjectId",
         "marketingFundingCapObjectId",
         "marketingFundingCustodyProof",
         "clockObjectId"
@@ -19923,6 +20242,7 @@
         "amount"
       ],
       "optionalFields": [
+        "paymentCoinObjectId",
         "marketingFundingCapObjectId",
         "marketingFundingCustodyProof",
         "clockObjectId"

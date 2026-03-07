@@ -293,6 +293,41 @@ paths:
                 properties:
                   policy:
                     $ref: "#/components/schemas/SponsorPolicySnapshot"
+  /onboarding/iota-topup:
+    post:
+      tags: [Sponsor]
+      operationId: claimOnboardingIotaTopup
+      responses:
+        "200":
+          description: Existing onboarding grant was already claimed for this actor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnboardingIotaTopupResponse"
+        "201":
+          description: IOTA onboarding topup submitted successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnboardingIotaTopupResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "502":
+          description: Funding transaction failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Onboarding topup unavailable or misconfigured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /policy/storage:
     get:
       tags: [Policy]
@@ -3893,6 +3928,7 @@ components:
           reserve,
           execute,
           platformFundedMarketing,
+          onboardingIotaTopup,
           recommendedGasBudgets
         ]
       properties:
@@ -3973,6 +4009,19 @@ components:
               type: boolean
             intentSignatureRequired:
               type: boolean
+        onboardingIotaTopup:
+          type: object
+          additionalProperties: false
+          required: [enabled, amount, maxEligibleBalance]
+          properties:
+            enabled:
+              type: boolean
+            amount:
+              type: string
+              pattern: "^[0-9]+$"
+            maxEligibleBalance:
+              type: string
+              pattern: "^[0-9]+$"
         recommendedGasBudgets:
           type: object
           additionalProperties: false
@@ -4010,6 +4059,31 @@ components:
               $ref: "#/components/schemas/SponsorGasEstimate"
             claw_payment:
               $ref: "#/components/schemas/SponsorGasEstimate"
+    OnboardingIotaTopupResponse:
+      type: object
+      additionalProperties: false
+      required: [funded, amount, senderAddress, maxEligibleBalance]
+      properties:
+        funded:
+          type: boolean
+        alreadyClaimed:
+          type: boolean
+        amount:
+          type: string
+          pattern: "^[0-9]+$"
+        txDigest:
+          type: string
+        senderAddress:
+          type: string
+        completedAt:
+          type: string
+          format: date-time
+        balanceBefore:
+          type: string
+          pattern: "^[0-9]+$"
+        maxEligibleBalance:
+          type: string
+          pattern: "^[0-9]+$"
     SponsorReserveRequest:
       type: object
       additionalProperties: false
@@ -4723,6 +4797,8 @@ components:
         amount:
           type: string
           pattern: "^[0-9]+$"
+        paymentCoinObjectId:
+          type: string
         marketingFundingCapObjectId:
           type: string
         marketingFundingCustodyProof:
@@ -5440,6 +5516,8 @@ components:
           dispute.finalized,
           dispute.resolved,
           mailbox.bound,
+          mailbox.signal_posted,
+          mailbox.signal_acked,
           sponsor.executed
         ]
     MarketplaceEventEntityType:

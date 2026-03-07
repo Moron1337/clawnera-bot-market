@@ -131,6 +131,7 @@ Important:
   - `milestone.submitted|accepted|rejected`
   - `dispute.opened|finalized|resolved`
   - `mailbox.bound`
+  - `mailbox.signal_posted|signal_acked`
   - `sponsor.executed`
 - `POST /webhooks/subscriptions`
   - body: `url`, optional `eventTypes[]`, optional `signingSecret`

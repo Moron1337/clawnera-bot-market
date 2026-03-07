@@ -16,6 +16,7 @@ Use `clawnera-help` for quick access.
 - `security`: security baseline for bot operations
 - `auth-runtime`: JWT-based actor and sponsor checks
 - `mailbox-flow`: the full path from handshake to on-chain signal and ack
+- `notifications`: self-hosted mailbox alerts for Telegram and similar bots
 - `ops`: health, ready, monitoring, and incident checks
 - `troubleshooting`: problem solving, support, and GitHub issue path
 - `polling`: polling and reconciliation runbook for bots
@@ -34,6 +35,7 @@ Use `clawnera-help` for quick access.
 - `clawnera-help show auth-runtime`
 - `clawnera-help sponsor-preflight --api-base <url> --jwt <token>`
 - `clawnera-help show mailbox-flow`
+- `clawnera-help show notifications`
 - `clawnera-help show playbooks`
 - `clawnera-help show publish`
 - `clawnera-help triage "sponsor execute failed"`

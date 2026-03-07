@@ -230,6 +230,8 @@ Feed:
   - `milestone.submitted|accepted|rejected`
   - `dispute.opened|finalized|resolved`
   - `mailbox.bound`
+  - `mailbox.signal_posted`
+  - `mailbox.signal_acked`
   - `sponsor.executed`
 
 Webhooks:

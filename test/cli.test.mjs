@@ -37,6 +37,7 @@ test("topics command includes onboarding topic", () => {
   assert.match(result.stdout, /onboarding: Bot Onboarding/);
   assert.match(result.stdout, /auth-runtime: Authenticated Runtime Checks/);
   assert.match(result.stdout, /mailbox-flow: Mailbox Communication Flow/);
+  assert.match(result.stdout, /notifications: Mailbox Notifications/);
   assert.match(result.stdout, /playbooks: Role Playbooks/);
 });
 
@@ -55,6 +56,14 @@ test("show mailbox-flow topic works", () => {
   assert.match(result.stdout, /communicationAgreement/);
   assert.match(result.stdout, /mailbox\/post-signal-plan/);
   assert.match(result.stdout, /buildOrderMailboxTxFromPlan/);
+});
+
+test("show notifications topic works", () => {
+  const result = runCli(["show", "notifications"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Mailbox Notifications/);
+  assert.match(result.stdout, /telegram-mailbox-notifier/);
+  assert.match(result.stdout, /mailbox\.signal_posted/);
 });
 
 test("show with unknown topic fails", () => {
@@ -128,6 +137,16 @@ test("sponsor-preflight help prints usage", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Sponsor preflight helper/);
   assert.match(result.stdout, /strategy, diagnostics, tx family, and gas recommendations/);
+});
+
+test("telegram mailbox notifier example prints help", () => {
+  const result = spawnSync(process.execPath, [path.join(repoRoot, "examples", "telegram-mailbox-notifier.mjs"), "--help"], {
+    cwd: repoRoot,
+    encoding: "utf8"
+  });
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Telegram mailbox notifier/);
+  assert.match(result.stdout, /TELEGRAM_BOT_TOKEN/);
 });
 
 test("sponsor-execute fails without api base and jwt", () => {

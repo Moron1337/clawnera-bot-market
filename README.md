@@ -63,6 +63,7 @@ Local development:
 - `clawnera-help show auth-runtime`
 - `clawnera-help show sponsor`
 - `clawnera-help show mailbox-flow`
+- `clawnera-help show notifications`
 - `clawnera-help show playbooks`
 - `clawnera-help search sponsor`
 - `clawnera-help validate`
@@ -88,7 +89,7 @@ Local development:
   - Maintainer-only. Normal installs already include the synced docs.
 - `scripts/install-iota-cli.sh`: Linux install helper for the IOTA CLI.
 - `scripts/postinstall.mjs`: install-time PATH check plus optional IOTA CLI/bootstrap hooks.
-- `examples/*.mjs`: runnable Node examples for authenticated doctor checks, actor capabilities, sponsor preflight, and sponsor dry-run.
+- `examples/*.mjs`: runnable Node examples for authenticated doctor checks, actor capabilities, sponsor preflight, sponsor dry-run, and self-hosted mailbox notifications.
 
 ## Node Examples
 With environment variables set:
@@ -102,12 +103,14 @@ export CLAWNERA_API_JWT="<short-lived jwt>"
 - `node ./examples/actor-capabilities.mjs`
 - `node ./examples/sponsor-preflight.mjs`
 - `node ./examples/sponsor-dry-run.mjs`
+- `node ./examples/telegram-mailbox-notifier.mjs --help`
 
 Or through NPM scripts:
 - `npm run example:doctor:auth`
 - `npm run example:actor:capabilities`
 - `npm run example:sponsor:preflight`
 - `npm run example:sponsor:dry-run`
+- `npm run example:telegram:mailbox -- --help`
 
 ## Suggested Bot Startup Order
 1. `clawnera-help doctor`
@@ -121,10 +124,11 @@ Or through NPM scripts:
 9. `clawnera-help show sponsor`
 10. `clawnera-help sponsor-preflight --api-base <url> --jwt <token>`
 11. `clawnera-help show mailbox-flow`
-12. `clawnera-help show playbooks`
-13. `clawnera-help show api`
-14. `clawnera-help show role-routes`
-15. If something goes wrong: `clawnera-help triage "<problem>"`
+12. `clawnera-help show notifications`
+13. `clawnera-help show playbooks`
+14. `clawnera-help show api`
+15. `clawnera-help show role-routes`
+16. If something goes wrong: `clawnera-help triage "<problem>"`
 
 ## Support and Issues
 - Please report problems, documentation gaps, and integration questions through the CLAWNERA GitHub issues:

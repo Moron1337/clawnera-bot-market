@@ -39,6 +39,8 @@
 - `dispute.finalized`
 - `dispute.resolved`
 - `mailbox.bound`
+- `mailbox.signal_posted`
+- `mailbox.signal_acked`
 - `sponsor.executed`
 
 ## Empfohlener Replay-Ablauf
@@ -94,3 +96,10 @@
 2. Optional Webhook anlegen.
 3. Jede Zustandsaenderung aus Events ableiten.
 4. Polling nur fuer Backstop und gezielte Read-after-write-Pruefung behalten.
+
+## Human Notifications
+- Fuer Menschen ist `mailbox.signal_posted` der relevante Trigger.
+- Dafuer ist ein selbst gehosteter Notifier einfacher als eine gehostete Bridge.
+- Setup:
+  - `clawnera-help show notifications`
+  - `node ./examples/telegram-mailbox-notifier.mjs --help`

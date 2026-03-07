@@ -79,6 +79,12 @@
       "aliases": ["mailbox", "signals", "handshake", "communication-flow"]
     },
     {
+      "id": "notifications",
+      "title": "Mailbox Notifications",
+      "file": "docs/guides/MAILBOX_NOTIFICATIONS.md",
+      "aliases": ["telegram", "notify", "mailbox-notifier", "alerts"]
+    },
+    {
       "id": "ops",
       "title": "Operational Checks",
       "file": "docs/guides/OPERATIONS_CHECKS.md",

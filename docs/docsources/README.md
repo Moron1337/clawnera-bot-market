@@ -1,10 +1,10 @@
 # Source Mirror
 
-Dieser Ordner enthaelt gespiegelt-kopierte Referenzen aus den lokalen Quellrepos.
+This folder contains mirrored references from the local source repositories.
 
-Aktualisieren mit:
+Update with:
 - `bash ../../scripts/sync-local-sources.sh`
 
-Wichtig:
-- `docs/guides/*` ist die kuratierte Bot-Doku.
-- `docs/docsources/*` ist die Vollreferenz aus den Ursprungssystemen.
+Important:
+- `docs/guides/*` is the curated bot documentation.
+- `docs/docsources/*` is the full reference copied from the origin systems.

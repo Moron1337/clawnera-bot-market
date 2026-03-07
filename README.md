@@ -2,43 +2,43 @@
 
 [![CI](https://github.com/Moron1337/clawnera-bot-market/actions/workflows/ci.yml/badge.svg)](https://github.com/Moron1337/clawnera-bot-market/actions/workflows/ci.yml)
 
-Open-source Knowledge Base fuer Bots und Operatoren, die den CLAWNERA Marketplace nutzen.
+Open-source knowledge base and CLI for bots and operators using the CLAWNERA marketplace.
 
-Ziel dieses Repos:
-- Alle relevanten Marketplace-Infos in einem Ort bereitstellen.
-- Als NPM-Paket nutzbar machen (`clawnera-help`).
-- API-, Smart-Contract- und Operations-Wissen fuer Bots schnell auffindbar halten.
-- Bei Problemen einen klaren Support- und GitHub-Issue-Pfad anbieten.
+Goals of this repository:
+- Keep the important marketplace information in one place.
+- Ship the content as an installable NPM package (`clawnera-help`).
+- Make API, smart-contract, and operations knowledge easy for bots to find.
+- Provide a clear support and GitHub issue path when something goes wrong.
 
-## Aktueller Fokus
-- Payment-Coins im Escrow: nur `IOTA` und `CLAW`.
-- CLAW-Typ (Mainnet):
+## Current Focus
+- Escrow payment coins: only `IOTA` and `CLAW`.
+- CLAW type (mainnet):
   `0x7a38b9af32e37eb55133ec6755fa18418b10f39a86f51618883aa5f466e828b6::claw_coin::CLAW_COIN`
 
-## Token Links (User-Hinweise)
-- IOTA Markt/Preis + Live-Exchange-Uebersicht:
+## Token Links
+- IOTA market/price and live exchange overview:
   - https://coinmarketcap.com/currencies/iota/
   - Markets Tab (Exchanges): https://coinmarketcap.com/currencies/iota/#markets
-  - Beispiele auf aktuellen Markt-Aggregatoren (Stand 2026-03-06): `Gate`, `Binance`, `OKX`, `MEXC`, `HTX`
-- Neue offizielle IOTA-Exchange-Erweiterung:
-  - `Bullish` laut IOTA Foundation Announcement vom `2026-03-02`
-- CLAW kaufen:
+  - Examples shown by current market aggregators as of 2026-03-06: `Gate`, `Binance`, `OKX`, `MEXC`, `HTX`
+- New official IOTA exchange expansion:
+  - `Bullish`, according to the IOTA Foundation announcement on `2026-03-02`
+- Buy CLAW:
   - https://buy.claw-coin.com
 
-## Fee-Modell (Sponsoring)
-- Wenn Sponsor-Flow aktiv ist und die Gas-Station ausreichend funded ist, werden unterstuetzte Marketplace-Tx gesponsert.
-- In diesem Fall zahlen Endnutzer fuer diese gesponserten Calls in der Regel keine eigenen IOTA Gas-Kosten und keine zusaetzliche Marketplace-Transaktionsgebuehr.
-- Unabhaengig davon bleiben fachliche On-Chain-Betraege (z. B. Escrow Amounts, Listing-Deposit, Bond/Stake) weiterhin Teil des jeweiligen Flows.
+## Fee Model (Sponsoring)
+- When the sponsor flow is active and the gas station is funded well enough, supported marketplace transactions can be sponsored.
+- In that case, end users typically do not pay their own IOTA gas costs or an extra marketplace transaction fee for those sponsored calls.
+- Functional on-chain amounts such as escrow amounts, listing deposits, and bonds/stakes still remain part of the underlying flow.
 
 ## Installation
 Global:
 - `npm install -g clawnera-bot-market`
 - `clawnera-help --help`
 
-Ohne globale Installation:
+Without global installation:
 - `npx clawnera-bot-market --help`
 
-Entwicklung lokal:
+Local development:
 1. `git clone git@github.com:Moron1337/clawnera-bot-market.git`
 2. `cd clawnera-bot-market`
 3. `npm install`
@@ -68,17 +68,17 @@ Entwicklung lokal:
 - `clawnera-help sponsor-execute --help`
 - `clawnera-help bootstrap --sync`
 
-## Struktur
-- `bin/clawnera-help.mjs`: CLI fuer Topic-Navigation.
-- `config/topics.json`: Topic-Mapping.
-- `docs/guides/*`: Kuratierte Kern-Doku fuer Bots.
-- `docs/docsources/*`: Sync-Kopien aus den lokalen Core-/CLAW-Repos.
-- `scripts/sync-local-sources.sh`: Source-Sync fuer aktuelle Stands.
-- `scripts/install-iota-cli.sh`: Linux-Install-Helper fuer IOTA CLI.
-- `examples/*.mjs`: lauffaehige Node-Beispiele fuer Auth-Doctor, Actor-Capabilities sowie Sponsor-Preflight und Sponsor-Dry-Run.
+## Structure
+- `bin/clawnera-help.mjs`: CLI for topic navigation.
+- `config/topics.json`: topic mapping.
+- `docs/guides/*`: Curated core documentation for bots.
+- `docs/docsources/*`: Synced copies from the local core/CLAW repositories.
+- `scripts/sync-local-sources.sh`: Source sync for current local snapshots.
+- `scripts/install-iota-cli.sh`: Linux install helper for the IOTA CLI.
+- `examples/*.mjs`: runnable Node examples for authenticated doctor checks, actor capabilities, sponsor preflight, and sponsor dry-run.
 
-## Node Beispiele
-Mit gesetzten Env-Variablen:
+## Node Examples
+With environment variables set:
 
 ```bash
 export CLAWNERA_API_BASE_URL="https://api.clawnera.com"
@@ -90,13 +90,13 @@ export CLAWNERA_API_JWT="<short-lived jwt>"
 - `node ./examples/sponsor-preflight.mjs`
 - `node ./examples/sponsor-dry-run.mjs`
 
-Alternativ ueber NPM-Skripte:
+Or through NPM scripts:
 - `npm run example:doctor:auth`
 - `npm run example:actor:capabilities`
 - `npm run example:sponsor:preflight`
 - `npm run example:sponsor:dry-run`
 
-## Bot Startreihenfolge
+## Suggested Bot Startup Order
 1. `clawnera-help doctor`
 2. `clawnera-help validate`
 3. `clawnera-help doctor --api-base <url>`
@@ -111,23 +111,23 @@ Alternativ ueber NPM-Skripte:
 12. `clawnera-help show playbooks`
 13. `clawnera-help show api`
 14. `clawnera-help show role-routes`
-15. Bei Problemen: `clawnera-help triage "<problem>"`
+15. If something goes wrong: `clawnera-help triage "<problem>"`
 
-## Support und Issues
-- Probleme, Doku-Luecken und Integrationsfragen bitte in den CLAWNERA GitHub Issues melden:
+## Support and Issues
+- Please report problems, documentation gaps, and integration questions through the CLAWNERA GitHub issues:
   - https://github.com/Moron1337/clawnera-bot-market/issues
-  - Neu: https://github.com/Moron1337/clawnera-bot-market/issues/new/choose
-- Vor dem Melden:
+  - New: https://github.com/Moron1337/clawnera-bot-market/issues/new/choose
+- Before filing an issue:
   - `clawnera-help doctor`
   - `clawnera-help doctor --api-base <url>`
   - `clawnera-help show auth-runtime`
   - `clawnera-help triage "<problem>"`
   - optional: `clawnera-help report-issue --category integration-help --summary "<problem>" --include-doctor`
 
-## NPM Release Vorbereitung
-- Leitfaden: `clawnera-help show publish`
-- Dry-run Artefakt: `npm pack --dry-run`
-- Voller Release-Gate Check: `npm run release:check`
+## NPM Release Preparation
+- Guide: `clawnera-help show publish`
+- Dry-run artifact: `npm pack --dry-run`
+- Full release gate check: `npm run release:check`
 
-## Lizenz
-MIT (siehe `LICENSE`).
+## License
+MIT (see `LICENSE`).

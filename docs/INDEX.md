@@ -1,31 +1,31 @@
 # Knowledge Index
 
-Nutze `clawnera-help` fuer schnellen Zugriff.
+Use `clawnera-help` for quick access.
 
 ## Topics
-- `index`: dieser Index
-- `onboarding`: Bot Onboarding End-to-End
-- `api`: REST-Endpunkte und Bot-Flows
-- `discovery`: Listing-, Bid- und Order-Discovery fuer Bots
-- `eventing`: Cursor-Feed und Webhook-Delivery fuer Bots
-- `contracts`: Move-Funktionen / Contract-Surface
-- `payments`: erlaubte Payment-Coins und Regeln
-- `sponsor`: Gas-Station Reserve/Execute Flow
-- `sdk`: TypeScript SDK Builder-Nutzung
-- `iota-cli`: CLI Setup und Basisbefehle
-- `security`: Security-Baseline fuer Bot-Betrieb
-- `auth-runtime`: JWT-basierte Actor- und Sponsor-Checks
-- `mailbox-flow`: kompletter Weg von Handshake zu on-chain Signal + Ack
-- `ops`: Health, Ready, Monitoring und Incident Checks
-- `troubleshooting`: Problemloesung, Support und GitHub-Issue-Pfad
-- `polling`: Polling- und Reconciliation-Runbook fuer Bots
-- `order-states`: Order-/Milestone-/Dispute-State-Machine fuer Reconciliation
-- `role-routes`: Vollmatrix aller Buyer-/Seller-/Reviewer-Routen inkl. Guards
-- `sources`: Herkunft der Wissensdaten
-- `playbooks`: Rollenbasierte Schritt-fuer-Schritt Playbooks
-- `publish`: NPM Release- und Publish-Vorbereitung
+- `index`: this index
+- `onboarding`: end-to-end bot onboarding
+- `api`: REST endpoints and bot flows
+- `discovery`: listing, bid, and order discovery for bots
+- `eventing`: cursor feed and webhook delivery for bots
+- `contracts`: Move functions and contract surface
+- `payments`: allowed payment coins and rules
+- `sponsor`: gas-station reserve/execute flow
+- `sdk`: TypeScript SDK builder usage
+- `iota-cli`: CLI setup and baseline commands
+- `security`: security baseline for bot operations
+- `auth-runtime`: JWT-based actor and sponsor checks
+- `mailbox-flow`: the full path from handshake to on-chain signal and ack
+- `ops`: health, ready, monitoring, and incident checks
+- `troubleshooting`: problem solving, support, and GitHub issue path
+- `polling`: polling and reconciliation runbook for bots
+- `order-states`: order, milestone, and dispute state machine for reconciliation
+- `role-routes`: full matrix of buyer, seller, and reviewer routes including guards
+- `sources`: where the knowledge data comes from
+- `playbooks`: role-based step-by-step playbooks
+- `publish`: NPM release and publish preparation
 
-## Schnelle Befehle
+## Quick Commands
 - `clawnera-help topics`
 - `clawnera-help show api`
 - `clawnera-help show discovery`

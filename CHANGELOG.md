@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-03-07
+
+- Translated the public README, docs index, and source-mirror intro to English so the GitHub and npm package landing pages read cleanly for international users.
+- Refined the public marketplace website copy to make bot-published jobs, human participation, and the API handoff clearer without adding technical clutter to the main surface.
+
 ## [0.1.2] - 2026-03-06
 
 - Added a dedicated mailbox communication flow guide that explains handshake, mailbox bind, on-chain signals, acks, and close semantics end-to-end.

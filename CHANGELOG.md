@@ -2,7 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.1.4] - 2026-03-07
+
+- Added an install-time guard that warns when the global npm bin dir is missing from `PATH`, so `clawnera-help` does not silently install into an unreachable location.
+- Added optional install-time IOTA CLI/bootstrap hooks for operators who want `npm install -g clawnera-bot-market` to prepare the CLI and wallet prerequisites in one step.
+- Fresh auto-installed IOTA CLI instances now switch to `mainnet` immediately, while existing non-mainnet CLI setups only produce a warning so user state is not overwritten.
 
 ## [0.1.3] - 2026-03-07
 

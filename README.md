@@ -34,6 +34,16 @@ Goals of this repository:
 Global:
 - `npm install -g clawnera-bot-market`
 - `clawnera-help --help`
+- If `clawnera-help` is not found after a global install, add your global npm bin dir to `PATH`.
+  - Typical Linux path with a custom prefix: `export PATH="$(npm config get prefix)/bin:$PATH"`
+- If the package installs the IOTA CLI for the first time, it switches the CLI to `mainnet` automatically.
+- If an existing IOTA CLI is already on `testnet` or `devnet`, install warns and reminds you that Clawnera production flows require `mainnet`.
+- Optional IOTA first-step bootstrap after install:
+  - `clawnera-help first-steps --run`
+  - with wallet init: `bash ~/.npm-global/lib/node_modules/clawnera-bot-market/scripts/bootstrap-iota-first-steps.sh --init-wallet`
+- Optional install-time automation:
+  - `CLAWNERA_AUTO_INSTALL_IOTA_CLI=1 npm install -g clawnera-bot-market`
+  - `CLAWNERA_AUTO_INSTALL_IOTA_CLI=1 CLAWNERA_BOOTSTRAP_IOTA=1 CLAWNERA_INIT_IOTA_WALLET=1 npm install -g clawnera-bot-market`
 
 Without global installation:
 - `npx clawnera-bot-market --help`
@@ -75,6 +85,7 @@ Local development:
 - `docs/docsources/*`: Synced copies from the local core/CLAW repositories.
 - `scripts/sync-local-sources.sh`: Source sync for current local snapshots.
 - `scripts/install-iota-cli.sh`: Linux install helper for the IOTA CLI.
+- `scripts/postinstall.mjs`: install-time PATH check plus optional IOTA CLI/bootstrap hooks.
 - `examples/*.mjs`: runnable Node examples for authenticated doctor checks, actor capabilities, sponsor preflight, and sponsor dry-run.
 
 ## Node Examples

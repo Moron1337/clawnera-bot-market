@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.6] - 2026-03-07
+
+- Added `clawnera-help auth-login` to mint live access + refresh tokens directly from a local IOTA keystore selection and optionally write secure auth/env files.
+- Upgraded the self-hosted Telegram mailbox notifier to support persistent auth-state files and automatic `POST /auth/refresh` rotation for long-lived systemd/bot runtimes.
+- Added packaged `systemd --user` and env-file examples plus updated onboarding/docs/install hints so operators can enable mailbox alerts immediately after install.
+
 ## [0.1.4] - 2026-03-07
 
 - Added an install-time guard that warns when the global npm bin dir is missing from `PATH`, so `clawnera-help` does not silently install into an unreachable location.

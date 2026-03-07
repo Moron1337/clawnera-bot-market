@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 import fs from "node:fs/promises";
 import path from "node:path";
+import {
+  loadAuthState,
+  refreshAuthState,
+  saveAuthState,
+  tokenExpiresSoon
+} from "../lib/runtime-auth.mjs";
 
 const HELP_TEXT = `Telegram mailbox notifier
 
@@ -8,15 +14,21 @@ Polls actor-visible Clawnera mailbox events and forwards new mailbox messages to
 
 Required env:
 - CLAWNERA_API_BASE_URL
-- CLAWNERA_API_JWT
 - TELEGRAM_BOT_TOKEN
 - TELEGRAM_CHAT_ID
 
+Auth env:
+- Either CLAWNERA_API_JWT
+- Or CLAWNERA_AUTH_STATE_FILE
+- Optional: CLAWNERA_API_REFRESH_TOKEN
+
 Optional env:
+- CLAWNERA_AUTH_STATE_FILE       JSON auth state written by clawnera-help auth-login --state-out
 - CLAWNERA_NOTIFY_CURSOR_FILE   default: ./.clawnera-mailbox-notifier.cursor.json
 - CLAWNERA_NOTIFY_POLL_MS       default: 15000
 - CLAWNERA_NOTIFY_BATCH_LIMIT   default: 50
 - CLAWNERA_NOTIFY_TIMEOUT_MS    default: 10000
+- CLAWNERA_NOTIFY_REFRESH_SKEW_MS default: 60000
 - CLAWNERA_NOTIFY_ONCE          set 1 for a single poll cycle
 
 Usage:
@@ -43,6 +55,11 @@ function parsePositiveIntEnv(name, fallback) {
     throw new Error(`invalid_env_${name}`);
   }
   return parsed;
+}
+
+function readOptionalEnv(name) {
+  const value = process.env[name]?.trim();
+  return value || "";
 }
 
 function buildCursor(event) {
@@ -120,6 +137,109 @@ async function fetchMailboxEvents({ apiBase, jwt, cursor, batchLimit, timeoutMs 
   return Array.isArray(payload.items) ? payload.items : [];
 }
 
+async function loadNotifierAuthState({ apiBase, authStateFile }) {
+  if (authStateFile) {
+    const state = await loadAuthState(authStateFile);
+    return {
+      ...state,
+      apiBase: state.apiBase || apiBase
+    };
+  }
+
+  return {
+    apiBase,
+    token: readOptionalEnv("CLAWNERA_API_JWT"),
+    refreshToken: readOptionalEnv("CLAWNERA_API_REFRESH_TOKEN")
+  };
+}
+
+async function ensureFreshToken({ authState, authStateFile, timeoutMs, refreshSkewMs }) {
+  if (!authState?.token) {
+    if (!authState?.refreshToken) {
+      throw new Error("missing_auth_token");
+    }
+    const refreshed = await refreshAuthState({
+      apiBase: authState.apiBase,
+      authState,
+      timeoutMs
+    });
+    if (authStateFile) {
+      await saveAuthState(authStateFile, refreshed);
+    }
+    return refreshed;
+  }
+
+  if (!authState.refreshToken || !tokenExpiresSoon(authState.token, refreshSkewMs)) {
+    return authState;
+  }
+
+  const refreshed = await refreshAuthState({
+    apiBase: authState.apiBase,
+    authState,
+    timeoutMs
+  });
+  if (authStateFile) {
+    await saveAuthState(authStateFile, refreshed);
+  }
+  return refreshed;
+}
+
+async function fetchMailboxEventsWithRefresh({
+  authState,
+  authStateFile,
+  cursor,
+  batchLimit,
+  timeoutMs,
+  refreshSkewMs
+}) {
+  let activeState = await ensureFreshToken({
+    authState,
+    authStateFile,
+    timeoutMs,
+    refreshSkewMs
+  });
+
+  try {
+    const items = await fetchMailboxEvents({
+      apiBase: activeState.apiBase,
+      jwt: activeState.token,
+      cursor,
+      batchLimit,
+      timeoutMs
+    });
+    return {
+      authState: activeState,
+      items
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.startsWith("event_feed_http_401") || !activeState.refreshToken) {
+      throw error;
+    }
+
+    activeState = await refreshAuthState({
+      apiBase: activeState.apiBase,
+      authState: activeState,
+      timeoutMs
+    });
+    if (authStateFile) {
+      await saveAuthState(authStateFile, activeState);
+    }
+
+    const items = await fetchMailboxEvents({
+      apiBase: activeState.apiBase,
+      jwt: activeState.token,
+      cursor,
+      batchLimit,
+      timeoutMs
+    });
+    return {
+      authState: activeState,
+      items
+    };
+  }
+}
+
 async function sendTelegramMessage({ botToken, chatId, text, timeoutMs }) {
   const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",
@@ -147,25 +267,33 @@ async function run() {
 
   const once = process.argv.includes("--once") || process.env.CLAWNERA_NOTIFY_ONCE === "1";
   const apiBase = readRequiredEnv("CLAWNERA_API_BASE_URL");
-  const jwt = readRequiredEnv("CLAWNERA_API_JWT");
+  const authStateFile = readOptionalEnv("CLAWNERA_AUTH_STATE_FILE");
   const botToken = readRequiredEnv("TELEGRAM_BOT_TOKEN");
   const chatId = readRequiredEnv("TELEGRAM_CHAT_ID");
   const cursorFile = path.resolve(process.env.CLAWNERA_NOTIFY_CURSOR_FILE?.trim() || defaultCursorFile());
   const pollMs = parsePositiveIntEnv("CLAWNERA_NOTIFY_POLL_MS", 15_000);
   const batchLimit = parsePositiveIntEnv("CLAWNERA_NOTIFY_BATCH_LIMIT", 50);
   const timeoutMs = parsePositiveIntEnv("CLAWNERA_NOTIFY_TIMEOUT_MS", 10_000);
+  const refreshSkewMs = parsePositiveIntEnv("CLAWNERA_NOTIFY_REFRESH_SKEW_MS", 60_000);
 
   const state = await loadState(cursorFile);
+  let authState = await loadNotifierAuthState({
+    apiBase,
+    authStateFile
+  });
 
   for (;;) {
     try {
-      const items = await fetchMailboxEvents({
-        apiBase,
-        jwt,
+      const mailboxRead = await fetchMailboxEventsWithRefresh({
+        authState,
+        authStateFile,
         cursor: state.cursor,
         batchLimit,
-        timeoutMs
+        timeoutMs,
+        refreshSkewMs
       });
+      authState = mailboxRead.authState;
+      const items = mailboxRead.items;
 
       for (const event of items) {
         await sendTelegramMessage({
@@ -179,7 +307,18 @@ async function run() {
       }
 
       if (once) {
-        console.log(JSON.stringify({ ok: true, fetched: items.length, cursor: state.cursor ?? null }, null, 2));
+        console.log(
+          JSON.stringify(
+            {
+              ok: true,
+              fetched: items.length,
+              cursor: state.cursor ?? null,
+              address: authState.address || null
+            },
+            null,
+            2
+          )
+        );
         return;
       }
     } catch (error) {

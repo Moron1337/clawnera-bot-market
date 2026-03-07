@@ -1,6 +1,6 @@
 {
   "name": "clawnera-bot-market",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Bot knowledge base and CLI for CLAWNERA marketplace operations",
   "type": "module",
   "private": false,
@@ -26,6 +26,7 @@
     "config",
     "docs",
     "examples",
+    "lib",
     "scripts",
     "CHANGELOG.md",
     "LICENSE",
@@ -57,12 +58,15 @@
     "validate:strict": "node ./bin/clawnera-help.mjs validate --strict",
     "search": "node ./bin/clawnera-help.mjs search sponsor",
     "test": "node --test ./test/*.test.mjs",
-    "lint": "node --check ./bin/clawnera-help.mjs ./examples/*.mjs ./test/*.test.mjs",
+    "lint": "node --check ./bin/clawnera-help.mjs ./examples/*.mjs ./lib/*.mjs ./test/*.test.mjs",
     "pack:dry-run": "npm pack --dry-run",
     "release:check": "npm run lint && npm run test && npm run validate:strict && npm run pack:dry-run",
     "prepack": "npm run lint && npm run test && npm run validate:strict",
     "sync:local": "bash ./scripts/sync-local-sources.sh",
     "bootstrap": "bash ./scripts/bootstrap.sh"
+  },
+  "dependencies": {
+    "@iota/iota-sdk": "1.10.1"
   },
   "engines": {
     "node": ">=20"

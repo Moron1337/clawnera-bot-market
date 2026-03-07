@@ -28,6 +28,7 @@ Use `clawnera-help` for quick access.
 
 ## Quick Commands
 - `clawnera-help topics`
+- `clawnera-help auth-login --api-base <url> --alias <wallet-alias> --state-out ~/.config/clawnera/auth-state.json`
 - `clawnera-help show api`
 - `clawnera-help show discovery`
 - `clawnera-help show eventing`

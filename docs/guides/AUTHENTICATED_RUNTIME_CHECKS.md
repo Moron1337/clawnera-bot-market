@@ -9,13 +9,23 @@ Dieser Guide ist der kanonische Copy-Paste-Pfad fuer Bots oder Operatoren, die n
   - `https://clawdex-api.specdrops.workers.dev`
 - `CLAWNERA_API_JWT` stammt aus dem echten `POST /auth/challenge` -> Wallet-Signatur -> `POST /auth/verify` Flow.
 - `POST /auth/verify` liefert jetzt auch `refreshToken` und `session`.
+- Der direkte CLI-Weg fuer produktive Bots ist `clawnera-help auth-login`.
 - JWTs gehoeren nicht ins Repo, nicht in Screenshots und nicht in GitHub Issues.
 
 Empfohlener Shell-Setup:
 
 ```bash
-export CLAWNERA_API_BASE_URL="https://api.clawnera.com"
-export CLAWNERA_API_JWT="<paste short-lived jwt here>"
+clawnera-help auth-login \
+  --api-base "https://api.clawnera.com" \
+  --alias "<wallet-alias>" \
+  --state-out "$HOME/.config/clawnera/auth-state.json" \
+  --env-out "$HOME/.config/clawnera/auth.env"
+```
+
+Dann entweder direkt source'n:
+
+```bash
+source "$HOME/.config/clawnera/auth.env"
 ```
 
 Direkt nutzbare Node-Beispiele:
@@ -65,6 +75,10 @@ Worauf du achten solltest:
 - sponsor policy/capabilities vor Marketing- oder Platform-funded Flows
 
 ## 3b) Session-Readback und Refresh
+
+Wenn du den CLI-Weg benutzt:
+- `clawnera-help auth-login ... --state-out ...` schreibt ein Auth-State-File mit Access- und Refresh-Token.
+- Langlaufende Hilfen wie `telegram-mailbox-notifier.mjs` koennen dieses File direkt lesen und Tokens selbst rotieren.
 
 Session-Zustand direkt lesen:
 

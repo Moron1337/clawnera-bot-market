@@ -26,9 +26,18 @@ test("help command prints usage", () => {
   const result = runCli(["--help"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /CLAWNERA Bot Market CLI/);
+  assert.match(result.stdout, /clawnera-help auth-login/);
   assert.match(result.stdout, /clawnera-help validate/);
   assert.match(result.stdout, /clawnera-help triage/);
   assert.match(result.stdout, /clawnera-help report-issue/);
+});
+
+test("help json output includes auth-login command", () => {
+  const result = runCli(["--help", "--json"]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.ok(Array.isArray(payload.commands));
+  assert.ok(payload.commands.includes("auth-login"));
 });
 
 test("topics command includes onboarding topic", () => {
@@ -125,6 +134,14 @@ test("first-steps command prints instructions by default", () => {
   assert.match(result.stdout, /bootstrap-iota-first-steps\.sh/);
 });
 
+test("auth-login help prints usage", () => {
+  const result = runCli(["auth-login", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Auth login helper/);
+  assert.match(result.stdout, /--state-out/);
+  assert.match(result.stdout, /auto-refresh sessions/);
+});
+
 test("sponsor-execute help prints usage", () => {
   const result = runCli(["sponsor-execute", "--help"]);
   assert.equal(result.status, 0);
@@ -146,6 +163,7 @@ test("telegram mailbox notifier example prints help", () => {
   });
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Telegram mailbox notifier/);
+  assert.match(result.stdout, /CLAWNERA_AUTH_STATE_FILE/);
   assert.match(result.stdout, /TELEGRAM_BOT_TOKEN/);
 });
 

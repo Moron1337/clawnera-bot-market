@@ -4,6 +4,14 @@ import path from "node:path";
 import { execSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import {
+  buildAuthEnvText,
+  defaultIotaKeystorePath,
+  loadKeystoreEntries,
+  resolveKeystoreEntry,
+  saveAuthState,
+  signInWithKeystoreEntry
+} from "../lib/runtime-auth.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,6 +51,7 @@ const TRIAGE_RULES = Object.freeze([
     keywords: ["auth", "jwt", "token", "challenge", "verify", "401", "403"],
     topics: ["onboarding", "api", "security"],
     commands: [
+      "clawnera-help auth-login --api-base <url> --alias <wallet-alias>",
       "clawnera-help show onboarding",
       "clawnera-help show api",
       "clawnera-help doctor --api-base <url> --jwt <token>"
@@ -148,6 +157,7 @@ function printUsage() {
   console.log("  clawnera-help triage <problem>            Suggest docs, commands, and escalation path");
   console.log("  clawnera-help report-issue [options]      Generate a structured GitHub issue scaffold");
   console.log("  clawnera-help path                        Print repository path");
+  console.log("  clawnera-help auth-login [options]        Create JWT + refresh token from local IOTA keystore");
   console.log("  clawnera-help first-steps [--run]         Show or run IOTA first-step bootstrap");
   console.log("  clawnera-help sponsor-preflight [options] Read sponsor policy/strategy/diagnostics");
   console.log("  clawnera-help sponsor-execute [options]   Reserve->sign->execute sponsor helper");
@@ -780,6 +790,194 @@ function sponsorExecuteUsageLines() {
     "- Build command must output JSON with fields: txBytesB64, userSig",
     "- For sponsored IOTA value tx: use user payment coin object for business amount; sponsor coins are gas-only."
   ];
+}
+
+function authLoginUsageLines() {
+  return [
+    "Auth login helper:",
+    "- Required: --api-base <url>",
+    "- Optional selector: --alias <wallet-alias> or --address <wallet-address>",
+    `- Default keystore path: ${defaultIotaKeystorePath()}`,
+    "- If no selector is given, the active IOTA CLI address is used",
+    "- Optional outputs: --state-out <file> --env-out <file>",
+    "- Writes short-lived access token plus refresh token for long-lived runtimes",
+    "- Use --state-out for mailbox notifiers or bots that should auto-refresh sessions"
+  ];
+}
+
+function shellQuote(value) {
+  return `'${String(value ?? "").replace(/'/g, `'\"'\"'`)}'`;
+}
+
+function parseCliJsonStdout(rawValue) {
+  const trimmed = String(rawValue || "").trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+}
+
+function detectActiveAddressViaCli(iotaCliPath, timeoutMs) {
+  const result = spawnSync(iotaCliPath, ["client", "active-address", "--json"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: timeoutMs
+  });
+
+  if (result.error) {
+    return {
+      ok: false,
+      error: result.error instanceof Error ? result.error.message : "iota_cli_spawn_failed"
+    };
+  }
+
+  if (result.status !== 0) {
+    return {
+      ok: false,
+      error: `iota_cli_active_address_failed_exit_${result.status ?? "unknown"}`
+    };
+  }
+
+  const parsed = parseCliJsonStdout(result.stdout);
+  if (typeof parsed === "string" && parsed.trim()) {
+    return {
+      ok: true,
+      address: parsed.trim()
+    };
+  }
+
+  const plain = String(result.stdout || "").trim().replace(/^"+|"+$/g, "");
+  if (plain) {
+    return {
+      ok: true,
+      address: plain
+    };
+  }
+
+  return {
+    ok: false,
+    error: "iota_cli_active_address_invalid"
+  };
+}
+
+async function runAuthLogin(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: authLoginUsageLines()
+    };
+  }
+
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals
+    };
+  }
+
+  const apiBase = normalizeApiBase(options["api-base"] || process.env.CLAWNERA_API_BASE_URL);
+  if (!apiBase) {
+    return {
+      ok: false,
+      error: "missing_or_invalid_api_base",
+      hint: "set --api-base or CLAWNERA_API_BASE_URL"
+    };
+  }
+
+  const alias = typeof options.alias === "string" ? String(options.alias).trim() : "";
+  let address = typeof options.address === "string" ? String(options.address).trim() : "";
+  const keystorePath =
+    typeof options["keystore-path"] === "string" && options["keystore-path"].trim()
+      ? path.resolve(String(options["keystore-path"]).trim())
+      : defaultIotaKeystorePath();
+  const stateOut =
+    typeof options["state-out"] === "string" && options["state-out"].trim()
+      ? path.resolve(String(options["state-out"]).trim())
+      : "";
+  const envOut =
+    typeof options["env-out"] === "string" && options["env-out"].trim()
+      ? path.resolve(String(options["env-out"]).trim())
+      : "";
+  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 15_000);
+  const iotaCliPath = String(options["iota-cli"] || process.env.IOTA_CLI_PATH || "iota").trim() || "iota";
+
+  try {
+    if (!address && !alias) {
+      const activeAddress = detectActiveAddressViaCli(iotaCliPath, timeoutMs);
+      if (!activeAddress.ok || !activeAddress.address) {
+        return {
+          ok: false,
+          error: activeAddress.error || "missing_wallet_selector",
+          hint: "set --alias or --address if no active IOTA CLI address is configured"
+        };
+      }
+      address = activeAddress.address;
+    }
+
+    const entries = await loadKeystoreEntries(keystorePath);
+    const entry = resolveKeystoreEntry(entries, {
+      address,
+      alias
+    });
+
+    if (!entry) {
+      return {
+        ok: false,
+        error: "keystore_entry_not_found",
+        selector: {
+          address: address || null,
+          alias: alias || null
+        },
+        keystorePath
+      };
+    }
+
+    const authState = await signInWithKeystoreEntry({
+      apiBase,
+      entry,
+      timeoutMs
+    });
+
+    let savedStateFile = null;
+    if (stateOut) {
+      await saveAuthState(stateOut, authState);
+      savedStateFile = stateOut;
+    }
+
+    let savedEnvFile = null;
+    if (envOut) {
+      fs.mkdirSync(path.dirname(envOut), { recursive: true });
+      fs.writeFileSync(envOut, buildAuthEnvText(authState), { mode: 0o600 });
+      fs.chmodSync(envOut, 0o600);
+      savedEnvFile = envOut;
+    }
+
+    return {
+      ok: true,
+      apiBase,
+      keystorePath,
+      address: authState.address,
+      alias: authState.alias || null,
+      token: authState.token,
+      refreshToken: authState.refreshToken,
+      expiresAtMs: authState.expiresAtMs,
+      refreshExpiresAtMs: authState.session.refreshExpiresAtMs,
+      stateOut: savedStateFile,
+      envOut: savedEnvFile
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "auth_login_failed"
+    };
+  }
 }
 
 function sponsorPreflightUsageLines() {
@@ -1536,7 +1734,9 @@ const aliasCommands = new Map([
   ["sponsor-plan", "sponsor-preflight"],
   ["ask", "triage"],
   ["support", "triage"],
-  ["issue", "report-issue"]
+  ["issue", "report-issue"],
+  ["login", "auth-login"],
+  ["jwt-login", "auth-login"]
 ]);
 const effectiveCommand = aliasCommands.get(parsedCommand) || parsedCommand;
 
@@ -1554,6 +1754,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "triage",
         "report-issue",
         "path",
+        "auth-login",
         "first-steps",
         "sponsor-preflight",
         "sponsor-execute",
@@ -1688,6 +1889,45 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     printJson({ repo: repoRoot });
   } else {
     console.log(repoRoot);
+  }
+} else if (effectiveCommand === "auth-login") {
+  const result = await runAuthLogin(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`auth_login_ok address=${result.address}`);
+    if (result.alias) {
+      console.log(`wallet_alias=${result.alias}`);
+    }
+    console.log(`api_base=${result.apiBase}`);
+    console.log(`access_token_expires_ms=${result.expiresAtMs ?? "unknown"}`);
+    console.log(`refresh_token_expires_ms=${result.refreshExpiresAtMs ?? "unknown"}`);
+    if (result.stateOut) {
+      console.log(`auth_state_file=${result.stateOut}`);
+    }
+    if (result.envOut) {
+      console.log(`env_file=${result.envOut}`);
+      console.log(`source ${shellQuote(result.envOut)}`);
+    }
+    if (!result.stateOut && !result.envOut) {
+      console.log(`export CLAWNERA_API_BASE_URL=${shellQuote(result.apiBase)}`);
+      console.log(`export CLAWNERA_API_JWT=${shellQuote(result.token)}`);
+      console.log(`export CLAWNERA_API_REFRESH_TOKEN=${shellQuote(result.refreshToken)}`);
+      console.log(`export CLAWNERA_API_ADDRESS=${shellQuote(result.address)}`);
+      if (result.alias) {
+        console.log(`export CLAWNERA_API_ADDRESS_ALIAS=${shellQuote(result.alias)}`);
+      }
+    }
+  } else {
+    console.error(`auth_login_helper_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
   }
 } else if (effectiveCommand === "first-steps") {
   const runMode = commandArgs.includes("--run");

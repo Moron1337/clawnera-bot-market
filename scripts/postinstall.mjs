@@ -254,7 +254,7 @@ function maybeRunIotaBootstrap(iotaCliPath) {
 
 function printNextStepHints() {
   info("Need actor auth? Start with `clawnera-help auth-login --api-base https://api.clawnera.com --alias <wallet-alias> --state-out ~/.config/clawnera/auth-state.json`.");
-  info("Need mailbox alerts? Read `clawnera-help show notifications` and then run `node \"$(npm root -g)/clawnera-bot-market/examples/telegram-mailbox-notifier.mjs\" --help`.");
+  info("Need Telegram alerts? Start with `clawnera-help notifications init telegram --preset seller --api-base https://api.clawnera.com --alias <wallet-alias>`.");
 }
 
 export function runPostinstall() {

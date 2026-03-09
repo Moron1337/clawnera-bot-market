@@ -6,12 +6,25 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {
   buildAuthEnvText,
+  defaultAuthStatePath,
   defaultIotaKeystorePath,
+  loadAuthState,
   loadKeystoreEntries,
   resolveKeystoreEntry,
   saveAuthState,
   signInWithKeystoreEntry
 } from "../lib/runtime-auth.mjs";
+import {
+  buildNotificationEnvText,
+  buildNotificationServiceText,
+  defaultNotificationCursorPath,
+  defaultNotificationEnvPath,
+  defaultNotificationServicePath,
+  notificationPresetNames,
+  NOTIFICATION_PRESETS,
+  resolveNotificationEventTypes,
+  resolveNotificationPreset
+} from "../lib/notifications.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -158,6 +171,7 @@ function printUsage() {
   console.log("  clawnera-help report-issue [options]      Generate a structured GitHub issue scaffold");
   console.log("  clawnera-help path                        Print repository path");
   console.log("  clawnera-help auth-login [options]        Create JWT + refresh token from local IOTA keystore");
+  console.log("  clawnera-help notifications [options]     Scaffold and check Telegram event notifications");
   console.log("  clawnera-help first-steps [--run]         Show or run IOTA first-step bootstrap");
   console.log("  clawnera-help sponsor-preflight [options] Read sponsor policy/strategy/diagnostics");
   console.log("  clawnera-help sponsor-execute [options]   Reserve->sign->execute sponsor helper");
@@ -980,6 +994,311 @@ async function runAuthLogin(commandArgs) {
   }
 }
 
+function notificationsUsageLines() {
+  return [
+    "Notifications helper:",
+    "- Usage: clawnera-help notifications <init|presets|doctor> [options]",
+    "- Init telegram notifier: clawnera-help notifications init telegram --preset seller --api-base https://api.clawnera.com --alias <wallet-alias>",
+    "- List presets: clawnera-help notifications presets",
+    "- Check local config: clawnera-help notifications doctor",
+    "- Default preset: seller",
+    "- Default files:",
+    `  auth state: ${defaultAuthStatePath()}`,
+    `  env file:   ${defaultNotificationEnvPath()}`,
+    `  service:    ${defaultNotificationServicePath()}`,
+    `  cursor:     ${defaultNotificationCursorPath()}`
+  ];
+}
+
+function writeModeForPath(targetPath) {
+  return targetPath.endsWith(".service") ? 0o644 : 0o600;
+}
+
+function writeTextFile(targetPath, content, mode) {
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.writeFileSync(targetPath, content, { mode });
+  fs.chmodSync(targetPath, mode);
+}
+
+function parseSimpleEnvFile(raw) {
+  const out = {};
+  for (const line of String(raw || "").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+    const separator = trimmed.indexOf("=");
+    if (separator <= 0) {
+      continue;
+    }
+    const key = trimmed.slice(0, separator).trim();
+    const value = trimmed.slice(separator + 1).trim();
+    if (key) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+function notificationsPresetPayload() {
+  return notificationPresetNames().map((name) => ({
+    id: name,
+    description: NOTIFICATION_PRESETS[name].description,
+    eventTypes: [...NOTIFICATION_PRESETS[name].eventTypes]
+  }));
+}
+
+async function runNotifications(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h || positionals.length === 0) {
+    return {
+      ok: true,
+      help: true,
+      usage: notificationsUsageLines()
+    };
+  }
+
+  const subcommand = String(positionals[0] || "").toLowerCase();
+  if (subcommand === "presets") {
+    return {
+      ok: true,
+      presets: notificationsPresetPayload()
+    };
+  }
+
+  if (subcommand === "doctor") {
+    const envFile =
+      typeof options["env-file"] === "string" && options["env-file"].trim()
+        ? path.resolve(String(options["env-file"]).trim())
+        : defaultNotificationEnvPath();
+    const serviceFile =
+      typeof options["service-file"] === "string" && options["service-file"].trim()
+        ? path.resolve(String(options["service-file"]).trim())
+        : defaultNotificationServicePath();
+    const issues = [];
+
+    let envValues = {};
+    if (!fs.existsSync(envFile)) {
+      issues.push("missing_env_file");
+    } else {
+      envValues = parseSimpleEnvFile(fs.readFileSync(envFile, "utf8"));
+      const requiredEnvKeys = [
+        "CLAWNERA_API_BASE_URL",
+        "CLAWNERA_AUTH_STATE_FILE",
+        "TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_CHAT_ID"
+      ];
+      for (const key of requiredEnvKeys) {
+        if (!String(envValues[key] || "").trim()) {
+          issues.push(`missing_env_${key}`);
+        }
+      }
+      const resolved = resolveNotificationEventTypes({
+        preset: envValues.CLAWNERA_NOTIFY_PRESET,
+        eventTypes: envValues.CLAWNERA_NOTIFY_EVENT_TYPES
+      });
+      if (resolved.eventTypes.length === 0) {
+        issues.push("missing_notification_event_types");
+      }
+      if (envValues.CLAWNERA_AUTH_STATE_FILE && !fs.existsSync(path.resolve(envValues.CLAWNERA_AUTH_STATE_FILE))) {
+        issues.push("missing_auth_state_file");
+      }
+    }
+
+    if (!fs.existsSync(serviceFile)) {
+      issues.push("missing_service_file");
+    }
+
+    return {
+      ok: issues.length === 0,
+      envFile,
+      serviceFile,
+      issues,
+      env: envValues,
+      presets: notificationsPresetPayload()
+    };
+  }
+
+  if (subcommand !== "init") {
+    return {
+      ok: false,
+      error: "unknown_notifications_subcommand"
+    };
+  }
+
+  const target = String(positionals[1] || "").toLowerCase();
+  if (!target || target === "help") {
+    return {
+      ok: true,
+      help: true,
+      usage: notificationsUsageLines()
+    };
+  }
+  if (target !== "telegram") {
+    return {
+      ok: false,
+      error: "unsupported_notifications_target"
+    };
+  }
+
+  const apiBase = normalizeApiBase(options["api-base"] || process.env.CLAWNERA_API_BASE_URL);
+  const alias = typeof options.alias === "string" ? String(options.alias).trim() : "";
+  const address = typeof options.address === "string" ? String(options.address).trim() : "";
+  const keystorePath =
+    typeof options["keystore-path"] === "string" && options["keystore-path"].trim()
+      ? path.resolve(String(options["keystore-path"]).trim())
+      : defaultIotaKeystorePath();
+  const authStateFile =
+    typeof options["state-out"] === "string" && options["state-out"].trim()
+      ? path.resolve(String(options["state-out"]).trim())
+      : typeof options["auth-state-file"] === "string" && options["auth-state-file"].trim()
+        ? path.resolve(String(options["auth-state-file"]).trim())
+        : defaultAuthStatePath();
+  const envOut =
+    typeof options["env-out"] === "string" && options["env-out"].trim()
+      ? path.resolve(String(options["env-out"]).trim())
+      : defaultNotificationEnvPath();
+  const serviceOut =
+    typeof options["service-out"] === "string" && options["service-out"].trim()
+      ? path.resolve(String(options["service-out"]).trim())
+      : defaultNotificationServicePath();
+  const cursorOut =
+    typeof options["cursor-out"] === "string" && options["cursor-out"].trim()
+      ? path.resolve(String(options["cursor-out"]).trim())
+      : defaultNotificationCursorPath();
+  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 15_000);
+  const pollMs = parsePositiveIntOption(options["poll-ms"], "poll_ms", 15_000);
+  const batchLimit = parsePositiveIntOption(options["batch-limit"], "batch_limit", 50);
+  const refreshSkewMs = parsePositiveIntOption(options["refresh-skew-ms"], "refresh_skew_ms", 60_000);
+  const force = Boolean(options.force);
+  const packageRoot =
+    typeof options["package-root"] === "string" && options["package-root"].trim()
+      ? path.resolve(String(options["package-root"]).trim())
+      : repoRoot;
+  const { preset, eventTypes } = resolveNotificationEventTypes({
+    preset: options.preset,
+    eventTypes: options["event-types"]
+  });
+
+  if ((alias || address) && !apiBase) {
+    return {
+      ok: false,
+      error: "missing_or_invalid_api_base",
+      hint: "set --api-base when notifications init should create a fresh auth state"
+    };
+  }
+
+  if (!preset && eventTypes.length === 0) {
+    return {
+      ok: false,
+      error: "invalid_notification_preset"
+    };
+  }
+
+  if (!force) {
+    for (const targetFile of [envOut, serviceOut]) {
+      if (fs.existsSync(targetFile)) {
+        return {
+          ok: false,
+          error: "notifications_output_exists",
+          file: targetFile,
+          hint: "use --force to overwrite generated notifier files"
+        };
+      }
+    }
+  }
+
+  let authState = null;
+  let authSource = "existing_state";
+  if (alias || address) {
+    const entries = await loadKeystoreEntries(keystorePath);
+    const entry = resolveKeystoreEntry(entries, { alias, address });
+    if (!entry) {
+      return {
+        ok: false,
+        error: "keystore_entry_not_found",
+        selector: {
+          address: address || null,
+          alias: alias || null
+        },
+        keystorePath
+      };
+    }
+    authState = await signInWithKeystoreEntry({
+      apiBase,
+      entry,
+      timeoutMs
+    });
+    await saveAuthState(authStateFile, authState);
+    authSource = "fresh_login";
+  } else if (fs.existsSync(authStateFile)) {
+    authState = await loadAuthState(authStateFile);
+  } else {
+    return {
+      ok: false,
+      error: "missing_auth_state_setup",
+      hint: "run clawnera-help auth-login first or pass --api-base with --alias/--address"
+    };
+  }
+
+  const effectiveApiBase = authState.apiBase || apiBase;
+  if (!effectiveApiBase) {
+    return {
+      ok: false,
+      error: "missing_or_invalid_api_base",
+      hint: "auth state is missing apiBase and no --api-base was provided"
+    };
+  }
+
+  writeTextFile(
+    envOut,
+    buildNotificationEnvText({
+      packageRoot,
+      apiBase: effectiveApiBase,
+      authStateFile,
+      preset: preset || "custom",
+      eventTypes,
+      cursorFile: cursorOut,
+      telegramBotToken: typeof options["telegram-bot-token"] === "string" ? options["telegram-bot-token"].trim() : "",
+      telegramChatId: typeof options["telegram-chat-id"] === "string" ? options["telegram-chat-id"].trim() : "",
+      pollMs,
+      batchLimit,
+      timeoutMs,
+      refreshSkewMs
+    }),
+    writeModeForPath(envOut)
+  );
+  writeTextFile(
+    serviceOut,
+    buildNotificationServiceText({
+      envFile: envOut,
+      packageRoot
+    }),
+    writeModeForPath(serviceOut)
+  );
+
+  return {
+    ok: true,
+    target: "telegram",
+    preset: preset || "custom",
+    eventTypes,
+    authSource,
+    apiBase: effectiveApiBase,
+    address: authState.address || null,
+    alias: authState.alias || null,
+    authStateFile,
+    envOut,
+    serviceOut,
+    cursorOut,
+    packageRoot,
+    commands: [
+      `systemctl --user daemon-reload`,
+      `systemctl --user enable --now ${path.basename(serviceOut)}`,
+      `journalctl --user -u ${path.basename(serviceOut)} -f`
+    ]
+  };
+}
+
 function sponsorPreflightUsageLines() {
   return [
     "Sponsor preflight helper:",
@@ -1736,7 +2055,8 @@ const aliasCommands = new Map([
   ["support", "triage"],
   ["issue", "report-issue"],
   ["login", "auth-login"],
-  ["jwt-login", "auth-login"]
+  ["jwt-login", "auth-login"],
+  ["notify", "notifications"]
 ]);
 const effectiveCommand = aliasCommands.get(parsedCommand) || parsedCommand;
 
@@ -1755,6 +2075,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "report-issue",
         "path",
         "auth-login",
+        "notifications",
         "first-steps",
         "sponsor-preflight",
         "sponsor-execute",
@@ -1924,6 +2245,67 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`auth_login_helper_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "notifications") {
+  const result = await runNotifications(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok && Array.isArray(result.presets)) {
+    console.log("Notification presets:");
+    for (const preset of result.presets) {
+      console.log(`- ${preset.id}: ${preset.description}`);
+      console.log(`  events: ${preset.eventTypes.join(", ")}`);
+    }
+  } else if (result.ok && result.target === "telegram") {
+    console.log(`notifications_init_ok target=${result.target}`);
+    console.log(`preset=${result.preset}`);
+    console.log(`event_types=${result.eventTypes.join(",")}`);
+    console.log(`auth_source=${result.authSource}`);
+    console.log(`api_base=${result.apiBase}`);
+    console.log(`auth_state_file=${result.authStateFile}`);
+    console.log(`env_file=${result.envOut}`);
+    console.log(`service_file=${result.serviceOut}`);
+    console.log(`cursor_file=${result.cursorOut}`);
+    if (result.alias) {
+      console.log(`wallet_alias=${result.alias}`);
+    }
+    if (result.address) {
+      console.log(`address=${result.address}`);
+    }
+    console.log("Next steps:");
+    console.log(`- Edit ${result.envOut} and set TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID if they are still placeholders`);
+    for (const command of result.commands) {
+      console.log(`- ${command}`);
+    }
+  } else if (result.ok) {
+    console.log(`notifications_doctor_${result.ok ? "ok" : "failed"}`);
+    if (result.envFile) {
+      console.log(`env_file=${result.envFile}`);
+    }
+    if (result.serviceFile) {
+      console.log(`service_file=${result.serviceFile}`);
+    }
+    if (Array.isArray(result.issues) && result.issues.length > 0) {
+      for (const issue of result.issues) {
+        console.log(`- ${issue}`);
+      }
+    }
+  } else {
+    console.error(`notifications_helper_error: ${result.error}`);
+    if (result.hint) {
+      console.error(result.hint);
+    }
+    if (result.file) {
+      console.error(`file=${result.file}`);
+    }
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {

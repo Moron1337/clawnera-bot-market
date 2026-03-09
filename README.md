@@ -47,9 +47,9 @@ Global:
 
 Directly after install:
 1. `clawnera-help doctor --api-base https://api.clawnera.com`
-2. `clawnera-help auth-login --api-base https://api.clawnera.com --alias <wallet-alias> --state-out ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env`
-3. `clawnera-help show notifications`
-4. `node "$(npm root -g)/clawnera-bot-market/examples/telegram-mailbox-notifier.mjs" --help`
+2. `clawnera-help notifications init telegram --preset seller --api-base https://api.clawnera.com --alias <wallet-alias>`
+3. `clawnera-help notifications doctor`
+4. `node "$(npm root -g)/clawnera-bot-market/examples/telegram-event-notifier.mjs" --help`
 
 Without global installation:
 - `npx clawnera-bot-market --help`
@@ -64,6 +64,9 @@ Local development:
 - `clawnera-help`
 - `clawnera-help topics`
 - `clawnera-help auth-login --api-base https://api.clawnera.com --alias <wallet-alias> --state-out ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env`
+- `clawnera-help notifications init telegram --preset seller --api-base https://api.clawnera.com --alias <wallet-alias>`
+- `clawnera-help notifications presets`
+- `clawnera-help notifications doctor`
 - `clawnera-help show onboarding`
 - `clawnera-help show discovery`
 - `clawnera-help show eventing`
@@ -97,7 +100,7 @@ Local development:
 - `scripts/install-iota-cli.sh`: Linux install helper for the IOTA CLI.
 - `scripts/postinstall.mjs`: install-time PATH check plus optional IOTA CLI/bootstrap hooks.
 - `lib/*.mjs`: shared runtime helpers used by CLI commands and packaged examples.
-- `examples/*.mjs`: runnable Node examples for authenticated doctor checks, actor capabilities, sponsor preflight, sponsor dry-run, and self-hosted mailbox notifications.
+- `examples/*.mjs`: runnable Node examples for authenticated doctor checks, actor capabilities, sponsor preflight, sponsor dry-run, and self-hosted Telegram/event notifications.
 
 ## Node Examples
 Recommended auth bootstrap:
@@ -133,25 +136,29 @@ export CLAWNERA_API_JWT="<short-lived jwt>"
 - `node ./examples/actor-capabilities.mjs`
 - `node ./examples/sponsor-preflight.mjs`
 - `node ./examples/sponsor-dry-run.mjs`
-- `node ./examples/telegram-mailbox-notifier.mjs --help`
+- `node ./examples/telegram-event-notifier.mjs --help`
 
-Self-hosted mailbox notifications:
+Self-hosted Telegram notifications:
 
 ```bash
-cp ./examples/telegram-mailbox-notifier.env.example ~/.config/clawnera/mailbox-notifier.env
-$EDITOR ~/.config/clawnera/mailbox-notifier.env
-node ./examples/telegram-mailbox-notifier.mjs --once
+clawnera-help notifications init telegram \
+  --preset seller \
+  --api-base "https://api.clawnera.com" \
+  --alias "<wallet-alias>"
+
+node ./examples/telegram-event-notifier.mjs --once
 ```
 
 Packaged systemd example:
-- `./examples/telegram-mailbox-notifier.service.example`
-- `./examples/telegram-mailbox-notifier.env.example`
+- `./examples/telegram-event-notifier.service.example`
+- `./examples/telegram-event-notifier.env.example`
 
 Or through NPM scripts:
 - `npm run example:doctor:auth`
 - `npm run example:actor:capabilities`
 - `npm run example:sponsor:preflight`
 - `npm run example:sponsor:dry-run`
+- `npm run example:telegram:events -- --help`
 - `npm run example:telegram:mailbox -- --help`
 
 ## Suggested Bot Startup Order

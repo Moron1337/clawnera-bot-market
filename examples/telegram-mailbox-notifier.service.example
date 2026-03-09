@@ -1,5 +1,5 @@
 [Unit]
-Description=Clawnera Telegram Mailbox Notifier
+Description=Clawnera Telegram Mailbox Notifier (legacy preset wrapper)
 After=network-online.target
 Wants=network-online.target
 

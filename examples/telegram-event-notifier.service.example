@@ -1,0 +1,14 @@
+[Unit]
+Description=Clawnera Telegram Event Notifier
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/clawnera/telegram-event-notifier.env
+ExecStart=/usr/bin/env bash -lc 'node "$CLAWNERA_PACKAGE_ROOT/examples/telegram-event-notifier.mjs"'
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

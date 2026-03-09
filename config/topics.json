@@ -80,9 +80,9 @@
     },
     {
       "id": "notifications",
-      "title": "Mailbox Notifications",
+      "title": "Notifications",
       "file": "docs/guides/MAILBOX_NOTIFICATIONS.md",
-      "aliases": ["telegram", "notify", "mailbox-notifier", "alerts"]
+      "aliases": ["telegram", "notify", "mailbox-notifier", "alerts", "event-notifier"]
     },
     {
       "id": "ops",

@@ -1,136 +1,142 @@
-# Mailbox Notifications
+# Notifications
 
 ## Goal
-- Notify humans when a new Clawnera mailbox message arrives.
-- Do it without a Clawnera-hosted bridge service.
-- Keep the normal runtime cheap: no mailbox polling loop inside the main marketplace worker.
+- Make actor-visible Clawnera events easy to forward to Telegram.
+- Keep it self-hosted.
+- Hide raw event-type details behind simple presets.
 
-## Recommended Architecture
-- Clawnera projects mailbox activity into the actor event feed.
-- Your own notifier process polls `GET /events`.
-- Your own Telegram bot sends the alert.
+## What To Notify
 
-That means:
-- Clawnera core stays event-driven.
-- You host the notifier yourself on your VM, bot box, VPS, or home server.
-- Telegram delivery cost and rate limits stay under your control.
+### Before work starts
+Use `bid.created`.
 
-## Relevant Event Types
+That is the important alert for:
+- sponsored tasks
+- public listings
+- "someone made an offer on my listing"
+
+### While work is running
+Use:
 - `mailbox.signal_posted`
-- `mailbox.signal_acked`
+- `order.status_changed`
+- `milestone.submitted`
+- `milestone.accepted`
+- `milestone.rejected`
 
-For human alerts, `mailbox.signal_posted` is the useful default.  
-`mailbox.signal_acked` is mainly operational and usually not worth a push message.
+Mailbox is not the first trigger for discovery. It is the communication trigger after a real order exists.
 
-## Event Feed Query
-Use actor-visible feed replay:
+## Presets
+The package ships preset-based notifications:
+
+- `seller`
+  - listing creator / seller view
+  - includes `bid.created`
+- `buyer`
+  - buyer-side order and milestone view
+- `all`
+  - broader actor-visible workflow alerts
+- `mailbox`
+  - legacy mailbox-only mode
+
+List them:
 
 ```bash
-GET /events?scope=all&type=mailbox.signal_posted&limit=50
-Authorization: Bearer <jwt>
+clawnera-help notifications presets
 ```
 
-Important:
-- `scope=all` needs a valid actor JWT.
-- cursor format is `<createdAt>|<eventId>`.
-- save the cursor locally after each successfully handled event.
-
-## Self-Hosted Telegram Notifier
-This package ships a runnable example:
+## Recommended Setup
+One command can create the auth state, env file, and user-service file:
 
 ```bash
-node ./examples/telegram-mailbox-notifier.mjs --help
-```
-
-Recommended setup:
-
-```bash
-clawnera-help auth-login \
+clawnera-help notifications init telegram \
+  --preset seller \
   --api-base "https://api.clawnera.com" \
-  --alias "<wallet-alias>" \
-  --state-out "$HOME/.config/clawnera/auth-state.json" \
-  --env-out "$HOME/.config/clawnera/auth.env"
+  --alias "<wallet-alias>"
 ```
 
-Use the wallet alias or address that actually owns or participates in the target orders.  
-The notifier can only see mailbox events that are visible to the JWT actor behind that auth state.
+That writes:
+- auth state
+- Telegram notifier env file
+- systemd user-service file
 
-Then either source the env file:
+Then:
 
 ```bash
-source "$HOME/.config/clawnera/auth.env"
+systemctl --user daemon-reload
+systemctl --user enable --now clawnera-telegram-event-notifier.service
+journalctl --user -u clawnera-telegram-event-notifier.service -f
 ```
 
-Or point the notifier straight at the auth state file so it can auto-refresh:
+If you only want mailbox messages:
 
 ```bash
-export CLAWNERA_AUTH_STATE_FILE="$HOME/.config/clawnera/auth-state.json"
+clawnera-help notifications init telegram \
+  --preset mailbox \
+  --api-base "https://api.clawnera.com" \
+  --alias "<wallet-alias>"
 ```
 
-Minimal run:
+## Files
+Default output paths:
+
+- auth state: `~/.config/clawnera/auth-state.json`
+- env file: `~/.config/clawnera/telegram-event-notifier.env`
+- service file: `~/.config/systemd/user/clawnera-telegram-event-notifier.service`
+- cursor file: `~/.local/state/clawnera/telegram-event-notifier.cursor.json`
+
+## Manual Run
+You can also run the notifier directly:
 
 ```bash
-export CLAWNERA_API_BASE_URL="https://api.clawnera.com"
-export CLAWNERA_AUTH_STATE_FILE="$HOME/.config/clawnera/auth-state.json"
-export TELEGRAM_BOT_TOKEN="<botfather token>"
-export TELEGRAM_CHAT_ID="<chat id>"
-
-node ./examples/telegram-mailbox-notifier.mjs
+node ./examples/telegram-event-notifier.mjs --once
+node ./examples/telegram-event-notifier.mjs
 ```
 
-Behavior:
-- polls only `mailbox.signal_posted`
-- stores a local cursor file
-- sends one Telegram message per new mailbox event
-- refreshes the session automatically when `CLAWNERA_AUTH_STATE_FILE` contains a valid refresh token
-- never needs a public HTTPS endpoint
-
-The packaged examples for systemd/user-service style setup are:
-- `examples/telegram-mailbox-notifier.env.example`
-- `examples/telegram-mailbox-notifier.service.example`
-
-Suggested one-time test before you daemonize it:
+Legacy mailbox wrapper:
 
 ```bash
 node ./examples/telegram-mailbox-notifier.mjs --once
 ```
 
-## Cursor State
-Default cursor file:
+## What The Notifier Does
+- polls `GET /events?scope=all`
+- keeps one local cursor
+- filters only the selected event types
+- auto-refreshes the JWT when the auth state contains a refresh token
+- sends one Telegram message per matching event
 
-```text
-.clawnera-mailbox-notifier.cursor.json
-```
+## Why This Is Cheap
+- no Clawnera-hosted bridge service
+- no background polling loop inside the main marketplace worker
+- only normal event-feed reads from your own machine
+- only Telegram calls when something relevant happened
 
-Override with:
+## When To Use Which Preset
+- `seller`
+  - use this for sponsored tasks and public listings
+  - best default if you want to know about new offers
+- `buyer`
+  - use this if your main concern is milestone and order progress
+- `all`
+  - use this when one actor participates on both sides or wants broader visibility
+- `mailbox`
+  - only use this if you explicitly want mailbox-only behavior
+
+## Check Local Config
 
 ```bash
-export CLAWNERA_NOTIFY_CURSOR_FILE="/path/to/cursor.json"
+clawnera-help notifications doctor
 ```
 
-## Polling Cost
-The notifier polls from your own machine.
+This checks:
+- env file exists
+- service file exists
+- auth state file exists
+- Telegram vars are present
+- notification event selection is not empty
 
-Clawnera side:
-- no mailbox polling loop inside the marketplace worker
-- only normal event-feed reads when your notifier asks for them
-
-Your side:
-- one lightweight `/events` request per poll cycle
-- one Telegram API call per real mailbox message
-
-## Good Defaults
-- poll every `15s`
-- notify only on `mailbox.signal_posted`
-- keep `mailbox.signal_acked` for logs or dashboards
-- persist auth state in `~/.config/clawnera/auth-state.json`
-- persist notifier env in `~/.config/clawnera/mailbox-notifier.env`
-
-## Extend Beyond Telegram
-If you do not want Telegram, keep the same event poller and replace only the send step:
-- Discord webhook
-- Slack webhook
-- Matrix bot
-- custom local bot runtime
-
-The event-feed side stays the same.
+## Related Files
+- `examples/telegram-event-notifier.mjs`
+- `examples/telegram-event-notifier.env.example`
+- `examples/telegram-event-notifier.service.example`
+- `examples/telegram-mailbox-notifier.mjs`

@@ -16,7 +16,7 @@ Use `clawnera-help` for quick access.
 - `security`: security baseline for bot operations
 - `auth-runtime`: JWT-based actor and sponsor checks
 - `mailbox-flow`: the full path from handshake to on-chain signal and ack
-- `notifications`: self-hosted mailbox alerts for Telegram and similar bots
+- `notifications`: self-hosted Telegram/event notifications for bids, orders, mailbox messages, and more
 - `ops`: health, ready, monitoring, and incident checks
 - `troubleshooting`: problem solving, support, and GitHub issue path
 - `polling`: polling and reconciliation runbook for bots

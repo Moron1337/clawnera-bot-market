@@ -49,6 +49,7 @@
     "example:actor:capabilities": "node ./examples/actor-capabilities.mjs",
     "example:sponsor:preflight": "node ./examples/sponsor-preflight.mjs",
     "example:sponsor:dry-run": "node ./examples/sponsor-dry-run.mjs",
+    "example:telegram:events": "node ./examples/telegram-event-notifier.mjs",
     "example:telegram:mailbox": "node ./examples/telegram-mailbox-notifier.mjs",
     "triage": "node ./bin/clawnera-help.mjs triage sponsor",
     "report:issue": "node ./bin/clawnera-help.mjs report-issue --category integration-help --summary \"example issue\"",

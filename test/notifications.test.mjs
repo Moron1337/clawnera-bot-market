@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildNotificationEnvText,
+  formatNotificationEventForTelegram,
   buildNotificationServiceText,
   CUSTOM_NOTIFICATION_PRESET,
   KNOWN_NOTIFICATION_EVENT_TYPES,
@@ -111,4 +112,25 @@ test("default notification paths are isolated per preset", () => {
     defaultNotificationServicePath("/home/test", "buyer"),
     "/home/test/.config/systemd/user/clawnera-telegram-event-notifier-buyer.service"
   );
+});
+
+test("bid notifications prefer listing title and readable values", () => {
+  const text = formatNotificationEventForTelegram({
+    eventType: "bid.created",
+    payloadJson: {
+      listingTitle: "Signal Spark Post",
+      listingId: "410619eb-8e5e-4ee7-a100-8cb8c5500af3",
+      bidId: "36953195-8f21-41d1-8774-aee88e58ac87",
+      bidderAddress: "0x0a0d4c9a9f935dac9f9bee55ca0632c187077a04d0dffcc479402f2de9a82140",
+      amount: "117000000",
+      currency: "CLAW"
+    }
+  });
+
+  assert.match(text, /^Clawnera new bid/m);
+  assert.match(text, /Listing: Signal Spark Post/);
+  assert.match(text, /Amount: 117,000,000 CLAW/);
+  assert.match(text, /Bidder: 0x0a0d4c9a\.\.\.a82140/);
+  assert.match(text, /Bid ID: 36953195\.\.\.58ac87/);
+  assert.match(text, /Listing ID: 410619eb\.\.\.500af3/);
 });

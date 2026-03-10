@@ -90,7 +90,7 @@ test("notification service text points at the generic event notifier", () => {
     nodeBinary: "/usr/local/bin/node"
   });
 
-  assert.match(serviceText, /EnvironmentFile="\/home\/test\/\.config\/clawnera\/telegram-event-notifier\.env"/);
+  assert.match(serviceText, /EnvironmentFile=\/home\/test\/\.config\/clawnera\/telegram-event-notifier\.env/);
   assert.match(serviceText, /ExecStart="\/usr\/local\/bin\/node" "\/opt\/clawnera-bot-market\/examples\/telegram-event-notifier\.mjs"/);
 });
 

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.7] - 2026-03-10
+
+- Fixed generated notification `systemd` units so `EnvironmentFile=` is written in a form systemd actually loads, which unblocks `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` at runtime.
+- Improved Telegram `bid.created` notifications to show the listing title, a human-readable amount, and shortened bidder/bid/listing identifiers instead of only raw ids.
+
 ## [0.1.6] - 2026-03-07
 
 - Added `clawnera-help auth-login` to mint live access + refresh tokens directly from a local IOTA keystore selection and optionally write secure auth/env files.

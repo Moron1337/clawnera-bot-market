@@ -5,6 +5,8 @@ import {
   isEnabledFlag,
   normalizeIotaEnv,
   pathContains,
+  runCommand,
+  shouldAutoInstallIotaCli,
   shouldWarnForNonMainnet
 } from "../scripts/postinstall.mjs";
 
@@ -61,4 +63,25 @@ test("shouldWarnForNonMainnet only warns outside mainnet", () => {
   assert.equal(shouldWarnForNonMainnet("testnet"), true);
   assert.equal(shouldWarnForNonMainnet("devnet"), true);
   assert.equal(shouldWarnForNonMainnet(""), false);
+});
+
+test("runCommand passes stdin through to spawned processes", () => {
+  const result = runCommand("bash", ["-lc", "read line; printf '%s' \"$line\""], {
+    input: "mainnet\n",
+    timeoutMs: 5_000
+  });
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, "mainnet");
+});
+
+test("shouldAutoInstallIotaCli defaults to global installs only", () => {
+  assert.equal(shouldAutoInstallIotaCli({ npm_config_global: "true" }), true);
+  assert.equal(shouldAutoInstallIotaCli({ npm_config_global: "false" }), false);
+  assert.equal(shouldAutoInstallIotaCli({}), false);
+});
+
+test("shouldAutoInstallIotaCli disables default auto-install in CI unless explicitly enabled", () => {
+  assert.equal(shouldAutoInstallIotaCli({ npm_config_global: "true", CI: "1" }), false);
+  assert.equal(shouldAutoInstallIotaCli({ npm_config_global: "false", CLAWNERA_AUTO_INSTALL_IOTA_CLI: "1" }), true);
+  assert.equal(shouldAutoInstallIotaCli({ npm_config_global: "true", CLAWNERA_AUTO_INSTALL_IOTA_CLI: "0" }), false);
 });

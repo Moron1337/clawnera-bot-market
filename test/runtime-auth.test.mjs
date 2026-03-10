@@ -9,7 +9,8 @@ import {
   normalizeAuthState,
   resolveKeystoreEntry,
   saveAuthState,
-  tokenExpiresSoon
+  tokenExpiresSoon,
+  validateRuntimeAuthState
 } from "../lib/runtime-auth.mjs";
 
 function buildJwt(payload) {
@@ -61,6 +62,19 @@ test("normalizeAuthState keeps refresh/session metadata", () => {
   assert.equal(normalized.session.refreshExpiresAtMs, 222);
 });
 
+test("normalizeAuthState keeps missing numeric session fields null", () => {
+  const normalized = normalizeAuthState({
+    apiBase: "https://api.clawnera.com",
+    token: "token-1",
+    refreshToken: "refresh-1",
+    session: {}
+  });
+
+  assert.equal(normalized.expiresAtMs, null);
+  assert.equal(normalized.session.refreshExpiresAtMs, null);
+  assert.equal(normalized.session.lastRefreshedAtMs, null);
+});
+
 test("saveAuthState and loadAuthState round-trip auth files", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawnera-auth-test-"));
   const authStateFile = path.join(tempDir, "auth-state.json");
@@ -107,4 +121,60 @@ test("buildAuthEnvText emits shell-friendly variables", () => {
   assert.match(text, /CLAWNERA_API_REFRESH_TOKEN=refresh-1/);
   assert.match(text, /CLAWNERA_API_ADDRESS=0xabc/);
   assert.match(text, /CLAWNERA_API_ADDRESS_ALIAS=alpha/);
+});
+
+test("validateRuntimeAuthState rejects expired refresh tokens when refresh is required", () => {
+  const nowMs = Date.now();
+  const validation = validateRuntimeAuthState(
+    {
+      apiBase: "https://api.clawnera.com",
+      refreshToken: "refresh-token",
+      session: {
+        refreshAvailable: true,
+        refreshExpiresAtMs: nowMs - 1_000
+      }
+    },
+    {
+      nowMs
+    }
+  );
+
+  assert.equal(validation.ok, false);
+  assert.ok(validation.issues.includes("expired_auth_refresh_token"));
+});
+
+test("validateRuntimeAuthState allows valid access token with expired refresh token", () => {
+  const nowMs = Date.now();
+  const validation = validateRuntimeAuthState(
+    {
+      apiBase: "https://api.clawnera.com",
+      token: buildJwt({ exp: Math.floor((nowMs + 5 * 60_000) / 1000) }),
+      refreshToken: "refresh-token",
+      session: {
+        refreshAvailable: true,
+        refreshExpiresAtMs: nowMs - 1_000
+      }
+    },
+    {
+      nowMs
+    }
+  );
+
+  assert.equal(validation.ok, true);
+  assert.deepEqual(validation.issues, []);
+});
+
+test("validateRuntimeAuthState rejects mismatched required api base", () => {
+  const validation = validateRuntimeAuthState(
+    {
+      apiBase: "https://api.other.example",
+      token: buildJwt({ exp: Math.floor((Date.now() + 5 * 60_000) / 1000) })
+    },
+    {
+      requiredApiBase: "https://api.clawnera.com"
+    }
+  );
+
+  assert.equal(validation.ok, false);
+  assert.ok(validation.issues.includes("auth_state_api_base_mismatch"));
 });

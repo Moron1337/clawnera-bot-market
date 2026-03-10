@@ -54,6 +54,17 @@ export function shouldWarnForNonMainnet(value) {
   return Boolean(envName) && envName !== "mainnet";
 }
 
+export function shouldAutoInstallIotaCli(env = process.env) {
+  const explicit = env.CLAWNERA_AUTO_INSTALL_IOTA_CLI;
+  if (explicit !== undefined && String(explicit).trim() !== "") {
+    return isEnabledFlag(explicit, true);
+  }
+  if (isEnabledFlag(env.CI, false)) {
+    return false;
+  }
+  return String(env.npm_config_global || "").trim() === "true";
+}
+
 function info(message) {
   console.log(`${LOG_PREFIX} ${message}`);
 }
@@ -62,12 +73,14 @@ function warn(message) {
   console.warn(`${LOG_PREFIX} ${message}`);
 }
 
-function runCommand(command, args, options = {}) {
+export function runCommand(command, args, options = {}) {
   return spawnSync(command, args, {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: options.timeoutMs ?? 15000,
     env: options.env ?? process.env,
+    input: options.input,
+    stdio: options.input !== undefined ? ["pipe", "pipe", "pipe"] : undefined,
     maxBuffer: 16 * 1024 * 1024
   });
 }
@@ -166,7 +179,7 @@ function maybeAutoInstallIotaCli() {
     return cliPath;
   }
 
-  if (!isEnabledFlag(process.env.CLAWNERA_AUTO_INSTALL_IOTA_CLI, true)) {
+  if (!shouldAutoInstallIotaCli(process.env)) {
     warn("IOTA CLI not detected. Optional next step: `clawnera-help first-steps --run`.");
     return cliPath;
   }
@@ -233,7 +246,7 @@ function maybeRunIotaBootstrap(iotaCliPath) {
     env: {
       ...process.env,
       IOTA_CLI_PATH: iotaCliPath,
-      IOTA_HELPER_AUTO_INSTALL_CLI: isEnabledFlag(process.env.CLAWNERA_AUTO_INSTALL_IOTA_CLI, true) ? "1" : "0",
+      IOTA_HELPER_AUTO_INSTALL_CLI: shouldAutoInstallIotaCli(process.env) ? "1" : "0",
       IOTA_HELPER_INIT_WALLET: isEnabledFlag(process.env.CLAWNERA_INIT_IOTA_WALLET, false) ? "1" : "0"
     }
   });

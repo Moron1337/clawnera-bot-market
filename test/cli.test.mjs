@@ -12,6 +12,11 @@ const repoRoot = path.resolve(__dirname, "..");
 const cliFile = path.join(repoRoot, "bin", "clawnera-help.mjs");
 const packageJson = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
 
+function buildJwtWithExp(expSeconds) {
+  const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  return `${encode({ alg: "none", typ: "JWT" })}.${encode({ exp: expSeconds })}.signature`;
+}
+
 function runCli(args = [], options = {}) {
   return spawnSync(process.execPath, [cliFile, ...args], {
     cwd: repoRoot,
@@ -143,7 +148,97 @@ test("notifications init telegram scaffolds env and service files from existing 
   assert.ok(existsSync(serviceFile));
   assert.match(readFileSync(envFile, "utf8"), /CLAWNERA_NOTIFY_PRESET=seller/);
   assert.match(readFileSync(envFile, "utf8"), /bid\.created/);
+  assert.match(readFileSync(envFile, "utf8"), /CLAWNERA_NOTIFY_TIMEOUT_MS=10000/);
   assert.match(readFileSync(serviceFile, "utf8"), /telegram-event-notifier\.mjs/);
+});
+
+test("notifications init uses preset-specific default artifact paths", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-default-paths-"));
+  const fakeHome = path.join(tempDir, "home");
+  const authStateFile = path.join(tempDir, "auth-state.json");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        version: "clawnera.auth.v1",
+        apiBase: "https://api.clawnera.com",
+        address: "0xabc",
+        alias: "seller-bot",
+        token: "jwt-token",
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+
+  const result = runCli(
+    [
+      "--json",
+      "notifications",
+      "init",
+      "telegram",
+      "--auth-state-file",
+      authStateFile,
+      "--preset",
+      "mailbox"
+    ],
+    {
+      env: {
+        HOME: fakeHome
+      }
+    }
+  );
+
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.match(payload.envOut, /telegram-event-notifier\.mailbox\.env$/);
+  assert.match(payload.serviceOut, /clawnera-telegram-event-notifier-mailbox\.service$/);
+  assert.match(payload.cursorOut, /telegram-event-notifier\.mailbox\.cursor\.json$/);
+  assert.equal(existsSync(payload.envOut), true);
+  assert.equal(existsSync(payload.serviceOut), true);
+});
+
+test("notifications init with explicit event types and no preset writes custom-only selection", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-custom-default-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const envFile = path.join(tempDir, "telegram-event-notifier.env");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        version: "clawnera.auth.v1",
+        apiBase: "https://api.clawnera.com",
+        address: "0xabc",
+        alias: "seller-bot",
+        token: "jwt-token",
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+
+  const result = runCli([
+    "notifications",
+    "init",
+    "telegram",
+    "--auth-state-file",
+    authStateFile,
+    "--env-out",
+    envFile,
+    "--service-out",
+    path.join(tempDir, "notify.service"),
+    "--event-types",
+    "bid.created,order.status_changed"
+  ]);
+
+  assert.equal(result.status, 0, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  const envText = readFileSync(envFile, "utf8");
+  assert.match(envText, /CLAWNERA_NOTIFY_PRESET=custom/);
+  assert.match(envText, /CLAWNERA_NOTIFY_EVENT_TYPES=bid\.created,order\.status_changed/);
 });
 
 test("notifications doctor validates generated notifier files", () => {
@@ -152,7 +247,10 @@ test("notifications doctor validates generated notifier files", () => {
   const envFile = path.join(tempDir, "telegram-event-notifier.env");
   const serviceFile = path.join(tempDir, "clawnera-telegram-event-notifier.service");
 
-  writeFileSync(authStateFile, JSON.stringify({ apiBase: "https://api.clawnera.com", token: "jwt" }, null, 2));
+  writeFileSync(
+    authStateFile,
+    JSON.stringify({ apiBase: "https://api.clawnera.com", token: "jwt", refreshToken: "refresh-token" }, null, 2)
+  );
   writeFileSync(
     envFile,
     [
@@ -160,8 +258,8 @@ test("notifications doctor validates generated notifier files", () => {
       `CLAWNERA_AUTH_STATE_FILE=${authStateFile}`,
       "CLAWNERA_NOTIFY_PRESET=seller",
       "CLAWNERA_NOTIFY_EVENT_TYPES=bid.created,mailbox.signal_posted",
-      "TELEGRAM_BOT_TOKEN=bot",
-      "TELEGRAM_CHAT_ID=chat"
+      "TELEGRAM_BOT_TOKEN=123456:ABCDEF-real-token",
+      "TELEGRAM_CHAT_ID=123456"
     ].join("\n")
   );
   writeFileSync(serviceFile, "ExecStart=/usr/bin/env bash -lc 'node ./examples/telegram-event-notifier.mjs'\n");
@@ -180,6 +278,1000 @@ test("notifications doctor validates generated notifier files", () => {
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, true);
   assert.deepEqual(payload.issues, []);
+});
+
+test("notifications doctor accepts export-style env files", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-doctor-export-env-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const envFile = path.join(tempDir, "telegram-event-notifier.env");
+  const serviceFile = path.join(tempDir, "clawnera-telegram-event-notifier.service");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: "https://api.clawnera.com",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+  writeFileSync(
+    envFile,
+    [
+      "export CLAWNERA_API_BASE_URL=https://api.clawnera.com",
+      `export CLAWNERA_AUTH_STATE_FILE=${authStateFile}`,
+      "export CLAWNERA_NOTIFY_PRESET=seller",
+      "export CLAWNERA_NOTIFY_EVENT_TYPES=bid.created,mailbox.signal_posted",
+      "export TELEGRAM_BOT_TOKEN=123456:ABCDEF-real-token",
+      "export TELEGRAM_CHAT_ID=123456 # bot inbox"
+    ].join("\n")
+  );
+  writeFileSync(serviceFile, 'ExecStart="/usr/bin/node" "/tmp/telegram-event-notifier.mjs"\n');
+
+  const result = runCli([
+    "notifications",
+    "doctor",
+    "--env-file",
+    envFile,
+    "--service-file",
+    serviceFile,
+    "--json"
+  ]);
+
+  assert.equal(result.status, 0, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+});
+
+test("notifications doctor plain output does not print preset list", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-doctor-plain-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const envFile = path.join(tempDir, "telegram-event-notifier.env");
+  const serviceFile = path.join(tempDir, "clawnera-telegram-event-notifier.service");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: "https://api.clawnera.com",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+  writeFileSync(
+    envFile,
+    [
+      "CLAWNERA_API_BASE_URL=https://api.clawnera.com",
+      `CLAWNERA_AUTH_STATE_FILE=${authStateFile}`,
+      "CLAWNERA_NOTIFY_PRESET=seller",
+      "CLAWNERA_NOTIFY_EVENT_TYPES=bid.created,mailbox.signal_posted",
+      "TELEGRAM_BOT_TOKEN=123456:ABCDEF-real-token",
+      "TELEGRAM_CHAT_ID=123456"
+    ].join("\n")
+  );
+  writeFileSync(serviceFile, 'ExecStart="/usr/bin/node" "/tmp/telegram-event-notifier.mjs"\n');
+
+  const result = runCli([
+    "notifications",
+    "doctor",
+    "--env-file",
+    envFile,
+    "--service-file",
+    serviceFile
+  ]);
+
+  assert.equal(result.status, 0, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  assert.match(result.stdout, /notifications_doctor_ok/);
+  assert.doesNotMatch(result.stdout, /Notification presets:/);
+});
+
+test("notifications doctor flags auth state api base mismatch", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-doctor-authstate-mismatch-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const envFile = path.join(tempDir, "telegram-event-notifier.env");
+  const serviceFile = path.join(tempDir, "clawnera-telegram-event-notifier.service");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: "https://api.other.example",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+  writeFileSync(
+    envFile,
+    [
+      "CLAWNERA_API_BASE_URL=https://api.clawnera.com",
+      `CLAWNERA_AUTH_STATE_FILE=${authStateFile}`,
+      "CLAWNERA_NOTIFY_PRESET=seller",
+      "CLAWNERA_NOTIFY_EVENT_TYPES=bid.created,mailbox.signal_posted",
+      "TELEGRAM_BOT_TOKEN=123456:ABCDEF-real-token",
+      "TELEGRAM_CHAT_ID=123456"
+    ].join("\n")
+  );
+  writeFileSync(serviceFile, 'ExecStart="/usr/bin/node" "/tmp/telegram-event-notifier.mjs"\n');
+
+  const result = runCli([
+    "notifications",
+    "doctor",
+    "--env-file",
+    envFile,
+    "--service-file",
+    serviceFile,
+    "--json"
+  ]);
+
+  assert.notEqual(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.ok(payload.issues.includes("auth_state_api_base_mismatch"));
+});
+
+test("notifications doctor validates notifier numeric env values", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-doctor-numeric-env-"));
+  const envFile = path.join(tempDir, "telegram-event-notifier.env");
+  const serviceFile = path.join(tempDir, "clawnera-telegram-event-notifier.service");
+  const validJwt = buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600);
+
+  writeFileSync(
+    envFile,
+    [
+      "CLAWNERA_API_BASE_URL=https://api.clawnera.com",
+      `CLAWNERA_API_JWT=${validJwt}`,
+      "CLAWNERA_NOTIFY_PRESET=seller",
+      "CLAWNERA_NOTIFY_EVENT_TYPES=bid.created,mailbox.signal_posted",
+      "CLAWNERA_NOTIFY_POLL_MS=10ms",
+      "TELEGRAM_BOT_TOKEN=123456:ABCDEF-real-token",
+      "TELEGRAM_CHAT_ID=123456"
+    ].join("\n")
+  );
+  writeFileSync(serviceFile, 'ExecStart="/usr/bin/node" "/tmp/telegram-event-notifier.mjs"\n');
+
+  const result = runCli([
+    "notifications",
+    "doctor",
+    "--env-file",
+    envFile,
+    "--service-file",
+    serviceFile,
+    "--json"
+  ]);
+
+  assert.notEqual(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.ok(payload.issues.includes("invalid_env_CLAWNERA_NOTIFY_POLL_MS"));
+});
+
+test("notifications doctor accepts auth-state-only api base resolution", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-doctor-authstate-api-base-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const envFile = path.join(tempDir, "telegram-event-notifier.env");
+  const serviceFile = path.join(tempDir, "clawnera-telegram-event-notifier.service");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: "https://api.clawnera.com",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+  writeFileSync(
+    envFile,
+    [
+      `CLAWNERA_AUTH_STATE_FILE=${authStateFile}`,
+      "CLAWNERA_NOTIFY_PRESET=seller",
+      "CLAWNERA_NOTIFY_EVENT_TYPES=bid.created,mailbox.signal_posted",
+      "TELEGRAM_BOT_TOKEN=123456:ABCDEF-real-token",
+      "TELEGRAM_CHAT_ID=123456"
+    ].join("\n")
+  );
+  writeFileSync(serviceFile, 'ExecStart="/usr/bin/node" "/tmp/telegram-event-notifier.mjs"\n');
+
+  const result = runCli([
+    "notifications",
+    "doctor",
+    "--env-file",
+    envFile,
+    "--service-file",
+    serviceFile,
+    "--json"
+  ]);
+
+  assert.equal(result.status, 0, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.deepEqual(payload.issues, []);
+});
+
+test("notifications doctor flags quoted placeholder telegram values", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-doctor-quoted-placeholder-"));
+  const envFile = path.join(tempDir, "telegram-event-notifier.env");
+  const serviceFile = path.join(tempDir, "clawnera-telegram-event-notifier.service");
+
+  writeFileSync(
+    envFile,
+    [
+      "CLAWNERA_API_BASE_URL=https://api.clawnera.com",
+      "CLAWNERA_API_JWT=jwt-token",
+      'TELEGRAM_BOT_TOKEN=" <botfather token> "',
+      "TELEGRAM_CHAT_ID=123456"
+    ].join("\n")
+  );
+  writeFileSync(serviceFile, 'ExecStart="/usr/bin/node" "/tmp/telegram-event-notifier.mjs"\n');
+
+  const result = runCli([
+    "notifications",
+    "doctor",
+    "--env-file",
+    envFile,
+    "--service-file",
+    serviceFile,
+    "--json"
+  ]);
+
+  assert.notEqual(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.ok(payload.issues.includes("invalid_env_TELEGRAM_BOT_TOKEN"));
+});
+
+test("notifications doctor validates env jwt expiry", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-doctor-expired-jwt-"));
+  const envFile = path.join(tempDir, "telegram-event-notifier.env");
+  const serviceFile = path.join(tempDir, "clawnera-telegram-event-notifier.service");
+  const expiredJwt = buildJwtWithExp(Math.floor(Date.now() / 1000) - 60);
+
+  writeFileSync(
+    envFile,
+    [
+      "CLAWNERA_API_BASE_URL=https://api.clawnera.com",
+      `CLAWNERA_API_JWT=${expiredJwt}`,
+      "CLAWNERA_NOTIFY_PRESET=seller",
+      "TELEGRAM_BOT_TOKEN=123456:ABCDEF-real-token",
+      "TELEGRAM_CHAT_ID=123456"
+    ].join("\n")
+  );
+  writeFileSync(serviceFile, 'ExecStart="/usr/bin/node" "/tmp/telegram-event-notifier.mjs"\n');
+
+  const result = runCli([
+    "notifications",
+    "doctor",
+    "--env-file",
+    envFile,
+    "--service-file",
+    serviceFile,
+    "--json"
+  ]);
+
+  assert.notEqual(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.ok(payload.issues.includes("expired_auth_no_refresh"));
+});
+
+test("notifications doctor accepts JWT-only notifier auth", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-doctor-jwt-"));
+  const envFile = path.join(tempDir, "telegram-event-notifier.env");
+  const serviceFile = path.join(tempDir, "clawnera-telegram-event-notifier.service");
+  const validJwt = buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600);
+
+  writeFileSync(
+    envFile,
+    [
+      "CLAWNERA_API_BASE_URL=https://api.clawnera.com",
+      `CLAWNERA_API_JWT=${validJwt}`,
+      "CLAWNERA_NOTIFY_PRESET=seller",
+      "CLAWNERA_NOTIFY_EVENT_TYPES=bid.created,mailbox.signal_posted",
+      "TELEGRAM_BOT_TOKEN=123456:ABCDEF-real-token",
+      "TELEGRAM_CHAT_ID=123456"
+    ].join("\n")
+  );
+  writeFileSync(serviceFile, "ExecStart=/usr/bin/env bash -lc 'node ./examples/telegram-event-notifier.mjs'\n");
+
+  const result = runCli([
+    "notifications",
+    "doctor",
+    "--env-file",
+    envFile,
+    "--service-file",
+    serviceFile,
+    "--json"
+  ]);
+
+  assert.equal(result.status, 0, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.deepEqual(payload.issues, []);
+});
+
+test("notifications doctor accepts refresh-token-only notifier auth", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-doctor-refresh-"));
+  const envFile = path.join(tempDir, "telegram-event-notifier.env");
+  const serviceFile = path.join(tempDir, "clawnera-telegram-event-notifier.service");
+
+  writeFileSync(
+    envFile,
+    [
+      "CLAWNERA_API_BASE_URL=https://api.clawnera.com",
+      "CLAWNERA_API_REFRESH_TOKEN=refresh-token",
+      "CLAWNERA_NOTIFY_PRESET=seller",
+      "TELEGRAM_BOT_TOKEN=123456:ABCDEF-real-token",
+      "TELEGRAM_CHAT_ID=123456"
+    ].join("\n")
+  );
+  writeFileSync(serviceFile, "ExecStart=/usr/bin/env bash -lc 'node ./examples/telegram-event-notifier.mjs'\n");
+
+  const result = runCli([
+    "notifications",
+    "doctor",
+    "--env-file",
+    envFile,
+    "--service-file",
+    serviceFile,
+    "--json"
+  ]);
+
+  assert.equal(result.status, 0, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.deepEqual(payload.issues, []);
+});
+
+test("notifications init rejects unknown event types", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-events-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        version: "clawnera.auth.v1",
+        apiBase: "https://api.clawnera.com",
+        address: "0xabc",
+        alias: "seller-bot",
+        token: "jwt-token",
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+
+  const result = runCli([
+    "notifications",
+    "init",
+    "telegram",
+    "--auth-state-file",
+    authStateFile,
+    "--env-out",
+    path.join(tempDir, "notify.env"),
+    "--service-out",
+    path.join(tempDir, "notify.service"),
+    "--event-types",
+    "not.real.event"
+  ]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /invalid_notification_event_types/);
+});
+
+test("notifications init rejects invalid preset values even with explicit events", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-preset-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        version: "clawnera.auth.v1",
+        apiBase: "https://api.clawnera.com",
+        address: "0xabc",
+        alias: "seller-bot",
+        token: "jwt-token",
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+
+  const result = runCli([
+    "notifications",
+    "init",
+    "telegram",
+    "--auth-state-file",
+    authStateFile,
+    "--env-out",
+    path.join(tempDir, "notify.env"),
+    "--service-out",
+    path.join(tempDir, "notify.service"),
+    "--preset",
+    "typo",
+    "--event-types",
+    "bid.created"
+  ]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /invalid_notification_preset/);
+});
+
+test("notifications init requires explicit event types for custom preset", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-custom-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        version: "clawnera.auth.v1",
+        apiBase: "https://api.clawnera.com",
+        address: "0xabc",
+        alias: "seller-bot",
+        token: "jwt-token",
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+
+  const result = runCli([
+    "notifications",
+    "init",
+    "telegram",
+    "--auth-state-file",
+    authStateFile,
+    "--env-out",
+    path.join(tempDir, "notify.env"),
+    "--service-out",
+    path.join(tempDir, "notify.service"),
+    "--preset",
+    "custom"
+  ]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /missing_notification_event_types/);
+});
+
+test("notifications init protects existing auth state during fresh login unless forced", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-authstate-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  writeFileSync(authStateFile, JSON.stringify({ token: "jwt-token" }, null, 2));
+
+  const result = runCli([
+    "notifications",
+    "init",
+    "telegram",
+    "--api-base",
+    "https://api.clawnera.com",
+    "--alias",
+    "seller-bot",
+    "--state-out",
+    authStateFile,
+    "--env-out",
+    path.join(tempDir, "notify.env"),
+    "--service-out",
+    path.join(tempDir, "notify.service")
+  ]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /notifications_output_exists/);
+  assert.match(result.stderr, new RegExp(authStateFile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
+test("notifications init rejects state-out without login selector", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-state-out-reuse-"));
+  const result = runCli([
+    "notifications",
+    "init",
+    "telegram",
+    "--state-out",
+    path.join(tempDir, "auth-state.json"),
+    "--env-out",
+    path.join(tempDir, "notify.env"),
+    "--service-out",
+    path.join(tempDir, "notify.service")
+  ]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /notifications_state_out_requires_login_selector/);
+});
+
+test("notifications doctor flags invalid preset values", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-doctor-preset-"));
+  const envFile = path.join(tempDir, "telegram-event-notifier.env");
+  const serviceFile = path.join(tempDir, "clawnera-telegram-event-notifier.service");
+
+  writeFileSync(
+    envFile,
+    [
+      "CLAWNERA_API_BASE_URL=https://api.clawnera.com",
+      "CLAWNERA_API_JWT=jwt-token",
+      "CLAWNERA_NOTIFY_PRESET=typo",
+      "CLAWNERA_NOTIFY_EVENT_TYPES=bid.created",
+      "TELEGRAM_BOT_TOKEN=123456:ABCDEF-real-token",
+      "TELEGRAM_CHAT_ID=123456"
+    ].join("\n")
+  );
+  writeFileSync(serviceFile, "ExecStart=/usr/bin/env bash -lc 'node ./examples/telegram-event-notifier.mjs'\n");
+
+  const result = runCli([
+    "notifications",
+    "doctor",
+    "--env-file",
+    envFile,
+    "--service-file",
+    serviceFile,
+    "--json"
+  ]);
+
+  assert.notEqual(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.ok(payload.issues.includes("invalid_notification_preset"));
+});
+
+test("notifications doctor rejects invalid preset selectors instead of falling back silently", () => {
+  const result = runCli(["notifications", "doctor", "--preset", "seler", "--json"]);
+
+  assert.notEqual(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, "invalid_notification_preset");
+  assert.equal(payload.invalidPreset, "seler");
+});
+
+test("notifications doctor validates auth state contents, not just file presence", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-doctor-auth-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const envFile = path.join(tempDir, "telegram-event-notifier.env");
+  const serviceFile = path.join(tempDir, "clawnera-telegram-event-notifier.service");
+
+  writeFileSync(authStateFile, JSON.stringify({ apiBase: "https://api.clawnera.com" }, null, 2));
+  writeFileSync(
+    envFile,
+    [
+      "CLAWNERA_API_BASE_URL=https://api.clawnera.com",
+      `CLAWNERA_AUTH_STATE_FILE=${authStateFile}`,
+      "CLAWNERA_NOTIFY_PRESET=seller",
+      "TELEGRAM_BOT_TOKEN=123456:ABCDEF-real-token",
+      "TELEGRAM_CHAT_ID=123456"
+    ].join("\n")
+  );
+  writeFileSync(serviceFile, "ExecStart=/usr/bin/env bash -lc 'node ./examples/telegram-event-notifier.mjs'\n");
+
+  const result = runCli([
+    "notifications",
+    "doctor",
+    "--env-file",
+    envFile,
+    "--service-file",
+    serviceFile,
+    "--json"
+  ]);
+
+  assert.notEqual(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.ok(payload.issues.includes("missing_or_invalid_auth_token"));
+});
+
+test("notifications init rejects non-decimal poll values", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-poll-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        version: "clawnera.auth.v1",
+        apiBase: "https://api.clawnera.com",
+        address: "0xabc",
+        alias: "seller-bot",
+        token: "jwt-token",
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+
+  const result = runCli([
+    "notifications",
+    "init",
+    "telegram",
+    "--auth-state-file",
+    authStateFile,
+    "--env-out",
+    path.join(tempDir, "notify.env"),
+    "--service-out",
+    path.join(tempDir, "notify.service"),
+    "--poll-ms",
+    "10ms"
+  ]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /invalid_poll_ms/);
+});
+
+test("notifications init rejects placeholder telegram token values", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-placeholder-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        version: "clawnera.auth.v1",
+        apiBase: "https://api.clawnera.com",
+        address: "0xabc",
+        alias: "seller-bot",
+        token: "jwt-token",
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+
+  const result = runCli([
+    "notifications",
+    "init",
+    "telegram",
+    "--auth-state-file",
+    authStateFile,
+    "--env-out",
+    path.join(tempDir, "notify.env"),
+    "--service-out",
+    path.join(tempDir, "notify.service"),
+    "--telegram-bot-token",
+    "<botfather token>"
+  ]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /invalid_env_TELEGRAM_BOT_TOKEN/);
+});
+
+test("notifications init rejects malformed telegram chat ids", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-bad-chat-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        version: "clawnera.auth.v1",
+        apiBase: "https://api.clawnera.com",
+        address: "0xabc",
+        alias: "seller-bot",
+        token: "jwt-token",
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+
+  const result = runCli([
+    "notifications",
+    "init",
+    "telegram",
+    "--auth-state-file",
+    authStateFile,
+    "--env-out",
+    path.join(tempDir, "notify.env"),
+    "--service-out",
+    path.join(tempDir, "notify.service"),
+    "--telegram-bot-token",
+    "123456:ABCDEF-real-token",
+    "--telegram-chat-id",
+    "not-a-chat-id"
+  ]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /invalid_env_TELEGRAM_CHAT_ID/);
+});
+
+test("notifications init rejects existing auth state without usable auth tokens", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-bad-auth-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        version: "clawnera.auth.v1",
+        apiBase: "https://api.clawnera.com",
+        address: "0xabc",
+        alias: "seller-bot"
+      },
+      null,
+      2
+    )
+  );
+
+  const result = runCli([
+    "notifications",
+    "init",
+    "telegram",
+    "--auth-state-file",
+    authStateFile,
+    "--env-out",
+    path.join(tempDir, "notify.env"),
+    "--service-out",
+    path.join(tempDir, "notify.service")
+  ]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /missing_or_invalid_auth_token/);
+});
+
+test("notifications init rejects auth state apiBase mismatch", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-api-base-mismatch-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        version: "clawnera.auth.v1",
+        apiBase: "https://staging.clawnera.example",
+        address: "0xabc",
+        alias: "seller-bot",
+        token: "jwt-token",
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+
+  const result = runCli([
+    "notifications",
+    "init",
+    "telegram",
+    "--api-base",
+    "https://api.clawnera.com",
+    "--auth-state-file",
+    authStateFile,
+    "--env-out",
+    path.join(tempDir, "notify.env"),
+    "--service-out",
+    path.join(tempDir, "notify.service")
+  ]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /auth_state_api_base_mismatch/);
+  assert.match(result.stderr, /staging\.clawnera\.example/);
+});
+
+test("notifications init rejects invalid package roots before writing files", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-invalid-package-root-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        version: "clawnera.auth.v1",
+        apiBase: "https://api.clawnera.com",
+        address: "0xabc",
+        alias: "seller-bot",
+        token: "jwt-token",
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+
+  const result = runCli([
+    "notifications",
+    "init",
+    "telegram",
+    "--auth-state-file",
+    authStateFile,
+    "--package-root",
+    path.join(tempDir, "missing-package-root"),
+    "--json"
+  ]);
+
+  assert.notEqual(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, "invalid_notification_package_root");
+});
+
+test("notifications init returns structured write failures for notifier outputs", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-output-write-failure-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const blockerFile = path.join(tempDir, "not-a-dir");
+  const envOut = path.join(blockerFile, "notify.env");
+  const serviceOut = path.join(tempDir, "notify.service");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        version: "clawnera.auth.v1",
+        apiBase: "https://api.clawnera.com",
+        address: "0xabc",
+        alias: "seller-bot",
+        token: "jwt-token",
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+  writeFileSync(blockerFile, "blocker");
+
+  const result = runCli([
+    "notifications",
+    "init",
+    "telegram",
+    "--auth-state-file",
+    authStateFile,
+    "--env-out",
+    envOut,
+    "--service-out",
+    serviceOut,
+    "--json"
+  ]);
+
+  assert.notEqual(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, "notifications_output_write_failed");
+  assert.equal(payload.file, envOut);
+});
+
+test("notifications init treats --force false as disabled", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-force-false-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const envFile = path.join(tempDir, "notify.env");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        version: "clawnera.auth.v1",
+        apiBase: "https://api.clawnera.com",
+        address: "0xabc",
+        alias: "seller-bot",
+        token: "jwt-token",
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+  writeFileSync(envFile, "existing=true\n");
+
+  const result = runCli([
+    "notifications",
+    "init",
+    "telegram",
+    "--auth-state-file",
+    authStateFile,
+    "--env-out",
+    envFile,
+    "--service-out",
+    path.join(tempDir, "notify.service"),
+    "--force",
+    "false"
+  ]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /notifications_output_exists/);
+});
+
+test("notifications init emits link command for custom service paths", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-service-path-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const serviceFile = path.join(tempDir, "custom", "clawnera-telegram-event-notifier.service");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        version: "clawnera.auth.v1",
+        apiBase: "https://api.clawnera.com",
+        address: "0xabc",
+        alias: "seller-bot",
+        token: "jwt-token",
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+
+  const result = runCli(
+    [
+      "--json",
+      "notifications",
+      "init",
+      "telegram",
+      "--auth-state-file",
+      authStateFile,
+      "--env-out",
+      path.join(tempDir, "notify.env"),
+      "--service-out",
+      serviceFile,
+      "--telegram-bot-token",
+      "123456:ABCDEF-real-token",
+      "--telegram-chat-id",
+      "123456"
+    ]
+  );
+
+  assert.equal(result.status, 0, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.ok(Array.isArray(payload.commands));
+  assert.ok(payload.commands.some((line) => line.includes("systemctl --user link")));
+});
+
+test("notifications init without telegram creds scaffolds files but does not suggest start commands", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-no-creds-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        version: "clawnera.auth.v1",
+        apiBase: "https://api.clawnera.com",
+        address: "0xabc",
+        alias: "seller-bot",
+        token: "jwt-token",
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+
+  const result = runCli(
+    [
+      "--json",
+      "notifications",
+      "init",
+      "telegram",
+      "--auth-state-file",
+      authStateFile,
+      "--env-out",
+      path.join(tempDir, "notify.env"),
+      "--service-out",
+      path.join(tempDir, "notify.service")
+    ]
+  );
+
+  assert.equal(result.status, 0, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.readyToStart, false);
+  assert.deepEqual(payload.commands, []);
+  assert.ok(Array.isArray(payload.warnings));
+  assert.ok(payload.warnings.includes("missing_telegram_credentials"));
 });
 
 test("show with unknown topic fails", () => {
@@ -247,6 +1339,12 @@ test("auth-login help prints usage", () => {
   assert.match(result.stdout, /Auth login helper/);
   assert.match(result.stdout, /--state-out/);
   assert.match(result.stdout, /auto-refresh sessions/);
+});
+
+test("auth-login short help prints usage", () => {
+  const result = runCli(["auth-login", "-h"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Auth login helper/);
 });
 
 test("sponsor-execute help prints usage", () => {

@@ -12,16 +12,28 @@ import {
   loadKeystoreEntries,
   resolveKeystoreEntry,
   saveAuthState,
-  signInWithKeystoreEntry
+  signInWithKeystoreEntry,
+  validateRuntimeAuthState
 } from "../lib/runtime-auth.mjs";
 import {
+  CUSTOM_NOTIFICATION_PRESET,
+  DEFAULT_NOTIFICATION_BATCH_LIMIT,
+  DEFAULT_NOTIFICATION_PRESET,
   buildNotificationEnvText,
   buildNotificationServiceText,
+  DEFAULT_NOTIFICATION_POLL_MS,
+  DEFAULT_NOTIFICATION_REFRESH_SKEW_MS,
   defaultNotificationCursorPath,
   defaultNotificationEnvPath,
   defaultNotificationServicePath,
+  DEFAULT_NOTIFICATION_TIMEOUT_MS,
+  isPlaceholderNotificationValue,
+  isValidTelegramBotToken,
+  isValidTelegramChatId,
+  normalizeNotificationEnvValue,
   notificationPresetNames,
   NOTIFICATION_PRESETS,
+  parsePositiveNotificationValue,
   resolveNotificationEventTypes,
   resolveNotificationPreset
 } from "../lib/notifications.mjs";
@@ -591,14 +603,25 @@ function parseLongOptions(args) {
 
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index];
+    if (token === "-h") {
+      options.h = true;
+      continue;
+    }
     if (!token.startsWith("--")) {
       positionals.push(token);
       continue;
     }
 
-    const key = token.slice(2).trim().toLowerCase();
+    const trimmed = token.slice(2).trim();
+    const separator = trimmed.indexOf("=");
+    const key = (separator >= 0 ? trimmed.slice(0, separator) : trimmed).trim().toLowerCase();
     if (!key) {
       positionals.push(token);
+      continue;
+    }
+
+    if (separator >= 0) {
+      options[key] = trimmed.slice(separator + 1);
       continue;
     }
 
@@ -618,11 +641,35 @@ function parsePositiveIntOption(rawValue, fieldName, fallback) {
   if (rawValue === undefined || rawValue === null || rawValue === "") {
     return fallback;
   }
-  const parsed = Number.parseInt(String(rawValue), 10);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  const normalized = String(rawValue).trim();
+  if (!/^\d+$/.test(normalized)) {
+    throw new Error(`invalid_${fieldName}`);
+  }
+  const parsed = Number(normalized);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new Error(`invalid_${fieldName}`);
   }
   return parsed;
+}
+
+function parseBooleanOption(rawValue, fallback = false) {
+  if (rawValue === undefined || rawValue === null || rawValue === "") {
+    return fallback;
+  }
+  if (rawValue === true || rawValue === false) {
+    return rawValue;
+  }
+  const normalized = String(rawValue).trim().toLowerCase();
+  if (!normalized) {
+    return fallback;
+  }
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+  return fallback;
 }
 
 function normalizeApiBase(rawValue) {
@@ -995,18 +1042,23 @@ async function runAuthLogin(commandArgs) {
 }
 
 function notificationsUsageLines() {
+  const sellerPreset = DEFAULT_NOTIFICATION_PRESET;
   return [
     "Notifications helper:",
     "- Usage: clawnera-help notifications <init|presets|doctor> [options]",
     "- Init telegram notifier: clawnera-help notifications init telegram --preset seller --api-base https://api.clawnera.com --alias <wallet-alias>",
+    "- Use --auth-state-file <file> to reuse an existing auth state; use --state-out <file> only when init should create a fresh auth state via --alias/--address",
+    "- Passing --event-types without --preset uses custom-only events; --preset custom is also supported explicitly",
     "- List presets: clawnera-help notifications presets",
     "- Check local config: clawnera-help notifications doctor",
+    "- Runtime auth precedence: valid CLAWNERA_API_JWT wins; invalid env auth fails unless CLAWNERA_NOTIFY_ALLOW_AUTH_STATE_FALLBACK=1 is set",
     "- Default preset: seller",
     "- Default files:",
     `  auth state: ${defaultAuthStatePath()}`,
-    `  env file:   ${defaultNotificationEnvPath()}`,
-    `  service:    ${defaultNotificationServicePath()}`,
-    `  cursor:     ${defaultNotificationCursorPath()}`
+    `  seller env: ${defaultNotificationEnvPath(undefined, sellerPreset)}`,
+    `  seller svc: ${defaultNotificationServicePath(undefined, sellerPreset)}`,
+    `  seller cur: ${defaultNotificationCursorPath(undefined, sellerPreset)}`,
+    "- Other presets automatically use preset-specific env/service/cursor file names."
   ];
 }
 
@@ -1020,6 +1072,25 @@ function writeTextFile(targetPath, content, mode) {
   fs.chmodSync(targetPath, mode);
 }
 
+function buildNotificationServiceCommands(serviceOut) {
+  const unitName = path.basename(serviceOut);
+  const defaultServiceDir = path.dirname(defaultNotificationServicePath());
+  if (path.dirname(serviceOut) === defaultServiceDir) {
+    return [
+      `systemctl --user daemon-reload`,
+      `systemctl --user enable --now ${shellQuote(unitName)}`,
+      `journalctl --user -u ${shellQuote(unitName)} -f`
+    ];
+  }
+
+  return [
+    `systemctl --user daemon-reload`,
+    `systemctl --user link ${shellQuote(serviceOut)}`,
+    `systemctl --user enable --now ${shellQuote(unitName)}`,
+    `journalctl --user -u ${shellQuote(unitName)} -f`
+  ];
+}
+
 function parseSimpleEnvFile(raw) {
   const out = {};
   for (const line of String(raw || "").split(/\r?\n/)) {
@@ -1027,12 +1098,18 @@ function parseSimpleEnvFile(raw) {
     if (!trimmed || trimmed.startsWith("#")) {
       continue;
     }
-    const separator = trimmed.indexOf("=");
+    const normalizedLine = trimmed.replace(/^export\s+/, "");
+    const separator = normalizedLine.indexOf("=");
     if (separator <= 0) {
       continue;
     }
-    const key = trimmed.slice(0, separator).trim();
-    const value = trimmed.slice(separator + 1).trim();
+    const key = normalizedLine.slice(0, separator).trim();
+    let valuePart = normalizedLine.slice(separator + 1);
+    const commentIndex = valuePart.search(/\s+#/);
+    if (commentIndex >= 0) {
+      valuePart = valuePart.slice(0, commentIndex);
+    }
+    const value = normalizeNotificationEnvValue(valuePart);
     if (key) {
       out[key] = value;
     }
@@ -1046,6 +1123,59 @@ function notificationsPresetPayload() {
     description: NOTIFICATION_PRESETS[name].description,
     eventTypes: [...NOTIFICATION_PRESETS[name].eventTypes]
   }));
+}
+
+function resolveRequestedNotificationPreset(rawPreset) {
+  if (typeof rawPreset !== "string" || !rawPreset.trim()) {
+    return {
+      ok: true,
+      preset: DEFAULT_NOTIFICATION_PRESET
+    };
+  }
+  const resolved = resolveNotificationPreset(rawPreset);
+  if (!resolved) {
+    return {
+      ok: false,
+      error: "invalid_notification_preset",
+      invalidPreset: String(rawPreset).trim()
+    };
+  }
+  return {
+    ok: true,
+    preset: resolved
+  };
+}
+
+function validateNotificationPackageRoot(packageRoot) {
+  const notifierScript = path.join(packageRoot, "examples", "telegram-event-notifier.mjs");
+  if (!fs.existsSync(packageRoot)) {
+    return {
+      ok: false,
+      error: "invalid_notification_package_root",
+      packageRoot,
+      missing: packageRoot
+    };
+  }
+  if (!fs.statSync(packageRoot).isDirectory()) {
+    return {
+      ok: false,
+      error: "invalid_notification_package_root",
+      packageRoot,
+      missing: packageRoot
+    };
+  }
+  if (!fs.existsSync(notifierScript)) {
+    return {
+      ok: false,
+      error: "invalid_notification_package_root",
+      packageRoot,
+      missing: notifierScript
+    };
+  }
+  return {
+    ok: true,
+    notifierScript
+  };
 }
 
 async function runNotifications(commandArgs) {
@@ -1062,19 +1192,25 @@ async function runNotifications(commandArgs) {
   if (subcommand === "presets") {
     return {
       ok: true,
+      mode: "presets",
       presets: notificationsPresetPayload()
     };
   }
 
   if (subcommand === "doctor") {
+    const requestedPreset = resolveRequestedNotificationPreset(options.preset);
+    if (!requestedPreset.ok) {
+      return requestedPreset;
+    }
+    const requestedPresetLabel = requestedPreset.preset;
     const envFile =
       typeof options["env-file"] === "string" && options["env-file"].trim()
         ? path.resolve(String(options["env-file"]).trim())
-        : defaultNotificationEnvPath();
+        : defaultNotificationEnvPath(undefined, requestedPresetLabel);
     const serviceFile =
       typeof options["service-file"] === "string" && options["service-file"].trim()
         ? path.resolve(String(options["service-file"]).trim())
-        : defaultNotificationServicePath();
+        : defaultNotificationServicePath(undefined, requestedPresetLabel);
     const issues = [];
 
     let envValues = {};
@@ -1082,26 +1218,87 @@ async function runNotifications(commandArgs) {
       issues.push("missing_env_file");
     } else {
       envValues = parseSimpleEnvFile(fs.readFileSync(envFile, "utf8"));
-      const requiredEnvKeys = [
-        "CLAWNERA_API_BASE_URL",
-        "CLAWNERA_AUTH_STATE_FILE",
-        "TELEGRAM_BOT_TOKEN",
-        "TELEGRAM_CHAT_ID"
-      ];
+      const requiredEnvKeys = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"];
       for (const key of requiredEnvKeys) {
         if (!String(envValues[key] || "").trim()) {
           issues.push(`missing_env_${key}`);
         }
       }
+      if (isPlaceholderNotificationValue(envValues.TELEGRAM_BOT_TOKEN) || !isValidTelegramBotToken(envValues.TELEGRAM_BOT_TOKEN)) {
+        issues.push("invalid_env_TELEGRAM_BOT_TOKEN");
+      }
+      if (isPlaceholderNotificationValue(envValues.TELEGRAM_CHAT_ID) || !isValidTelegramChatId(envValues.TELEGRAM_CHAT_ID)) {
+        issues.push("invalid_env_TELEGRAM_CHAT_ID");
+      }
       const resolved = resolveNotificationEventTypes({
         preset: envValues.CLAWNERA_NOTIFY_PRESET,
         eventTypes: envValues.CLAWNERA_NOTIFY_EVENT_TYPES
       });
+      if (resolved.invalidPreset) {
+        issues.push("invalid_notification_preset");
+      }
+      if (resolved.invalidEventTypes.length > 0) {
+        issues.push("invalid_notification_event_types");
+      }
       if (resolved.eventTypes.length === 0) {
         issues.push("missing_notification_event_types");
       }
-      if (envValues.CLAWNERA_AUTH_STATE_FILE && !fs.existsSync(path.resolve(envValues.CLAWNERA_AUTH_STATE_FILE))) {
-        issues.push("missing_auth_state_file");
+      for (const [name, fallback] of [
+        ["CLAWNERA_NOTIFY_POLL_MS", DEFAULT_NOTIFICATION_POLL_MS],
+        ["CLAWNERA_NOTIFY_BATCH_LIMIT", DEFAULT_NOTIFICATION_BATCH_LIMIT],
+        ["CLAWNERA_NOTIFY_TIMEOUT_MS", DEFAULT_NOTIFICATION_TIMEOUT_MS],
+        ["CLAWNERA_NOTIFY_REFRESH_SKEW_MS", DEFAULT_NOTIFICATION_REFRESH_SKEW_MS]
+      ]) {
+        try {
+          parsePositiveNotificationValue(envValues[name], name, fallback);
+        } catch (error) {
+          issues.push(error instanceof Error ? error.message : `invalid_env_${name}`);
+        }
+      }
+      const hasAuthStateFile = Boolean(String(envValues.CLAWNERA_AUTH_STATE_FILE || "").trim());
+      const hasJwt = Boolean(String(envValues.CLAWNERA_API_JWT || "").trim());
+      const hasRefreshToken = Boolean(String(envValues.CLAWNERA_API_REFRESH_TOKEN || "").trim());
+      let resolvedApiBase = String(envValues.CLAWNERA_API_BASE_URL || "").trim();
+      if (!hasAuthStateFile && !hasJwt && !hasRefreshToken) {
+        issues.push("missing_auth_source");
+      }
+      if (hasAuthStateFile) {
+        const authStatePath = path.resolve(envValues.CLAWNERA_AUTH_STATE_FILE);
+        if (!fs.existsSync(authStatePath)) {
+          issues.push("missing_auth_state_file");
+        } else {
+          try {
+            const authState = await loadAuthState(authStatePath);
+            const validation = validateRuntimeAuthState(authState, {
+              apiBaseFallback: envValues.CLAWNERA_API_BASE_URL,
+              requiredApiBase: envValues.CLAWNERA_API_BASE_URL,
+              refreshSkewMs: DEFAULT_NOTIFICATION_REFRESH_SKEW_MS
+            });
+            issues.push(...validation.issues);
+            if (!resolvedApiBase && validation.authState.apiBase) {
+              resolvedApiBase = validation.authState.apiBase;
+            }
+          } catch {
+            issues.push("invalid_auth_state_file");
+          }
+        }
+      }
+      if (!resolvedApiBase) {
+        issues.push("missing_env_CLAWNERA_API_BASE_URL");
+      }
+      if (hasJwt || hasRefreshToken) {
+        const envAuthValidation = validateRuntimeAuthState(
+          {
+            apiBase: resolvedApiBase,
+            token: envValues.CLAWNERA_API_JWT,
+            refreshToken: envValues.CLAWNERA_API_REFRESH_TOKEN
+          },
+          {
+            apiBaseFallback: resolvedApiBase,
+            refreshSkewMs: DEFAULT_NOTIFICATION_REFRESH_SKEW_MS
+          }
+        );
+        issues.push(...envAuthValidation.issues);
       }
     }
 
@@ -1111,6 +1308,8 @@ async function runNotifications(commandArgs) {
 
     return {
       ok: issues.length === 0,
+      mode: "doctor",
+      error: issues.length > 0 ? "notification_doctor_issues_detected" : null,
       envFile,
       serviceFile,
       issues,
@@ -1144,41 +1343,53 @@ async function runNotifications(commandArgs) {
   const apiBase = normalizeApiBase(options["api-base"] || process.env.CLAWNERA_API_BASE_URL);
   const alias = typeof options.alias === "string" ? String(options.alias).trim() : "";
   const address = typeof options.address === "string" ? String(options.address).trim() : "";
+  const resolvedNotificationSelection = resolveNotificationEventTypes({
+    preset: options.preset,
+    eventTypes: options["event-types"]
+  });
+  const { preset, eventTypes, invalidEventTypes, invalidPreset } = resolvedNotificationSelection;
+  const artifactLabel = preset || CUSTOM_NOTIFICATION_PRESET;
+  const authStateInputFile =
+    typeof options["auth-state-file"] === "string" && options["auth-state-file"].trim()
+      ? path.resolve(String(options["auth-state-file"]).trim())
+      : "";
+  const authStateOutputFile =
+    typeof options["state-out"] === "string" && options["state-out"].trim()
+      ? path.resolve(String(options["state-out"]).trim())
+      : "";
   const keystorePath =
     typeof options["keystore-path"] === "string" && options["keystore-path"].trim()
       ? path.resolve(String(options["keystore-path"]).trim())
       : defaultIotaKeystorePath();
   const authStateFile =
-    typeof options["state-out"] === "string" && options["state-out"].trim()
-      ? path.resolve(String(options["state-out"]).trim())
-      : typeof options["auth-state-file"] === "string" && options["auth-state-file"].trim()
-        ? path.resolve(String(options["auth-state-file"]).trim())
-        : defaultAuthStatePath();
+    alias || address ? authStateOutputFile || authStateInputFile || defaultAuthStatePath() : authStateInputFile || defaultAuthStatePath();
   const envOut =
     typeof options["env-out"] === "string" && options["env-out"].trim()
       ? path.resolve(String(options["env-out"]).trim())
-      : defaultNotificationEnvPath();
+      : defaultNotificationEnvPath(undefined, artifactLabel);
   const serviceOut =
     typeof options["service-out"] === "string" && options["service-out"].trim()
       ? path.resolve(String(options["service-out"]).trim())
-      : defaultNotificationServicePath();
+      : defaultNotificationServicePath(undefined, artifactLabel);
   const cursorOut =
     typeof options["cursor-out"] === "string" && options["cursor-out"].trim()
       ? path.resolve(String(options["cursor-out"]).trim())
-      : defaultNotificationCursorPath();
-  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 15_000);
-  const pollMs = parsePositiveIntOption(options["poll-ms"], "poll_ms", 15_000);
-  const batchLimit = parsePositiveIntOption(options["batch-limit"], "batch_limit", 50);
-  const refreshSkewMs = parsePositiveIntOption(options["refresh-skew-ms"], "refresh_skew_ms", 60_000);
-  const force = Boolean(options.force);
+      : defaultNotificationCursorPath(undefined, artifactLabel);
+  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", DEFAULT_NOTIFICATION_TIMEOUT_MS);
+  const pollMs = parsePositiveIntOption(options["poll-ms"], "poll_ms", DEFAULT_NOTIFICATION_POLL_MS);
+  const batchLimit = parsePositiveIntOption(options["batch-limit"], "batch_limit", DEFAULT_NOTIFICATION_BATCH_LIMIT);
+  const refreshSkewMs = parsePositiveIntOption(
+    options["refresh-skew-ms"],
+    "refresh_skew_ms",
+    DEFAULT_NOTIFICATION_REFRESH_SKEW_MS
+  );
+  const force = parseBooleanOption(options.force, false);
   const packageRoot =
     typeof options["package-root"] === "string" && options["package-root"].trim()
       ? path.resolve(String(options["package-root"]).trim())
       : repoRoot;
-  const { preset, eventTypes } = resolveNotificationEventTypes({
-    preset: options.preset,
-    eventTypes: options["event-types"]
-  });
+  const telegramBotToken = typeof options["telegram-bot-token"] === "string" ? options["telegram-bot-token"].trim() : "";
+  const telegramChatId = typeof options["telegram-chat-id"] === "string" ? options["telegram-chat-id"].trim() : "";
 
   if ((alias || address) && !apiBase) {
     return {
@@ -1187,16 +1398,59 @@ async function runNotifications(commandArgs) {
       hint: "set --api-base when notifications init should create a fresh auth state"
     };
   }
-
-  if (!preset && eventTypes.length === 0) {
+  if (!(alias || address) && authStateOutputFile) {
     return {
       ok: false,
-      error: "invalid_notification_preset"
+      error: "notifications_state_out_requires_login_selector",
+      hint: "use --auth-state-file to reuse an existing auth state, or pass --alias/--address with --api-base when init should create a fresh auth state"
     };
   }
 
+  if (invalidPreset) {
+    return {
+      ok: false,
+      error: "invalid_notification_preset",
+      invalidPreset
+    };
+  }
+  if (invalidEventTypes.length > 0) {
+    return {
+      ok: false,
+      error: "invalid_notification_event_types",
+      invalidEventTypes
+    };
+  }
+  if (preset === CUSTOM_NOTIFICATION_PRESET && eventTypes.length === 0) {
+    return {
+      ok: false,
+      error: "missing_notification_event_types",
+      hint: "pass --event-types when using --preset custom"
+    };
+  }
+  if (telegramBotToken && (isPlaceholderNotificationValue(telegramBotToken) || !isValidTelegramBotToken(telegramBotToken))) {
+    return {
+      ok: false,
+      error: "invalid_env_TELEGRAM_BOT_TOKEN"
+    };
+  }
+  if (telegramChatId && (isPlaceholderNotificationValue(telegramChatId) || !isValidTelegramChatId(telegramChatId))) {
+    return {
+      ok: false,
+      error: "invalid_env_TELEGRAM_CHAT_ID"
+    };
+  }
+  const packageRootValidation = validateNotificationPackageRoot(packageRoot);
+  if (!packageRootValidation.ok) {
+    return packageRootValidation;
+  }
+  const readyToStart = Boolean(telegramBotToken && telegramChatId);
+
   if (!force) {
-    for (const targetFile of [envOut, serviceOut]) {
+    const guardedFiles = [envOut, serviceOut];
+    if (alias || address) {
+      guardedFiles.push(authStateFile);
+    }
+    for (const targetFile of guardedFiles) {
       if (fs.existsSync(targetFile)) {
         return {
           ok: false,
@@ -1210,34 +1464,57 @@ async function runNotifications(commandArgs) {
 
   let authState = null;
   let authSource = "existing_state";
-  if (alias || address) {
-    const entries = await loadKeystoreEntries(keystorePath);
-    const entry = resolveKeystoreEntry(entries, { alias, address });
-    if (!entry) {
+  try {
+    if (alias || address) {
+      const entries = await loadKeystoreEntries(keystorePath);
+      const entry = resolveKeystoreEntry(entries, { alias, address });
+      if (!entry) {
+        return {
+          ok: false,
+          error: "keystore_entry_not_found",
+          selector: {
+            address: address || null,
+            alias: alias || null
+          },
+          keystorePath
+        };
+      }
+      authState = await signInWithKeystoreEntry({
+        apiBase,
+        entry,
+        timeoutMs
+      });
+      await saveAuthState(authStateFile, authState);
+      authSource = "fresh_login";
+    } else if (fs.existsSync(authStateFile)) {
+      authState = await loadAuthState(authStateFile);
+      const authValidation = validateRuntimeAuthState(authState, {
+        apiBaseFallback: apiBase,
+        requiredApiBase: apiBase,
+        refreshSkewMs
+      });
+      if (!authValidation.ok) {
+        return {
+          ok: false,
+          error: authValidation.issues[0],
+          hint:
+            authValidation.issues[0] === "auth_state_api_base_mismatch" && apiBase
+              ? `existing auth state points at ${authState.apiBase || "another api base"}; rerun auth-login for ${apiBase} or use a matching --auth-state-file`
+              : undefined
+        };
+      }
+      authState = authValidation.authState;
+    } else {
       return {
         ok: false,
-        error: "keystore_entry_not_found",
-        selector: {
-          address: address || null,
-          alias: alias || null
-        },
-        keystorePath
+        error: "missing_auth_state_setup",
+        hint: "run clawnera-help auth-login first or pass --api-base with --alias/--address"
       };
     }
-    authState = await signInWithKeystoreEntry({
-      apiBase,
-      entry,
-      timeoutMs
-    });
-    await saveAuthState(authStateFile, authState);
-    authSource = "fresh_login";
-  } else if (fs.existsSync(authStateFile)) {
-    authState = await loadAuthState(authStateFile);
-  } else {
+  } catch (error) {
     return {
       ok: false,
-      error: "missing_auth_state_setup",
-      hint: "run clawnera-help auth-login first or pass --api-base with --alias/--address"
+      error: error instanceof Error ? error.message : "notifications_init_failed"
     };
   }
 
@@ -1250,37 +1527,57 @@ async function runNotifications(commandArgs) {
     };
   }
 
-  writeTextFile(
-    envOut,
-    buildNotificationEnvText({
-      packageRoot,
-      apiBase: effectiveApiBase,
-      authStateFile,
-      preset: preset || "custom",
-      eventTypes,
-      cursorFile: cursorOut,
-      telegramBotToken: typeof options["telegram-bot-token"] === "string" ? options["telegram-bot-token"].trim() : "",
-      telegramChatId: typeof options["telegram-chat-id"] === "string" ? options["telegram-chat-id"].trim() : "",
-      pollMs,
-      batchLimit,
-      timeoutMs,
-      refreshSkewMs
-    }),
-    writeModeForPath(envOut)
-  );
-  writeTextFile(
-    serviceOut,
-    buildNotificationServiceText({
-      envFile: envOut,
-      packageRoot
-    }),
-    writeModeForPath(serviceOut)
-  );
+  try {
+    writeTextFile(
+      envOut,
+      buildNotificationEnvText({
+        packageRoot,
+        apiBase: effectiveApiBase,
+        authStateFile,
+        preset: preset || CUSTOM_NOTIFICATION_PRESET,
+        eventTypes,
+        cursorFile: cursorOut,
+        telegramBotToken,
+        telegramChatId,
+        pollMs,
+        batchLimit,
+        timeoutMs,
+        refreshSkewMs
+      }),
+      writeModeForPath(envOut)
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      error: "notifications_output_write_failed",
+      reason: error instanceof Error ? error.message : "unknown",
+      file: envOut
+    };
+  }
+  try {
+    writeTextFile(
+      serviceOut,
+      buildNotificationServiceText({
+        envFile: envOut,
+        packageRoot,
+        nodeBinary: process.execPath
+      }),
+      writeModeForPath(serviceOut)
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      error: "notifications_output_write_failed",
+      reason: error instanceof Error ? error.message : "unknown",
+      file: serviceOut
+    };
+  }
 
   return {
     ok: true,
+    mode: "init",
     target: "telegram",
-    preset: preset || "custom",
+    preset: preset || CUSTOM_NOTIFICATION_PRESET,
     eventTypes,
     authSource,
     apiBase: effectiveApiBase,
@@ -1291,11 +1588,9 @@ async function runNotifications(commandArgs) {
     serviceOut,
     cursorOut,
     packageRoot,
-    commands: [
-      `systemctl --user daemon-reload`,
-      `systemctl --user enable --now ${path.basename(serviceOut)}`,
-      `journalctl --user -u ${path.basename(serviceOut)} -f`
-    ]
+    readyToStart,
+    warnings: readyToStart ? [] : ["missing_telegram_credentials"],
+    commands: readyToStart ? buildNotificationServiceCommands(serviceOut) : []
   };
 }
 
@@ -2258,13 +2553,13 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     for (const line of result.usage) {
       console.log(line);
     }
-  } else if (result.ok && Array.isArray(result.presets)) {
+  } else if (result.mode === "presets" && result.ok && Array.isArray(result.presets)) {
     console.log("Notification presets:");
     for (const preset of result.presets) {
       console.log(`- ${preset.id}: ${preset.description}`);
       console.log(`  events: ${preset.eventTypes.join(", ")}`);
     }
-  } else if (result.ok && result.target === "telegram") {
+  } else if (result.mode === "init" && result.ok && result.target === "telegram") {
     console.log(`notifications_init_ok target=${result.target}`);
     console.log(`preset=${result.preset}`);
     console.log(`event_types=${result.eventTypes.join(",")}`);
@@ -2280,12 +2575,17 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.address) {
       console.log(`address=${result.address}`);
     }
-    console.log("Next steps:");
-    console.log(`- Edit ${result.envOut} and set TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID if they are still placeholders`);
-    for (const command of result.commands) {
-      console.log(`- ${command}`);
+    if (!result.readyToStart) {
+      console.log("Next steps:");
+      console.log(`- Edit ${result.envOut} and set TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID before starting the notifier`);
+    } else {
+      console.log("Next steps:");
+      console.log(`- Review ${result.envOut} if you want to adjust polling or event selection`);
+      for (const command of result.commands) {
+        console.log(`- ${command}`);
+      }
     }
-  } else if (result.ok) {
+  } else if (result.mode === "doctor") {
     console.log(`notifications_doctor_${result.ok ? "ok" : "failed"}`);
     if (result.envFile) {
       console.log(`env_file=${result.envFile}`);
@@ -2298,13 +2598,19 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         console.log(`- ${issue}`);
       }
     }
+    if (!result.ok) {
+      process.exitCode = 1;
+    }
   } else {
-    console.error(`notifications_helper_error: ${result.error}`);
+    console.error(`notifications_helper_error: ${result.error || "notification_helper_failed"}`);
     if (result.hint) {
       console.error(result.hint);
     }
     if (result.file) {
       console.error(`file=${result.file}`);
+    }
+    if (Array.isArray(result.issues) && result.issues.length > 0) {
+      console.error(`issues=${result.issues.join(",")}`);
     }
     process.exitCode = 1;
   }

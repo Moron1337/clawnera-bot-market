@@ -67,6 +67,9 @@ Auth precedence:
 - Invalid env auth fails startup by default.
 - Set CLAWNERA_NOTIFY_ALLOW_AUTH_STATE_FALLBACK=1 to let the notifier fall back to a valid auth state file.
 `;
+const CURSOR_PERSIST_ATTEMPTS = 3;
+const CURSOR_PERSIST_RETRY_DELAY_MS = 150;
+const CURSOR_PERSIST_FATAL_THRESHOLD = 3;
 
 function readRequiredEnv(name) {
   const value = normalizeNotificationEnvValue(process.env[name]);
@@ -292,15 +295,23 @@ async function loadNotifierAuthState({ apiBase, authStateFile }) {
 }
 
 async function persistCursorState(cursorFile, state) {
-  try {
-    const result = await saveState(cursorFile, state);
-    if (result?.backupWarning) {
-      console.warn(`telegram_event_notifier_warning: cursor_backup_save_failed:${result.backupWarning}`);
+  let lastError = null;
+  for (let attempt = 1; attempt <= CURSOR_PERSIST_ATTEMPTS; attempt += 1) {
+    try {
+      const result = await saveState(cursorFile, state);
+      if (result?.backupWarning) {
+        console.warn(`telegram_event_notifier_warning: cursor_backup_save_failed:${result.backupWarning}`);
+      }
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < CURSOR_PERSIST_ATTEMPTS) {
+        await sleep(CURSOR_PERSIST_RETRY_DELAY_MS);
+      }
     }
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : "unknown";
-    throw new Error(`cursor_state_save_failed:${reason}`);
   }
+  const reason = lastError instanceof Error ? lastError.message : "unknown";
+  throw new Error(`cursor_state_save_failed:${reason}`);
 }
 
 async function ensureFreshToken({ authState, authStateFile, timeoutMs, refreshSkewMs }) {
@@ -382,14 +393,23 @@ async function fetchEventPageWithRefresh({
       await saveAuthState(authStateFile, activeState);
     }
 
-    const page = await fetchEventPage({
-      apiBase: activeState.apiBase,
-      jwt: activeState.token,
-      cursor,
-      batchLimit,
-      timeoutMs,
-      eventTypeFilter
-    });
+    let page;
+    try {
+      page = await fetchEventPage({
+        apiBase: activeState.apiBase,
+        jwt: activeState.token,
+        cursor,
+        batchLimit,
+        timeoutMs,
+        eventTypeFilter
+      });
+    } catch (error) {
+      const retryMessage = error instanceof Error ? error.message : String(error);
+      if (retryMessage.startsWith("event_feed_http_401")) {
+        throw new Error("event_feed_http_401_after_refresh");
+      }
+      throw error;
+    }
     return {
       authState: activeState,
       ...page
@@ -514,6 +534,7 @@ export async function main(argv = process.argv.slice(2)) {
   };
   let authSource = authLoad.authSource;
   let failureCount = 0;
+  let cursorPersistFailureCount = 0;
 
   for (;;) {
     try {
@@ -591,10 +612,21 @@ export async function main(argv = process.argv.slice(2)) {
         return;
       }
       failureCount = 0;
+      cursorPersistFailureCount = 0;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`telegram_event_notifier_error: ${message}`);
-      if (once || message.startsWith("cursor_state_save_failed:") || isFatalNotifierError(message)) {
+      if (message.startsWith("cursor_state_save_failed:") && !once) {
+        cursorPersistFailureCount += 1;
+        if (cursorPersistFailureCount < CURSOR_PERSIST_FATAL_THRESHOLD) {
+          console.warn(
+            `telegram_event_notifier_warning: cursor_state_save_retry:${cursorPersistFailureCount}:${message}`
+          );
+          await sleep(failureBackoffMs(pollMs, cursorPersistFailureCount));
+          continue;
+        }
+      }
+      if (once || isFatalNotifierError(message) || message.startsWith("cursor_state_save_failed:")) {
         process.exitCode = 1;
         return;
       }

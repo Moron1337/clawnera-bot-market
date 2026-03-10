@@ -1014,9 +1014,7 @@ async function runAuthLogin(commandArgs) {
 
     let savedEnvFile = null;
     if (envOut) {
-      fs.mkdirSync(path.dirname(envOut), { recursive: true });
-      fs.writeFileSync(envOut, buildAuthEnvText(authState), { mode: 0o600 });
-      fs.chmodSync(envOut, 0o600);
+      writeTextFile(envOut, buildAuthEnvText(authState), 0o600);
       savedEnvFile = envOut;
     }
 
@@ -1067,9 +1065,12 @@ function writeModeForPath(targetPath) {
 }
 
 function writeTextFile(targetPath, content, mode) {
-  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-  fs.writeFileSync(targetPath, content, { mode });
-  fs.chmodSync(targetPath, mode);
+  const resolvedPath = path.resolve(targetPath);
+  const tempFile = `${resolvedPath}.${process.pid}.${Date.now()}.tmp`;
+  fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
+  fs.writeFileSync(tempFile, content, { mode });
+  fs.chmodSync(tempFile, mode);
+  fs.renameSync(tempFile, resolvedPath);
 }
 
 function buildNotificationServiceCommands(serviceOut) {
@@ -1259,27 +1260,33 @@ async function runNotifications(commandArgs) {
       const hasJwt = Boolean(String(envValues.CLAWNERA_API_JWT || "").trim());
       const hasRefreshToken = Boolean(String(envValues.CLAWNERA_API_REFRESH_TOKEN || "").trim());
       let resolvedApiBase = String(envValues.CLAWNERA_API_BASE_URL || "").trim();
+      let stateValidation = null;
       if (!hasAuthStateFile && !hasJwt && !hasRefreshToken) {
         issues.push("missing_auth_source");
       }
       if (hasAuthStateFile) {
         const authStatePath = path.resolve(envValues.CLAWNERA_AUTH_STATE_FILE);
         if (!fs.existsSync(authStatePath)) {
-          issues.push("missing_auth_state_file");
+          stateValidation = {
+            ok: false,
+            issues: ["missing_auth_state_file"]
+          };
         } else {
           try {
             const authState = await loadAuthState(authStatePath);
-            const validation = validateRuntimeAuthState(authState, {
+            stateValidation = validateRuntimeAuthState(authState, {
               apiBaseFallback: envValues.CLAWNERA_API_BASE_URL,
               requiredApiBase: envValues.CLAWNERA_API_BASE_URL,
               refreshSkewMs: DEFAULT_NOTIFICATION_REFRESH_SKEW_MS
             });
-            issues.push(...validation.issues);
-            if (!resolvedApiBase && validation.authState.apiBase) {
-              resolvedApiBase = validation.authState.apiBase;
+            if (!resolvedApiBase && stateValidation.authState.apiBase) {
+              resolvedApiBase = stateValidation.authState.apiBase;
             }
           } catch {
-            issues.push("invalid_auth_state_file");
+            stateValidation = {
+              ok: false,
+              issues: ["invalid_auth_state_file"]
+            };
           }
         }
       }
@@ -1299,6 +1306,8 @@ async function runNotifications(commandArgs) {
           }
         );
         issues.push(...envAuthValidation.issues);
+      } else if (stateValidation) {
+        issues.push(...stateValidation.issues);
       }
     }
 

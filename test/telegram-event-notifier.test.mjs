@@ -655,12 +655,13 @@ test("main rejects malformed telegram chat ids", async () => {
   );
 });
 
-test("main fails fast when cursor state cannot be persisted", async () => {
+test("main exits only after repeated cursor persistence failures in loop mode", async () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notifier-cursor-fatal-"));
   const stateDir = path.join(tempDir, "state");
   const cursorFile = path.join(stateDir, "cursor.json");
   const previousFetch = globalThis.fetch;
   const validToken = buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600);
+  let eventCalls = 0;
 
   mkdirSync(stateDir, { recursive: true });
   writeFileSync(cursorFile, JSON.stringify({ cursor: undefined }));
@@ -668,10 +669,13 @@ test("main fails fast when cursor state cannot be persisted", async () => {
   globalThis.fetch = async (input) => {
     const url = String(input);
     if (url.includes("/events")) {
+      eventCalls += 1;
+      const eventId = `evt-${eventCalls}`;
+      const createdAt = `2026-03-09T00:00:0${eventCalls}.000Z`;
       return {
         ok: true,
         json: async () => ({
-          items: [{ id: "evt-1", createdAt: "2026-03-09T00:00:00.000Z", eventType: "bid.created", payloadJson: {} }],
+          items: [{ id: eventId, createdAt, eventType: "bid.created", payloadJson: {} }],
           nextCursor: null
         })
       };
@@ -691,13 +695,15 @@ test("main fails fast when cursor state cannot be persisted", async () => {
         TELEGRAM_CHAT_ID: "123456",
         CLAWNERA_API_JWT: validToken,
         CLAWNERA_NOTIFY_ONCE: "0",
-        CLAWNERA_NOTIFY_CURSOR_FILE: cursorFile
+        CLAWNERA_NOTIFY_CURSOR_FILE: cursorFile,
+        CLAWNERA_NOTIFY_POLL_MS: "1"
       },
       async () => {
         await main([]);
       }
     );
 
+    assert.equal(eventCalls, 3);
     assert.equal(process.exitCode, 1);
   } finally {
     chmodSync(stateDir, 0o700);

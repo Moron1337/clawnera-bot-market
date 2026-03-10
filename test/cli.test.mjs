@@ -601,6 +601,42 @@ test("notifications doctor accepts JWT-only notifier auth", () => {
   assert.deepEqual(payload.issues, []);
 });
 
+test("notifications doctor ignores broken auth state when env auth is valid", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-doctor-env-wins-"));
+  const envFile = path.join(tempDir, "telegram-event-notifier.env");
+  const serviceFile = path.join(tempDir, "clawnera-telegram-event-notifier.service");
+  const validJwt = buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600);
+
+  writeFileSync(
+    envFile,
+    [
+      "CLAWNERA_API_BASE_URL=https://api.clawnera.com",
+      `CLAWNERA_API_JWT=${validJwt}`,
+      `CLAWNERA_AUTH_STATE_FILE=${path.join(tempDir, "missing-auth-state.json")}`,
+      "CLAWNERA_NOTIFY_PRESET=seller",
+      "CLAWNERA_NOTIFY_EVENT_TYPES=bid.created",
+      "TELEGRAM_BOT_TOKEN=123456:ABCDEF-real-token",
+      "TELEGRAM_CHAT_ID=123456"
+    ].join("\n")
+  );
+  writeFileSync(serviceFile, "ExecStart=/usr/bin/env bash -lc 'node ./examples/telegram-event-notifier.mjs'\n");
+
+  const result = runCli([
+    "notifications",
+    "doctor",
+    "--env-file",
+    envFile,
+    "--service-file",
+    serviceFile,
+    "--json"
+  ]);
+
+  assert.equal(result.status, 0, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.deepEqual(payload.issues, []);
+});
+
 test("notifications doctor accepts refresh-token-only notifier auth", () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-doctor-refresh-"));
   const envFile = path.join(tempDir, "telegram-event-notifier.env");

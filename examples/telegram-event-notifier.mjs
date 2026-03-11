@@ -125,7 +125,16 @@ function readOptionalEnv(name) {
 
 function envFlagEnabled(name) {
   const normalized = readOptionalEnv(name).toLowerCase();
-  return Boolean(normalized) && !new Set(["0", "false", "off", "no"]).has(normalized);
+  if (!normalized) {
+    return false;
+  }
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "off", "no"].includes(normalized)) {
+    return false;
+  }
+  throw new Error(`invalid_boolean_env:${name}`);
 }
 
 function buildCursor(event) {

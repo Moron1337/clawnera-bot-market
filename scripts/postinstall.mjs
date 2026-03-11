@@ -18,7 +18,13 @@ export function isEnabledFlag(value, defaultValue = true) {
   if (!normalized) {
     return defaultValue;
   }
-  return !new Set(["0", "false", "off", "no"]).has(normalized);
+  if (new Set(["1", "true", "yes", "on"]).has(normalized)) {
+    return true;
+  }
+  if (new Set(["0", "false", "off", "no"]).has(normalized)) {
+    return false;
+  }
+  throw new Error(`invalid_boolean_flag:${String(value).trim()}`);
 }
 
 export function buildGlobalBinDir(prefix, platform = process.platform) {

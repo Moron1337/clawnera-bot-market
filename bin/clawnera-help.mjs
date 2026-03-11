@@ -520,7 +520,16 @@ function printValidation(result) {
 
 function envFlagEnabled(name) {
   const normalized = String(process.env[name] || "").trim().toLowerCase();
-  return Boolean(normalized) && !new Set(["0", "false", "off", "no"]).has(normalized);
+  if (!normalized) {
+    return false;
+  }
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "off", "no"].includes(normalized)) {
+    return false;
+  }
+  throw new Error(`invalid_boolean_env:${name}`);
 }
 
 function syncRequiresSources(flags) {
@@ -669,7 +678,7 @@ function parseBooleanOption(rawValue, fallback = false) {
   if (["0", "false", "no", "off"].includes(normalized)) {
     return false;
   }
-  return fallback;
+  throw new Error(`invalid_boolean_option:${String(rawValue).trim()}`);
 }
 
 function normalizeApiBase(rawValue) {

@@ -29,6 +29,10 @@ test("isEnabledFlag can default to disabled", () => {
   assert.equal(isEnabledFlag("1", false), true);
 });
 
+test("isEnabledFlag rejects invalid boolean strings", () => {
+  assert.throws(() => isEnabledFlag("maybe"), /invalid_boolean_flag:maybe/);
+});
+
 test("buildGlobalBinDir appends bin on unix-like platforms", () => {
   assert.equal(buildGlobalBinDir("/home/openclaw/.npm-global", "linux"), "/home/openclaw/.npm-global/bin");
 });

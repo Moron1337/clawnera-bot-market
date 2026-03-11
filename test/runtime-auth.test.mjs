@@ -144,6 +144,21 @@ test("validateRuntimeAuthState rejects expired refresh tokens when refresh is re
   assert.ok(validation.issues.includes("expired_auth_refresh_token"));
 });
 
+test("validateRuntimeAuthState rejects malformed access tokens even with refresh token present", () => {
+  const validation = validateRuntimeAuthState({
+    apiBase: "https://api.clawnera.com",
+    token: "bad.token.value",
+    refreshToken: "refresh-token",
+    session: {
+      refreshAvailable: true,
+      refreshExpiresAtMs: Date.now() + 60_000
+    }
+  });
+
+  assert.equal(validation.ok, false);
+  assert.ok(validation.issues.includes("invalid_auth_token_format"));
+});
+
 test("validateRuntimeAuthState allows valid access token with expired refresh token", () => {
   const nowMs = Date.now();
   const validation = validateRuntimeAuthState(

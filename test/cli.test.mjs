@@ -114,7 +114,7 @@ test("notifications init telegram scaffolds env and service files from existing 
         apiBase: "https://api.clawnera.com",
         address: "0xabc",
         alias: "seller-bot",
-        token: "jwt-token",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
         refreshToken: "refresh-token",
         session: {
           id: "session-1",
@@ -165,7 +165,7 @@ test("notifications init uses preset-specific default artifact paths", () => {
         apiBase: "https://api.clawnera.com",
         address: "0xabc",
         alias: "seller-bot",
-        token: "jwt-token",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
         refreshToken: "refresh-token"
       },
       null,
@@ -213,7 +213,7 @@ test("notifications init with explicit event types and no preset writes custom-o
         apiBase: "https://api.clawnera.com",
         address: "0xabc",
         alias: "seller-bot",
-        token: "jwt-token",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
         refreshToken: "refresh-token"
       },
       null,
@@ -249,7 +249,15 @@ test("notifications doctor validates generated notifier files", () => {
 
   writeFileSync(
     authStateFile,
-    JSON.stringify({ apiBase: "https://api.clawnera.com", token: "jwt", refreshToken: "refresh-token" }, null, 2)
+    JSON.stringify(
+      {
+        apiBase: "https://api.clawnera.com",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
   );
   writeFileSync(
     envFile,
@@ -682,7 +690,7 @@ test("notifications init rejects unknown event types", () => {
         apiBase: "https://api.clawnera.com",
         address: "0xabc",
         alias: "seller-bot",
-        token: "jwt-token",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
         refreshToken: "refresh-token"
       },
       null,
@@ -720,7 +728,7 @@ test("notifications init rejects invalid preset values even with explicit events
         apiBase: "https://api.clawnera.com",
         address: "0xabc",
         alias: "seller-bot",
-        token: "jwt-token",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
         refreshToken: "refresh-token"
       },
       null,
@@ -760,7 +768,7 @@ test("notifications init requires explicit event types for custom preset", () =>
         apiBase: "https://api.clawnera.com",
         address: "0xabc",
         alias: "seller-bot",
-        token: "jwt-token",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
         refreshToken: "refresh-token"
       },
       null,
@@ -789,7 +797,10 @@ test("notifications init requires explicit event types for custom preset", () =>
 test("notifications init protects existing auth state during fresh login unless forced", () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-authstate-"));
   const authStateFile = path.join(tempDir, "auth-state.json");
-  writeFileSync(authStateFile, JSON.stringify({ token: "jwt-token" }, null, 2));
+  writeFileSync(
+    authStateFile,
+    JSON.stringify({ token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600) }, null, 2)
+  );
 
   const result = runCli([
     "notifications",
@@ -921,7 +932,7 @@ test("notifications init rejects non-decimal poll values", () => {
         apiBase: "https://api.clawnera.com",
         address: "0xabc",
         alias: "seller-bot",
-        token: "jwt-token",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
         refreshToken: "refresh-token"
       },
       null,
@@ -959,7 +970,7 @@ test("notifications init rejects placeholder telegram token values", () => {
         apiBase: "https://api.clawnera.com",
         address: "0xabc",
         alias: "seller-bot",
-        token: "jwt-token",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
         refreshToken: "refresh-token"
       },
       null,
@@ -997,7 +1008,7 @@ test("notifications init rejects malformed telegram chat ids", () => {
         apiBase: "https://api.clawnera.com",
         address: "0xabc",
         alias: "seller-bot",
-        token: "jwt-token",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
         refreshToken: "refresh-token"
       },
       null,
@@ -1071,7 +1082,7 @@ test("notifications init rejects auth state apiBase mismatch", () => {
         apiBase: "https://staging.clawnera.example",
         address: "0xabc",
         alias: "seller-bot",
-        token: "jwt-token",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
         refreshToken: "refresh-token"
       },
       null,
@@ -1110,7 +1121,7 @@ test("notifications init rejects invalid package roots before writing files", ()
         apiBase: "https://api.clawnera.com",
         address: "0xabc",
         alias: "seller-bot",
-        token: "jwt-token",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
         refreshToken: "refresh-token"
       },
       null,
@@ -1150,7 +1161,7 @@ test("notifications init returns structured write failures for notifier outputs"
         apiBase: "https://api.clawnera.com",
         address: "0xabc",
         alias: "seller-bot",
-        token: "jwt-token",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
         refreshToken: "refresh-token"
       },
       null,
@@ -1192,7 +1203,7 @@ test("notifications init treats --force false as disabled", () => {
         apiBase: "https://api.clawnera.com",
         address: "0xabc",
         alias: "seller-bot",
-        token: "jwt-token",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
         refreshToken: "refresh-token"
       },
       null,
@@ -1232,7 +1243,7 @@ test("notifications init emits link command for custom service paths", () => {
         apiBase: "https://api.clawnera.com",
         address: "0xabc",
         alias: "seller-bot",
-        token: "jwt-token",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
         refreshToken: "refresh-token"
       },
       null,
@@ -1278,7 +1289,7 @@ test("notifications init without telegram creds scaffolds files but does not sug
         apiBase: "https://api.clawnera.com",
         address: "0xabc",
         alias: "seller-bot",
-        token: "jwt-token",
+        token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
         refreshToken: "refresh-token"
       },
       null,

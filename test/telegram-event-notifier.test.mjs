@@ -235,6 +235,22 @@ test("main accepts truthy once env flags beyond numeric 1", async () => {
   }
 });
 
+test("main rejects invalid boolean env flag values", async () => {
+  const validToken = buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600);
+  await withEnv(
+    {
+      CLAWNERA_API_BASE_URL: "https://api.clawnera.com",
+      TELEGRAM_BOT_TOKEN: "123456:ABCDEF-real-token",
+      TELEGRAM_CHAT_ID: "123456",
+      CLAWNERA_API_JWT: validToken,
+      CLAWNERA_NOTIFY_ONCE: "maybe"
+    },
+    async () => {
+      await assert.rejects(() => main([]), /invalid_boolean_env:CLAWNERA_NOTIFY_ONCE/);
+    }
+  );
+});
+
 test("main rejects non-decimal numeric env values", async () => {
   await withEnv(
     {
@@ -533,6 +549,73 @@ test("main falls back to auth state when explicitly allowed and env auth is stal
         CLAWNERA_API_BASE_URL: "https://api.clawnera.com",
         CLAWNERA_AUTH_STATE_FILE: authStateFile,
         CLAWNERA_API_JWT: expiredEnvToken,
+        CLAWNERA_NOTIFY_ALLOW_AUTH_STATE_FALLBACK: "1",
+        TELEGRAM_BOT_TOKEN: "123456:ABCDEF-real-token",
+        TELEGRAM_CHAT_ID: "123456",
+        CLAWNERA_NOTIFY_ONCE: "1",
+        CLAWNERA_NOTIFY_CURSOR_FILE: cursorFile
+      },
+      async () => {
+        const previousExitCode = process.exitCode;
+        process.exitCode = 0;
+        try {
+          await main([]);
+          assert.equal(process.exitCode, 0);
+        } finally {
+          process.exitCode = previousExitCode;
+        }
+      }
+    );
+
+    assert.equal(seenAuthorization, `Bearer ${authStateToken}`);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("main falls back to auth state when explicitly allowed and env token format is invalid", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notifier-auth-format-fallback-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const cursorFile = path.join(tempDir, "cursor.json");
+  const authStateToken = buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600);
+  const previousFetch = globalThis.fetch;
+  let seenAuthorization = "";
+
+  await fs.writeFile(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: "https://api.clawnera.com",
+        token: authStateToken,
+        refreshToken: "refresh-token"
+      },
+      null,
+      2
+    )
+  );
+
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input);
+    if (url.includes("/events")) {
+      seenAuthorization = String(init.headers?.authorization || "");
+      return {
+        ok: true,
+        json: async () => ({
+          items: [],
+          nextCursor: null
+        })
+      };
+    }
+    throw new Error(`unexpected_fetch:${url}`);
+  };
+
+  try {
+    await withEnv(
+      {
+        CLAWNERA_API_BASE_URL: "https://api.clawnera.com",
+        CLAWNERA_AUTH_STATE_FILE: authStateFile,
+        CLAWNERA_API_JWT: "bad.token.value",
+        CLAWNERA_API_REFRESH_TOKEN: "refresh-token",
         CLAWNERA_NOTIFY_ALLOW_AUTH_STATE_FALLBACK: "1",
         TELEGRAM_BOT_TOKEN: "123456:ABCDEF-real-token",
         TELEGRAM_CHAT_ID: "123456",

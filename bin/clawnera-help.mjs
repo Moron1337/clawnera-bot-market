@@ -1106,7 +1106,19 @@ function parseSimpleEnvFile(raw) {
     }
     const key = normalizedLine.slice(0, separator).trim();
     let valuePart = normalizedLine.slice(separator + 1);
-    const commentIndex = valuePart.search(/\s+#/);
+    let commentIndex = -1;
+    let quote = "";
+    for (let index = 0; index < valuePart.length; index += 1) {
+      const char = valuePart[index];
+      if ((char === '"' || char === "'") && (index === 0 || valuePart[index - 1] !== "\\")) {
+        quote = quote === char ? "" : quote ? quote : char;
+        continue;
+      }
+      if (!quote && char === "#" && index > 0 && /\s/.test(valuePart[index - 1] || "")) {
+        commentIndex = index;
+        break;
+      }
+    }
     if (commentIndex >= 0) {
       valuePart = valuePart.slice(0, commentIndex);
     }

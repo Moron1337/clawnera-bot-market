@@ -66,7 +66,7 @@ test("invalid preset is surfaced explicitly", () => {
   assert.deepEqual(resolved.eventTypes, ["bid.created"]);
 });
 
-test("notification env text contains auth, preset, and blank telegram values", () => {
+test("notification env text contains auth, preset, and telegram placeholders when credentials are missing", () => {
   const envText = buildNotificationEnvText({
     packageRoot: "/tmp/clawnera-bot-market",
     apiBase: "https://api.clawnera.com",
@@ -80,8 +80,8 @@ test("notification env text contains auth, preset, and blank telegram values", (
   assert.match(envText, /CLAWNERA_API_BASE_URL=https:\/\/api\.clawnera\.com/);
   assert.match(envText, /CLAWNERA_NOTIFY_PRESET=seller/);
   assert.match(envText, /CLAWNERA_NOTIFY_EVENT_TYPES=bid\.created,mailbox\.signal_posted/);
-  assert.match(envText, /TELEGRAM_BOT_TOKEN=$/m);
-  assert.match(envText, /TELEGRAM_CHAT_ID=$/m);
+  assert.match(envText, /# TELEGRAM_BOT_TOKEN=<set your bot token>/);
+  assert.match(envText, /# TELEGRAM_CHAT_ID=<set your chat id>/);
 });
 
 test("notification service text points at the generic event notifier", () => {

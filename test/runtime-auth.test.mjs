@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   buildAuthEnvText,
+  refreshAuthState,
   loadAuthState,
   normalizeAuthState,
   resolveKeystoreEntry,
@@ -177,4 +178,51 @@ test("validateRuntimeAuthState rejects mismatched required api base", () => {
 
   assert.equal(validation.ok, false);
   assert.ok(validation.issues.includes("auth_state_api_base_mismatch"));
+});
+
+test("refreshAuthState preserves existing refresh token when server omits a new one", async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () =>
+      JSON.stringify({
+        token: "token-2",
+        expiresAtMs: 456,
+        session: {
+          id: "session-1",
+          refreshAvailable: true,
+          refreshExpiresAtMs: 789
+        }
+      }),
+    json: async () => ({
+      token: "token-2",
+      expiresAtMs: 456,
+      session: {
+        id: "session-1",
+        refreshAvailable: true,
+        refreshExpiresAtMs: 789
+      }
+    })
+  });
+
+  try {
+    const refreshed = await refreshAuthState({
+      apiBase: "https://api.clawnera.com",
+      authState: {
+        apiBase: "https://api.clawnera.com",
+        token: "token-1",
+        refreshToken: "refresh-1",
+        session: {
+          id: "session-1",
+          refreshAvailable: true
+        }
+      }
+    });
+
+    assert.equal(refreshed.token, "token-2");
+    assert.equal(refreshed.refreshToken, "refresh-1");
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
 });

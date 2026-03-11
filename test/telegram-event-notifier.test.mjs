@@ -57,6 +57,16 @@ test("loadState resets to empty cursor when both primary and backup are corrupt"
   assert.deepEqual(loaded, { cursor: undefined });
 });
 
+test("loadState falls back to backup when the primary cursor file is missing", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notifier-state-missing-primary-"));
+  const cursorFile = path.join(tempDir, "cursor.json");
+
+  await fs.writeFile(`${cursorFile}.bak`, JSON.stringify({ cursor: "cursor-from-backup" }, null, 2));
+
+  const loaded = await loadState(cursorFile);
+  assert.deepEqual(loaded, { cursor: "cursor-from-backup" });
+});
+
 test("saveState keeps primary cursor even when backup copy fails", async () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notifier-state-backup-warning-"));
   const cursorFile = path.join(tempDir, "cursor.json");

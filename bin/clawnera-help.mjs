@@ -23,6 +23,7 @@ import {
   buildNotificationServiceText,
   DEFAULT_NOTIFICATION_POLL_MS,
   DEFAULT_NOTIFICATION_REFRESH_SKEW_MS,
+  defaultNotificationAuthStatePath,
   defaultNotificationCursorPath,
   defaultNotificationEnvPath,
   defaultNotificationServicePath,
@@ -1055,6 +1056,7 @@ function notificationsUsageLines() {
     "- Usage: clawnera-help notifications <init|presets|doctor> [options]",
     "- Init telegram notifier: clawnera-help notifications init telegram --preset seller --api-base https://api.clawnera.com --alias <wallet-alias>",
     "- Use --auth-state-file <file> to reuse an existing auth state; use --state-out <file> only when init should create a fresh auth state via --alias/--address",
+    "- Fresh login without --state-out writes to a preset-scoped default auth state file.",
     "- Passing --event-types without --preset uses custom-only events; --preset custom is also supported explicitly",
     "- List presets: clawnera-help notifications presets",
     "- Check local config: clawnera-help notifications doctor",
@@ -1062,6 +1064,7 @@ function notificationsUsageLines() {
     "- Default preset: seller",
     "- Default files:",
     `  auth state: ${defaultAuthStatePath()}`,
+    `  seller auth: ${defaultNotificationAuthStatePath(undefined, sellerPreset)}`,
     `  seller env: ${defaultNotificationEnvPath(undefined, sellerPreset)}`,
     `  seller svc: ${defaultNotificationServicePath(undefined, sellerPreset)}`,
     `  seller cur: ${defaultNotificationCursorPath(undefined, sellerPreset)}`,
@@ -1392,7 +1395,9 @@ async function runNotifications(commandArgs) {
       ? path.resolve(String(options["keystore-path"]).trim())
       : defaultIotaKeystorePath();
   const authStateFile =
-    alias || address ? authStateOutputFile || authStateInputFile || defaultAuthStatePath() : authStateInputFile || defaultAuthStatePath();
+    alias || address
+      ? authStateOutputFile || defaultNotificationAuthStatePath(undefined, artifactLabel)
+      : authStateInputFile || defaultAuthStatePath();
   const envOut =
     typeof options["env-out"] === "string" && options["env-out"].trim()
       ? path.resolve(String(options["env-out"]).trim())
@@ -1433,6 +1438,13 @@ async function runNotifications(commandArgs) {
       ok: false,
       error: "notifications_state_out_requires_login_selector",
       hint: "use --auth-state-file to reuse an existing auth state, or pass --alias/--address with --api-base when init should create a fresh auth state"
+    };
+  }
+  if ((alias || address) && authStateInputFile) {
+    return {
+      ok: false,
+      error: "notifications_auth_state_file_reuse_only",
+      hint: "use --auth-state-file only to reuse an existing auth state, or use --state-out (or omit it for the preset default path) when init should create a fresh auth state"
     };
   }
 

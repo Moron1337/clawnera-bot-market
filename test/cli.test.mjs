@@ -841,6 +841,31 @@ test("notifications init rejects state-out without login selector", () => {
   assert.match(result.stderr, /notifications_state_out_requires_login_selector/);
 });
 
+test("notifications init rejects auth-state-file when fresh login is requested", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-auth-state-reuse-only-"));
+  const authStateFile = path.join(tempDir, "existing-auth-state.json");
+  writeFileSync(authStateFile, JSON.stringify({ token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600) }, null, 2));
+
+  const result = runCli([
+    "notifications",
+    "init",
+    "telegram",
+    "--api-base",
+    "https://api.clawnera.com",
+    "--alias",
+    "seller-bot",
+    "--auth-state-file",
+    authStateFile,
+    "--env-out",
+    path.join(tempDir, "notify.env"),
+    "--service-out",
+    path.join(tempDir, "notify.service")
+  ]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /notifications_auth_state_file_reuse_only/);
+});
+
 test("notifications doctor flags invalid preset values", () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-notify-doctor-preset-"));
   const envFile = path.join(tempDir, "telegram-event-notifier.env");

@@ -150,33 +150,35 @@ function backupStateFile(cursorFile) {
 }
 
 async function readCursorStateFile(cursorFile) {
-  try {
-    const raw = await fs.readFile(cursorFile, "utf8");
-    const parsed = JSON.parse(raw);
-    return typeof parsed.cursor === "string" && parsed.cursor ? { cursor: parsed.cursor } : { cursor: undefined };
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      return { cursor: undefined };
-    }
-    throw error;
-  }
+  const raw = await fs.readFile(cursorFile, "utf8");
+  const parsed = JSON.parse(raw);
+  return typeof parsed.cursor === "string" && parsed.cursor ? { cursor: parsed.cursor } : { cursor: undefined };
 }
 
 export async function loadState(cursorFile) {
   const problems = [];
+  let primaryMissing = false;
+  let backupMissing = false;
+  const backupFile = backupStateFile(cursorFile);
   try {
     return await readCursorStateFile(cursorFile);
   } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      primaryMissing = true;
+    }
     problems.push(error instanceof Error ? error.message : String(error));
   }
 
   try {
-    return await readCursorStateFile(backupStateFile(cursorFile));
+    return await readCursorStateFile(backupFile);
   } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      backupMissing = true;
+    }
     problems.push(error instanceof Error ? error.message : String(error));
   }
 
-  if (problems.length > 0) {
+  if (!(primaryMissing && backupMissing) && problems.length > 0) {
     console.warn(`telegram_event_notifier_warning: cursor_state_reset_due_to_invalid_files:${problems.join("|")}`);
   }
   return { cursor: undefined };

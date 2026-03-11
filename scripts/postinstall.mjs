@@ -71,6 +71,10 @@ export function shouldAutoInstallIotaCli(env = process.env) {
   return String(env.npm_config_global || "").trim() === "true";
 }
 
+export function shouldAutoSwitchIotaMainnet(env = process.env) {
+  return isEnabledFlag(env.CLAWNERA_AUTO_SWITCH_IOTA_MAINNET, false);
+}
+
 function info(message) {
   console.log(`${LOG_PREFIX} ${message}`);
 }
@@ -118,7 +122,14 @@ function maybeWarnAboutIotaEnv(cliPath) {
   warn("Recommended command: iota client switch --env mainnet");
 }
 
-function maybeSetIotaMainnet(cliPath) {
+function maybeSetIotaMainnet(cliPath, env = process.env) {
+  if (!shouldAutoSwitchIotaMainnet(env)) {
+    warn("Installed IOTA CLI, but did not switch the active env automatically.");
+    warn("Run `iota client switch --env mainnet` before using Clawnera on mainnet.");
+    warn("To enable auto-switch during install, set CLAWNERA_AUTO_SWITCH_IOTA_MAINNET=1.");
+    return;
+  }
+
   // Initialize CLI state non-interactively if the first-run prompt appears.
   runCommand(cliPath, ["client", "envs", "--json"], {
     expectJson: false,
@@ -221,7 +232,7 @@ function maybeAutoInstallIotaCli() {
     warn(`IOTA CLI install completed, but verification failed at ${installedCliPath}`);
   }
 
-  maybeSetIotaMainnet(installedCliPath);
+  maybeSetIotaMainnet(installedCliPath, process.env);
 
   if (!pathContains(installDir, process.env.PATH)) {
     warn(`IOTA CLI install dir is not on PATH: ${installDir}`);

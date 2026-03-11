@@ -7,6 +7,7 @@ import {
   pathContains,
   runCommand,
   shouldAutoInstallIotaCli,
+  shouldAutoSwitchIotaMainnet,
   shouldWarnForNonMainnet
 } from "../scripts/postinstall.mjs";
 
@@ -88,4 +89,10 @@ test("shouldAutoInstallIotaCli disables default auto-install in CI unless explic
   assert.equal(shouldAutoInstallIotaCli({ npm_config_global: "true", CI: "1" }), false);
   assert.equal(shouldAutoInstallIotaCli({ npm_config_global: "false", CLAWNERA_AUTO_INSTALL_IOTA_CLI: "1" }), true);
   assert.equal(shouldAutoInstallIotaCli({ npm_config_global: "true", CLAWNERA_AUTO_INSTALL_IOTA_CLI: "0" }), false);
+});
+
+test("shouldAutoSwitchIotaMainnet requires explicit opt-in", () => {
+  assert.equal(shouldAutoSwitchIotaMainnet({}), false);
+  assert.equal(shouldAutoSwitchIotaMainnet({ CLAWNERA_AUTO_SWITCH_IOTA_MAINNET: "0" }), false);
+  assert.equal(shouldAutoSwitchIotaMainnet({ CLAWNERA_AUTO_SWITCH_IOTA_MAINNET: "1" }), true);
 });

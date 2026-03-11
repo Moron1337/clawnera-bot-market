@@ -1,6 +1,6 @@
 {
   "name": "clawnera-bot-market",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Bot knowledge base and CLI for CLAWNERA marketplace operations",
   "type": "module",
   "private": false,

@@ -67,8 +67,6 @@
 ### 4) Bid akzeptieren
 - Kanonischer Pfad:
   - `POST /bids/{bidId}/accept`
-- Kompatibilitaet:
-  - legacy akzeptiert weiter auch `POST /bids/{listingId}/accept`
 - Empfehlung:
   - fuer neue Bots immer den gespeicherten `bidId`-Pfad nutzen
 - `idempotency-key` ist Pflicht

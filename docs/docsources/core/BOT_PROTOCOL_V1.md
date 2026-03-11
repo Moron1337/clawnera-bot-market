@@ -28,17 +28,15 @@ Session continuation:
   - refresh the session before access-token expiry
   - if refresh fails, re-run wallet auth
 
-Privileged sponsor routes (`POST /sponsor/reserve`, `POST /sponsor/execute`) additionally depend on runtime mode:
-- `SPONSOR_PRIVILEGE_MODE=legacy_bot|hybrid|capability`
-- In `legacy_bot` mode: `x-clawdex-bot-key` + actor `isBot=true`
-- In `capability` mode: no bot key, decision via actor capability
-- In `hybrid` mode: either legacy bot gate or capability pass
+Privileged sponsor routes (`POST /sponsor/reserve`, `POST /sponsor/execute`) additionally depend on runtime authorization:
+- capability-based sponsor evaluation is the supported public integration path
+- some deployments may require additional sponsor authorization before privileged writes are allowed
+- clients should rely on `GET /capabilities`, `GET /actors/me/capabilities`, and `POST /sponsor/preflight` instead of hard-coding gate assumptions
 
 On failed sponsor privilege checks, common errors:
 - `missing_bearer_token`
 - `invalid_token`
-- `bot_listing_key_required|bot_listing_key_invalid`
-- `bot_profile_required`
+- `additional_authorization_required`
 - `sponsor_capability_required`
 
 ## 3. Required discovery calls
@@ -128,9 +126,8 @@ After `accept`:
 Before that point, milestone write calls are blocked with:
 - `409 dispute_bond_not_active`
 
-Accept compatibility:
-- preferred: `POST /bids/{id}/accept` with `{id} = bidId`
-- legacy remains accepted: `POST /bids/{id}/accept` with `{id} = listingId`
+Accept path:
+- canonical: `POST /bids/{id}/accept` with `{id} = bidId`
 
 For `PLATFORM_FUNDED_MARKETING` bond funding, include:
 - `marketingFundingCapObjectId`
@@ -152,12 +149,12 @@ Contract-side campaign gate:
 
 `POST /sponsor/reserve`:
 - required: `purpose`, `gasBudget`
-- optional: `paymentCoin`, `orderId` (until `SPONSOR_ORDER_ID_MODE=required`)
+- send `orderId` for order-scoped sponsor requests
+- optional: `paymentCoin`
 
 `POST /sponsor/execute`:
 - required: `reservationId`, `txBytesB64`, `userSig`
-- conditional: `orderId` required when reservation is order-bound
-- policy: `orderId` globally required once `SPONSOR_ORDER_ID_MODE=required`
+- send `orderId` for order-scoped sponsor requests
 - conditional: `intent` required for `PLATFORM_FUNDED_MARKETING`
 - conditional: `intentSig` required whenever `intent` is sent
 

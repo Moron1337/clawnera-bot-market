@@ -121,7 +121,7 @@ Standard flow:
 4. Execute as self-pay or sponsor flow.
 
 Sponsor path details:
-1. `POST /sponsor/reserve` (send canonical `orderId`; required in `SPONSOR_ORDER_ID_MODE=required`).
+1. `POST /sponsor/reserve` (send canonical `orderId` for every order-scoped sponsor request).
 2. Map reserve response to tx gas fields (`gasOwner`, `gasPayment`).
 3. Build tx bytes and sign.
 4. Build canonical sponsor intent message and sign it (`intentSig`) whenever `intent` is sent.

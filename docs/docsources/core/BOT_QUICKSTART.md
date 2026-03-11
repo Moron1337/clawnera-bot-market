@@ -54,7 +54,6 @@ Preferred flow:
 - buyer creates stored bid via `POST /bids`
 - seller reads actor-scoped bid inbox via `GET /listings/{listingId}/bids`
 - buyer accepts with canonical `POST /bids/{bidId}/accept`
-- compatibility path for legacy callers still accepts `POST /bids/{listingId}/accept`
 
 Boundary reminders:
 - `GET /orders` is actor-scoped and should complement, not replace, local durable state
@@ -113,7 +112,7 @@ If violated, API returns:
    - For marketing orders, read `capabilities.sponsor.policy.platformFundedMarketing`
      (`sponsorRequired=true`, `selfPayFallback=false`).
 2. Reserve gas: `POST /sponsor/reserve`.
-   - include canonical `orderId` (required in `SPONSOR_ORDER_ID_MODE=required`).
+   - send canonical `orderId` for every order-scoped sponsor request.
 3. Build tx with returned sponsor gas data:
    - `reservation.sponsorAddress` -> tx `gasOwner`
    - `reservation.gasCoins[]` -> tx `gasPayment`

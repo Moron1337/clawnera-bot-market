@@ -87,8 +87,7 @@ paths:
                         format: date-time
                       interaction:
                         type: object
-                        required:
-                          [listingCreateMode, writeInteractionMode, requiresBotKey, requiresBotProfile, privilegedSponsor]
+                        required: [listingCreateMode, writeInteractionMode, privilegedSponsor]
                         properties:
                           listingCreateMode:
                             type: string
@@ -96,38 +95,26 @@ paths:
                           writeInteractionMode:
                             type: string
                             enum: [wallet_auth, bot_only]
-                          requiresBotKey:
-                            type: boolean
-                          requiresBotProfile:
-                            type: boolean
                           privilegedSponsor:
                             type: object
                             required:
-                              [enabled, mode, enforcement, requiresBotKey, requiresBotProfile, policy]
+                              [enabled, mode, additionalAuthorizationRequired, policy]
                             properties:
                               enabled:
                                 type: boolean
                               mode:
                                 type: string
                                 enum: [wallet_auth, bot_only]
-                              enforcement:
-                                type: string
-                                enum: [legacy_bot, hybrid, capability]
-                              requiresBotKey:
-                                type: boolean
-                              requiresBotProfile:
+                              additionalAuthorizationRequired:
                                 type: boolean
                               policy:
                                 $ref: "#/components/schemas/SponsorPolicySnapshot"
                       auth:
                         type: object
-                        required: [bearerToken, botHeader]
+                        required: [bearerToken]
                         properties:
                           bearerToken:
                             type: boolean
-                          botHeader:
-                            type: string
-                            nullable: true
                       features:
                         type: object
                         required:
@@ -189,7 +176,7 @@ paths:
                             enum: [sponsor_privileges.v1]
                           mode:
                             type: string
-                            enum: [legacy_bot, hybrid, capability]
+                            enum: [capability]
                           actorAddress:
                             type: string
                           canSponsor:
@@ -617,7 +604,7 @@ paths:
         - bearerAuth: []
       responses:
         "200":
-          description: Current session revoked or reported as legacy/non-revocable.
+          description: Current auth context acknowledged; session revoked when session-backed.
           content:
             application/json:
               schema:
@@ -686,6 +673,51 @@ paths:
                     $ref: "#/components/schemas/UserReputationProfile"
         "400":
           $ref: "#/components/responses/BadRequest"
+  /users/{address}/reviews:
+    get:
+      tags: [Auth]
+      security: []
+      operationId: listUserReviews
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Composite cursor `<txDigest>|<eventSeq>`.
+      responses:
+        "200":
+          description: Public review anchors where the address is the review subject.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "502":
+          description: Review feed temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Review feed not configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /users/me/key-agreement:
     put:
       tags: [Auth]
@@ -782,24 +814,19 @@ paths:
           required: false
           schema:
             type: string
-            format: date-time
+            description: Sort-aware listings cursor. `newest` accepts `<createdAt>` or `<createdAt>|<listingId>`, `highest_payout` uses `<budgetAmount>|<createdAt>|<listingId>`, and `expires_soon` uses `<expiresAt>|<createdAt>|<listingId>`.
+        - name: sort
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/ListingSort"
       responses:
         "200":
           description: Listing collection.
           content:
             application/json:
               schema:
-                type: object
-                required: [items]
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Listing"
-                  nextCursor:
-                    type: string
-                    format: date-time
-                    nullable: true
+                $ref: "#/components/schemas/ListingListResponse"
     post:
       tags: [Listings]
       operationId: createListing
@@ -895,6 +922,84 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /listings/{listingId}/cancel:
+    post:
+      tags: [Listings]
+      operationId: cancelListing
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: idempotency-key
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Listing canceled.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [listing]
+                properties:
+                  listing:
+                    $ref: "#/components/schemas/Listing"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /listings/{listingId}/renew:
+    post:
+      tags: [Listings]
+      operationId: renewListing
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: idempotency-key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListingRenewRequest"
+      responses:
+        "200":
+          description: Listing reopened or expiry extended.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [listing]
+                properties:
+                  listing:
+                    $ref: "#/components/schemas/Listing"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /bids:
     post:
       tags: [Orders]
@@ -932,6 +1037,42 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+  /bids/{bidId}/withdraw:
+    post:
+      tags: [Orders]
+      operationId: withdrawBid
+      parameters:
+        - name: bidId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: idempotency-key
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Bid withdrawn.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bid]
+                properties:
+                  bid:
+                    $ref: "#/components/schemas/Bid"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /bids/{listingId}/accept:
     post:
       tags: [Orders]
@@ -942,7 +1083,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Stored bid id or legacy listing id.
+          description: Canonical accepted bid identifier.
         - name: idempotency-key
           in: header
           required: true
@@ -1045,7 +1186,8 @@ paths:
           in: query
           required: false
           schema:
-            $ref: "#/components/schemas/MarketplaceEventType"
+            type: string
+            description: Single event type or comma-separated event types.
         - name: limit
           in: query
           required: false
@@ -1843,6 +1985,52 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
   /orders/{orderId}/reviews:
+    get:
+      tags: [Orders]
+      security: []
+      operationId: listOrderReviews
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Composite cursor `<txDigest>|<eventSeq>`.
+      responses:
+        "200":
+          description: Public review anchors attached to the order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          description: Review feed temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Review feed not configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     post:
       tags: [Orders]
       operationId: postOrderReviewPlan
@@ -2343,7 +2531,9 @@ paths:
           schema:
             type: string
       responses:
-        "409":
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
           description: Explicitly unsupported in current on-chain revision.
           content:
             application/json:
@@ -2425,7 +2615,7 @@ paths:
               $ref: "#/components/schemas/DisputeFallbackResolveRequest"
       responses:
         "200":
-          description: Transaction plan for ArbCap fallback resolution (break-glass/admin path).
+          description: Transaction plan for ArbCap fallback resolution (configured arb operator path).
           content:
             application/json:
               schema:
@@ -3349,14 +3539,12 @@ components:
           maxLength: 8192
     AuthSessionView:
       type: object
-      required: [refreshAvailable, legacyAccessToken]
+      required: [refreshAvailable]
       properties:
         id:
           type: string
           format: uuid
         refreshAvailable:
-          type: boolean
-        legacyAccessToken:
           type: boolean
         issuedAtMs:
           type: integer
@@ -3616,6 +3804,11 @@ components:
         budgetAmount:
           type: string
           pattern: "^[0-9]+$"
+        expiresAtMs:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Optional listing expiry timestamp in milliseconds since epoch. Omitted values default to 30 days from creation and may not exceed 30 days.
         communicationPolicy:
           $ref: "#/components/schemas/ListingCommunicationPolicy"
         listingDepositObjectId:
@@ -3660,6 +3853,9 @@ components:
     ListingCategory:
       type: string
       enum: [dev, design, marketing, ops, security, other]
+    ListingSort:
+      type: string
+      enum: [newest, highest_payout, expires_soon]
     ListingCategoryCount:
       type: object
       required: [category, count]
@@ -3833,6 +4029,14 @@ components:
           type: string
           minLength: 1
           maxLength: 1000
+    ListingRenewRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expiresAtMs:
+          type: integer
+          format: int64
+          minimum: 1
     AcceptBidByListingRequest:
       type: object
       additionalProperties: false
@@ -4104,9 +4308,7 @@ components:
           type: string
           minLength: 1
           maxLength: 200
-          description: |
-            Transitional field. Optional in compatibility mode, required once
-            `SPONSOR_ORDER_ID_MODE=required` is enabled.
+          description: Canonical order identifier for order-scoped sponsor policy evaluation.
     SponsorPreflightRequest:
       type: object
       additionalProperties: false
@@ -4123,6 +4325,7 @@ components:
           type: string
           minLength: 1
           maxLength: 200
+          description: Canonical order identifier for order-scoped sponsor policy evaluation.
         gasBudget:
           type: integer
           minimum: 1
@@ -4147,9 +4350,7 @@ components:
           type: string
           minLength: 1
           maxLength: 200
-          description: |
-            Transitional field. Optional in compatibility mode, required once
-            `SPONSOR_ORDER_ID_MODE=required` is enabled.
+          description: Canonical order identifier for order-scoped sponsor policy evaluation.
         intent:
           $ref: "#/components/schemas/SponsorExecutionIntentRequest"
         intentSig:
@@ -4388,14 +4589,12 @@ components:
             authGate:
               type: object
               additionalProperties: false
-              required: [mode, requiresBotKey, requiresBotProfile]
+              required: [mode, additionalAuthorizationRequired]
               properties:
                 mode:
                   type: string
-                  enum: [legacy_bot, hybrid, capability]
-                requiresBotKey:
-                  type: boolean
-                requiresBotProfile:
+                  enum: [capability]
+                additionalAuthorizationRequired:
                   type: boolean
         providedGasBudget:
           type: integer
@@ -4878,7 +5077,10 @@ components:
     DisputeReplaceReviewersRequest:
       type: object
       additionalProperties: false
+      required: [reviewerRegistryObjectId]
       properties:
+        reviewerRegistryObjectId:
+          type: string
         clockObjectId:
           type: string
     DisputeFinalizeRequest:
@@ -5377,6 +5579,9 @@ components:
         status:
           type: string
           enum: [OPEN, PAUSED, FILLED, EXPIRED, CANCELLED]
+        expiresAt:
+          type: string
+          format: date-time
         createdAt:
           type: string
           format: date-time
@@ -5407,6 +5612,17 @@ components:
         createdAt:
           type: string
           format: date-time
+    ListingListResponse:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Listing"
+        nextCursor:
+          type: string
+          nullable: true
     BidListResponse:
       type: object
       required: [items, nextCursor, scope]
@@ -5421,6 +5637,63 @@ components:
         scope:
           type: string
           enum: [seller_all, bidder_self]
+    OrderReview:
+      type: object
+      required:
+        [
+          reviewId,
+          orderId,
+          escrowId,
+          reviewerAddress,
+          reviewerRole,
+          subjectAddress,
+          rating,
+          reviewHash,
+          createdAt,
+          txDigest,
+          eventSeq
+        ]
+      properties:
+        reviewId:
+          type: string
+        orderId:
+          type: string
+        escrowId:
+          type: string
+        reviewerAddress:
+          type: string
+        reviewerRole:
+          type: string
+          enum: [BUYER, SELLER]
+        subjectAddress:
+          type: string
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        reviewHash:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        txDigest:
+          type: string
+        eventSeq:
+          type: string
+    ReviewListResponse:
+      type: object
+      required: [items, nextCursor, incompleteScan]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderReview"
+        nextCursor:
+          type: string
+          nullable: true
+        incompleteScan:
+          type: boolean
+          description: True when the on-chain event scan hit its safety cap before it could prove the page is complete.
     OrderDisputeBondPolicy:
       type: string
       enum: [DUAL_BOND_REQUIRED, PLATFORM_FUNDED_MARKETING]
@@ -5507,6 +5780,7 @@ components:
           listing.created,
           listing.status_changed,
           bid.created,
+          bid.status_changed,
           order.accepted,
           order.status_changed,
           milestone.submitted,
@@ -5514,7 +5788,9 @@ components:
           milestone.rejected,
           dispute.opened,
           dispute.finalized,
+          dispute.finalization_planned,
           dispute.resolved,
+          dispute.escrow_resolution_planned,
           mailbox.bound,
           mailbox.signal_posted,
           mailbox.signal_acked,
@@ -6030,6 +6306,8 @@ components:
           type: string
           minLength: 1
           maxLength: 256
+        targetAddress:
+          type: string
         reasonCode:
           type: string
           enum: [ILLEGAL_CONTENT, SCAM, FRAUD, IP, OTHER]
@@ -6435,6 +6713,8 @@ components:
           type: string
           enum: [LISTING, BID, ORDER, PROFILE, OTHER]
         targetId:
+          type: string
+        targetAddress:
           type: string
         reasonCode:
           type: string

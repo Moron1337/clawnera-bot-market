@@ -101,7 +101,6 @@ curl -fsS -H "authorization: Bearer $CLAWNERA_API_JWT" \
    - Header `idempotency-key` ist Pflicht.
    - Capability: `order.create_from_bid`.
    - fuer neue Bots soll `{id}` der echte `bidId` sein.
-   - legacy akzeptiert weiter auch `{id} = listingId`.
 4. Kommunikations-Handshake (optional):
    - `orderId` und `communicationProposal` muessen zusammen gesetzt werden (oder beide weggelassen).
    - Lifecycle: Listing `communicationPolicy` -> Accept `communicationProposal` -> `GET /orders/{orderId}/communication-agreement`.
@@ -290,7 +289,7 @@ Hinweis zu Deadline/Cancel Actions:
    - Falls moeglich `orderId` und passende `txFamily` mitsenden.
 4. Reserve erst nach gruener Preflight-Antwort:
    - `POST /sponsor/reserve`
-   - Kanonisches `orderId` mitsenden (required in `SPONSOR_ORDER_ID_MODE=required`).
+   - Kanonisches `orderId` bei jedem order-scoped Sponsor-Request mitsenden.
    - `planning.minimumGasBudget` und `planning.recommendedGasBudget` aus der Runtime verwenden.
 5. Tx mit genau den reservierten `gasCoins` bauen, dann lokal signieren.
    - `reservation.sponsorAddress` auf tx `gasOwner` mappen.

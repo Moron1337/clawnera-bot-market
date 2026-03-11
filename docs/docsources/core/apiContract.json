@@ -1073,6 +1073,97 @@
         }
       }
     },
+    "/users/{address}/reviews": {
+      "get": {
+        "path": "/users/{address}/reviews",
+        "method": "get",
+        "operationId": "listUserReviews",
+        "tags": [
+          "Auth"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "address",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [
+            {
+              "name": "limit",
+              "in": "query",
+              "required": false
+            },
+            {
+              "name": "cursor",
+              "in": "query",
+              "required": false
+            }
+          ],
+          "header": []
+        },
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ReviewListResponse",
+            "schemaName": "ReviewListResponse",
+            "requiredFields": [
+              "items",
+              "nextCursor",
+              "incompleteScan"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "items",
+              "nextCursor",
+              "incompleteScan"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "502": {
+            "status": "502",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
     "/users/me/key-agreement": {
       "put": {
         "path": "/users/me/key-agreement",
@@ -1341,6 +1432,11 @@
               "name": "cursor",
               "in": "query",
               "required": false
+            },
+            {
+              "name": "sort",
+              "in": "query",
+              "required": false
             }
           ],
           "header": []
@@ -1350,43 +1446,16 @@
           "200": {
             "status": "200",
             "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/Listing",
-            "schemaName": "Listing",
+            "schemaRef": "#/components/schemas/ListingListResponse",
+            "schemaName": "ListingListResponse",
             "requiredFields": [
-              "id",
-              "creatorAddress",
-              "title",
-              "description",
-              "currency",
-              "budgetAmount",
-              "milestones",
-              "status",
-              "createdAt"
+              "items",
+              "nextCursor"
             ],
-            "optionalFields": [
-              "category",
-              "communicationPolicy",
-              "listingDepositObjectId",
-              "listingDepositTxDigest",
-              "listingDepositStatus",
-              "creatorReputation"
-            ],
+            "optionalFields": [],
             "propertyNames": [
-              "id",
-              "creatorAddress",
-              "title",
-              "description",
-              "category",
-              "currency",
-              "budgetAmount",
-              "milestones",
-              "communicationPolicy",
-              "listingDepositObjectId",
-              "listingDepositTxDigest",
-              "listingDepositStatus",
-              "creatorReputation",
-              "status",
-              "createdAt"
+              "items",
+              "nextCursor"
             ]
           }
         }
@@ -1423,6 +1492,7 @@
           "optionalFields": [
             "description",
             "category",
+            "expiresAtMs",
             "communicationPolicy",
             "listingDepositObjectId",
             "listingDepositTxDigest"
@@ -1434,6 +1504,7 @@
             "category",
             "currency",
             "budgetAmount",
+            "expiresAtMs",
             "communicationPolicy",
             "listingDepositObjectId",
             "listingDepositTxDigest",
@@ -1463,7 +1534,8 @@
               "listingDepositObjectId",
               "listingDepositTxDigest",
               "listingDepositStatus",
-              "creatorReputation"
+              "creatorReputation",
+              "expiresAt"
             ],
             "propertyNames": [
               "id",
@@ -1480,6 +1552,7 @@
               "listingDepositStatus",
               "creatorReputation",
               "status",
+              "expiresAt",
               "createdAt"
             ]
           },
@@ -1680,6 +1753,295 @@
         }
       }
     },
+    "/listings/{listingId}/cancel": {
+      "post": {
+        "path": "/listings/{listingId}/cancel",
+        "method": "post",
+        "operationId": "cancelListing",
+        "tags": [
+          "Listings"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "listingId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": [
+            {
+              "name": "idempotency-key",
+              "in": "header",
+              "required": true
+            }
+          ]
+        },
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/Listing",
+            "schemaName": "Listing",
+            "requiredFields": [
+              "id",
+              "creatorAddress",
+              "title",
+              "description",
+              "currency",
+              "budgetAmount",
+              "milestones",
+              "status",
+              "createdAt"
+            ],
+            "optionalFields": [
+              "category",
+              "communicationPolicy",
+              "listingDepositObjectId",
+              "listingDepositTxDigest",
+              "listingDepositStatus",
+              "creatorReputation",
+              "expiresAt"
+            ],
+            "propertyNames": [
+              "id",
+              "creatorAddress",
+              "title",
+              "description",
+              "category",
+              "currency",
+              "budgetAmount",
+              "milestones",
+              "communicationPolicy",
+              "listingDepositObjectId",
+              "listingDepositTxDigest",
+              "listingDepositStatus",
+              "creatorReputation",
+              "status",
+              "expiresAt",
+              "createdAt"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": "#/components/responses/Conflict",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/listings/{listingId}/renew": {
+      "post": {
+        "path": "/listings/{listingId}/renew",
+        "method": "post",
+        "operationId": "renewListing",
+        "tags": [
+          "Listings"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "listingId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": [
+            {
+              "name": "idempotency-key",
+              "in": "header",
+              "required": true
+            }
+          ]
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/ListingRenewRequest",
+          "schemaName": "ListingRenewRequest",
+          "requiredFields": [],
+          "optionalFields": [
+            "expiresAtMs"
+          ],
+          "propertyNames": [
+            "expiresAtMs"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/Listing",
+            "schemaName": "Listing",
+            "requiredFields": [
+              "id",
+              "creatorAddress",
+              "title",
+              "description",
+              "currency",
+              "budgetAmount",
+              "milestones",
+              "status",
+              "createdAt"
+            ],
+            "optionalFields": [
+              "category",
+              "communicationPolicy",
+              "listingDepositObjectId",
+              "listingDepositTxDigest",
+              "listingDepositStatus",
+              "creatorReputation",
+              "expiresAt"
+            ],
+            "propertyNames": [
+              "id",
+              "creatorAddress",
+              "title",
+              "description",
+              "category",
+              "currency",
+              "budgetAmount",
+              "milestones",
+              "communicationPolicy",
+              "listingDepositObjectId",
+              "listingDepositTxDigest",
+              "listingDepositStatus",
+              "creatorReputation",
+              "status",
+              "expiresAt",
+              "createdAt"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": "#/components/responses/Conflict",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
     "/bids": {
       "post": {
         "path": "/bids",
@@ -1723,6 +2085,129 @@
         "responses": {
           "201": {
             "status": "201",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/Bid",
+            "schemaName": "Bid",
+            "requiredFields": [
+              "id",
+              "listingId",
+              "bidderAddress",
+              "amount",
+              "currency",
+              "status",
+              "createdAt"
+            ],
+            "optionalFields": [
+              "message"
+            ],
+            "propertyNames": [
+              "id",
+              "listingId",
+              "bidderAddress",
+              "amount",
+              "currency",
+              "message",
+              "status",
+              "createdAt"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": "#/components/responses/Conflict",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/bids/{bidId}/withdraw": {
+      "post": {
+        "path": "/bids/{bidId}/withdraw",
+        "method": "post",
+        "operationId": "withdrawBid",
+        "tags": [
+          "Orders"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "bidId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": [
+            {
+              "name": "idempotency-key",
+              "in": "header",
+              "required": true
+            }
+          ]
+        },
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "status": "200",
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/Bid",
             "schemaName": "Bid",
@@ -4670,6 +5155,108 @@
       }
     },
     "/orders/{orderId}/reviews": {
+      "get": {
+        "path": "/orders/{orderId}/reviews",
+        "method": "get",
+        "operationId": "listOrderReviews",
+        "tags": [
+          "Orders"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "orderId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [
+            {
+              "name": "limit",
+              "in": "query",
+              "required": false
+            },
+            {
+              "name": "cursor",
+              "in": "query",
+              "required": false
+            }
+          ],
+          "header": []
+        },
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ReviewListResponse",
+            "schemaName": "ReviewListResponse",
+            "requiredFields": [
+              "items",
+              "nextCursor",
+              "incompleteScan"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "items",
+              "nextCursor",
+              "incompleteScan"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "502": {
+            "status": "502",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      },
       "post": {
         "path": "/orders/{orderId}/reviews",
         "method": "post",
@@ -6445,8 +7032,21 @@
         },
         "requestBody": null,
         "responses": {
-          "409": {
-            "status": "409",
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "501": {
+            "status": "501",
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ErrorResponse",
             "schemaName": "ErrorResponse",
@@ -6484,11 +7084,14 @@
           "required": true,
           "schemaRef": "#/components/schemas/DisputeReplaceReviewersRequest",
           "schemaName": "DisputeReplaceReviewersRequest",
-          "requiredFields": [],
+          "requiredFields": [
+            "reviewerRegistryObjectId"
+          ],
           "optionalFields": [
             "clockObjectId"
           ],
           "propertyNames": [
+            "reviewerRegistryObjectId",
             "clockObjectId"
           ]
         },
@@ -7924,12 +8527,14 @@
             "details"
           ],
           "optionalFields": [
+            "targetAddress",
             "reporterContact",
             "evidenceUrls"
           ],
           "propertyNames": [
             "targetType",
             "targetId",
+            "targetAddress",
             "reasonCode",
             "details",
             "reporterContact",
@@ -7949,6 +8554,7 @@
               "reporterContact",
               "targetType",
               "targetId",
+              "targetAddress",
               "reasonCode",
               "details",
               "evidenceUrls",
@@ -7967,6 +8573,7 @@
               "reporterContact",
               "targetType",
               "targetId",
+              "targetAddress",
               "reasonCode",
               "details",
               "evidenceUrls",
@@ -8632,6 +9239,7 @@
               "reporterContact",
               "targetType",
               "targetId",
+              "targetAddress",
               "reasonCode",
               "details",
               "evidenceUrls",
@@ -8650,6 +9258,7 @@
               "reporterContact",
               "targetType",
               "targetId",
+              "targetAddress",
               "reasonCode",
               "details",
               "evidenceUrls",
@@ -8746,6 +9355,7 @@
               "reporterContact",
               "targetType",
               "targetId",
+              "targetAddress",
               "reasonCode",
               "details",
               "evidenceUrls",
@@ -8764,6 +9374,7 @@
               "reporterContact",
               "targetType",
               "targetId",
+              "targetAddress",
               "reasonCode",
               "details",
               "evidenceUrls",
@@ -10742,6 +11353,94 @@
         }
       }
     },
+    "listUserReviews": {
+      "path": "/users/{address}/reviews",
+      "method": "get",
+      "tags": [
+        "Auth"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false
+          }
+        ],
+        "header": []
+      },
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ReviewListResponse",
+          "schemaName": "ReviewListResponse",
+          "requiredFields": [
+            "items",
+            "nextCursor",
+            "incompleteScan"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "items",
+            "nextCursor",
+            "incompleteScan"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "502": {
+          "status": "502",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
     "upsertMyKeyAgreement": {
       "path": "/users/me/key-agreement",
       "method": "put",
@@ -11002,6 +11701,11 @@
             "name": "cursor",
             "in": "query",
             "required": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false
           }
         ],
         "header": []
@@ -11011,43 +11715,16 @@
         "200": {
           "status": "200",
           "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/Listing",
-          "schemaName": "Listing",
+          "schemaRef": "#/components/schemas/ListingListResponse",
+          "schemaName": "ListingListResponse",
           "requiredFields": [
-            "id",
-            "creatorAddress",
-            "title",
-            "description",
-            "currency",
-            "budgetAmount",
-            "milestones",
-            "status",
-            "createdAt"
+            "items",
+            "nextCursor"
           ],
-          "optionalFields": [
-            "category",
-            "communicationPolicy",
-            "listingDepositObjectId",
-            "listingDepositTxDigest",
-            "listingDepositStatus",
-            "creatorReputation"
-          ],
+          "optionalFields": [],
           "propertyNames": [
-            "id",
-            "creatorAddress",
-            "title",
-            "description",
-            "category",
-            "currency",
-            "budgetAmount",
-            "milestones",
-            "communicationPolicy",
-            "listingDepositObjectId",
-            "listingDepositTxDigest",
-            "listingDepositStatus",
-            "creatorReputation",
-            "status",
-            "createdAt"
+            "items",
+            "nextCursor"
           ]
         }
       }
@@ -11083,6 +11760,7 @@
         "optionalFields": [
           "description",
           "category",
+          "expiresAtMs",
           "communicationPolicy",
           "listingDepositObjectId",
           "listingDepositTxDigest"
@@ -11094,6 +11772,7 @@
           "category",
           "currency",
           "budgetAmount",
+          "expiresAtMs",
           "communicationPolicy",
           "listingDepositObjectId",
           "listingDepositTxDigest",
@@ -11123,7 +11802,8 @@
             "listingDepositObjectId",
             "listingDepositTxDigest",
             "listingDepositStatus",
-            "creatorReputation"
+            "creatorReputation",
+            "expiresAt"
           ],
           "propertyNames": [
             "id",
@@ -11140,6 +11820,7 @@
             "listingDepositStatus",
             "creatorReputation",
             "status",
+            "expiresAt",
             "createdAt"
           ]
         },
@@ -11333,6 +12014,289 @@
         }
       }
     },
+    "cancelListing": {
+      "path": "/listings/{listingId}/cancel",
+      "method": "post",
+      "tags": [
+        "Listings"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "listingId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": true
+          }
+        ]
+      },
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/Listing",
+          "schemaName": "Listing",
+          "requiredFields": [
+            "id",
+            "creatorAddress",
+            "title",
+            "description",
+            "currency",
+            "budgetAmount",
+            "milestones",
+            "status",
+            "createdAt"
+          ],
+          "optionalFields": [
+            "category",
+            "communicationPolicy",
+            "listingDepositObjectId",
+            "listingDepositTxDigest",
+            "listingDepositStatus",
+            "creatorReputation",
+            "expiresAt"
+          ],
+          "propertyNames": [
+            "id",
+            "creatorAddress",
+            "title",
+            "description",
+            "category",
+            "currency",
+            "budgetAmount",
+            "milestones",
+            "communicationPolicy",
+            "listingDepositObjectId",
+            "listingDepositTxDigest",
+            "listingDepositStatus",
+            "creatorReputation",
+            "status",
+            "expiresAt",
+            "createdAt"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": "#/components/responses/Conflict",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "renewListing": {
+      "path": "/listings/{listingId}/renew",
+      "method": "post",
+      "tags": [
+        "Listings"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "listingId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": true
+          }
+        ]
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/ListingRenewRequest",
+        "schemaName": "ListingRenewRequest",
+        "requiredFields": [],
+        "optionalFields": [
+          "expiresAtMs"
+        ],
+        "propertyNames": [
+          "expiresAtMs"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/Listing",
+          "schemaName": "Listing",
+          "requiredFields": [
+            "id",
+            "creatorAddress",
+            "title",
+            "description",
+            "currency",
+            "budgetAmount",
+            "milestones",
+            "status",
+            "createdAt"
+          ],
+          "optionalFields": [
+            "category",
+            "communicationPolicy",
+            "listingDepositObjectId",
+            "listingDepositTxDigest",
+            "listingDepositStatus",
+            "creatorReputation",
+            "expiresAt"
+          ],
+          "propertyNames": [
+            "id",
+            "creatorAddress",
+            "title",
+            "description",
+            "category",
+            "currency",
+            "budgetAmount",
+            "milestones",
+            "communicationPolicy",
+            "listingDepositObjectId",
+            "listingDepositTxDigest",
+            "listingDepositStatus",
+            "creatorReputation",
+            "status",
+            "expiresAt",
+            "createdAt"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": "#/components/responses/Conflict",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
     "createBid": {
       "path": "/bids",
       "method": "post",
@@ -11374,6 +12338,126 @@
       "responses": {
         "201": {
           "status": "201",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/Bid",
+          "schemaName": "Bid",
+          "requiredFields": [
+            "id",
+            "listingId",
+            "bidderAddress",
+            "amount",
+            "currency",
+            "status",
+            "createdAt"
+          ],
+          "optionalFields": [
+            "message"
+          ],
+          "propertyNames": [
+            "id",
+            "listingId",
+            "bidderAddress",
+            "amount",
+            "currency",
+            "message",
+            "status",
+            "createdAt"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": "#/components/responses/Conflict",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "withdrawBid": {
+      "path": "/bids/{bidId}/withdraw",
+      "method": "post",
+      "tags": [
+        "Orders"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "bidId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": true
+          }
+        ]
+      },
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "status": "200",
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/Bid",
           "schemaName": "Bid",
@@ -14250,6 +15334,107 @@
         }
       }
     },
+    "listOrderReviews": {
+      "path": "/orders/{orderId}/reviews",
+      "method": "get",
+      "tags": [
+        "Orders"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false
+          }
+        ],
+        "header": []
+      },
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ReviewListResponse",
+          "schemaName": "ReviewListResponse",
+          "requiredFields": [
+            "items",
+            "nextCursor",
+            "incompleteScan"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "items",
+            "nextCursor",
+            "incompleteScan"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "502": {
+          "status": "502",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
     "postOrderReviewPlan": {
       "path": "/orders/{orderId}/reviews",
       "method": "post",
@@ -15979,8 +17164,21 @@
       },
       "requestBody": null,
       "responses": {
-        "409": {
-          "status": "409",
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "501": {
+          "status": "501",
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ErrorResponse",
           "schemaName": "ErrorResponse",
@@ -16015,11 +17213,14 @@
         "required": true,
         "schemaRef": "#/components/schemas/DisputeReplaceReviewersRequest",
         "schemaName": "DisputeReplaceReviewersRequest",
-        "requiredFields": [],
+        "requiredFields": [
+          "reviewerRegistryObjectId"
+        ],
         "optionalFields": [
           "clockObjectId"
         ],
         "propertyNames": [
+          "reviewerRegistryObjectId",
           "clockObjectId"
         ]
       },
@@ -17431,12 +18632,14 @@
           "details"
         ],
         "optionalFields": [
+          "targetAddress",
           "reporterContact",
           "evidenceUrls"
         ],
         "propertyNames": [
           "targetType",
           "targetId",
+          "targetAddress",
           "reasonCode",
           "details",
           "reporterContact",
@@ -17456,6 +18659,7 @@
             "reporterContact",
             "targetType",
             "targetId",
+            "targetAddress",
             "reasonCode",
             "details",
             "evidenceUrls",
@@ -17474,6 +18678,7 @@
             "reporterContact",
             "targetType",
             "targetId",
+            "targetAddress",
             "reasonCode",
             "details",
             "evidenceUrls",
@@ -18118,6 +19323,7 @@
             "reporterContact",
             "targetType",
             "targetId",
+            "targetAddress",
             "reasonCode",
             "details",
             "evidenceUrls",
@@ -18136,6 +19342,7 @@
             "reporterContact",
             "targetType",
             "targetId",
+            "targetAddress",
             "reasonCode",
             "details",
             "evidenceUrls",
@@ -18229,6 +19436,7 @@
             "reporterContact",
             "targetType",
             "targetId",
+            "targetAddress",
             "reasonCode",
             "details",
             "evidenceUrls",
@@ -18247,6 +19455,7 @@
             "reporterContact",
             "targetType",
             "targetId",
+            "targetAddress",
             "reasonCode",
             "details",
             "evidenceUrls",
@@ -19290,15 +20499,13 @@
       "propertyNames": [
         "id",
         "refreshAvailable",
-        "legacyAccessToken",
         "issuedAtMs",
         "refreshExpiresAtMs",
         "lastRefreshedAtMs",
         "revokedAtMs"
       ],
       "requiredFields": [
-        "refreshAvailable",
-        "legacyAccessToken"
+        "refreshAvailable"
       ],
       "optionalFields": [
         "id",
@@ -19482,6 +20689,7 @@
         "category",
         "currency",
         "budgetAmount",
+        "expiresAtMs",
         "communicationPolicy",
         "listingDepositObjectId",
         "listingDepositTxDigest",
@@ -19497,6 +20705,7 @@
       "optionalFields": [
         "description",
         "category",
+        "expiresAtMs",
         "communicationPolicy",
         "listingDepositObjectId",
         "listingDepositTxDigest"
@@ -19523,6 +20732,12 @@
     },
     "ListingCategory": {
       "name": "ListingCategory",
+      "propertyNames": [],
+      "requiredFields": [],
+      "optionalFields": []
+    },
+    "ListingSort": {
+      "name": "ListingSort",
       "propertyNames": [],
       "requiredFields": [],
       "optionalFields": []
@@ -19663,6 +20878,16 @@
       ],
       "optionalFields": [
         "message"
+      ]
+    },
+    "ListingRenewRequest": {
+      "name": "ListingRenewRequest",
+      "propertyNames": [
+        "expiresAtMs"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "expiresAtMs"
       ]
     },
     "AcceptBidByListingRequest": {
@@ -20334,9 +21559,12 @@
     "DisputeReplaceReviewersRequest": {
       "name": "DisputeReplaceReviewersRequest",
       "propertyNames": [
+        "reviewerRegistryObjectId",
         "clockObjectId"
       ],
-      "requiredFields": [],
+      "requiredFields": [
+        "reviewerRegistryObjectId"
+      ],
       "optionalFields": [
         "clockObjectId"
       ]
@@ -20797,6 +22025,7 @@
         "listingDepositStatus",
         "creatorReputation",
         "status",
+        "expiresAt",
         "createdAt"
       ],
       "requiredFields": [
@@ -20816,7 +22045,8 @@
         "listingDepositObjectId",
         "listingDepositTxDigest",
         "listingDepositStatus",
-        "creatorReputation"
+        "creatorReputation",
+        "expiresAt"
       ]
     },
     "BidStatus": {
@@ -20850,6 +22080,18 @@
         "message"
       ]
     },
+    "ListingListResponse": {
+      "name": "ListingListResponse",
+      "propertyNames": [
+        "items",
+        "nextCursor"
+      ],
+      "requiredFields": [
+        "items",
+        "nextCursor"
+      ],
+      "optionalFields": []
+    },
     "BidListResponse": {
       "name": "BidListResponse",
       "propertyNames": [
@@ -20861,6 +22103,50 @@
         "items",
         "nextCursor",
         "scope"
+      ],
+      "optionalFields": []
+    },
+    "OrderReview": {
+      "name": "OrderReview",
+      "propertyNames": [
+        "reviewId",
+        "orderId",
+        "escrowId",
+        "reviewerAddress",
+        "reviewerRole",
+        "subjectAddress",
+        "rating",
+        "reviewHash",
+        "createdAt",
+        "txDigest",
+        "eventSeq"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "reviewId",
+        "orderId",
+        "escrowId",
+        "reviewerAddress",
+        "reviewerRole",
+        "subjectAddress",
+        "rating",
+        "reviewHash",
+        "createdAt",
+        "txDigest",
+        "eventSeq"
+      ]
+    },
+    "ReviewListResponse": {
+      "name": "ReviewListResponse",
+      "propertyNames": [
+        "items",
+        "nextCursor",
+        "incompleteScan"
+      ],
+      "requiredFields": [
+        "items",
+        "nextCursor",
+        "incompleteScan"
       ],
       "optionalFields": []
     },
@@ -21288,6 +22574,7 @@
       "propertyNames": [
         "targetType",
         "targetId",
+        "targetAddress",
         "reasonCode",
         "details",
         "reporterContact",
@@ -21300,6 +22587,7 @@
         "details"
       ],
       "optionalFields": [
+        "targetAddress",
         "reporterContact",
         "evidenceUrls"
       ]
@@ -21525,6 +22813,7 @@
         "reporterContact",
         "targetType",
         "targetId",
+        "targetAddress",
         "reasonCode",
         "details",
         "evidenceUrls",
@@ -21544,6 +22833,7 @@
         "reporterContact",
         "targetType",
         "targetId",
+        "targetAddress",
         "reasonCode",
         "details",
         "evidenceUrls",

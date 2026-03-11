@@ -28,7 +28,7 @@
    - Dry-run danach sauber?
      `clawnera-help sponsor-execute --api-base <url> --jwt <token> --dry-run`
    - `reservation.sponsorAddress`/`reservation.gasCoins[]` korrekt auf tx `gasOwner`/`gasPayment` gemappt?
-   - `SPONSOR_ORDER_ID_MODE=required` aktiv? Dann `orderId` in Reserve+Execute immer mitsenden.
+   - `orderId` in Reserve+Execute bei order-scoped Flows immer mitsenden.
    - Bei Marketing-Orders: `intent` + `intentSig` vorhanden und auf aktueller Reservation erzeugt?
    - `intentSig` auf kanonische Nachricht signiert?
      - `CLAWDEX Sponsor Execute Intent v1`

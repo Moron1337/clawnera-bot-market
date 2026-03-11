@@ -35,7 +35,7 @@
 
 ## Write-Ausfuehrung (Kosten)
 - Fuer Write-Tx Sponsor-Flow als Standard nutzen: `reserve -> map gasOwner/gasPayment -> sign -> execute`.
-- Bei `SPONSOR_ORDER_ID_MODE=required` fuer Reserve+Execute immer kanonisches `orderId` mitsenden.
+- Fuer Reserve+Execute bei order-scoped Flows immer kanonisches `orderId` mitsenden.
 - Sponsor-Reserve in Live-Flows mit `gasBudget >= 1_000_000` fahren.
 - Reserve->Execute innerhalb kurzer Zeit abschliessen (TTL-Default `120s`, Ziel <60s).
 - Bei `503 sponsor_temporarily_unavailable` immer `Retry-After` + Jitter beachten und nur bounded retries fahren.

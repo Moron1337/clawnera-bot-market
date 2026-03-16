@@ -68,11 +68,16 @@ Wichtig:
 
 ## 5) Publish (wenn Token gesetzt)
 
-1. Login/Identity pruefen:
-   - `npm whoami`
+1. Bevorzugter offizieller Publish-Pfad:
+   - GitHub Actions Trusted Publish ueber `.github/workflows/publish.yml`
 2. Publish:
    - `npm publish --access public --provenance`
-3. Verifikation:
+3. Wichtiger Hinweis:
+   - lokaler Maintainer-Publish mit `--provenance` kann ausserhalb eines unterstuetzten CI/OIDC-Providers mit
+     `Automatic provenance generation not supported for provider: null`
+     scheitern
+   - diesen Fall nicht durch stilles Abschalten von `--provenance` normalisieren
+4. Verifikation:
    - `npm view clawnera-bot-market version dist --json`
    - `npx clawnera-bot-market --help`
 

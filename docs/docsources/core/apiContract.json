@@ -356,19 +356,23 @@
             ],
             "optionalFields": [
               "alreadyClaimed",
+              "pendingConfirmation",
               "txDigest",
               "completedAt",
-              "balanceBefore"
+              "balanceBefore",
+              "detail"
             ],
             "propertyNames": [
               "funded",
               "alreadyClaimed",
+              "pendingConfirmation",
               "amount",
               "txDigest",
               "senderAddress",
               "completedAt",
               "balanceBefore",
-              "maxEligibleBalance"
+              "maxEligibleBalance",
+              "detail"
             ]
           },
           "201": {
@@ -384,19 +388,55 @@
             ],
             "optionalFields": [
               "alreadyClaimed",
+              "pendingConfirmation",
               "txDigest",
               "completedAt",
-              "balanceBefore"
+              "balanceBefore",
+              "detail"
             ],
             "propertyNames": [
               "funded",
               "alreadyClaimed",
+              "pendingConfirmation",
               "amount",
               "txDigest",
               "senderAddress",
               "completedAt",
               "balanceBefore",
+              "maxEligibleBalance",
+              "detail"
+            ]
+          },
+          "202": {
+            "status": "202",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/OnboardingIotaTopupResponse",
+            "schemaName": "OnboardingIotaTopupResponse",
+            "requiredFields": [
+              "funded",
+              "amount",
+              "senderAddress",
               "maxEligibleBalance"
+            ],
+            "optionalFields": [
+              "alreadyClaimed",
+              "pendingConfirmation",
+              "txDigest",
+              "completedAt",
+              "balanceBefore",
+              "detail"
+            ],
+            "propertyNames": [
+              "funded",
+              "alreadyClaimed",
+              "pendingConfirmation",
+              "amount",
+              "txDigest",
+              "senderAddress",
+              "completedAt",
+              "balanceBefore",
+              "maxEligibleBalance",
+              "detail"
             ]
           },
           "401": {
@@ -950,7 +990,7 @@
             {
               "name": "keyVersion",
               "in": "query",
-              "required": false
+              "required": true
             }
           ],
           "header": []
@@ -1921,10 +1961,10 @@
           "required": true,
           "schemaRef": "#/components/schemas/ListingRenewRequest",
           "schemaName": "ListingRenewRequest",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "expiresAtMs"
           ],
+          "optionalFields": [],
           "propertyNames": [
             "expiresAtMs"
           ]
@@ -3213,6 +3253,276 @@
               "status",
               "createdAt",
               "updatedAt"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": "#/components/responses/Conflict",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/orders/{orderId}/escrow/release": {
+      "post": {
+        "path": "/orders/{orderId}/escrow/release",
+        "method": "post",
+        "operationId": "releaseOrderEscrowPlan",
+        "tags": [
+          "Orders"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "orderId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/OrderEscrowReleaseRequest",
+          "schemaName": "OrderEscrowReleaseRequest",
+          "requiredFields": [
+            "escrowObjectId"
+          ],
+          "optionalFields": [
+            "bondObjectId"
+          ],
+          "propertyNames": [
+            "escrowObjectId",
+            "bondObjectId"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/TxPlanResponse",
+            "schemaName": "TxPlanResponse",
+            "requiredFields": [
+              "txBuilder",
+              "request"
+            ],
+            "optionalFields": [
+              "txMoveCall"
+            ],
+            "propertyNames": [
+              "txBuilder",
+              "request",
+              "txMoveCall"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": "#/components/responses/Conflict",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/orders/{orderId}/escrow/claim-after-deadline": {
+      "post": {
+        "path": "/orders/{orderId}/escrow/claim-after-deadline",
+        "method": "post",
+        "operationId": "claimOrderEscrowAfterDeadlinePlan",
+        "tags": [
+          "Orders"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "orderId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/OrderEscrowClaimAfterDeadlineRequest",
+          "schemaName": "OrderEscrowClaimAfterDeadlineRequest",
+          "requiredFields": [
+            "escrowObjectId"
+          ],
+          "optionalFields": [
+            "bondObjectId",
+            "clockObjectId"
+          ],
+          "propertyNames": [
+            "escrowObjectId",
+            "bondObjectId",
+            "clockObjectId"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/TxPlanResponse",
+            "schemaName": "TxPlanResponse",
+            "requiredFields": [
+              "txBuilder",
+              "request"
+            ],
+            "optionalFields": [
+              "txMoveCall"
+            ],
+            "propertyNames": [
+              "txBuilder",
+              "request",
+              "txMoveCall"
             ]
           },
           "400": {
@@ -10667,19 +10977,23 @@
           ],
           "optionalFields": [
             "alreadyClaimed",
+            "pendingConfirmation",
             "txDigest",
             "completedAt",
-            "balanceBefore"
+            "balanceBefore",
+            "detail"
           ],
           "propertyNames": [
             "funded",
             "alreadyClaimed",
+            "pendingConfirmation",
             "amount",
             "txDigest",
             "senderAddress",
             "completedAt",
             "balanceBefore",
-            "maxEligibleBalance"
+            "maxEligibleBalance",
+            "detail"
           ]
         },
         "201": {
@@ -10695,19 +11009,55 @@
           ],
           "optionalFields": [
             "alreadyClaimed",
+            "pendingConfirmation",
             "txDigest",
             "completedAt",
-            "balanceBefore"
+            "balanceBefore",
+            "detail"
           ],
           "propertyNames": [
             "funded",
             "alreadyClaimed",
+            "pendingConfirmation",
             "amount",
             "txDigest",
             "senderAddress",
             "completedAt",
             "balanceBefore",
+            "maxEligibleBalance",
+            "detail"
+          ]
+        },
+        "202": {
+          "status": "202",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/OnboardingIotaTopupResponse",
+          "schemaName": "OnboardingIotaTopupResponse",
+          "requiredFields": [
+            "funded",
+            "amount",
+            "senderAddress",
             "maxEligibleBalance"
+          ],
+          "optionalFields": [
+            "alreadyClaimed",
+            "pendingConfirmation",
+            "txDigest",
+            "completedAt",
+            "balanceBefore",
+            "detail"
+          ],
+          "propertyNames": [
+            "funded",
+            "alreadyClaimed",
+            "pendingConfirmation",
+            "amount",
+            "txDigest",
+            "senderAddress",
+            "completedAt",
+            "balanceBefore",
+            "maxEligibleBalance",
+            "detail"
           ]
         },
         "401": {
@@ -11234,7 +11584,7 @@
           {
             "name": "keyVersion",
             "in": "query",
-            "required": false
+            "required": true
           }
         ],
         "header": []
@@ -12177,10 +12527,10 @@
         "required": true,
         "schemaRef": "#/components/schemas/ListingRenewRequest",
         "schemaName": "ListingRenewRequest",
-        "requiredFields": [],
-        "optionalFields": [
+        "requiredFields": [
           "expiresAtMs"
         ],
+        "optionalFields": [],
         "propertyNames": [
           "expiresAtMs"
         ]
@@ -13435,6 +13785,270 @@
             "status",
             "createdAt",
             "updatedAt"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": "#/components/responses/Conflict",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "releaseOrderEscrowPlan": {
+      "path": "/orders/{orderId}/escrow/release",
+      "method": "post",
+      "tags": [
+        "Orders"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/OrderEscrowReleaseRequest",
+        "schemaName": "OrderEscrowReleaseRequest",
+        "requiredFields": [
+          "escrowObjectId"
+        ],
+        "optionalFields": [
+          "bondObjectId"
+        ],
+        "propertyNames": [
+          "escrowObjectId",
+          "bondObjectId"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/TxPlanResponse",
+          "schemaName": "TxPlanResponse",
+          "requiredFields": [
+            "txBuilder",
+            "request"
+          ],
+          "optionalFields": [
+            "txMoveCall"
+          ],
+          "propertyNames": [
+            "txBuilder",
+            "request",
+            "txMoveCall"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": "#/components/responses/Conflict",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "claimOrderEscrowAfterDeadlinePlan": {
+      "path": "/orders/{orderId}/escrow/claim-after-deadline",
+      "method": "post",
+      "tags": [
+        "Orders"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/OrderEscrowClaimAfterDeadlineRequest",
+        "schemaName": "OrderEscrowClaimAfterDeadlineRequest",
+        "requiredFields": [
+          "escrowObjectId"
+        ],
+        "optionalFields": [
+          "bondObjectId",
+          "clockObjectId"
+        ],
+        "propertyNames": [
+          "escrowObjectId",
+          "bondObjectId",
+          "clockObjectId"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/TxPlanResponse",
+          "schemaName": "TxPlanResponse",
+          "requiredFields": [
+            "txBuilder",
+            "request"
+          ],
+          "optionalFields": [
+            "txMoveCall"
+          ],
+          "propertyNames": [
+            "txBuilder",
+            "request",
+            "txMoveCall"
           ]
         },
         "400": {
@@ -20885,10 +21499,10 @@
       "propertyNames": [
         "expiresAtMs"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "expiresAtMs"
-      ]
+      ],
+      "optionalFields": []
     },
     "AcceptBidByListingRequest": {
       "name": "AcceptBidByListingRequest",
@@ -21004,12 +21618,14 @@
       "propertyNames": [
         "funded",
         "alreadyClaimed",
+        "pendingConfirmation",
         "amount",
         "txDigest",
         "senderAddress",
         "completedAt",
         "balanceBefore",
-        "maxEligibleBalance"
+        "maxEligibleBalance",
+        "detail"
       ],
       "requiredFields": [
         "funded",
@@ -21019,9 +21635,11 @@
       ],
       "optionalFields": [
         "alreadyClaimed",
+        "pendingConfirmation",
         "txDigest",
         "completedAt",
-        "balanceBefore"
+        "balanceBefore",
+        "detail"
       ]
     },
     "SponsorReserveRequest": {
@@ -21900,6 +22518,34 @@
         "escrowObjectId"
       ],
       "optionalFields": []
+    },
+    "OrderEscrowReleaseRequest": {
+      "name": "OrderEscrowReleaseRequest",
+      "propertyNames": [
+        "escrowObjectId",
+        "bondObjectId"
+      ],
+      "requiredFields": [
+        "escrowObjectId"
+      ],
+      "optionalFields": [
+        "bondObjectId"
+      ]
+    },
+    "OrderEscrowClaimAfterDeadlineRequest": {
+      "name": "OrderEscrowClaimAfterDeadlineRequest",
+      "propertyNames": [
+        "escrowObjectId",
+        "bondObjectId",
+        "clockObjectId"
+      ],
+      "requiredFields": [
+        "escrowObjectId"
+      ],
+      "optionalFields": [
+        "bondObjectId",
+        "clockObjectId"
+      ]
     },
     "ReviewPostRequest": {
       "name": "ReviewPostRequest",

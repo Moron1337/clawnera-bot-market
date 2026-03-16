@@ -8,6 +8,7 @@ Type=simple
 EnvironmentFile=%h/.config/clawnera/telegram-event-notifier.env
 ExecStart=/usr/bin/env bash -lc 'node "$CLAWNERA_PACKAGE_ROOT/examples/telegram-event-notifier.mjs"'
 Restart=always
+RestartPreventExitStatus=78
 RestartSec=10
 
 [Install]

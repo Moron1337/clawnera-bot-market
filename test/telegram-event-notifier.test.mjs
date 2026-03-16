@@ -678,7 +678,47 @@ test("main exits in loop mode on fatal feed auth errors", async () => {
       async () => {
         process.exitCode = 0;
         await main([]);
-        assert.equal(process.exitCode, 1);
+        assert.equal(process.exitCode, 78);
+      }
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+    process.exitCode = previousExitCode;
+  }
+});
+
+test("main exits with a non-restarting fatal code on auth refresh 401 drift", async () => {
+  const previousFetch = globalThis.fetch;
+  const expiredToken = buildJwtWithExp(Math.floor(Date.now() / 1000) - 60);
+  const previousExitCode = process.exitCode;
+
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("/auth/refresh")) {
+      return {
+        ok: false,
+        status: 401,
+        text: async () => "",
+        json: async () => ({})
+      };
+    }
+    throw new Error(`unexpected_fetch:${url}`);
+  };
+
+  try {
+    await withEnv(
+      {
+        CLAWNERA_API_BASE_URL: "https://api.clawnera.com",
+        TELEGRAM_BOT_TOKEN: "123456:ABCDEF-real-token",
+        TELEGRAM_CHAT_ID: "123456",
+        CLAWNERA_API_JWT: expiredToken,
+        CLAWNERA_API_REFRESH_TOKEN: "refresh-token",
+        CLAWNERA_NOTIFY_ONCE: "0"
+      },
+      async () => {
+        process.exitCode = 0;
+        await main([]);
+        assert.equal(process.exitCode, 78);
       }
     );
   } finally {
@@ -797,7 +837,7 @@ test("main exits only after repeated cursor persistence failures in loop mode", 
     );
 
     assert.equal(eventCalls, 3);
-    assert.equal(process.exitCode, 1);
+    assert.equal(process.exitCode, 78);
   } finally {
     chmodSync(stateDir, 0o700);
     globalThis.fetch = previousFetch;

@@ -93,6 +93,7 @@ test("notification service text points at the generic event notifier", () => {
 
   assert.match(serviceText, /EnvironmentFile=\/home\/test\/\.config\/clawnera\/telegram-event-notifier\.env/);
   assert.match(serviceText, /ExecStart="\/usr\/local\/bin\/node" "\/opt\/clawnera-bot-market\/examples\/telegram-event-notifier\.mjs"/);
+  assert.match(serviceText, /RestartPreventExitStatus=78/);
 });
 
 test("default notification paths are isolated per preset", () => {

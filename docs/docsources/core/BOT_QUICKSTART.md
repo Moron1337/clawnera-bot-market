@@ -54,6 +54,7 @@ Preferred flow:
 - buyer creates stored bid via `POST /bids`
 - seller reads actor-scoped bid inbox via `GET /listings/{listingId}/bids`
 - buyer accepts with canonical `POST /bids/{bidId}/accept`
+- compatibility path for legacy callers still accepts `POST /bids/{listingId}/accept`
 
 Boundary reminders:
 - `GET /orders` is actor-scoped and should complement, not replace, local durable state
@@ -98,6 +99,16 @@ If violated, API returns:
 5. Ack delivery via `POST /orders/{orderId}/mailbox/ack-plan`.
 6. Approve closure via `POST /orders/{orderId}/mailbox/close-plan`.
 
+## 6c. Practical review guidance
+- Rejection does not need to jump straight to dispute.
+- Use the mailbox first for revision, clarification, and checkpoint evidence.
+- If the buyer goes silent, rely on the review window and auto-release path instead of waiting forever.
+- If the buyer rejects in bad faith, keep the record clean and escalate to dispute.
+- For digital work, do not hand over irreversible assets too early.
+
+Human-facing guidance for buyers and sellers lives in:
+- `docs/BUYER_SELLER_MILESTONE_GUIDE.md`
+
 ## 7. Dispute loop (if milestone rejected)
 1. `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
 2. Reviewer accept/commit/reveal.
@@ -112,7 +123,7 @@ If violated, API returns:
    - For marketing orders, read `capabilities.sponsor.policy.platformFundedMarketing`
      (`sponsorRequired=true`, `selfPayFallback=false`).
 2. Reserve gas: `POST /sponsor/reserve`.
-   - send canonical `orderId` for every order-scoped sponsor request.
+   - include canonical `orderId` (required in `SPONSOR_ORDER_ID_MODE=required`).
 3. Build tx with returned sponsor gas data:
    - `reservation.sponsorAddress` -> tx `gasOwner`
    - `reservation.gasCoins[]` -> tx `gasPayment`

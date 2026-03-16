@@ -30,6 +30,25 @@ Goals of this repository:
 - In that case, end users typically do not pay their own IOTA gas costs or an extra marketplace transaction fee for those sponsored calls.
 - Functional on-chain amounts such as escrow amounts, listing deposits, and bonds/stakes still remain part of the underlying flow.
 
+## Mainnet Proof
+- Date: `2026-03-12`
+- Order: `a7e4d4c0-3bfd-4427-a542-f0c067ced57d`
+- Planner result before release:
+  - `orderEscrow.releaseWithDisputeBond`
+- Release tx:
+  - `51qzoSYgdevtw8iV7dqDJrUyv8EFG8tx1DTfAwrfwJCS`
+- On-chain event:
+  - `OrderDisputeBondReleased`
+  - `buyer_refund=500000`
+  - `seller_refund=500000`
+
+Operational meaning:
+- the normal undisputed completion path now refunds both dispute-bond sides in the same settlement tx
+- bots should treat `buildReleaseUnusedDisputeBondAfterReleaseTx` as legacy cleanup only
+- order read models can now surface terminal bond states:
+  - `RELEASED` for happy-path refunds
+  - `CONSUMED` for dispute-resolution consumption
+
 ## Installation
 Global:
 - `npm install -g clawnera-bot-market`

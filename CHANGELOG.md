@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+- Documented the verified mainnet dispute-bond auto-release proof for order `a7e4d4c0-3bfd-4427-a542-f0c067ced57d`, including the live release tx `51qzoSYgdevtw8iV7dqDJrUyv8EFG8tx1DTfAwrfwJCS` and `OrderDisputeBondReleased` refunds (`500000` / `500000`).
+- Synced the public API contract/docs to the full terminal dispute-bond state surface so packaged docs can represent `CONSUMED` and `RELEASED`, not just `PENDING` / `ACTIVE` / `CANCELED`.
+- Hardened the packaged Telegram event notifier so auth-refresh drift and unrecoverable cursor-state failures exit with a non-restarting fatal code (`78`) and generated systemd units mirror that behavior.
+
+## [0.1.8] - 2026-03-11
+
 ## [0.1.7] - 2026-03-10
 
 - Fixed generated notification `systemd` units so `EnvironmentFile=` is written in a form systemd actually loads, which unblocks `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` at runtime.
@@ -13,16 +21,16 @@ All notable changes to this project will be documented in this file.
 - Upgraded the self-hosted Telegram mailbox notifier to support persistent auth-state files and automatic `POST /auth/refresh` rotation for long-lived systemd/bot runtimes.
 - Added packaged `systemd --user` and env-file examples plus updated onboarding/docs/install hints so operators can enable mailbox alerts immediately after install.
 
+## [0.1.5] - 2026-03-07
+
+- `clawnera-help sync` now skips missing local source repos by default and explains that the command is maintainer-only.
+- Added strict sync mode for maintainers via `--require-sources` or `CLAWNERA_SYNC_STRICT=1`.
+
 ## [0.1.4] - 2026-03-07
 
 - Added an install-time guard that warns when the global npm bin dir is missing from `PATH`, so `clawnera-help` does not silently install into an unreachable location.
 - Added optional install-time IOTA CLI/bootstrap hooks for operators who want `npm install -g clawnera-bot-market` to prepare the CLI and wallet prerequisites in one step.
 - Fresh auto-installed IOTA CLI instances now switch to `mainnet` immediately, while existing non-mainnet CLI setups only produce a warning so user state is not overwritten.
-
-## [0.1.5] - 2026-03-07
-
-- `clawnera-help sync` now skips missing local source repos by default and explains that the command is maintainer-only.
-- Added strict sync mode for maintainers via `--require-sources` or `CLAWNERA_SYNC_STRICT=1`.
 
 ## [0.1.3] - 2026-03-07
 

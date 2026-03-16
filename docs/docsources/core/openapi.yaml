@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: Local-first marketplace API contract for auth, listings, orders, sponsor proxy, and admin audit.
 servers:
-  - url: https://clawdex-api.specdrops.workers.dev
+  - url: https://api.clawnera.com
   - url: https://api.local
 security:
   - bearerAuth: []
@@ -293,6 +293,12 @@ paths:
                 $ref: "#/components/schemas/OnboardingIotaTopupResponse"
         "201":
           description: IOTA onboarding topup submitted successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnboardingIotaTopupResponse"
+        "202":
+          description: IOTA onboarding topup is pending confirmation after an uncertain execution outcome.
           content:
             application/json:
               schema:
@@ -630,13 +636,13 @@ paths:
             type: string
         - name: keyVersion
           in: query
-          required: false
+          required: true
           schema:
             type: integer
             minimum: 1
       responses:
         "200":
-          description: Latest (or specific) wallet-bound key-agreement record for the address.
+          description: Wallet-bound key-agreement record for the specific address and key version.
           content:
             application/json:
               schema:
@@ -1416,6 +1422,84 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /orders/{orderId}/escrow/release:
+    post:
+      tags: [Orders]
+      operationId: releaseOrderEscrowPlan
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderEscrowReleaseRequest"
+      responses:
+        "200":
+          description: Transaction plan for releasing a verified order escrow.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          description: On-chain escrow verification temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /orders/{orderId}/escrow/claim-after-deadline:
+    post:
+      tags: [Orders]
+      operationId: claimOrderEscrowAfterDeadlinePlan
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderEscrowClaimAfterDeadlineRequest"
+      responses:
+        "200":
+          description: Transaction plan for claiming a verified order escrow after deadline expiry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          description: On-chain escrow verification temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /orders/{orderId}/mailbox:
     get:
       tags: [Orders]
@@ -1792,7 +1876,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Resolve and return the stored manifest JSON via the managed-storage provider path first, then configured gateway fallbacks.
+          description: Resolve and return the stored manifest JSON through the participant-authenticated managed-storage proxy, including the resolved retrieval source metadata.
           content:
             application/json:
               schema:
@@ -1803,15 +1887,11 @@ paths:
                     $ref: "#/components/schemas/MilestoneArtifactManifest"
                   resolvedManifest:
                     type: object
-                    required: [source, gatewayBaseUrl, sourceUrl, payload]
+                    required: [source, payload]
                     properties:
                       source:
                         type: string
                       network:
-                        type: string
-                      gatewayBaseUrl:
-                        type: string
-                      sourceUrl:
                         type: string
                       payload:
                         type: object
@@ -3387,7 +3467,7 @@ paths:
       operationId: getSponsorCircuitStatus
       responses:
         "200":
-          description: In-memory sponsor circuit/window/abuse state snapshot.
+          description: Runtime sponsor circuit/window/abuse state snapshot.
           content:
             application/json:
               schema:
@@ -4032,6 +4112,7 @@ components:
     ListingRenewRequest:
       type: object
       additionalProperties: false
+      required: [expiresAtMs]
       properties:
         expiresAtMs:
           type: integer
@@ -4272,6 +4353,8 @@ components:
           type: boolean
         alreadyClaimed:
           type: boolean
+        pendingConfirmation:
+          type: boolean
         amount:
           type: string
           pattern: "^[0-9]+$"
@@ -4288,6 +4371,8 @@ components:
         maxEligibleBalance:
           type: string
           pattern: "^[0-9]+$"
+        detail:
+          type: string
     SponsorReserveRequest:
       type: object
       additionalProperties: false
@@ -5417,6 +5502,36 @@ components:
       required: [escrowObjectId]
       properties:
         escrowObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+    OrderEscrowReleaseRequest:
+      type: object
+      additionalProperties: false
+      required: [escrowObjectId]
+      properties:
+        escrowObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        bondObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+    OrderEscrowClaimAfterDeadlineRequest:
+      type: object
+      additionalProperties: false
+      required: [escrowObjectId]
+      properties:
+        escrowObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        bondObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        clockObjectId:
           type: string
           minLength: 3
           maxLength: 200

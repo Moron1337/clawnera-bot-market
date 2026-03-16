@@ -70,6 +70,7 @@ Auth precedence:
 const CURSOR_PERSIST_ATTEMPTS = 3;
 const CURSOR_PERSIST_RETRY_DELAY_MS = 150;
 const CURSOR_PERSIST_FATAL_THRESHOLD = 3;
+const FATAL_NOTIFIER_EXIT_CODE = 78;
 
 function readRequiredEnv(name) {
   const value = normalizeNotificationEnvValue(process.env[name]);
@@ -464,6 +465,9 @@ function isFatalNotifierError(message) {
     message.startsWith("invalid_env_auth_source:") ||
     message.startsWith("auth_state_api_base_mismatch") ||
     message.startsWith("invalid_auth_state_file") ||
+    message.startsWith("auth_refresh_failed:400") ||
+    message.startsWith("auth_refresh_failed:401") ||
+    message.startsWith("auth_refresh_failed:403") ||
     message.startsWith("event_feed_http_400") ||
     message.startsWith("event_feed_http_401") ||
     message.startsWith("event_feed_http_403") ||
@@ -637,8 +641,9 @@ export async function main(argv = process.argv.slice(2)) {
           continue;
         }
       }
-      if (once || isFatalNotifierError(message) || message.startsWith("cursor_state_save_failed:")) {
-        process.exitCode = 1;
+      const fatalError = isFatalNotifierError(message) || message.startsWith("cursor_state_save_failed:");
+      if (once || fatalError) {
+        process.exitCode = once ? 1 : FATAL_NOTIFIER_EXIT_CODE;
         return;
       }
       failureCount += 1;
@@ -654,6 +659,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   main().catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`telegram_event_notifier_fatal: ${message}`);
-    process.exitCode = 1;
+    process.exitCode =
+      isFatalNotifierError(message) || message.startsWith("cursor_state_save_failed:")
+        ? FATAL_NOTIFIER_EXIT_CODE
+        : 1;
   });
 }

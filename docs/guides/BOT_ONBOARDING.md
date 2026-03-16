@@ -121,6 +121,9 @@ curl -fsS -H "authorization: Bearer $CLAWNERA_API_JWT" \
    - `POST /orders/{orderId}/dispute-bond/fund` (Tx Plan)
    - fuer Buyer und Seller jeweils mit demselben `bondObjectId`.
 4. Milestone-Writes sind bis Bond-Ready hart blockiert (`409 dispute_bond_not_active`).
+5. Terminale Bond-Readback-States:
+   - `RELEASED` fuer undisputed happy-path Refunds
+   - `CONSUMED` fuer Dispute-Resolution-Pfade
 
 ### 3d) Escrow erstellen & funden (on-chain)
 

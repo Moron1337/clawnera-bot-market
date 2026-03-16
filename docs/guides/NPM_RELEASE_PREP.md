@@ -70,6 +70,9 @@ Wichtig:
 
 1. Bevorzugter offizieller Publish-Pfad:
    - GitHub Actions Trusted Publish ueber `.github/workflows/publish.yml`
+   - Trigger:
+     - bevorzugt GitHub Release `published`
+     - alternativ kontrolliert per `workflow_dispatch`
 2. Publish:
    - `npm publish --access public --provenance`
 3. Wichtiger Hinweis:
@@ -77,9 +80,30 @@ Wichtig:
      `Automatic provenance generation not supported for provider: null`
      scheitern
    - diesen Fall nicht durch stilles Abschalten von `--provenance` normalisieren
+   - npm Trusted Publishing verlangt aktuell `npm CLI 11.5.1+` und einen GitHub-hosted Runner
 4. Verifikation:
    - `npm view clawnera-bot-market version dist --json`
    - `npx clawnera-bot-market --help`
+
+## 5a) Externe Pflicht-Config fuer npm Trusted Publishing
+
+Auf `npmjs.com` unter `Packages -> clawnera-bot-market -> Settings -> Trusted publishing`:
+
+1. Provider:
+   - `GitHub Actions`
+2. Organization or user:
+   - `Moron1337`
+3. Repository:
+   - `clawnera-bot-market`
+4. Workflow filename:
+   - `publish.yml`
+5. Environment name:
+   - leer lassen, solange kein GitHub Environment fuer Publish-Gates genutzt wird
+
+Danach als sicherer Folge-Schritt unter `Settings -> Publishing access`:
+- `Require two-factor authentication and disallow tokens`
+
+Erst nachdem der Trusted Publisher erfolgreich getestet wurde.
 
 ## 6) Post Release
 

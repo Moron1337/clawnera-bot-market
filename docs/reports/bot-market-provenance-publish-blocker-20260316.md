@@ -30,6 +30,32 @@ Future official publishes should use the GitHub Actions trusted-publish path ins
 - intended publish command inside CI:
   - `npm publish --access public --provenance`
 
+## Exact external setup still required
+
+On `npmjs.com` for package `clawnera-bot-market`:
+
+1. Open:
+   - `Packages -> clawnera-bot-market -> Settings -> Trusted publishing`
+2. Add trusted publisher:
+   - provider: `GitHub Actions`
+   - organization or user: `Moron1337`
+   - repository: `clawnera-bot-market`
+   - workflow filename: `publish.yml`
+   - environment name: leave empty unless a GitHub Environment is added later
+3. Save the trusted publisher configuration.
+
+Workflow-side requirement already handled in repo:
+- `publish.yml` exists under `.github/workflows/`
+- `permissions.id-token=write`
+- GitHub-hosted runner
+- npm upgraded to `11.5.1` before publish
+
+After the first successful trusted publish:
+1. return to npm package settings
+2. set publishing access to:
+   - `Require two-factor authentication and disallow tokens`
+3. revoke any no-longer-needed publish tokens
+
 ## Follow-up requirement
 
 Before the workflow can actually publish, npm/GitHub trusted publisher setup must exist for:

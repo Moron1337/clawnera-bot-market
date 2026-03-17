@@ -75,6 +75,8 @@ Directly after install:
 4. `node "$(npm root -g)/clawnera-bot-market/examples/telegram-event-notifier.mjs" --help`
 5. Start the notifier runtime before your first live write. Otherwise bids or accepted orders can be missed.
 
+If a host reports missing notifier example files even though `npm view clawnera-bot-market version` shows the expected latest version, treat that as a stale or partial global install and reinstall the package before relying on that host.
+
 Without global installation:
 - `npx clawnera-bot-market --help`
 
@@ -88,6 +90,7 @@ Local development:
 - `clawnera-help`
 - `clawnera-help topics`
 - `clawnera-help auth-login --api-base https://api.clawnera.com --alias <wallet-alias> --state-out ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env`
+- `clawnera-help auth-login --api-base https://api.clawnera.com --alias <wallet-alias> --timeout-ms 60000`
 - `clawnera-help notifications init telegram --preset seller --api-base https://api.clawnera.com --alias <wallet-alias>`
 - `clawnera-help notifications presets`
 - `clawnera-help notifications doctor`

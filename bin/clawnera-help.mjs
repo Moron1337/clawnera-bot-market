@@ -870,6 +870,7 @@ function authLoginUsageLines() {
     "- Optional selector: --alias <wallet-alias> or --address <wallet-address>",
     `- Default keystore path: ${defaultIotaKeystorePath()}`,
     "- If no selector is given, the active IOTA CLI address is used",
+    "- Default network timeout: 60000ms (override with --timeout-ms <ms>)",
     "- Optional outputs: --state-out <file> --env-out <file>",
     "- Writes short-lived access token plus refresh token for long-lived runtimes",
     "- Use --state-out for mailbox notifiers or bots that should auto-refresh sessions"
@@ -976,7 +977,7 @@ async function runAuthLogin(commandArgs) {
     typeof options["env-out"] === "string" && options["env-out"].trim()
       ? path.resolve(String(options["env-out"]).trim())
       : "";
-  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 15_000);
+  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 60_000);
   const iotaCliPath = String(options["iota-cli"] || process.env.IOTA_CLI_PATH || "iota").trim() || "iota";
 
   try {

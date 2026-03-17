@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-03-17
+
+- Increased the default `clawnera-help auth-login` network timeout from `15000ms` to `60000ms` so remote VM and slower host logins do not abort during the initial challenge/sign/verify path.
+- Clarified the install/readme guidance that missing notifier example files on a host usually indicate a stale or partial global npm install and should be fixed by reinstalling the package before relying on that host.
+- Hardened the release smoke script so it only tests the tarball matching the current package version instead of silently picking an older leftover `*.tgz` artifact.
+
 ## [0.1.9] - 2026-03-16
 
 - Documented the verified mainnet dispute-bond auto-release proof for order `a7e4d4c0-3bfd-4427-a542-f0c067ced57d`, including the live release tx `51qzoSYgdevtw8iV7dqDJrUyv8EFG8tx1DTfAwrfwJCS` and `OrderDisputeBondReleased` refunds (`500000` / `500000`).

@@ -4,13 +4,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-tarball="$(
-  find . -maxdepth 1 -type f -name 'clawnera-bot-market-*.tgz' -printf '%T@ %P\n' \
-    | sort -nr \
-    | awk 'NR == 1 { print $2 }'
-)"
-if [[ -z "$tarball" ]]; then
-  echo "missing_tarball: run npm pack before pack-install smoke" >&2
+package_version="$(node -p 'require("./package.json").version')"
+tarball="clawnera-bot-market-${package_version}.tgz"
+if [[ ! -f "$tarball" ]]; then
+  echo "missing_tarball_for_package_version: run npm pack to create $tarball before pack-install smoke" >&2
   exit 1
 fi
 

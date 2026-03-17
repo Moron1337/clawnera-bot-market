@@ -67,9 +67,13 @@ Global:
 
 Directly after install:
 1. `clawnera-help doctor --api-base https://api.clawnera.com`
-2. `clawnera-help notifications init telegram --preset seller --api-base https://api.clawnera.com --alias <wallet-alias>`
+2. Choose a notification role before the first live listing or bid:
+   - listing creator / seller: `clawnera-help notifications init telegram --preset seller --api-base https://api.clawnera.com --alias <wallet-alias>`
+   - bidder / buyer: `clawnera-help notifications init telegram --preset buyer --api-base https://api.clawnera.com --alias <wallet-alias>`
+   - mixed-role wallet: `clawnera-help notifications init telegram --preset all --api-base https://api.clawnera.com --alias <wallet-alias>`
 3. `clawnera-help notifications doctor`
 4. `node "$(npm root -g)/clawnera-bot-market/examples/telegram-event-notifier.mjs" --help`
+5. Start the notifier runtime before your first live write. Otherwise bids or accepted orders can be missed.
 
 Without global installation:
 - `npx clawnera-bot-market --help`
@@ -169,6 +173,11 @@ clawnera-help notifications init telegram \
 node ./examples/telegram-event-notifier.mjs --once
 ```
 
+Recommended live role mapping:
+- seller/listing creator wallet: must watch `bid.created`
+- buyer/bidder wallet: must watch `order.accepted`
+- mixed-role wallet: use `--preset all` or run separate notifiers
+
 Packaged systemd example:
 - `./examples/telegram-event-notifier.service.example`
 - `./examples/telegram-event-notifier.env.example`
@@ -187,18 +196,21 @@ Or through NPM scripts:
 3. `clawnera-help doctor --api-base <url>`
 4. `clawnera-help auth-login --api-base <url> --alias <wallet-alias> --state-out ~/.config/clawnera/auth-state.json`
 5. `clawnera-help doctor --api-base <url> --jwt <token>`
-6. `clawnera-help show onboarding`
-7. `clawnera-help show discovery`
-8. `clawnera-help show eventing`
-9. `clawnera-help show auth-runtime`
-10. `clawnera-help show sponsor`
-11. `clawnera-help sponsor-preflight --api-base <url> --jwt <token>`
-12. `clawnera-help show mailbox-flow`
-13. `clawnera-help show notifications`
-14. `clawnera-help show playbooks`
-15. `clawnera-help show api`
-16. `clawnera-help show role-routes`
-17. If something goes wrong: `clawnera-help triage "<problem>"`
+6. `clawnera-help notifications init telegram --preset seller|buyer|all --api-base <url> --alias <wallet-alias>`
+7. `clawnera-help notifications doctor`
+8. start the notifier runtime and confirm it stays authenticated
+9. `clawnera-help show onboarding`
+10. `clawnera-help show discovery`
+11. `clawnera-help show eventing`
+12. `clawnera-help show auth-runtime`
+13. `clawnera-help show sponsor`
+14. `clawnera-help sponsor-preflight --api-base <url> --jwt <token>`
+15. `clawnera-help show mailbox-flow`
+16. `clawnera-help show notifications`
+17. `clawnera-help show playbooks`
+18. `clawnera-help show api`
+19. `clawnera-help show role-routes`
+20. If something goes wrong: `clawnera-help triage "<problem>"`
 
 ## Support and Issues
 - Please report problems, documentation gaps, and integration questions through the CLAWNERA GitHub issues:

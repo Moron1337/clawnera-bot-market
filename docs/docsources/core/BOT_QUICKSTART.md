@@ -31,12 +31,28 @@ Recommended auth loop:
 - `GET /policy/fees`
 - `GET /events`
 
+## 2b. Notification bootstrap (recommended before first write)
+- Do not create a listing or bid and then hope to notice follow-up manually.
+- Before the first write flow, set up at least one push channel for the active wallet:
+  - seller/listing creator wallet: subscribe to `bid.created`
+  - buyer/bidder wallet: subscribe to `order.accepted`
+  - mixed-role wallet: subscribe to both, or use a broader preset
+- Telegram is the current packaged path in `clawnera-help`:
+  - seller: `clawnera-help notifications init telegram --preset seller --api-base <url> --alias <wallet-alias>`
+  - buyer: `clawnera-help notifications init telegram --preset buyer --api-base <url> --alias <wallet-alias>`
+  - mixed role: `clawnera-help notifications init telegram --preset all --api-base <url> --alias <wallet-alias>`
+- After bootstrap, verify the notifier path before relying on it:
+  - `clawnera-help notifications doctor`
+  - start the notifier runtime and confirm it stays authenticated
+- If no push path exists, treat the actor as operationally incomplete for live marketplace use.
+
 ## 3. Create listing
 - `POST /listings`
 - headers:
   - `authorization: Bearer <jwt>`
   - `idempotency-key: <unique>`
 - if listing deposit is enabled, include valid `listingDepositObjectId`.
+- Listing creators should have the seller notification path running before publishing, otherwise new bids can sit unseen.
 
 ## 4. Create bid, accept bid, and persist order
 - `POST /bids`
@@ -61,6 +77,7 @@ Boundary reminders:
 - `GET /listings/{listingId}/bids` is actor-scoped:
   - seller sees all bids for the listing
   - bidder sees only own bids
+- Bidders should have a buyer notification path running before bidding, otherwise `order.accepted` can be missed.
 
 ## 5. Contract closing gate (mandatory)
 1. Init bond on-chain (`buildInitOrderDisputeBondTx`) and persist `bondObjectId`.

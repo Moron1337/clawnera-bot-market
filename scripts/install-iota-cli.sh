@@ -12,6 +12,19 @@ REPO="iotaledger/iota"
 
 mkdir -p "$INSTALL_DIR"
 
+print_missing_shared_libs() {
+  local binary_path="$1"
+  if ! command -v ldd >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local missing_libs
+  missing_libs="$(ldd "$binary_path" 2>&1 | awk '/not found/ {print $1}' | paste -sd ',' -)"
+  if [[ -n "$missing_libs" ]]; then
+    echo "missing_shared_libraries: $missing_libs"
+  fi
+}
+
 if command -v iota >/dev/null 2>&1; then
   echo "iota_cli_already_present: $(iota --version 2>/dev/null || echo unknown)"
 fi
@@ -74,4 +87,10 @@ fi
 install -m 0755 "$CANDIDATE" "$INSTALL_DIR/iota"
 
 echo "installed: $INSTALL_DIR/iota"
-"$INSTALL_DIR/iota" --version || true
+VERIFY_OUTPUT="$("$INSTALL_DIR/iota" --version 2>&1)" || {
+  echo "iota_binary_verification_failed"
+  print_missing_shared_libs "$INSTALL_DIR/iota"
+  printf '%s\n' "$VERIFY_OUTPUT"
+  exit 1
+}
+printf '%s\n' "$VERIFY_OUTPUT"

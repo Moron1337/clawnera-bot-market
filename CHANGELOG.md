@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-03-17
+
+- Hardened the optional IOTA CLI bootstrap so install-time verification now fails loudly when the upstream binary is present but unusable because shared libraries are missing.
+- `first-steps` no longer treats a broken `iota` binary as available; it now reports the runtime failure and any missing shared libraries instead of drifting forward with `unknown` results.
+- Added explicit docs for minimal-container runtime dependencies such as `libpq.so.5` (`libpq5` on Debian/Ubuntu-style hosts).
+
 ## [0.1.11] - 2026-03-17
 
 - Fixed the optional install-time IOTA CLI helper on minimal Linux hosts by detecting ZIP assets correctly and adding a `python3` ZIP extraction fallback when `unzip` is unavailable.

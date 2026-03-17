@@ -65,6 +65,8 @@ Global:
   - `CLAWNERA_AUTO_INSTALL_IOTA_CLI=1 CLAWNERA_AUTO_SWITCH_IOTA_MAINNET=1 npm install -g clawnera-bot-market`
   - `CLAWNERA_AUTO_INSTALL_IOTA_CLI=1 CLAWNERA_BOOTSTRAP_IOTA=1 CLAWNERA_INIT_IOTA_WALLET=1 npm install -g clawnera-bot-market`
   - without one of those opt-in flags, `clawnera-help doctor` may still report `iota: missing` until you install the CLI yourself or run the first-step bootstrap
+  - the upstream Linux `iota` binary is dynamically linked; on minimal containers it can still fail at runtime with missing shared libraries such as `libpq.so.5`
+  - if install-time verification reports missing shared libraries, use a fuller VM/host or install the required runtime packages first (for example `libpq5` on Debian/Ubuntu)
 
 Directly after install:
 1. `clawnera-help doctor --api-base https://api.clawnera.com`

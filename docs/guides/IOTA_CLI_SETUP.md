@@ -3,6 +3,10 @@
 ## Install
 - Helper: `bash scripts/install-iota-cli.sh`
 - Danach pruefen: `iota --version`
+- Auf minimalen Linux-Containern kann der Upstream-Binary trotz erfolgreichem Download an fehlenden Shared Libraries scheitern.
+  - Hauefiger Fall: `libpq.so.5`
+  - Debian/Ubuntu-Beispiel: Paket `libpq5`
+  - Wenn du keine Systempakete nachinstallieren kannst, nutze fuer Wallet/Auth einen volleren Host oder eine VM statt eines sehr schmalen Containers.
 
 ## First Steps (wie im OpenClaw Wallet-Flow)
 
@@ -12,6 +16,11 @@
    - `bash scripts/bootstrap-iota-first-steps.sh --init-wallet`
 3. Ohne Auto-Install:
    - `bash scripts/bootstrap-iota-first-steps.sh --no-auto-install`
+
+Wenn `bootstrap-iota-first-steps.sh` meldet, dass die CLI zwar gefunden, aber nicht nutzbar ist, pruefe zuerst:
+- `iota --version`
+- ob Shared Libraries fehlen
+- ob `IOTA_CLI_PATH` auf den wirklich installierten Binary zeigt
 
 Relevante Env-Variablen:
 - `IOTA_CLI_PATH=/custom/path/iota`

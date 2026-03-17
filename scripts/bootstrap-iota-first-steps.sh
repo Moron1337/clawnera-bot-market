@@ -9,6 +9,34 @@ INIT_WALLET_FLAG="${IOTA_HELPER_INIT_WALLET:-0}"
 SET_MAINNET_FLAG="${IOTA_HELPER_SET_MAINNET:-1}"
 CLI_PATH="${IOTA_CLI_PATH:-iota}"
 
+resolve_cli_binary() {
+  command -v "$CLI_PATH" 2>/dev/null || true
+}
+
+describe_cli_runtime_failure() {
+  local binary_path="$1"
+  local version_output
+  version_output="$("$binary_path" --version 2>&1 || true)"
+  if [[ -n "$version_output" ]]; then
+    echo "iota_cli_not_usable: $version_output" >&2
+  else
+    echo "iota_cli_not_usable: version_check_failed" >&2
+  fi
+
+  if command -v ldd >/dev/null 2>&1; then
+    local missing_libs
+    missing_libs="$(ldd "$binary_path" 2>&1 | awk '/not found/ {print $1}' | paste -sd ',' -)"
+    if [[ -n "$missing_libs" ]]; then
+      echo "missing_shared_libraries: $missing_libs" >&2
+    fi
+  fi
+}
+
+cli_is_usable() {
+  local binary_path="$1"
+  "$binary_path" --version >/dev/null 2>&1
+}
+
 for arg in "$@"; do
   case "$arg" in
     --no-auto-install)
@@ -46,8 +74,13 @@ USAGE
 done
 
 ensure_cli_available() {
-  if command -v "$CLI_PATH" >/dev/null 2>&1; then
-    return 0
+  local resolved_cli
+  resolved_cli="$(resolve_cli_binary)"
+  if [[ -n "$resolved_cli" ]]; then
+    if cli_is_usable "$resolved_cli"; then
+      return 0
+    fi
+    describe_cli_runtime_failure "$resolved_cli"
   fi
 
   if [[ "$AUTO_INSTALL_FLAG" == "0" ]]; then
@@ -63,10 +96,14 @@ ensure_cli_available() {
   echo "iota_cli_missing_attempting_install"
   bash "$INSTALL_SCRIPT"
 
-  if command -v "$CLI_PATH" >/dev/null 2>&1; then
+  resolved_cli="$(resolve_cli_binary)"
+  if [[ -n "$resolved_cli" ]] && cli_is_usable "$resolved_cli"; then
     return 0
   fi
 
+  if [[ -n "$resolved_cli" ]]; then
+    describe_cli_runtime_failure "$resolved_cli"
+  fi
   echo "iota_cli_still_missing_after_install" >&2
   return 1
 }

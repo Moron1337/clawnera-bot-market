@@ -95,6 +95,13 @@ export function runCommand(command, args, options = {}) {
   });
 }
 
+function formatCommandFailure(result) {
+  const stdout = String(result?.stdout || "").trim();
+  const stderr = String(result?.stderr || "").trim();
+  const error = result?.error ? String(result.error).trim() : "";
+  return [stderr, stdout, error].filter(Boolean).join("\n").trim() || "unknown_error";
+}
+
 function detectIotaVersion(cliPath) {
   const result = runCommand(cliPath, ["--version"], { timeoutMs: 15000 });
   if (result.status !== 0 || result.error) {
@@ -109,6 +116,18 @@ function detectIotaActiveEnv(cliPath) {
     return "";
   }
   return normalizeIotaEnv(result.stdout);
+}
+
+function detectMissingSharedLibraries(cliPath) {
+  const result = runCommand("ldd", [cliPath], { timeoutMs: 15000 });
+  const combined = `${String(result.stdout || "")}\n${String(result.stderr || "")}`;
+  const missing = combined
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.includes("=>") && line.includes("not found"))
+    .map((line) => line.split("=>")[0]?.trim())
+    .filter(Boolean);
+  return Array.from(new Set(missing));
 }
 
 function maybeWarnAboutIotaEnv(cliPath) {
@@ -219,7 +238,7 @@ function maybeAutoInstallIotaCli() {
   });
 
   if (result.status !== 0 || result.error) {
-    warn(`IOTA CLI auto-install failed: ${String(result.stderr || result.error || "unknown_error").trim()}`);
+    warn(`IOTA CLI auto-install failed: ${formatCommandFailure(result)}`);
     warn("You can still run `clawnera-help first-steps --run` later.");
     return cliPath;
   }
@@ -230,6 +249,11 @@ function maybeAutoInstallIotaCli() {
     info(`Installed IOTA CLI: ${installedVersion}`);
   } else {
     warn(`IOTA CLI install completed, but verification failed at ${installedCliPath}`);
+    const missingLibraries = detectMissingSharedLibraries(installedCliPath);
+    if (missingLibraries.length > 0) {
+      warn(`Missing shared libraries: ${missingLibraries.join(", ")}`);
+      warn("On minimal Debian/Ubuntu-style containers this is often the PostgreSQL client runtime (`libpq5`).");
+    }
   }
 
   maybeSetIotaMainnet(installedCliPath, process.env);

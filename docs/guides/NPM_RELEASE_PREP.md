@@ -73,6 +73,9 @@ Wichtig:
    - Trigger:
      - bevorzugt GitHub Release `published`
      - alternativ kontrolliert per `workflow_dispatch`
+   - wichtig:
+     - `publish.yml` bleibt bewusst auf GitHub-hosted Actions
+     - der normale `ci`-Workflow darf auf dem Hetzner self-hosted Runner laufen, der Publish-Workflow aber nicht
 2. Publish:
    - `npm publish --access public --provenance`
 3. Wichtiger Hinweis:

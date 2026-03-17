@@ -24,7 +24,7 @@ For this repository, the self-hosted runner is intentionally limited to normal C
 - dedicated user: `gha-runner`
 - no sudo for the runner user
 - separate runner install path:
-  - `/home/gha-runner/actions-runner-clawnera-bot-market`
+  - `$RUNNER_HOME/actions-runner-clawnera-bot-market`
 - repo-tracked systemd unit:
   - `ops/systemd/hetzner/clawnera-bot-market-github-actions-runner.service`
 - labels:
@@ -55,21 +55,21 @@ Reason:
 1. Hetzner access as `ops`
 2. repository self-hosted runner registration token from GitHub
 3. SSH key:
-   - `/home/codex/.ssh/id_ed25519_clawdex_hetzner_pg_20260223`
+   - dedicated operator SSH key with access to the Hetzner runtime host
 
 ## Installation
 
 Prepare-only:
 
 ```bash
-cd /home/codex/clawnera-bot-market
+cd <repo-root>
 PREPARE_ONLY=1 bash scripts/install_github_actions_runner_on_hetzner.sh
 ```
 
 Full install:
 
 ```bash
-cd /home/codex/clawnera-bot-market
+cd <repo-root>
 RUNNER_TOKEN=<repo-registration-token> \
   bash scripts/install_github_actions_runner_on_hetzner.sh
 ```

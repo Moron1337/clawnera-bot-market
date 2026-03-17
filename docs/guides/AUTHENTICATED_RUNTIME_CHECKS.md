@@ -10,11 +10,14 @@ Dieser Guide ist der kanonische Copy-Paste-Pfad fuer Bots oder Operatoren, die n
 - `CLAWNERA_API_JWT` stammt aus dem echten `POST /auth/challenge` -> Wallet-Signatur -> `POST /auth/verify` Flow.
 - `POST /auth/verify` liefert jetzt auch `refreshToken` und `session`.
 - Der direkte CLI-Weg fuer produktive Bots ist `clawnera-help auth-login`.
+- Wenn die IOTA CLI auf dem Host nicht lauffaehig ist, kann die Wallet-Identitaet auch lokal per JS-SDK angelegt werden: `clawnera-help wallet-init --alias <wallet-alias>`.
 - JWTs gehoeren nicht ins Repo, nicht in Screenshots und nicht in GitHub Issues.
 
 Empfohlener Shell-Setup:
 
 ```bash
+clawnera-help wallet-init --alias "<wallet-alias>"
+
 clawnera-help auth-login \
   --api-base "https://api.clawnera.com" \
   --alias "<wallet-alias>" \

@@ -4,7 +4,9 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
+  appendEd25519KeystoreEntry,
   buildAuthEnvText,
+  loadKeystoreEntries,
   refreshAuthState,
   loadAuthState,
   normalizeAuthState,
@@ -103,6 +105,28 @@ test("saveAuthState and loadAuthState round-trip auth files", async () => {
     assert.equal(loaded.refreshToken, "refresh-1");
     assert.equal(loaded.session.id, "session-1");
     assert.equal(loaded.session.refreshExpiresAtMs, 456);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("appendEd25519KeystoreEntry creates a readable keystore entry", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawnera-keystore-test-"));
+  const keystoreFile = path.join(tempDir, "iota.keystore");
+
+  try {
+    const created = await appendEd25519KeystoreEntry(keystoreFile, "sdk-wallet");
+    const loaded = await loadKeystoreEntries(keystoreFile);
+    const raw = JSON.parse(await fs.readFile(keystoreFile, "utf8"));
+
+    assert.equal(created.alias, "sdk-wallet");
+    assert.match(created.address, /^0x[a-f0-9]{64}$/);
+    assert.equal(raw.version, 2);
+    assert.equal(Array.isArray(raw.keys), true);
+    assert.equal(loaded.length, 1);
+    assert.equal(loaded[0].alias, "sdk-wallet");
+    assert.equal(loaded[0].address, created.address);
+    assert.match(loaded[0].secretKey, /^iotaprivkey1/);
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }

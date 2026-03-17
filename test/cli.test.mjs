@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import http from "node:http";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -28,11 +29,42 @@ function runCli(args = [], options = {}) {
   });
 }
 
+function runCliAsync(args = [], options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [cliFile, ...args], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        ...options.env
+      },
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", reject);
+    child.on("close", (code, signal) => {
+      resolve({
+        status: code,
+        signal,
+        stdout,
+        stderr
+      });
+    });
+  });
+}
+
 test("help command prints usage", () => {
   const result = runCli(["--help"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /CLAWNERA Bot Market CLI/);
   assert.match(result.stdout, /clawnera-help auth-login/);
+  assert.match(result.stdout, /clawnera-help wallet-init/);
   assert.match(result.stdout, /clawnera-help notifications/);
   assert.match(result.stdout, /clawnera-help validate/);
   assert.match(result.stdout, /clawnera-help triage/);
@@ -45,6 +77,7 @@ test("help json output includes auth-login command", () => {
   const payload = JSON.parse(result.stdout);
   assert.ok(Array.isArray(payload.commands));
   assert.ok(payload.commands.includes("auth-login"));
+  assert.ok(payload.commands.includes("wallet-init"));
 });
 
 test("topics command includes onboarding topic", () => {
@@ -1417,6 +1450,119 @@ test("auth-login short help prints usage", () => {
   const result = runCli(["auth-login", "-h"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Auth login helper/);
+});
+
+test("wallet-init creates a local keystore entry", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-wallet-init-"));
+  const keystoreFile = path.join(tempDir, "iota.keystore");
+
+  try {
+    const result = runCli(["wallet-init", "--alias", "sdk-buyer", "--keystore-path", keystoreFile]);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /wallet_init_ok/);
+    assert.match(result.stdout, /wallet_alias=sdk-buyer/);
+    assert.equal(existsSync(keystoreFile), true);
+
+    const payload = JSON.parse(readFileSync(keystoreFile, "utf8"));
+    assert.equal(payload.version, 2);
+    assert.equal(Array.isArray(payload.keys), true);
+    assert.equal(payload.keys.length, 1);
+    assert.equal(payload.keys[0].alias, "sdk-buyer");
+    assert.match(payload.keys[0].address, /^0x[a-f0-9]{64}$/);
+    assert.match(payload.keys[0].key.value, /^iotaprivkey1/);
+  } finally {
+    // cleanup best-effort
+  }
+});
+
+test("auth-login falls back to the sole keystore entry when no IOTA CLI address is available", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-auth-sdk-only-"));
+  const keystoreFile = path.join(tempDir, "iota.keystore");
+  const stateFile = path.join(tempDir, "auth-state.json");
+  const envFile = path.join(tempDir, "auth.env");
+
+  const initResult = runCli(["wallet-init", "--alias", "sdk-only", "--keystore-path", keystoreFile]);
+  assert.equal(initResult.status, 0);
+  const createdKeystore = JSON.parse(readFileSync(keystoreFile, "utf8"));
+  const createdAddress = createdKeystore.keys[0].address;
+
+  const issuedToken = buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600);
+  const server = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) {
+      chunks.push(chunk);
+    }
+    const bodyText = Buffer.concat(chunks).toString("utf8");
+    const body = bodyText ? JSON.parse(bodyText) : {};
+
+    if (req.url === "/auth/challenge" && req.method === "POST") {
+      assert.equal(body.address, createdAddress);
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ messageToSign: "clawnera-auth-test", nonce: "nonce-1" }));
+      return;
+    }
+
+    if (req.url === "/auth/verify" && req.method === "POST") {
+      assert.equal(body.address, createdAddress);
+      assert.equal(body.message, "clawnera-auth-test");
+      assert.equal(typeof body.signature, "string");
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          token: issuedToken,
+          refreshToken: "refresh-token-1",
+          expiresAtMs: Date.now() + 3600_000,
+          session: {
+            id: "session-1",
+            refreshAvailable: true,
+            refreshExpiresAtMs: Date.now() + 7200_000
+          }
+        })
+      );
+      return;
+    }
+
+    res.writeHead(404, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: false }));
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const apiBase = `http://127.0.0.1:${address.port}`;
+
+  try {
+    const result = await runCliAsync(
+      [
+        "auth-login",
+        "--api-base",
+        apiBase,
+        "--keystore-path",
+        keystoreFile,
+        "--state-out",
+        stateFile,
+        "--env-out",
+        envFile
+      ],
+      {
+        env: {
+          PATH: "/usr/bin:/bin"
+        }
+      }
+    );
+
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /auth_login_ok/);
+    assert.equal(existsSync(stateFile), true);
+    assert.equal(existsSync(envFile), true);
+
+    const savedState = JSON.parse(readFileSync(stateFile, "utf8"));
+    assert.equal(savedState.address, createdAddress);
+    assert.equal(savedState.alias, "sdk-only");
+    assert.equal(savedState.token, issuedToken);
+    assert.match(readFileSync(envFile, "utf8"), /CLAWNERA_API_JWT=/);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  }
 });
 
 test("sponsor-execute help prints usage", () => {

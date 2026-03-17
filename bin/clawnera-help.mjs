@@ -5,6 +5,7 @@ import { execSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {
+  appendEd25519KeystoreEntry,
   buildAuthEnvText,
   defaultAuthStatePath,
   defaultIotaKeystorePath,
@@ -183,6 +184,7 @@ function printUsage() {
   console.log("  clawnera-help triage <problem>            Suggest docs, commands, and escalation path");
   console.log("  clawnera-help report-issue [options]      Generate a structured GitHub issue scaffold");
   console.log("  clawnera-help path                        Print repository path");
+  console.log("  clawnera-help wallet-init [options]       Create a local IOTA keystore entry without the IOTA CLI");
   console.log("  clawnera-help auth-login [options]        Create JWT + refresh token from local IOTA keystore");
   console.log("  clawnera-help notifications [options]     Scaffold and check Telegram event notifications");
   console.log("  clawnera-help first-steps [--run]         Show or run IOTA first-step bootstrap");
@@ -869,11 +871,23 @@ function authLoginUsageLines() {
     "- Required: --api-base <url>",
     "- Optional selector: --alias <wallet-alias> or --address <wallet-address>",
     `- Default keystore path: ${defaultIotaKeystorePath()}`,
-    "- If no selector is given, the active IOTA CLI address is used",
+    "- If no selector is given, the active IOTA CLI address is used when available",
+    "- Without the IOTA CLI, auth-login can still use the sole keystore entry automatically",
     "- Default network timeout: 60000ms (override with --timeout-ms <ms>)",
     "- Optional outputs: --state-out <file> --env-out <file>",
     "- Writes short-lived access token plus refresh token for long-lived runtimes",
     "- Use --state-out for mailbox notifiers or bots that should auto-refresh sessions"
+  ];
+}
+
+function walletInitUsageLines() {
+  return [
+    "Wallet init helper:",
+    "- Optional: --alias <wallet-alias>",
+    `- Default keystore path: ${defaultIotaKeystorePath()}`,
+    "- Creates a new local ED25519 keystore entry using the JS SDK",
+    "- Does not require the IOTA CLI",
+    "- Use this when you only need a wallet identity for auth/login in constrained environments"
   ];
 }
 
@@ -981,19 +995,25 @@ async function runAuthLogin(commandArgs) {
   const iotaCliPath = String(options["iota-cli"] || process.env.IOTA_CLI_PATH || "iota").trim() || "iota";
 
   try {
+    const entries = await loadKeystoreEntries(keystorePath);
     if (!address && !alias) {
       const activeAddress = detectActiveAddressViaCli(iotaCliPath, timeoutMs);
-      if (!activeAddress.ok || !activeAddress.address) {
+      if (activeAddress.ok && activeAddress.address) {
+        address = activeAddress.address;
+      } else if (entries.length === 1) {
+        address = entries[0].address;
+      } else {
         return {
           ok: false,
           error: activeAddress.error || "missing_wallet_selector",
-          hint: "set --alias or --address if no active IOTA CLI address is configured"
+          hint:
+            entries.length > 1
+              ? "set --alias or --address when multiple keystore entries exist and no active IOTA CLI address is configured"
+              : "set --alias or --address, or create a local keystore entry with `clawnera-help wallet-init`"
         };
       }
-      address = activeAddress.address;
     }
 
-    const entries = await loadKeystoreEntries(keystorePath);
     const entry = resolveKeystoreEntry(entries, {
       address,
       alias
@@ -1046,6 +1066,47 @@ async function runAuthLogin(commandArgs) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "auth_login_failed"
+    };
+  }
+}
+
+async function runWalletInit(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: walletInitUsageLines()
+    };
+  }
+
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals
+    };
+  }
+
+  const alias = typeof options.alias === "string" ? String(options.alias).trim() : "";
+  const keystorePath =
+    typeof options["keystore-path"] === "string" && options["keystore-path"].trim()
+      ? path.resolve(String(options["keystore-path"]).trim())
+      : defaultIotaKeystorePath();
+
+  try {
+    const created = await appendEd25519KeystoreEntry(keystorePath, alias);
+    return {
+      ok: true,
+      address: created.address,
+      alias: created.alias,
+      keystorePath: created.keystorePath
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "wallet_init_failed",
+      keystorePath
     };
   }
 }
@@ -2412,6 +2473,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "triage",
         "report-issue",
         "path",
+        "wallet-init",
         "auth-login",
         "notifications",
         "first-steps",
@@ -2548,6 +2610,28 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     printJson({ repo: repoRoot });
   } else {
     console.log(repoRoot);
+  }
+} else if (effectiveCommand === "wallet-init") {
+  const result = await runWalletInit(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`wallet_init_ok address=${result.address}`);
+    if (result.alias) {
+      console.log(`wallet_alias=${result.alias}`);
+    }
+    console.log(`keystore_path=${result.keystorePath}`);
+    console.log(`clawnera-help auth-login --api-base https://api.clawnera.com --keystore-path ${shellQuote(result.keystorePath)}${result.alias ? ` --alias ${shellQuote(result.alias)}` : ""}`);
+  } else {
+    console.error(`wallet_init_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
   }
 } else if (effectiveCommand === "auth-login") {
   const result = await runAuthLogin(commandArgs);

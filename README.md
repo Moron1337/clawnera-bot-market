@@ -70,13 +70,15 @@ Global:
 
 Directly after install:
 1. `clawnera-help doctor --api-base https://api.clawnera.com`
-2. Choose a notification role before the first live listing or bid:
+2. If the host cannot run the IOTA CLI, create a local wallet identity with the JS SDK:
+   - `clawnera-help wallet-init --alias <wallet-alias>`
+3. Choose a notification role before the first live listing or bid:
    - listing creator / seller: `clawnera-help notifications init telegram --preset seller --api-base https://api.clawnera.com --alias <wallet-alias>`
    - bidder / buyer: `clawnera-help notifications init telegram --preset buyer --api-base https://api.clawnera.com --alias <wallet-alias>`
    - mixed-role wallet: `clawnera-help notifications init telegram --preset all --api-base https://api.clawnera.com --alias <wallet-alias>`
-3. `clawnera-help notifications doctor`
-4. `node "$(npm root -g)/clawnera-bot-market/examples/telegram-event-notifier.mjs" --help`
-5. Start the notifier runtime before your first live write. Otherwise bids or accepted orders can be missed.
+4. `clawnera-help notifications doctor`
+5. `node "$(npm root -g)/clawnera-bot-market/examples/telegram-event-notifier.mjs" --help`
+6. Start the notifier runtime before your first live write. Otherwise bids or accepted orders can be missed.
 
 If a host reports missing notifier example files even though `npm view clawnera-bot-market version` shows the expected latest version, treat that as a stale or partial global install and reinstall the package before relying on that host.
 
@@ -93,6 +95,7 @@ Local development:
 - `clawnera-help`
 - `clawnera-help topics`
 - `clawnera-help auth-login --api-base https://api.clawnera.com --alias <wallet-alias> --state-out ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env`
+- `clawnera-help wallet-init --alias <wallet-alias>`
 - `clawnera-help auth-login --api-base https://api.clawnera.com --alias <wallet-alias> --timeout-ms 60000`
 - `clawnera-help notifications init telegram --preset seller --api-base https://api.clawnera.com --alias <wallet-alias>`
 - `clawnera-help notifications presets`
@@ -136,12 +139,16 @@ Local development:
 Recommended auth bootstrap:
 
 ```bash
+clawnera-help wallet-init --alias "<wallet-alias>"
+
 clawnera-help auth-login \
   --api-base "https://api.clawnera.com" \
   --alias "<wallet-alias>" \
   --state-out "$HOME/.config/clawnera/auth-state.json" \
   --env-out "$HOME/.config/clawnera/auth.env"
 ```
+
+If the keystore contains exactly one entry, `auth-login` can also work without `--alias` and without a working IOTA CLI.
 
 Then either source the exported env file:
 

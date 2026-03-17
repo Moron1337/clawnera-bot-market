@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-03-17
+
+- Added `clawnera-help wallet-init`, a JS-SDK-only wallet bootstrap that creates a local ED25519 keystore entry without requiring the IOTA CLI.
+- `clawnera-help auth-login` now falls back to the sole keystore entry when no active IOTA CLI address is available, which makes login work on hosts where the CLI is unavailable or intentionally absent.
+- Updated docs and CLI help to treat the IOTA CLI as optional for the auth/bid entry path while keeping it available for later on-chain operator flows.
+
 ## [0.1.12] - 2026-03-17
 
 - Hardened the optional IOTA CLI bootstrap so install-time verification now fails loudly when the upstream binary is present but unusable because shared libraries are missing.

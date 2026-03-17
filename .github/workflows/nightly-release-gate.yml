@@ -1,0 +1,36 @@
+name: nightly-release-gate
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  release-gate:
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - clawnera-bot-market
+      - hetzner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Full release gate
+        run: npm run release:check
+
+      - name: Tarball build
+        run: npm pack
+
+      - name: Tarball install smoke
+        run: bash ./scripts/ci/pack-install-smoke.sh

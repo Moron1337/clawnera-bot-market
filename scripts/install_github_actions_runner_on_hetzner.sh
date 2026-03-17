@@ -67,6 +67,7 @@ remote_runner_name() {
 }
 
 ensure_remote_user_and_packages() {
+  # shellcheck disable=SC2029
   ssh "${ssh_opts[@]}" "$REMOTE_HOST" "
     set -euo pipefail
     export DEBIAN_FRONTEND=noninteractive
@@ -86,6 +87,7 @@ install_runner_bits() {
   scp "${scp_opts[@]}" \
     "$ROOT_DIR/ops/systemd/hetzner/$SERVICE_NAME" \
     "$REMOTE_HOST:/tmp/$SERVICE_NAME"
+  # shellcheck disable=SC2029
   ssh "${ssh_opts[@]}" "$REMOTE_HOST" "
     set -euo pipefail
     sudo -u '$RUNNER_USER' bash -lc '
@@ -109,6 +111,7 @@ install_runner_bits() {
 
 configure_runner() {
   local runner_name="$1"
+  # shellcheck disable=SC2029
   ssh "${ssh_opts[@]}" "$REMOTE_HOST" "
     set -euo pipefail
     sudo systemctl stop '$SERVICE_NAME' >/dev/null 2>&1 || true
@@ -132,6 +135,7 @@ configure_runner() {
 }
 
 verify_runner_service() {
+  # shellcheck disable=SC2029
   ssh "${ssh_opts[@]}" "$REMOTE_HOST" "
     set -euo pipefail
     sudo systemctl status '$SERVICE_NAME' --no-pager

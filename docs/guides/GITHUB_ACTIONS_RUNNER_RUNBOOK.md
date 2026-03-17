@@ -41,6 +41,8 @@ This runner is intended only for trusted workflows in this repository.
 Runs on the self-hosted runner:
 
 - `.github/workflows/ci.yml`
+- `.github/workflows/shellcheck.yml`
+- `.github/workflows/nightly-release-gate.yml`
 
 Stays on GitHub-hosted runners:
 
@@ -49,6 +51,7 @@ Stays on GitHub-hosted runners:
 Reason:
 
 - npm trusted publishing with provenance must continue to run from GitHub-hosted Actions, not from the Hetzner self-hosted runner.
+- the self-hosted runner is the right place for heavier repeatable CI such as shell linting and nightly tarball install-smokes.
 
 ## Prerequisites
 

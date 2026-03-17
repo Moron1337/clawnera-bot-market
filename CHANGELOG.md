@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-03-17
+
+- Fixed the optional install-time IOTA CLI helper on minimal Linux hosts by detecting ZIP assets correctly and adding a `python3` ZIP extraction fallback when `unzip` is unavailable.
+- This keeps `CLAWNERA_AUTO_INSTALL_IOTA_CLI=1 npm install -g clawnera-bot-market` viable on lean VM/container images instead of silently leaving `doctor` at `iota: missing`.
+
 ## [0.1.10] - 2026-03-17
 
 - Increased the default `clawnera-help auth-login` network timeout from `15000ms` to `60000ms` so remote VM and slower host logins do not abort during the initial challenge/sign/verify path.

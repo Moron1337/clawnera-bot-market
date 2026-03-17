@@ -43,8 +43,24 @@ ASSET_FILE="$TMP_DIR/asset"
 echo "downloading: $ASSET_URL"
 curl -fsSL "$ASSET_URL" -o "$ASSET_FILE"
 
-if file "$ASSET_FILE" | grep -qi 'zip'; then
-  unzip -q "$ASSET_FILE" -d "$TMP_DIR/unpack"
+if [[ "$ASSET_URL" == *.zip ]]; then
+  if command -v unzip >/dev/null 2>&1; then
+    unzip -q "$ASSET_FILE" -d "$TMP_DIR/unpack"
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 - "$ASSET_FILE" "$TMP_DIR/unpack" <<'PY'
+import sys
+import zipfile
+
+archive = sys.argv[1]
+target = sys.argv[2]
+
+with zipfile.ZipFile(archive) as zf:
+    zf.extractall(target)
+PY
+  else
+    echo "zip_asset_requires_unzip_or_python3"
+    exit 1
+  fi
 else
   tar -xf "$ASSET_FILE" -C "$TMP_DIR" || tar -xzf "$ASSET_FILE" -C "$TMP_DIR"
 fi

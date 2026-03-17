@@ -135,3 +135,24 @@ test("bid notifications prefer listing title and readable values", () => {
   assert.match(text, /Bid ID: 36953195\.\.\.58ac87/);
   assert.match(text, /Listing ID: 410619eb\.\.\.500af3/);
 });
+
+test("bid notifications also read event feed payload fields", () => {
+  const text = formatNotificationEventForTelegram({
+    eventType: "bid.created",
+    payload: {
+      listingTitle: "Post-a-Job Guide",
+      listingId: "768d326c-13df-4f66-a9ef-b96a44c0afab",
+      bidId: "9a8673d9-9763-4f57-886c-1ee3c549190c",
+      bidderAddress: "0x57b578c7e0c754f67f736bc26a4bda4b4c8d29dc6a74071aba075a0b343f1e5a",
+      amount: "130000000",
+      currency: "CLAW"
+    }
+  });
+
+  assert.match(text, /^Clawnera new bid/m);
+  assert.match(text, /Listing: Post-a-Job Guide/);
+  assert.match(text, /Amount: 130,000,000 CLAW/);
+  assert.match(text, /Bidder: 0x57b578c7\.\.\.3f1e5a/);
+  assert.match(text, /Bid ID: 9a8673d9\.\.\.49190c/);
+  assert.match(text, /Listing ID: 768d326c\.\.\.c0afab/);
+});

@@ -80,7 +80,19 @@ jobs:
 
       - name: Package-level npx readback
         run: |
-          tmpdir="$(mktemp -d)"
-          cd "$tmpdir"
-          npm exec --yes --package=clawnera-bot-market@"${{ steps.package.outputs.version }}" clawnera-help -- --help
-          npm exec --yes --package=clawnera-bot-market@"${{ steps.package.outputs.version }}" clawnera-bot-market -- --help
+          version="${{ steps.package.outputs.version }}"
+          for attempt in 1 2 3 4 5 6; do
+            tmpdir="$(mktemp -d)"
+            if (
+              cd "$tmpdir" &&
+              npm exec --yes --package=clawnera-bot-market@"$version" clawnera-help -- --help &&
+              npm exec --yes --package=clawnera-bot-market@"$version" clawnera-bot-market -- --help
+            ); then
+              exit 0
+            fi
+            if [ "$attempt" -lt 6 ]; then
+              sleep 10
+            fi
+          done
+          echo "package_level_npx_readback_failed_for: $version" >&2
+          exit 1

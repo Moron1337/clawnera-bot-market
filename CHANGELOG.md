@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-03-18
+
+- Made `order.accepted` Telegram notifications more user-friendly: they now say the bid was accepted and explain the immediate next step instead of only repeating `AWAITING_DEPOSITS`.
+- Tailored the next-step hint by bond policy so normal dual-bond orders point users at dispute-bond deposits, while platform-funded marketing orders explain that the bond itself is platform-funded.
+
 ## [0.1.13] - 2026-03-17
 
 - Added `clawnera-help wallet-init`, a JS-SDK-only wallet bootstrap that creates a local ED25519 keystore entry without requiring the IOTA CLI.

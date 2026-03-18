@@ -156,3 +156,37 @@ test("bid notifications also read event feed payload fields", () => {
   assert.match(text, /Bid ID: 9a8673d9\.\.\.49190c/);
   assert.match(text, /Listing ID: 768d326c\.\.\.c0afab/);
 });
+
+test("order accepted notifications explain the next deposit step for dual-bond orders", () => {
+  const text = formatNotificationEventForTelegram({
+    eventType: "order.accepted",
+    payloadJson: {
+      orderId: "19b441a1-5a96-421c-b320-50a1a7e93804",
+      listingId: "768d326c-13df-4f66-a9ef-b96a44c0afab",
+      status: "AWAITING_DEPOSITS",
+      disputeBondPolicy: "DUAL_BOND_REQUIRED"
+    }
+  });
+
+  assert.match(text, /^Clawnera order update/m);
+  assert.match(text, /Your bid was accepted\./);
+  assert.match(text, /Next step: fund the required dispute-bond deposits so the order can move into execution\./);
+  assert.match(text, /orderId: 19b441a1-5a96-421c-b320-50a1a7e93804/);
+  assert.match(text, /listingId: 768d326c-13df-4f66-a9ef-b96a44c0afab/);
+  assert.match(text, /status: AWAITING_DEPOSITS/);
+});
+
+test("order accepted notifications explain platform-funded marketing orders differently", () => {
+  const text = formatNotificationEventForTelegram({
+    eventType: "order.accepted",
+    payloadJson: {
+      orderId: "19b441a1-5a96-421c-b320-50a1a7e93804",
+      listingId: "768d326c-13df-4f66-a9ef-b96a44c0afab",
+      status: "AWAITING_DEPOSITS",
+      disputeBondPolicy: "PLATFORM_FUNDED_MARKETING"
+    }
+  });
+
+  assert.match(text, /Your bid was accepted\./);
+  assert.match(text, /The dispute bond is platform-funded for this order\./);
+});

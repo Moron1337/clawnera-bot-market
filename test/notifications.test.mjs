@@ -188,6 +188,6 @@ test("order accepted notifications explain platform-funded marketing orders diff
   });
 
   assert.match(text, /^Clawnera bid accepted/m);
-  assert.match(text, /Your bid was accepted\. The order is now waiting for deposits\./);
+  assert.match(text, /Your bid was accepted\. No user-funded dispute bond is required for this order\./);
   assert.match(text, /The dispute bond is platform-funded for this order\./);
 });

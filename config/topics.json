@@ -73,6 +73,12 @@
       "aliases": ["jwt", "auth-checks", "actor-capabilities", "me"]
     },
     {
+      "id": "live-order-flow",
+      "title": "Manual Live Order Flow",
+      "file": "docs/guides/LIVE_MANUAL_ORDER_FLOW.md",
+      "aliases": ["manual", "live", "llm", "real-run", "manual-order"]
+    },
+    {
       "id": "mailbox-flow",
       "title": "Mailbox Communication Flow",
       "file": "docs/guides/MAILBOX_COMMUNICATION_FLOW.md",

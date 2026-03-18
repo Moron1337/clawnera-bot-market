@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-03-18
+
+- Raised the default Telegram/event-notifier HTTP timeout from `10000ms` to `30000ms`, matching the stable setting used in the real manual mainnet order run.
+- Added a short `live-order-flow` guide for weaker LLMs and operators so the first live write path is easier to follow without reading the full onboarding pack.
+- Surfaced two real managed-storage guardrails more prominently: lock final file bytes and SHA-256 before presign, and treat managed upload fee proofs as single-use.
+
 ## [0.1.18] - 2026-03-18
 
 - Added a public SDK-first local IOTA transfer path to the packaged CLI: `iota-active-env`, `iota-get-balance`, `iota-get-gas`, `iota-prepare-transfer`, `iota-dry-run-transfer`, and `iota-execute-transfer`.

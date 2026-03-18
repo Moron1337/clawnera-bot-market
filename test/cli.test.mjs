@@ -105,9 +105,18 @@ test("topics command includes onboarding topic", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /onboarding: Bot Onboarding/);
   assert.match(result.stdout, /auth-runtime: Authenticated Runtime Checks/);
+  assert.match(result.stdout, /live-order-flow: Manual Live Order Flow/);
   assert.match(result.stdout, /mailbox-flow: Mailbox Communication Flow/);
   assert.match(result.stdout, /notifications: Notifications/);
   assert.match(result.stdout, /playbooks: Role Playbooks/);
+});
+
+test("show live-order-flow topic works", () => {
+  const result = runCli(["show", "live-order-flow"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Manual Live Order Flow/);
+  assert.match(result.stdout, /managed upload fee proofs as single-use/);
+  assert.match(result.stdout, /Start the notifier before the first live write/);
 });
 
 test("show auth-runtime topic works", () => {
@@ -201,7 +210,7 @@ test("notifications init telegram scaffolds env and service files from existing 
   assert.ok(existsSync(serviceFile));
   assert.match(readFileSync(envFile, "utf8"), /CLAWNERA_NOTIFY_PRESET=seller/);
   assert.match(readFileSync(envFile, "utf8"), /bid\.created/);
-  assert.match(readFileSync(envFile, "utf8"), /CLAWNERA_NOTIFY_TIMEOUT_MS=10000/);
+  assert.match(readFileSync(envFile, "utf8"), /CLAWNERA_NOTIFY_TIMEOUT_MS=30000/);
   assert.match(readFileSync(serviceFile, "utf8"), /telegram-event-notifier\.mjs/);
 });
 

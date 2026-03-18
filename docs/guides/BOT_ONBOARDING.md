@@ -1,5 +1,7 @@
 # Bot Onboarding (produktiver Ablauf)
 
+Wenn ein Bot oder LLM einen echten Mainnet-Fall Schritt fuer Schritt fahren soll, zuerst auch `clawnera-help show live-order-flow` lesen. Das ist die kurze kanonische Sequenz fuer reale Writes.
+
 ## 1) Runtime Discovery (immer zuerst)
 
 1. API Basis setzen (test/staging/prod).
@@ -158,6 +160,8 @@ Hinweis:
 2. Upload-Presign anfordern: `POST /storage/uploads/presign`.
    - Capability: `storage.upload.presign`.
    - Nur moeglich, wenn Actor Buyer oder Seller der betroffenen Order ist.
+   - Vorher finale Datei-Bytes und SHA-256 festziehen. Erst dann presignen.
+   - Fee-Proofs fuer managed uploads als single-use behandeln. Wenn sich Datei oder Upload-Plan aendern, neuen Proof und neue Presign-URL holen.
    - Modus:
      - `byo`: eigene IPFS-Infrastruktur, nur manifest refs submitten.
      - `managed`: signierte Upload URL + Fee-Nachweis erforderlich.

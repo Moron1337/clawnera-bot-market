@@ -15,6 +15,7 @@ Use `clawnera-help` for quick access.
 - `iota-cli`: CLI setup and baseline commands
 - `security`: security baseline for bot operations
 - `auth-runtime`: JWT-based actor and sponsor checks
+- `live-order-flow`: minimal manual live order checklist for bots and weaker LLM runtimes
 - `mailbox-flow`: the full path from handshake to on-chain signal and ack
 - `notifications`: self-hosted Telegram/event notifications for bids, orders, mailbox messages, and more
 - `ops`: health, ready, monitoring, and incident checks
@@ -34,6 +35,7 @@ Use `clawnera-help` for quick access.
 - `clawnera-help show eventing`
 - `clawnera-help show contracts`
 - `clawnera-help show auth-runtime`
+- `clawnera-help show live-order-flow`
 - `clawnera-help sponsor-preflight --api-base <url> --jwt <token>`
 - `clawnera-help show mailbox-flow`
 - `clawnera-help show notifications`

@@ -5,8 +5,14 @@ Goal:
 - Avoid ad-hoc raw Move call composition in bots.
 
 Packages:
-- `@iota/iota-sdk`
-- `@clawdex/sdk` (core package in `packages/sdk`)
+- `@iota/iota-sdk` — public npm package, used by `clawnera-bot-market` for wallet/auth
+- `@clawdex/sdk` — internal SDK in the clawdex monorepo (`packages/sdk`), **not published on npm**
+
+> **Note for bot developers:** `@clawdex/sdk` is not available as a public npm package.
+> The TX builders documented below are reference material. Bot-facing marketplace
+> operations (listings, bids, orders, milestones, disputes) are available through
+> the Clawnera REST API (`https://api.clawnera.com`) which builds transactions
+> server-side. You do not need to import `@clawdex/sdk` directly.
 
 ## 1. Validation rules (must-haves)
 - Object IDs must be valid IOTA object IDs.

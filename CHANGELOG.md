@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-03-18
+
+- Reworked the install guidance around two explicit paths: a JS-SDK-only quick start for restricted hosts and a separate full setup for VMs with root access and optional IOTA CLI install.
+- Hardened `postinstall` and the optional IOTA CLI installer with clearer Node/PATH/runtime dependency diagnostics, shorter auto-install timeouts, and direct fallback hints to `wallet-init` when the CLI is unavailable.
+- Clarified that `@clawdex/sdk` is internal reference material and that public bot flows should use the Clawnera REST API instead of expecting a published SDK package.
+- Excluded internal `docs/reports/` artifacts from the published npm tarball so the package only ships end-user docs.
+
 ## [0.1.16] - 2026-03-18
 
 - Added a `clawnera-bot-market` CLI alias that points at the same packaged entrypoint as `clawnera-help`, so the global command now matches the npm package name users expect.

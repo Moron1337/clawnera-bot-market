@@ -28,6 +28,9 @@ describe_cli_runtime_failure() {
     missing_libs="$(ldd "$binary_path" 2>&1 | awk '/not found/ {print $1}' | paste -sd ',' -)"
     if [[ -n "$missing_libs" ]]; then
       echo "missing_shared_libraries: $missing_libs" >&2
+      echo "fix_debian_ubuntu: sudo apt-get install -y libpq5" >&2
+      echo "fix_alpine: apk add libpq" >&2
+      echo "alternative: skip the CLI and use clawnera-help wallet-init --alias <name>" >&2
     fi
   fi
 }

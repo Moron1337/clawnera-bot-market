@@ -12,6 +12,12 @@ const repoRoot = path.resolve(__dirname, "..");
 const installScript = path.join(repoRoot, "scripts", "install-iota-cli.sh");
 const bootstrapScript = path.join(repoRoot, "scripts", "bootstrap-iota-first-steps.sh");
 const LOG_PREFIX = "[clawnera-bot-market postinstall]";
+const MIN_NODE_MAJOR = 20;
+
+export function checkNodeVersion(nodeVersion = process.versions.node) {
+  const major = Number(String(nodeVersion).split(".")[0]);
+  return { major, ok: major >= MIN_NODE_MAJOR };
+}
 
 export function isEnabledFlag(value, defaultValue = true) {
   const normalized = String(value ?? "").trim().toLowerCase();
@@ -201,8 +207,8 @@ function maybeWarnAboutGlobalBinPath() {
 
   if (!pathContains(binDir, process.env.PATH)) {
     warn(`Global npm bin dir is not on PATH: ${binDir}`);
-    warn(`Add it to your shell profile, for example: export PATH="${binDir}:$PATH"`);
-    warn("Until then, the package is installed but `clawnera-help` may not be found directly.");
+    warn(`Fix now:  export PATH="${binDir}:$PATH"`);
+    warn(`Fix permanently:  echo 'export PATH="${binDir}:$PATH"' >> ~/.bashrc && source ~/.bashrc`);
   }
 }
 
@@ -216,7 +222,7 @@ function maybeAutoInstallIotaCli() {
   }
 
   if (!shouldAutoInstallIotaCli(process.env)) {
-    warn("IOTA CLI not detected. Optional next step: `clawnera-help first-steps --run`.");
+    info("IOTA CLI not detected (optional). Quick start without CLI: `clawnera-help wallet-init --alias <name>`.");
     return cliPath;
   }
 
@@ -230,7 +236,7 @@ function maybeAutoInstallIotaCli() {
   info(`IOTA CLI not detected. Attempting auto-install (${version}) to ${installDir}...`);
 
   const result = runCommand("bash", [installScript, version], {
-    timeoutMs: 120000,
+    timeoutMs: 60000,
     env: {
       ...process.env,
       INSTALL_DIR: installDir
@@ -239,7 +245,7 @@ function maybeAutoInstallIotaCli() {
 
   if (result.status !== 0 || result.error) {
     warn(`IOTA CLI auto-install failed: ${formatCommandFailure(result)}`);
-    warn("You can still run `clawnera-help first-steps --run` later.");
+    warn("The IOTA CLI is optional. Use the JS-SDK path instead: `clawnera-help wallet-init --alias <name>`.");
     return cliPath;
   }
 
@@ -252,7 +258,8 @@ function maybeAutoInstallIotaCli() {
     const missingLibraries = detectMissingSharedLibraries(installedCliPath);
     if (missingLibraries.length > 0) {
       warn(`Missing shared libraries: ${missingLibraries.join(", ")}`);
-      warn("On minimal Debian/Ubuntu-style containers this is often the PostgreSQL client runtime (`libpq5`).");
+      warn("Fix: sudo apt-get install -y libpq5  (Debian/Ubuntu) | apk add libpq  (Alpine) | dnf install libpq  (Fedora)");
+      warn("Or skip the CLI entirely and use: `clawnera-help wallet-init --alias <name>`.");
     }
   }
 
@@ -260,7 +267,8 @@ function maybeAutoInstallIotaCli() {
 
   if (!pathContains(installDir, process.env.PATH)) {
     warn(`IOTA CLI install dir is not on PATH: ${installDir}`);
-    warn(`Add it to your shell profile or set IOTA_CLI_PATH=${installedCliPath}`);
+    warn(`Fix now:  export PATH="${installDir}:$PATH"`);
+    warn(`Fix permanently:  echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc`);
   }
 
   return installedCliPath;
@@ -307,11 +315,16 @@ function maybeRunIotaBootstrap(iotaCliPath) {
 }
 
 function printNextStepHints() {
-  info("Need actor auth? Start with `clawnera-help auth-login --api-base https://api.clawnera.com --alias <wallet-alias> --state-out ~/.config/clawnera/auth-state.json`.");
-  info("Need Telegram alerts? Start with `clawnera-help notifications init telegram --preset seller --api-base https://api.clawnera.com --alias <wallet-alias>`.");
+  info("Quick start (no IOTA CLI needed): `clawnera-help wallet-init --alias <name>` then `clawnera-help auth-login --api-base https://api.clawnera.com --alias <name>`.");
+  info("Need Telegram alerts? `clawnera-help notifications init telegram --preset seller --api-base https://api.clawnera.com --alias <name>`.");
 }
 
 export function runPostinstall() {
+  const nodeCheck = checkNodeVersion();
+  if (!nodeCheck.ok) {
+    warn(`Node.js ${process.versions.node} detected. clawnera-bot-market requires Node.js >= ${MIN_NODE_MAJOR}.`);
+    warn("Upgrade: https://nodejs.org/ or via nvm: nvm install 20");
+  }
   maybeWarnAboutGlobalBinPath();
   const iotaCliPath = maybeAutoInstallIotaCli();
   maybeRunIotaBootstrap(iotaCliPath);

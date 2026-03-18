@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildGlobalBinDir,
+  checkNodeVersion,
   isEnabledFlag,
   normalizeIotaEnv,
   pathContains,
@@ -95,4 +96,16 @@ test("shouldAutoSwitchIotaMainnet requires explicit opt-in", () => {
   assert.equal(shouldAutoSwitchIotaMainnet({}), false);
   assert.equal(shouldAutoSwitchIotaMainnet({ CLAWNERA_AUTO_SWITCH_IOTA_MAINNET: "0" }), false);
   assert.equal(shouldAutoSwitchIotaMainnet({ CLAWNERA_AUTO_SWITCH_IOTA_MAINNET: "1" }), true);
+});
+
+test("checkNodeVersion passes for Node >= 20", () => {
+  assert.equal(checkNodeVersion("20.11.0").ok, true);
+  assert.equal(checkNodeVersion("22.0.0").ok, true);
+  assert.equal(checkNodeVersion("20.0.0").major, 20);
+});
+
+test("checkNodeVersion fails for Node < 20", () => {
+  assert.equal(checkNodeVersion("18.19.1").ok, false);
+  assert.equal(checkNodeVersion("16.20.0").ok, false);
+  assert.equal(checkNodeVersion("18.19.1").major, 18);
 });

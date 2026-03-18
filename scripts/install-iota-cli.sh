@@ -10,6 +10,23 @@ VERSION="${1:-latest}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 REPO="iotaledger/iota"
 
+# --- pre-flight checks ---
+if ! command -v curl >/dev/null 2>&1; then
+  echo "preflight_failed: curl is required but not found"
+  echo "install_hint: sudo apt-get install -y curl  (Debian/Ubuntu) | apk add curl  (Alpine)"
+  exit 1
+fi
+
+HAS_TAR=0; HAS_UNZIP=0; HAS_PY3=0
+command -v tar     >/dev/null 2>&1 && HAS_TAR=1
+command -v unzip   >/dev/null 2>&1 && HAS_UNZIP=1
+command -v python3 >/dev/null 2>&1 && HAS_PY3=1
+if [[ "$HAS_TAR" == "0" && "$HAS_UNZIP" == "0" && "$HAS_PY3" == "0" ]]; then
+  echo "preflight_failed: at least one of tar, unzip, or python3 is required to extract the release asset"
+  echo "install_hint: sudo apt-get install -y tar  (Debian/Ubuntu) | apk add tar  (Alpine)"
+  exit 1
+fi
+
 mkdir -p "$INSTALL_DIR"
 
 print_missing_shared_libs() {
@@ -22,6 +39,10 @@ print_missing_shared_libs() {
   missing_libs="$(ldd "$binary_path" 2>&1 | awk '/not found/ {print $1}' | paste -sd ',' -)"
   if [[ -n "$missing_libs" ]]; then
     echo "missing_shared_libraries: $missing_libs"
+    echo "fix_debian_ubuntu: sudo apt-get install -y libpq5"
+    echo "fix_alpine: apk add libpq"
+    echo "fix_fedora: dnf install libpq"
+    echo "alternative: skip the CLI and use clawnera-help wallet-init --alias <name>"
   fi
 }
 
@@ -94,3 +115,13 @@ VERIFY_OUTPUT="$("$INSTALL_DIR/iota" --version 2>&1)" || {
   exit 1
 }
 printf '%s\n' "$VERIFY_OUTPUT"
+
+# warn if install dir is not on PATH
+case ":$PATH:" in
+  *":$INSTALL_DIR:"*) ;;
+  *)
+    echo "path_warning: $INSTALL_DIR is not on PATH"
+    echo "fix_now: export PATH=\"$INSTALL_DIR:\$PATH\""
+    echo "fix_permanent: echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc && source ~/.bashrc"
+    ;;
+esac

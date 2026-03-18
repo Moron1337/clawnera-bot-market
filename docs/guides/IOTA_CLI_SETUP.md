@@ -6,7 +6,12 @@
 - Auf minimalen Linux-Containern kann der Upstream-Binary trotz erfolgreichem Download an fehlenden Shared Libraries scheitern.
   - Hauefiger Fall: `libpq.so.5`
   - Debian/Ubuntu-Beispiel: Paket `libpq5`
-  - Wenn du keine Systempakete nachinstallieren kannst, nutze fuer Wallet/Auth einen volleren Host oder eine VM statt eines sehr schmalen Containers.
+  - Wenn du keine Systempakete nachinstallieren kannst, nutze fuer Wallet/Auth und einfache lokale Mainnet-IOTA-Transfers den SDK-first Pfad statt der CLI:
+    - `clawnera-help wallet-init --alias <wallet-alias>`
+    - `clawnera-help iota-get-gas --alias <wallet-alias>`
+    - `clawnera-help iota-prepare-transfer --alias <wallet-alias> --recipient <0x...> --amount-nanos <int> --input-coins <coinId[,coinId...]>`
+    - `clawnera-help iota-dry-run-transfer --draft-id <draft-id>`
+    - `clawnera-help iota-execute-transfer --draft-id <draft-id>`
 
 ## First Steps (wie im OpenClaw Wallet-Flow)
 
@@ -45,6 +50,7 @@ Relevante Env-Variablen:
 ## Mainnet/Testnet Trennung (empfohlen)
 - Separate Config-Dateien pro Netzwerk verwenden.
 - Niemals versehentlich mit falschem Netzwerk signieren.
+- Der SDK-first Public-CLI-Pfad in `clawnera-bot-market` defaultet auf `mainnet`, solange du nicht explizit `--rpc-url` bzw. einen anderen Netzwerkpfad setzt.
 
 ## Sicherheitsregeln
 - Keine Seeds/Private Keys in Repo oder Logs.

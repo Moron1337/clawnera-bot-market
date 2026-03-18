@@ -18,6 +18,10 @@ npm install --prefix "$tmpdir" "./$tarball"
 
 "$tmpdir/node_modules/.bin/clawnera-help" --help >/dev/null
 "$tmpdir/node_modules/.bin/clawnera-bot-market" --help >/dev/null
+"$tmpdir/node_modules/.bin/clawnera-help" iota-prepare-transfer --help >/dev/null
+"$tmpdir/node_modules/.bin/clawnera-help" iota-execute-transfer --help >/dev/null
+"$tmpdir/node_modules/.bin/clawnera-bot-market" iota-prepare-transfer --help >/dev/null
+"$tmpdir/node_modules/.bin/clawnera-bot-market" iota-execute-transfer --help >/dev/null
 "$tmpdir/node_modules/.bin/clawnera-help" show onboarding >/dev/null
 "$tmpdir/node_modules/.bin/clawnera-help" doctor --json >/dev/null
 

@@ -17,6 +17,24 @@ import {
   validateRuntimeAuthState
 } from "../lib/runtime-auth.mjs";
 import {
+  DEFAULT_IOTA_NETWORK,
+  IOTA_COIN_TYPE,
+  executeIotaTransfer,
+  getIotaActiveEnv,
+  getIotaBalance,
+  getIotaGas,
+  normalizeIotaAddress,
+  prepareIotaTransfer,
+  dryRunIotaTransfer
+} from "../lib/iota-local.mjs";
+import {
+  DEFAULT_TRANSFER_DRAFT_TTL_SEC,
+  defaultIotaTransferDraftsPath,
+  deleteIotaTransferDraft,
+  loadIotaTransferDraft,
+  saveIotaTransferDraft
+} from "../lib/iota-transfer-drafts.mjs";
+import {
   CUSTOM_NOTIFICATION_PRESET,
   DEFAULT_NOTIFICATION_BATCH_LIMIT,
   DEFAULT_NOTIFICATION_PRESET,
@@ -186,6 +204,12 @@ function printUsage() {
   console.log("  clawnera-help path                        Print repository path");
   console.log("  clawnera-help wallet-init [options]       Create a local IOTA keystore entry without the IOTA CLI");
   console.log("  clawnera-help auth-login [options]        Create JWT + refresh token from local IOTA keystore");
+  console.log("  clawnera-help iota-active-env [options]   Show local IOTA RPC/keystore runtime config");
+  console.log("  clawnera-help iota-get-balance [options]  Read local wallet balances via the IOTA SDK");
+  console.log("  clawnera-help iota-get-gas [options]      Read local IOTA gas coins via the IOTA SDK");
+  console.log("  clawnera-help iota-prepare-transfer [options]  Build a local IOTA mainnet transfer draft");
+  console.log("  clawnera-help iota-dry-run-transfer [options]  Dry-run a prepared local IOTA transfer");
+  console.log("  clawnera-help iota-execute-transfer [options]  Sign and broadcast a prepared local IOTA transfer");
   console.log("  clawnera-help notifications [options]     Scaffold and check Telegram event notifications");
   console.log("  clawnera-help first-steps [--run]         Show or run IOTA first-step bootstrap");
   console.log("  clawnera-help sponsor-preflight [options] Read sponsor policy/strategy/diagnostics");
@@ -664,6 +688,34 @@ function parsePositiveIntOption(rawValue, fieldName, fallback) {
   return parsed;
 }
 
+function parsePositiveBigIntOption(rawValue, fieldName) {
+  const normalized = String(rawValue ?? "").trim();
+  if (!normalized || !/^\d+$/.test(normalized)) {
+    throw new Error(`invalid_${fieldName}`);
+  }
+  const parsed = BigInt(normalized);
+  if (parsed <= 0n) {
+    throw new Error(`invalid_${fieldName}`);
+  }
+  return parsed;
+}
+
+function parseCommaSeparatedIotaAddresses(rawValue, fieldName) {
+  const normalized = String(rawValue ?? "").trim();
+  if (!normalized) {
+    throw new Error(`missing_${fieldName}`);
+  }
+  const parts = normalized
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const values = parts.map((entry) => normalizeIotaAddress(entry));
+  if (values.length === 0 || values.some((entry) => !entry)) {
+    throw new Error(`invalid_${fieldName}`);
+  }
+  return values;
+}
+
 function parseBooleanOption(rawValue, fallback = false) {
   if (rawValue === undefined || rawValue === null || rawValue === "") {
     return fallback;
@@ -891,6 +943,69 @@ function walletInitUsageLines() {
   ];
 }
 
+function iotaActiveEnvUsageLines() {
+  return [
+    "IOTA active env helper:",
+    `- Defaults to --network ${DEFAULT_IOTA_NETWORK}`,
+    "- Optional: --rpc-url <url> to use a custom fullnode",
+    `- Default keystore path: ${defaultIotaKeystorePath()}`,
+    "- This is local-only and does not ask the Clawnera worker to execute anything",
+  ];
+}
+
+function iotaGetBalanceUsageLines() {
+  return [
+    "IOTA balance helper:",
+    `- Defaults to --network ${DEFAULT_IOTA_NETWORK}`,
+    `- Defaults to local keystore path ${defaultIotaKeystorePath()}`,
+    "- Optional selector: --alias <wallet-alias> or --address <wallet-address>",
+    "- Optional: --coin-type <type> --with-coins",
+    "- Reads local wallet balances via the IOTA SDK on the user machine",
+  ];
+}
+
+function iotaGetGasUsageLines() {
+  return [
+    "IOTA gas helper:",
+    `- Defaults to --network ${DEFAULT_IOTA_NETWORK}`,
+    `- Defaults to local keystore path ${defaultIotaKeystorePath()}`,
+    "- Optional selector: --alias <wallet-alias> or --address <wallet-address>",
+    `- Returns coin objects for ${IOTA_COIN_TYPE}`,
+  ];
+}
+
+function iotaPrepareTransferUsageLines() {
+  return [
+    "IOTA prepare transfer helper:",
+    "- Required: --recipient <0x...> --amount-nanos <int> --input-coins <coinId[,coinId...]>",
+    `- Defaults to --network ${DEFAULT_IOTA_NETWORK}`,
+    `- Draft file default: ${defaultIotaTransferDraftsPath()}`,
+    "- Optional selector: --alias <wallet-alias> or --address <wallet-address>",
+    "- Optional: --gas-budget <int> --ttl-sec <int> --drafts-file <file> --rpc-url <url>",
+    "- Builds tx bytes locally on the user machine and stores a reusable draft for dry-run/execute",
+  ];
+}
+
+function iotaDryRunTransferUsageLines() {
+  return [
+    "IOTA dry-run transfer helper:",
+    "- Required: --draft-id <id>",
+    `- Draft file default: ${defaultIotaTransferDraftsPath()}`,
+    "- Replays a prepared local transfer draft against the selected IOTA RPC without broadcasting",
+  ];
+}
+
+function iotaExecuteTransferUsageLines() {
+  return [
+    "IOTA execute transfer helper:",
+    "- Required: --draft-id <id>",
+    `- Draft file default: ${defaultIotaTransferDraftsPath()}`,
+    "- Optional local signer selector: --signer-address <0x...> or --signer-alias <alias>",
+    "- Optional: --signature <base64> to execute a pre-signed tx instead of signing locally",
+    "- Signs and broadcasts locally on the user machine; the Clawnera worker does not custody user keys",
+  ];
+}
+
 function shellQuote(value) {
   return `'${String(value ?? "").replace(/'/g, `'\"'\"'`)}'`;
 }
@@ -1107,6 +1222,302 @@ async function runWalletInit(commandArgs) {
       ok: false,
       error: error instanceof Error ? error.message : "wallet_init_failed",
       keystorePath
+    };
+  }
+}
+
+async function runIotaActiveEnv(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: iotaActiveEnvUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  try {
+    return {
+      ok: true,
+      ...(await getIotaActiveEnv({
+        network: options.network,
+        rpcUrl: options["rpc-url"],
+        keystorePath:
+          typeof options["keystore-path"] === "string" && options["keystore-path"].trim()
+            ? path.resolve(String(options["keystore-path"]).trim())
+            : defaultIotaKeystorePath(),
+      })),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "iota_active_env_failed",
+    };
+  }
+}
+
+async function runIotaGetBalance(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: iotaGetBalanceUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  try {
+    return {
+      ok: true,
+      ...(await getIotaBalance({
+        network: options.network,
+        rpcUrl: options["rpc-url"],
+        keystorePath:
+          typeof options["keystore-path"] === "string" && options["keystore-path"].trim()
+            ? path.resolve(String(options["keystore-path"]).trim())
+            : defaultIotaKeystorePath(),
+        alias: typeof options.alias === "string" ? options.alias.trim() : "",
+        address: typeof options.address === "string" ? options.address.trim() : "",
+        coinType: typeof options["coin-type"] === "string" ? options["coin-type"].trim() : "",
+        withCoins: parseBooleanOption(options["with-coins"], false),
+      })),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "iota_get_balance_failed",
+    };
+  }
+}
+
+async function runIotaGetGas(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: iotaGetGasUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  try {
+    return {
+      ok: true,
+      ...(await getIotaGas({
+        network: options.network,
+        rpcUrl: options["rpc-url"],
+        keystorePath:
+          typeof options["keystore-path"] === "string" && options["keystore-path"].trim()
+            ? path.resolve(String(options["keystore-path"]).trim())
+            : defaultIotaKeystorePath(),
+        alias: typeof options.alias === "string" ? options.alias.trim() : "",
+        address: typeof options.address === "string" ? options.address.trim() : "",
+      })),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "iota_get_gas_failed",
+    };
+  }
+}
+
+async function runIotaPrepareTransfer(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: iotaPrepareTransferUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  try {
+    const draftsPath =
+      typeof options["drafts-file"] === "string" && options["drafts-file"].trim()
+        ? path.resolve(String(options["drafts-file"]).trim())
+        : defaultIotaTransferDraftsPath();
+    const ttlSec = parsePositiveIntOption(options["ttl-sec"], "ttl_sec", DEFAULT_TRANSFER_DRAFT_TTL_SEC);
+    const prepared = await prepareIotaTransfer({
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+      keystorePath:
+        typeof options["keystore-path"] === "string" && options["keystore-path"].trim()
+          ? path.resolve(String(options["keystore-path"]).trim())
+          : defaultIotaKeystorePath(),
+      alias: typeof options.alias === "string" ? options.alias.trim() : "",
+      address: typeof options.address === "string" ? options.address.trim() : "",
+      recipient: normalizeIotaAddress(options.recipient),
+      amountNanos: parsePositiveBigIntOption(options["amount-nanos"], "amount_nanos"),
+      inputCoins: parseCommaSeparatedIotaAddresses(options["input-coins"], "input_coins"),
+      gasBudget:
+        options["gas-budget"] === undefined || options["gas-budget"] === null || options["gas-budget"] === ""
+          ? undefined
+          : parsePositiveIntOption(options["gas-budget"], "gas_budget", 0),
+    });
+
+    const nowMs = Date.now();
+    const draft = {
+      id: randomUUID(),
+      kind: "iota_transfer",
+      createdAt: nowMs,
+      expiresAt: nowMs + ttlSec * 1000,
+      recipient: normalizeIotaAddress(options.recipient),
+      amountNanos: String(parsePositiveBigIntOption(options["amount-nanos"], "amount_nanos")),
+      inputCoins: parseCommaSeparatedIotaAddresses(options["input-coins"], "input_coins"),
+      gasBudget:
+        options["gas-budget"] === undefined || options["gas-budget"] === null || options["gas-budget"] === ""
+          ? null
+          : parsePositiveIntOption(options["gas-budget"], "gas_budget", 0),
+      signerAddress: prepared.signerAddress,
+      txBytesB64: prepared.txBytesB64,
+      decodedTx: prepared.decodedTx,
+      network: prepared.network,
+      rpcUrl: prepared.rpcUrl,
+    };
+
+    await saveIotaTransferDraft(draftsPath, draft);
+    return {
+      ok: true,
+      draft,
+      draftsPath,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "iota_prepare_transfer_failed",
+    };
+  }
+}
+
+async function runIotaDryRunTransfer(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: iotaDryRunTransferUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  try {
+    const draftId = typeof options["draft-id"] === "string" ? options["draft-id"].trim() : "";
+    if (!draftId) {
+      throw new Error("missing_draft_id");
+    }
+    const draftsPath =
+      typeof options["drafts-file"] === "string" && options["drafts-file"].trim()
+        ? path.resolve(String(options["drafts-file"]).trim())
+        : defaultIotaTransferDraftsPath();
+    const draft = await loadIotaTransferDraft(draftsPath, draftId);
+    const result = await dryRunIotaTransfer({
+      network: draft.network,
+      rpcUrl: draft.rpcUrl,
+      txBytesB64: draft.txBytesB64,
+    });
+    return {
+      ok: true,
+      draftId,
+      draftsPath,
+      result,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "iota_dry_run_transfer_failed",
+    };
+  }
+}
+
+async function runIotaExecuteTransfer(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: iotaExecuteTransferUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  try {
+    const draftId = typeof options["draft-id"] === "string" ? options["draft-id"].trim() : "";
+    if (!draftId) {
+      throw new Error("missing_draft_id");
+    }
+    const draftsPath =
+      typeof options["drafts-file"] === "string" && options["drafts-file"].trim()
+        ? path.resolve(String(options["drafts-file"]).trim())
+        : defaultIotaTransferDraftsPath();
+    const draft = await loadIotaTransferDraft(draftsPath, draftId);
+    const result = await executeIotaTransfer({
+      network: draft.network,
+      rpcUrl: draft.rpcUrl,
+      txBytesB64: draft.txBytesB64,
+      keystorePath:
+        typeof options["keystore-path"] === "string" && options["keystore-path"].trim()
+          ? path.resolve(String(options["keystore-path"]).trim())
+          : defaultIotaKeystorePath(),
+      address: typeof options["signer-address"] === "string" ? options["signer-address"].trim() : draft.signerAddress,
+      alias: typeof options["signer-alias"] === "string" ? options["signer-alias"].trim() : "",
+      signerAddress: draft.signerAddress,
+      signature: typeof options.signature === "string" ? options.signature.trim() : "",
+    });
+    await deleteIotaTransferDraft(draftsPath, draftId);
+    return {
+      ok: true,
+      draftId,
+      draftsPath,
+      txDigest: result?.result?.digest || result?.result?.effects?.transactionDigest || null,
+      signerAddress: result?.verifyResult?.signerAddress || draft.signerAddress,
+      result: result.result,
+      signature: result.signature,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "iota_execute_transfer_failed",
     };
   }
 }
@@ -2455,7 +2866,12 @@ const aliasCommands = new Map([
   ["issue", "report-issue"],
   ["login", "auth-login"],
   ["jwt-login", "auth-login"],
-  ["notify", "notifications"]
+  ["notify", "notifications"],
+  ["iota-balance", "iota-get-balance"],
+  ["iota-gas", "iota-get-gas"],
+  ["iota-transfer-prepare", "iota-prepare-transfer"],
+  ["iota-transfer-dry-run", "iota-dry-run-transfer"],
+  ["iota-transfer-execute", "iota-execute-transfer"]
 ]);
 const effectiveCommand = aliasCommands.get(parsedCommand) || parsedCommand;
 
@@ -2475,6 +2891,12 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "path",
         "wallet-init",
         "auth-login",
+        "iota-active-env",
+        "iota-get-balance",
+        "iota-get-gas",
+        "iota-prepare-transfer",
+        "iota-dry-run-transfer",
+        "iota-execute-transfer",
         "notifications",
         "first-steps",
         "sponsor-preflight",
@@ -2667,6 +3089,136 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`auth_login_helper_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "iota-active-env") {
+  const result = await runIotaActiveEnv(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`iota_active_env_ok network=${result.activeEnv}`);
+    console.log(`rpc_url=${result.rpcUrl}`);
+    console.log(`keystore_path=${result.keystorePath}`);
+  } else {
+    console.error(`iota_active_env_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "iota-get-balance") {
+  const result = await runIotaGetBalance(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`iota_get_balance_ok owner=${result.owner}`);
+    console.log(`network=${result.network}`);
+    if (result.balance) {
+      console.log(`coin_type=${result.balance.coinType || "unknown"}`);
+      console.log(`total_balance=${result.balance.totalBalance || "0"}`);
+    } else if (Array.isArray(result.balances)) {
+      console.log(`balance_entries=${result.balances.length}`);
+    }
+    if (Array.isArray(result.coins?.data)) {
+      console.log(`coin_objects=${result.coins.data.length}`);
+    } else if (Array.isArray(result.coins)) {
+      console.log(`coin_objects=${result.coins.length}`);
+    }
+  } else {
+    console.error(`iota_get_balance_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "iota-get-gas") {
+  const result = await runIotaGetGas(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`iota_get_gas_ok owner=${result.owner}`);
+    console.log(`network=${result.network}`);
+    console.log(`coin_type=${result.coinType}`);
+    console.log(`gas_coin_objects=${Array.isArray(result.gasCoins?.data) ? result.gasCoins.data.length : 0}`);
+  } else {
+    console.error(`iota_get_gas_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "iota-prepare-transfer") {
+  const result = await runIotaPrepareTransfer(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`iota_prepare_transfer_ok draft_id=${result.draft.id}`);
+    console.log(`signer_address=${result.draft.signerAddress}`);
+    console.log(`recipient=${result.draft.recipient}`);
+    console.log(`amount_nanos=${result.draft.amountNanos}`);
+    console.log(`drafts_file=${result.draftsPath}`);
+    console.log(`clawnera-help iota-dry-run-transfer --draft-id ${shellQuote(result.draft.id)} --drafts-file ${shellQuote(result.draftsPath)}`);
+    console.log(`clawnera-help iota-execute-transfer --draft-id ${shellQuote(result.draft.id)} --drafts-file ${shellQuote(result.draftsPath)}`);
+  } else {
+    console.error(`iota_prepare_transfer_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "iota-dry-run-transfer") {
+  const result = await runIotaDryRunTransfer(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`iota_dry_run_transfer_ok draft_id=${result.draftId}`);
+    if (result.result?.effects?.gasUsed) {
+      console.log(`gas_used=${JSON.stringify(result.result.effects.gasUsed)}`);
+    }
+  } else {
+    console.error(`iota_dry_run_transfer_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "iota-execute-transfer") {
+  const result = await runIotaExecuteTransfer(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`iota_execute_transfer_ok tx_digest=${result.txDigest || "unknown"}`);
+    console.log(`signer_address=${result.signerAddress}`);
+    console.log(`drafts_file=${result.draftsPath}`);
+  } else {
+    console.error(`iota_execute_transfer_error: ${result.error}`);
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {

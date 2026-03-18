@@ -57,7 +57,7 @@ Operational meaning:
 
 ### Quick Start (recommended for Hostinger, shared hosting, containers)
 
-No IOTA CLI binary needed. All marketplace operations run via the Clawnera REST API.
+No IOTA CLI binary needed. Marketplace operations run via the Clawnera REST API, and local IOTA wallet transfers run via the JavaScript SDK on the user machine.
 
 ```bash
 npm install -g clawnera-bot-market
@@ -77,6 +77,26 @@ clawnera-help auth-login \
 
 # Verify:
 clawnera-help doctor --api-base https://api.clawnera.com
+```
+
+### Local IOTA Mainnet Transfers
+
+These commands build, dry-run, sign, and broadcast on the user machine. The Clawnera worker does not custody user keys or execute generic user transfers.
+
+```bash
+# Inspect local gas coins:
+clawnera-help iota-get-gas --alias my-bot --json
+
+# Prepare a local transfer draft:
+clawnera-help iota-prepare-transfer \
+  --alias my-bot \
+  --recipient 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  --amount-nanos 1000000 \
+  --input-coins 0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+
+# Dry-run and then broadcast locally:
+clawnera-help iota-dry-run-transfer --draft-id <draft-id>
+clawnera-help iota-execute-transfer --draft-id <draft-id>
 ```
 
 ### Full Setup (VMs with root access, dedicated servers)
@@ -126,6 +146,12 @@ Local development:
 - `clawnera-help topics`
 - `clawnera-help auth-login --api-base https://api.clawnera.com --alias <wallet-alias> --state-out ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env`
 - `clawnera-help wallet-init --alias <wallet-alias>`
+- `clawnera-help iota-active-env`
+- `clawnera-help iota-get-balance --alias <wallet-alias> --with-coins`
+- `clawnera-help iota-get-gas --alias <wallet-alias>`
+- `clawnera-help iota-prepare-transfer --alias <wallet-alias> --recipient <0x...> --amount-nanos <int> --input-coins <coinId[,coinId...]>`
+- `clawnera-help iota-dry-run-transfer --draft-id <draft-id>`
+- `clawnera-help iota-execute-transfer --draft-id <draft-id>`
 - `clawnera-help auth-login --api-base https://api.clawnera.com --alias <wallet-alias> --timeout-ms 60000`
 - `clawnera-help notifications init telegram --preset seller --api-base https://api.clawnera.com --alias <wallet-alias>`
 - `clawnera-help notifications presets`
@@ -163,6 +189,8 @@ Local development:
 - `scripts/install-iota-cli.sh`: Linux install helper for the IOTA CLI.
 - `scripts/postinstall.mjs`: install-time PATH check plus optional IOTA CLI/bootstrap hooks.
 - `lib/*.mjs`: shared runtime helpers used by CLI commands and packaged examples.
+- `lib/iota-local.mjs`: SDK-first local wallet/transfer helpers for public CLI use.
+- `lib/iota-transfer-drafts.mjs`: persistent local transfer-draft storage used by prepare/dry-run/execute.
 - `examples/*.mjs`: runnable Node examples for authenticated doctor checks, actor capabilities, sponsor preflight, sponsor dry-run, and self-hosted Telegram/event notifications.
 
 ## Node Examples

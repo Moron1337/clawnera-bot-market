@@ -65,6 +65,9 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /CLAWNERA Bot Market CLI/);
   assert.match(result.stdout, /clawnera-help auth-login/);
   assert.match(result.stdout, /clawnera-help wallet-init/);
+  assert.match(result.stdout, /clawnera-help iota-get-balance/);
+  assert.match(result.stdout, /clawnera-help iota-prepare-transfer/);
+  assert.match(result.stdout, /clawnera-help iota-execute-transfer/);
   assert.match(result.stdout, /clawnera-help notifications/);
   assert.match(result.stdout, /clawnera-help validate/);
   assert.match(result.stdout, /clawnera-help triage/);
@@ -78,6 +81,23 @@ test("help json output includes auth-login command", () => {
   assert.ok(Array.isArray(payload.commands));
   assert.ok(payload.commands.includes("auth-login"));
   assert.ok(payload.commands.includes("wallet-init"));
+  assert.ok(payload.commands.includes("iota-prepare-transfer"));
+  assert.ok(payload.commands.includes("iota-execute-transfer"));
+});
+
+test("iota prepare transfer help prints usage", () => {
+  const result = runCli(["iota-prepare-transfer", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /IOTA prepare transfer helper/);
+  assert.match(result.stdout, /--recipient <0x\.\.\.>/);
+  assert.match(result.stdout, /Builds tx bytes locally on the user machine/);
+});
+
+test("iota execute transfer help prints usage", () => {
+  const result = runCli(["iota-execute-transfer", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /IOTA execute transfer helper/);
+  assert.match(result.stdout, /Signs and broadcasts locally on the user machine/);
 });
 
 test("topics command includes onboarding topic", () => {

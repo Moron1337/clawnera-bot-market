@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.18] - 2026-03-18
+
+- Added a public SDK-first local IOTA transfer path to the packaged CLI: `iota-active-env`, `iota-get-balance`, `iota-get-gas`, `iota-prepare-transfer`, `iota-dry-run-transfer`, and `iota-execute-transfer`.
+- Kept execution local to the user machine: the new flow builds, signs, dry-runs, and broadcasts with the JS SDK and the local keystore instead of sending generic user transfers through the Clawnera worker.
+- Added persistent local transfer-draft storage so prepared transfers can be reviewed, dry-run, and executed in separate steps on restricted hosts.
+- Updated install/docs/smoke coverage so the npm tarball proves both packaged binaries can expose the new local transfer commands after install.
+
 ## [0.1.17] - 2026-03-18
 
 - Reworked the install guidance around two explicit paths: a JS-SDK-only quick start for restricted hosts and a separate full setup for VMs with root access and optional IOTA CLI install.

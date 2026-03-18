@@ -1,5 +1,7 @@
 # Manual Live Order Flow
 
+If the bot or LLM is not already grounded in the full sequence, read `clawnera-help show canonical-flow` first. This guide is the tighter write-phase subset.
+
 Use this guide when a bot or LLM is driving a real marketplace run and must avoid the common operator mistakes from the first mainnet manual walkthrough.
 
 ## Goal

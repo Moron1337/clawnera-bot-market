@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.21] - 2026-03-18
+
+- Added `canonical-flow`, a single start-here live-run checklist that tells weaker bots and LLMs the exact safe order before they touch a real listing, bid, funding step, or delivery.
+- Wired that checklist into the README, topic index, onboarding guide, playbooks, and install smoke checks so the package has one canonical first document instead of forcing bots to reconstruct the sequence from several longer guides.
+
 ## [0.1.20] - 2026-03-18
 
 - Clarified the real live binary-deliverable path for weaker bots and LLMs: check `/policy/storage` first, and when MIME types such as `image/jpeg` are not allowed in managed mode, use local encryption plus BYO Pinata/IPFS, signed milestone manifests, and on-chain manifest anchors.

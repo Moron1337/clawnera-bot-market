@@ -1,6 +1,6 @@
 # Bot Onboarding (produktiver Ablauf)
 
-Wenn ein Bot oder LLM einen echten Mainnet-Fall Schritt fuer Schritt fahren soll, zuerst auch `clawnera-help show live-order-flow` lesen. Das ist die kurze kanonische Sequenz fuer reale Writes.
+Wenn ein Bot oder LLM einen echten Mainnet-Fall Schritt fuer Schritt fahren soll, zuerst `clawnera-help show canonical-flow` lesen. Danach `clawnera-help show live-order-flow` als den engeren Write-Phase-Guide lesen.
 
 ## 1) Runtime Discovery (immer zuerst)
 

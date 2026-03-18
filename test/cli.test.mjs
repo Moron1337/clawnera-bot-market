@@ -105,10 +105,19 @@ test("topics command includes onboarding topic", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /onboarding: Bot Onboarding/);
   assert.match(result.stdout, /auth-runtime: Authenticated Runtime Checks/);
+  assert.match(result.stdout, /canonical-flow: Canonical Live Run Checklist/);
   assert.match(result.stdout, /live-order-flow: Manual Live Order Flow/);
   assert.match(result.stdout, /mailbox-flow: Mailbox Communication Flow/);
   assert.match(result.stdout, /notifications: Notifications/);
   assert.match(result.stdout, /playbooks: Role Playbooks/);
+});
+
+test("show canonical-flow topic works", () => {
+  const result = runCli(["show", "canonical-flow"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Canonical Live Run Checklist/);
+  assert.match(result.stdout, /One live write, one readback/);
+  assert.match(result.stdout, /set up notifications before writing anything live/);
 });
 
 test("show live-order-flow topic works", () => {

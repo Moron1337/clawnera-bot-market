@@ -73,6 +73,12 @@
       "aliases": ["jwt", "auth-checks", "actor-capabilities", "me"]
     },
     {
+      "id": "canonical-flow",
+      "title": "Canonical Live Run Checklist",
+      "file": "docs/guides/CANONICAL_LIVE_RUN_CHECKLIST.md",
+      "aliases": ["canonical", "checklist", "start-here", "live-checklist", "runbook-first"]
+    },
+    {
       "id": "live-order-flow",
       "title": "Manual Live Order Flow",
       "file": "docs/guides/LIVE_MANUAL_ORDER_FLOW.md",

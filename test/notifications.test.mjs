@@ -168,8 +168,8 @@ test("order accepted notifications explain the next deposit step for dual-bond o
     }
   });
 
-  assert.match(text, /^Clawnera order update/m);
-  assert.match(text, /Your bid was accepted\./);
+  assert.match(text, /^Clawnera bid accepted/m);
+  assert.match(text, /Your bid was accepted\. The order is now waiting for deposits\./);
   assert.match(text, /Next step: fund the required dispute-bond deposits so the order can move into execution\./);
   assert.match(text, /orderId: 19b441a1-5a96-421c-b320-50a1a7e93804/);
   assert.match(text, /listingId: 768d326c-13df-4f66-a9ef-b96a44c0afab/);
@@ -187,6 +187,7 @@ test("order accepted notifications explain platform-funded marketing orders diff
     }
   });
 
-  assert.match(text, /Your bid was accepted\./);
+  assert.match(text, /^Clawnera bid accepted/m);
+  assert.match(text, /Your bid was accepted\. The order is now waiting for deposits\./);
   assert.match(text, /The dispute bond is platform-funded for this order\./);
 });

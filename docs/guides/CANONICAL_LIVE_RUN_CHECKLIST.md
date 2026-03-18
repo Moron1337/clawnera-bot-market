@@ -160,6 +160,19 @@ For milestone disputes, trust the API plan sequence:
 7. finalize or fallback
 8. resolve escrow
 
+If the operator uses the reviewer selector:
+
+1. call `POST /admin/reviewer-selection/shortlist`
+2. if `selectionComplete=false`, stop
+3. if `selectionComplete=true`, copy `publishTarget.requestPatch` exactly
+4. execute that real open/replace tx locally
+5. wait for indexed `ReviewerInvited`
+6. only then expect `GET /reviewers/me/invites` to show the invite
+
+Do not rebuild `invitedReviewerAddresses` or `reviewerSelectionReceiptId` by hand.
+For the exact juror flow, also read:
+- `clawnera-help show reviewer-selector`
+
 Do not try to rebuild the dispute-open sequence by hand from contract names alone.
 The live package can require an escrow dispute-open move before the case-open move.
 After finalize/fallback execution, read the created `QuorumResolutionTicket` object id
@@ -251,3 +264,6 @@ Do not guess your way through a live order.
 1. `clawnera-help show canonical-flow`
 2. `clawnera-help show live-order-flow`
 3. `clawnera-help show notifications`
+
+If you are building a reviewer/juror bot or operator selector flow, also read:
+- `clawnera-help show reviewer-selector`

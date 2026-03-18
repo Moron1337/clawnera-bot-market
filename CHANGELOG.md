@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.23] - 2026-03-18
+
+- Added a dedicated `reviewer-selector` guide and topic so weaker bots can follow the exact reviewer/juror sequence without reconstructing it from longer dispute docs.
+- Tightened the packaged onboarding/checklist text around the real selector boundary: `selectionComplete=false` is a stop condition, `publishTarget.requestPatch` must be copied exactly, reviewer inboxes only update after real tx execution plus indexed `ReviewerInvited`, and replacement rounds supersede stale invites.
+
 ## [0.1.22] - 2026-03-18
 
 - Tightened the dispute docs for weaker bots and LLMs around the real live resolution path: `finalize`/fallback creates a `QuorumResolutionTicket`, that exact created object id must be fed into `/resolve-escrow`, and the returned `/resolve-escrow` plan should be treated as canonical including `disputeQuorumConfigObjectId`.

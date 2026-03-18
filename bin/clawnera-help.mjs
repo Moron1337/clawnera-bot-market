@@ -143,8 +143,9 @@ const TRIAGE_RULES = Object.freeze([
   {
     id: "dispute",
     keywords: ["dispute", "quorum", "reviewer", "bond", "fallback", "vote", "resolve-escrow"],
-    topics: ["order-states", "role-routes", "contracts", "playbooks"],
+    topics: ["order-states", "role-routes", "reviewer-selector", "contracts", "playbooks"],
     commands: [
+      "clawnera-help show reviewer-selector",
       "clawnera-help show order-states",
       "clawnera-help show role-routes",
       "clawnera-help show contracts",

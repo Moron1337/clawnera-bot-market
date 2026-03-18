@@ -85,6 +85,12 @@
       "aliases": ["manual", "live", "llm", "real-run", "manual-order"]
     },
     {
+      "id": "reviewer-selector",
+      "title": "Reviewer Selector Flow",
+      "file": "docs/guides/REVIEWER_SELECTOR_FLOW.md",
+      "aliases": ["juror", "jury", "reviewer-selector-flow", "reviewer-invites", "selector"]
+    },
+    {
       "id": "mailbox-flow",
       "title": "Mailbox Communication Flow",
       "file": "docs/guides/MAILBOX_COMMUNICATION_FLOW.md",

@@ -107,6 +107,7 @@ test("topics command includes onboarding topic", () => {
   assert.match(result.stdout, /auth-runtime: Authenticated Runtime Checks/);
   assert.match(result.stdout, /canonical-flow: Canonical Live Run Checklist/);
   assert.match(result.stdout, /live-order-flow: Manual Live Order Flow/);
+  assert.match(result.stdout, /reviewer-selector: Reviewer Selector Flow/);
   assert.match(result.stdout, /mailbox-flow: Mailbox Communication Flow/);
   assert.match(result.stdout, /notifications: Notifications/);
   assert.match(result.stdout, /playbooks: Role Playbooks/);
@@ -126,6 +127,14 @@ test("show live-order-flow topic works", () => {
   assert.match(result.stdout, /Manual Live Order Flow/);
   assert.match(result.stdout, /managed upload fee proofs as single-use/);
   assert.match(result.stdout, /Start the notifier before the first live write/);
+});
+
+test("show reviewer-selector topic works", () => {
+  const result = runCli(["show", "reviewer-selector"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Reviewer Selector Flow/);
+  assert.match(result.stdout, /publishTarget\.requestPatch/);
+  assert.match(result.stdout, /ReviewerInvited/);
 });
 
 test("show auth-runtime topic works", () => {

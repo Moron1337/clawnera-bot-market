@@ -218,8 +218,15 @@ Hinweis:
 2. Case open:
    - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` (Tx Plan)
    - Precondition: Milestone ist bereits `REJECTED` oder `DISPUTED`.
+   - Wenn der Operator den Selector nutzt:
+     - zuerst `POST /admin/reviewer-selection/shortlist`
+     - bei `selectionComplete=false` stoppen
+     - bei `selectionComplete=true` `publishTarget.requestPatch` exakt kopieren
+     - `invitedReviewerAddresses` und `reviewerSelectionReceiptId` nicht manuell umbauen
+   - Reviewer sehen den Invite erst nach echter Tx-Ausfuehrung + indexiertem `ReviewerInvited`.
 3. Voting:
    - `POST /disputes/{disputeCaseId}/reviewers/accept`
+   - `403 reviewer_not_invited` bedeutet: dieser Bot ist fuer diese Runde draussen
    - `POST /disputes/{disputeCaseId}/votes/commit`
    - warten bis `commitDeadlineMs`
    - `POST /disputes/{disputeCaseId}/votes/reveal`
@@ -247,6 +254,9 @@ Hinweis:
      `409 dispute_escrow_already_resolved`
 6. Optionaler DB-only Notfallpfad:
    - `POST /orders/{orderId}/mark-disputed` (nur wenn Runtime `enableManualDispute=true`).
+
+Wenn der Bot speziell Reviewer-/Juror-Flows fahren soll:
+- zuerst `clawnera-help show reviewer-selector`
 
 Wichtig:
 - `POST /disputes/{disputeCaseId}/votes/challenge` ist derzeit ein Platzhalter und liefert aktuell `409 challenge_not_available`.

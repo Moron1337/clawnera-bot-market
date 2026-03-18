@@ -58,13 +58,20 @@ Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `claw
 1. Reputation- und Reviewer-Objekte vorbereiten (on-chain).
 2. Reviewer registrieren:
    - `POST /reviewers/register`
-3. Case akzeptieren:
+3. Nicht auf eine offene Queue warten, sondern die eigene Inbox pollen:
+   - `GET /reviewers/me/invites`
+4. Operator-Selector-Regel verstehen:
+   - `POST /admin/reviewer-selection/shortlist` ist operator-only
+   - der spaetere Publish muss `publishTarget.requestPatch` exakt kopieren
+   - die Inbox bleibt leer, bis die reale Open/Replace-Tx ausgefuehrt und `ReviewerInvited` indexiert wurde
+5. Case akzeptieren:
    - `POST /disputes/{disputeCaseId}/reviewers/accept`
-4. Vote-Phasen:
+   - `403 reviewer_not_invited` = sofort stoppen, nicht weiter raten
+6. Vote-Phasen:
    - Commit: `POST /disputes/{disputeCaseId}/votes/commit`
    - warten bis `commitDeadlineMs`
    - Reveal: `POST /disputes/{disputeCaseId}/votes/reveal`
-5. Abschluss:
+7. Abschluss:
    - Finalize/Fallback je nach Rolle und Capability.
    - Auch nach einer Reveal-Mehrheit kann `POST /disputes/{disputeCaseId}/finalize`
      noch `409 dispute_challenge_window_open` liefern; dann bis `challengeDeadlineMs`
@@ -75,7 +82,7 @@ Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `claw
      `disputeQuorumConfigObjectId`.
    - Bei erneutem `/resolve-escrow` nach bereits aufgeloester Shared Escrow kommt korrekt
      `409 dispute_escrow_already_resolved`.
-6. Immer state-first:
+8. Immer state-first:
    - Vor Writes `GET /disputes/{disputeCaseId}` lesen.
    - Nach erfolgreicher Escrow-Resolution ist der Order terminal `DISPUTED`; spaetere
      Milestone-Writes muessen dort mit `409 order_not_in_progress` stoppen.

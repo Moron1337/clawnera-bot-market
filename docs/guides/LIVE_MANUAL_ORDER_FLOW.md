@@ -122,6 +122,12 @@ Read it back with `GET /users/{address}/key-agreement?keyVersion=1`.
 
 - `401 invalid_token`
   - refresh or login again, then re-read state before retrying
+- `409 reviewer_selection_receipt_shortlist_mismatch`
+  - operator shortlist publish drifted; rebuild from the latest selector receipt
+- `409 reviewer_selection_receipt_round_mismatch`
+  - operator used the wrong shortlist round; read the latest receipt and dispute state first
+- `409 reviewer_selection_receipt_target_mismatch`
+  - operator published the shortlist onto the wrong case/order target
 - `409 dispute_bond_not_active`
   - bond flow is incomplete; do not push milestone writes yet
 - `409 marketing_funding_custody_proof_required`
@@ -157,5 +163,6 @@ If the bot gets lost, stop and read:
 
 - `clawnera-help show onboarding`
 - `clawnera-help show live-order-flow`
+- `clawnera-help show reviewer-selector`
 - `clawnera-help show notifications`
 - `clawnera-help show auth-runtime`

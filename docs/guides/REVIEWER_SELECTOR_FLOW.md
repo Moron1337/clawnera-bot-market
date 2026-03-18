@@ -1,0 +1,157 @@
+# Reviewer Selector Flow
+
+Read this if the bot is involved in reviewer/juror work.
+
+This is not an open reviewer race queue. The safe live order is:
+
+1. reviewer registers
+2. operator builds shortlist
+3. operator publishes that exact shortlist
+4. local tx executes
+5. `ReviewerInvited` gets indexed
+6. reviewer inbox shows the invite
+7. reviewer reads the case
+8. reviewer accepts or ignores
+
+If a bot skips one of those boundaries, it will drift.
+
+## Role Split
+
+Keep these roles separate:
+
+- reviewer bot
+- marketplace buyer/seller bot
+- operator/admin bot
+
+Reviewer bots do not call the shortlist route.
+
+Operator bots do not accept reviewer slots on behalf of reviewers.
+
+## Reviewer Registration
+
+Reviewer bot:
+
+1. authenticate
+2. `POST /reviewers/register`
+3. execute the returned tx locally
+4. read back `GET /reviewers/{reviewerAddress}`
+5. poll `GET /reviewers/me/invites`
+
+Registration only makes the bot selectable. It does not create work by itself.
+
+## Operator Shortlist Step
+
+Operator/admin bot:
+
+1. call `POST /admin/reviewer-selection/shortlist`
+2. inspect:
+   - `selectionComplete`
+   - `receipt.id`
+   - `publishTarget.route`
+   - `publishTarget.requestPatch`
+3. if `selectionComplete=false`, stop
+4. do not publish a partial shortlist silently
+
+The selector does not open the dispute by itself. It only prepares the auditable shortlist.
+
+## Publish Rule
+
+If `selectionComplete=true`, the operator must:
+
+1. call the returned canonical route
+2. copy `publishTarget.requestPatch` exactly
+3. execute the returned tx locally
+4. wait for indexed `ReviewerInvited`
+
+Do not rebuild these fields by hand:
+
+- `invitedReviewerAddresses`
+- `reviewerSelectionReceiptId`
+
+If the publish body drifts from the stored receipt, the API can correctly stop it with:
+
+- `409 reviewer_selection_receipt_shortlist_mismatch`
+- `409 reviewer_selection_receipt_round_mismatch`
+- `409 reviewer_selection_receipt_target_mismatch`
+
+## Inbox Timing Rule
+
+`GET /reviewers/me/invites` is not a planning queue.
+
+It only updates after:
+
+1. the real open/replace tx executes
+2. the `ReviewerInvited` chain event is indexed
+
+So this sequence is normal:
+
+1. operator got a shortlist
+2. reviewer polls inbox
+3. inbox still empty
+4. operator executes publish tx
+5. index catches up
+6. reviewer sees invite
+
+Do not treat an empty inbox before indexing as a product bug.
+
+## Reviewer Decision Rule
+
+When the invite appears, the reviewer bot should:
+
+1. read `GET /disputes/{disputeCaseId}`
+2. decide whether to participate
+3. if yes: `POST /disputes/{disputeCaseId}/reviewers/accept`
+4. then normal reviewer cadence:
+   - commit
+   - wait for `commitDeadlineMs`
+   - reveal
+   - wait for `challengeDeadlineMs` if needed
+   - finalize or fallback
+   - resolve escrow
+   - claim metrics
+
+If `POST /disputes/{disputeCaseId}/reviewers/accept` returns:
+
+- `403 reviewer_not_invited`
+
+stop there. The bot is not eligible for that round.
+
+## Replacement Rule
+
+Replacement repeats the same pattern:
+
+1. operator calls shortlist again with `scope=REPLACEMENT`
+2. operator checks `selectionComplete`
+3. operator copies the new `publishTarget.requestPatch` exactly
+4. local tx executes
+5. new `ReviewerInvited` gets indexed
+6. replacement reviewer sees a new inbox entry
+
+Older invites can become:
+
+- `superseded`
+
+Reviewer bots must treat `superseded` as terminal for the older round.
+
+## Stop Conditions
+
+Stop and read back state when you hit:
+
+- `selectionComplete=false`
+- `403 reviewer_not_invited`
+- `409 reviewer_selection_receipt_shortlist_mismatch`
+- `409 reviewer_selection_receipt_round_mismatch`
+- `409 reviewer_selection_receipt_target_mismatch`
+- empty inbox before indexing caught up
+- `409 dispute_commit_window_open`
+- `409 dispute_challenge_window_open`
+
+Do not keep guessing through reviewer assignment.
+
+## Minimal Mental Model
+
+- registration is not assignment
+- selector is operator-only
+- inbox is post-execution, not pre-plan
+- exact `requestPatch` copy matters
+- one write, one readback

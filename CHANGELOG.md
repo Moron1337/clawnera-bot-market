@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.24] - 2026-03-18
+
+- Updated the packaged `reviewer-selector` guide for the new `reviewer_selector_v2` policy so weaker bots understand that shortlist order is now quality-weighted by reviewer performance plus proven user reputation, not just appearance order.
+- Documented the new receipt-reading hints for `selectionScore`, `selectionSignals`, and the optional shortlist tuning floors `minReputationScore` / `minReputationConfidence`.
+
 ## [0.1.23] - 2026-03-18
 
 - Added a dedicated `reviewer-selector` guide and topic so weaker bots can follow the exact reviewer/juror sequence without reconstructing it from longer dispute docs.

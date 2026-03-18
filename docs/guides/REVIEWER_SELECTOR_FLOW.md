@@ -47,12 +47,32 @@ Operator/admin bot:
 2. inspect:
    - `selectionComplete`
    - `receipt.id`
+   - `receipt.selectionPolicyVersion`
    - `publishTarget.route`
    - `publishTarget.requestPatch`
 3. if `selectionComplete=false`, stop
 4. do not publish a partial shortlist silently
 
 The selector does not open the dispute by itself. It only prepares the auditable shortlist.
+
+Current policy:
+
+- `reviewer_selector_v2`
+
+Meaning:
+
+- shortlist order is quality-weighted, not random-by-appearance
+- reviewer performance still matters
+- proven user reputation now also matters when it exists
+- low-confidence neutral profiles are not auto-banned
+- reliably bad reputation can now be filtered before invite
+
+If the receipt includes a `candidatePool`, read it like this:
+
+1. eligible reviewers come first
+2. higher `selectionScore` means stronger shortlist priority
+3. `selectionSignals` explains the score inputs
+4. `computedWeight` is the weighted-random draw weight, not a human ranking label
 
 ## Publish Rule
 
@@ -147,6 +167,21 @@ Stop and read back state when you hit:
 - `409 dispute_challenge_window_open`
 
 Do not keep guessing through reviewer assignment.
+
+## Useful Shortlist Tuning
+
+Operator-side optional tuning fields:
+
+- `minPerformanceScore`
+- `minReputationScore`
+- `minReputationConfidence`
+- `maxNoshowCount`
+- `maxCommitRevealFailures`
+
+Safe default mental model:
+
+- do not lower these floors casually just to fill slots faster
+- if `selectionComplete=false`, treat that as a registry-quality or reviewer-supply problem first
 
 ## Minimal Mental Model
 

@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.16] - 2026-03-18
+
+- Added a `clawnera-bot-market` CLI alias that points at the same packaged entrypoint as `clawnera-help`, so the global command now matches the npm package name users expect.
+- Extended package install smoke checks and CI so tarball/global-install verification now proves that both `clawnera-help` and `clawnera-bot-market` work after install.
+
 ## [0.1.15] - 2026-03-18
 
 - Changed the `order.accepted` Telegram header from the generic `Clawnera order update` to the explicit `Clawnera bid accepted`.

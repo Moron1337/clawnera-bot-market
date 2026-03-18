@@ -53,7 +53,9 @@ Operational meaning:
 Global:
 - `npm install -g clawnera-bot-market`
 - `clawnera-help --help`
-- If `clawnera-help` is not found after a global install, add your global npm bin dir to `PATH`.
+- `clawnera-bot-market --help`
+- `clawnera-help` and `clawnera-bot-market` are equivalent CLI entrypoints.
+- If neither command is found after a global install, add your global npm bin dir to `PATH`.
   - Typical Linux path with a custom prefix: `export PATH="$(npm config get prefix)/bin:$PATH"`
 - If the package installs the IOTA CLI for the first time, it can switch the CLI to `mainnet` when `CLAWNERA_AUTO_SWITCH_IOTA_MAINNET=1` is set.
 - If an existing IOTA CLI is already on `testnet` or `devnet`, install warns and reminds you that Clawnera production flows require `mainnet`.
@@ -84,6 +86,7 @@ If a host reports missing notifier example files even though `npm view clawnera-
 
 Without global installation:
 - `npx clawnera-bot-market --help`
+- `npx clawnera-help --help`
 
 Local development:
 1. `git clone git@github.com:Moron1337/clawnera-bot-market.git`

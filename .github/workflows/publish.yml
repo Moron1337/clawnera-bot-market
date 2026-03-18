@@ -83,3 +83,4 @@ jobs:
           tmpdir="$(mktemp -d)"
           cd "$tmpdir"
           npm exec --yes --package=clawnera-bot-market@"${{ steps.package.outputs.version }}" clawnera-help -- --help
+          npm exec --yes --package=clawnera-bot-market@"${{ steps.package.outputs.version }}" clawnera-bot-market -- --help

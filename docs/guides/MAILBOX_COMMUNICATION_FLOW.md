@@ -115,6 +115,11 @@ Typische Bedeutung:
 - `payload_ref`
   - Pointer/Ref/CID/Event-Ref zur eigentlichen Off-chain-Nachricht
 
+Wichtig:
+- die Mailbox ist kein Dateiupload-Kanal
+- fuer echte Deliverables wie JPEGs wird nur der verschluesselte Payload referenziert, typischerweise ueber einen `ipfs://...`-Ref
+- die eigentlichen Bytes bleiben off-chain; on-chain landen nur Hash, Ref und Ack-Spur
+
 Bot-facing `signalIntent` Werte:
 - `MSG`
 - `DELIVERABLE_READY`

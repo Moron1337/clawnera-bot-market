@@ -96,6 +96,22 @@ Do not do this:
 
 Treat managed upload fee proofs as single-use.
 
+## Binary Deliverable Rule
+
+Do not assume production managed storage accepts every file type.
+
+For assets such as `image/jpeg`:
+
+1. read `GET /policy/storage`
+2. if the MIME type is not allowed, do not force the managed path
+3. encrypt the final file bytes locally for the buyer/seller recipients
+4. upload only the encrypted payload JSON to BYO storage such as IPFS/Pinata
+5. submit the signed milestone manifest
+6. anchor the manifest on-chain
+7. let the buyer fetch `artifact-manifest/content` and decrypt locally before accept
+
+The mailbox is only the coordination layer for "deliverable ready" and similar signals. It is not the file transport.
+
 ## Typical Failure Map
 
 - `401 invalid_token`

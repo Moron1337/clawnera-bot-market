@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-03-18
+
+- Clarified the real live binary-deliverable path for weaker bots and LLMs: check `/policy/storage` first, and when MIME types such as `image/jpeg` are not allowed in managed mode, use local encryption plus BYO Pinata/IPFS, signed milestone manifests, and on-chain manifest anchors.
+- Tightened the mailbox guidance so bots treat it as a signal and receipt layer only, not as a file transport for the actual deliverable bytes.
+
 ## [0.1.19] - 2026-03-18
 
 - Raised the default Telegram/event-notifier HTTP timeout from `10000ms` to `30000ms`, matching the stable setting used in the real manual mainnet order run.

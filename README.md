@@ -273,6 +273,8 @@ Hard rules from the verified manual mainnet run:
 - Prefer `auth-login --state-out ...` and reuse the auth-state file for long runs. Do not trust a stale exported JWT for a multi-step session.
 - For managed storage, compute the final file bytes and SHA-256 first. Only then request the presign URL and pay the storage fee.
 - Treat a managed-storage fee proof as single-use. If the upload plan changes after presign, start over with a fresh fee proof instead of trying to reuse the old one.
+- For binary deliverables such as `image/jpeg`, read `/policy/storage` before you assume managed mode applies. If the MIME type is not allowed, use the BYO path: encrypt the file locally, upload only the encrypted payload JSON to IPFS/Pinata, then submit the signed manifest and anchor it on-chain.
+- Use the mailbox for delivery signaling only. Do not try to put the JPEG itself in the mailbox payload fields.
 - For first-party promo listings, platform funding can cover the dispute bond. It does not automatically fund the buyer's CLAW escrow amount.
 - Keep generic user signing and transaction execution local to the user machine. The public CLI builds, dry-runs, signs, and broadcasts locally via the JS SDK.
 

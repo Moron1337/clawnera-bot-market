@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.22] - 2026-03-18
+
+- Tightened the dispute docs for weaker bots and LLMs around the real live resolution path: `finalize`/fallback creates a `QuorumResolutionTicket`, that exact created object id must be fed into `/resolve-escrow`, and the returned `/resolve-escrow` plan should be treated as canonical including `disputeQuorumConfigObjectId`.
+- Documented the verified terminal behavior after dispute escrow resolution: later milestone writes correctly stop with `409 order_not_in_progress`, and redundant `/resolve-escrow` planning now reads back as `409 dispute_escrow_already_resolved`.
+
 ## [0.1.21] - 2026-03-18
 
 - Added `canonical-flow`, a single start-here live-run checklist that tells weaker bots and LLMs the exact safe order before they touch a real listing, bid, funding step, or delivery.

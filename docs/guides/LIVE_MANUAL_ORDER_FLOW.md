@@ -114,6 +114,10 @@ For assets such as `image/jpeg`:
 
 The mailbox is only the coordination layer for "deliverable ready" and similar signals. It is not the file transport.
 
+Before the first encrypted milestone delivery, both sides must register a key-agreement
+record via `PUT /users/me/key-agreement`.
+Read it back with `GET /users/{address}/key-agreement?keyVersion=1`.
+
 ## Typical Failure Map
 
 - `401 invalid_token`
@@ -124,6 +128,14 @@ The mailbox is only the coordination layer for "deliverable ready" and similar s
   - operator-side funding proof is missing for first-party promo funding
 - `409 manifest_anchor_required` or `409 manifest_anchor_not_confirmed`
   - storage submit/accept sequence is not complete yet
+- `409 dispute_commit_window_open`
+  - all reviewer commits are not old enough yet; wait until `commitDeadlineMs`
+- `409 order_not_in_progress`
+  - expected after a milestone dispute already resolved the shared escrow; the order is
+    terminal `DISPUTED`, so later milestone writes must stop there
+- `409 dispute_escrow_already_resolved`
+  - expected if someone tries to plan `/resolve-escrow` again after the shared escrow was
+    already resolved
 - managed storage fee proof rejected or already used
   - rebuild from final file bytes and start with a fresh proof
 
@@ -132,6 +144,13 @@ The mailbox is only the coordination layer for "deliverable ready" and similar s
 - sponsor gas != escrow value
 - sponsor gas != dispute-bond principal
 - promo funding can cover dispute bonds, but not every order value component
+- dispute reveal is not immediate after commit; wait for `commitDeadlineMs`
+- dispute finalize is not immediate after reveal; if quorum exists but the API returns
+  `409 dispute_challenge_window_open`, wait for `challengeDeadlineMs`
+- finalize/fallback execution creates a `QuorumResolutionTicket`; keep the created object
+  id from the chain result and feed it into `/resolve-escrow`
+- treat the `/resolve-escrow` tx-plan request as canonical, including
+  `disputeQuorumConfigObjectId`
 - one write, one readback, then next write
 
 If the bot gets lost, stop and read:

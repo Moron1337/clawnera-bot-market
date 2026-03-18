@@ -62,11 +62,23 @@ Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `claw
    - `POST /disputes/{disputeCaseId}/reviewers/accept`
 4. Vote-Phasen:
    - Commit: `POST /disputes/{disputeCaseId}/votes/commit`
+   - warten bis `commitDeadlineMs`
    - Reveal: `POST /disputes/{disputeCaseId}/votes/reveal`
 5. Abschluss:
    - Finalize/Fallback je nach Rolle und Capability.
+   - Auch nach einer Reveal-Mehrheit kann `POST /disputes/{disputeCaseId}/finalize`
+     noch `409 dispute_challenge_window_open` liefern; dann bis `challengeDeadlineMs`
+     warten und neu planen.
+   - Nach Finalize/Fallback die erzeugte `QuorumResolutionTicket`-Object-ID aus dem
+     Chain-Result lesen und fuer `/resolve-escrow` wiederverwenden.
+   - Den `/resolve-escrow`-Plan als kanonisch behandeln, inklusive
+     `disputeQuorumConfigObjectId`.
+   - Bei erneutem `/resolve-escrow` nach bereits aufgeloester Shared Escrow kommt korrekt
+     `409 dispute_escrow_already_resolved`.
 6. Immer state-first:
    - Vor Writes `GET /disputes/{disputeCaseId}` lesen.
+   - Nach erfolgreicher Escrow-Resolution ist der Order terminal `DISPUTED`; spaetere
+     Milestone-Writes muessen dort mit `409 order_not_in_progress` stoppen.
 
 ## 4) Ops Bot Playbook
 

@@ -128,6 +128,10 @@ If the MIME type is not allowed:
 4. anchor the manifest on-chain
 5. let the buyer fetch and decrypt locally before accept
 
+Before the first encrypted delivery, both buyer and seller must have a key-agreement
+record registered through `PUT /users/me/key-agreement`.
+Read it back with `GET /users/{address}/key-agreement?keyVersion=1`.
+
 ## Managed Storage Rule
 
 If you use managed storage, the safe order is:
@@ -141,6 +145,46 @@ If you use managed storage, the safe order is:
 7. read back anchor / manifest state
 
 Do not reuse a fee proof if the upload plan changed. Treat fee proofs as single-use.
+
+## Dispute Rule
+
+For milestone disputes, trust the API plan sequence:
+
+1. open dispute via `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
+2. accept reviewer slot
+3. commit votes
+4. wait until `commitDeadlineMs`
+5. reveal votes
+6. if finalize returns `409 dispute_challenge_window_open`, wait until
+   `challengeDeadlineMs`
+7. finalize or fallback
+8. resolve escrow
+
+Do not try to rebuild the dispute-open sequence by hand from contract names alone.
+The live package can require an escrow dispute-open move before the case-open move.
+After finalize/fallback execution, read the created `QuorumResolutionTicket` object id
+from the chain result and pass that exact id into `POST /disputes/{caseId}/resolve-escrow`.
+Treat the `/resolve-escrow` tx-plan request as canonical, including
+`disputeQuorumConfigObjectId`.
+If the shared escrow is already resolved, the expected response is
+`409 dispute_escrow_already_resolved`.
+After escrow resolution, the order is terminal `DISPUTED`, so later milestone writes
+must stop there.
+
+If you call reveal too early, the API now returns:
+- `409 dispute_commit_window_open`
+- `commitDeadlineMs`
+- `retryAfterMs`
+
+If you call finalize too early after reveal, the API can still return:
+- `409 dispute_challenge_window_open`
+- `challengeDeadlineMs`
+- `retryAfterMs`
+
+If you try a later milestone write after the dispute already resolved, the expected
+response is:
+- `409 order_not_in_progress`
+- `status=DISPUTED`
 
 ## Mailbox Rule
 

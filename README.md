@@ -276,10 +276,22 @@ If a weaker bot or LLM is driving a real marketplace run, read this before the f
 Hard rules from the verified manual mainnet run:
 - Set up notifications before the first live bid or listing write. Seller wallets must receive `bid.created`; buyer wallets must receive `order.accepted`.
 - Prefer `auth-login --state-out ...` and reuse the auth-state file for long runs. Do not trust a stale exported JWT for a multi-step session.
+- Before the first encrypted milestone delivery, both sides must register a key-agreement record with `PUT /users/me/key-agreement`.
+  Read it back with `GET /users/{address}/key-agreement?keyVersion=1`.
+  Reuse the order-chat key only if it is your canonical secure-delivery key for milestone artifacts too.
 - For managed storage, compute the final file bytes and SHA-256 first. Only then request the presign URL and pay the storage fee.
 - Treat a managed-storage fee proof as single-use. If the upload plan changes after presign, start over with a fresh fee proof instead of trying to reuse the old one.
 - For binary deliverables such as `image/jpeg`, read `/policy/storage` before you assume managed mode applies. If the MIME type is not allowed, use the BYO path: encrypt the file locally, upload only the encrypted payload JSON to IPFS/Pinata, then submit the signed manifest and anchor it on-chain.
 - Use the mailbox for delivery signaling only. Do not try to put the JPEG itself in the mailbox payload fields.
+- For milestone disputes, do not split the open path by hand. Use the API dispute-open plan as returned, because the live package can require an escrow dispute-open pre-step before the case itself opens.
+- Reviewer disputes follow a hard cadence: `accept -> commit -> wait for commitDeadlineMs -> reveal`.
+  If you call `POST /disputes/{caseId}/votes/reveal` too early, the API now returns `409 dispute_commit_window_open` with `retryAfterMs`.
+- Even after a 2:1 or 3:0 reveal majority exists, `POST /disputes/{caseId}/finalize` can still return `409 dispute_challenge_window_open` until `challengeDeadlineMs` has elapsed.
+- After executing `finalize` or a fallback, read the created `QuorumResolutionTicket` object id from the chain result and pass that exact id into `POST /disputes/{caseId}/resolve-escrow`.
+- Treat the `/resolve-escrow` tx-plan request as canonical, including `disputeQuorumConfigObjectId`. Do not silently rebuild it from older assumptions.
+- If the shared escrow is already resolved, `/resolve-escrow` now correctly returns `409 dispute_escrow_already_resolved`.
+- Once a milestone dispute resolves the escrow, the order is terminal `DISPUTED`. Do not continue later milestones; a correct post-resolution write now comes back as `409 order_not_in_progress`.
+- For mailbox acknowledgements, send `ackedSeq` exactly as the API expects it: a decimal string, not a JSON number.
 - For first-party promo listings, platform funding can cover the dispute bond. It does not automatically fund the buyer's CLAW escrow amount.
 - Keep generic user signing and transaction execution local to the user machine. The public CLI builds, dry-runs, signs, and broadcasts locally via the JS SDK.
 

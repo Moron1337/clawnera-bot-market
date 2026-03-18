@@ -49,7 +49,7 @@ Important:
 - `GET /auth/session`
 - `POST /auth/logout`
 - `PUT /users/me/key-agreement`
-- `GET /users/{address}/key-agreement`
+- `GET /users/{address}/key-agreement?keyVersion=1`
 - `GET /users/{address}/reputation`
 
 ### Auth session behavior
@@ -166,7 +166,7 @@ Important:
 - `POST /orders/{orderId}/mailbox/ack-plan`
   - auth required
   - requires already bound open mailbox
-  - body: `ackedSeq`
+  - body: `ackedSeq` as a decimal string, matching the API plan payload
 - `POST /orders/{orderId}/mailbox/close-plan`
   - auth required
   - requires already bound open mailbox
@@ -192,11 +192,25 @@ Important:
 - `POST /disputes/{disputeCaseId}/reviewers/accept`
 - `POST /disputes/{disputeCaseId}/votes/commit`
 - `POST /disputes/{disputeCaseId}/votes/reveal`
+  - returns `409 dispute_commit_window_open` with `commitDeadlineMs` and `retryAfterMs`
+    until the commit window has elapsed
 - `POST /disputes/{disputeCaseId}/reviewers/replace`
 - `POST /disputes/{disputeCaseId}/finalize`
+  - returns `409 dispute_challenge_window_open` with `challengeDeadlineMs` and
+    `retryAfterMs` when quorum exists but the post-reveal challenge window is still open
+  - live builder note: executing the finalize plan returns a `QuorumResolutionTicket`
+    object to the sender wallet; read its created object id from the chain result and
+    pass that id into `/resolve-escrow`
 - `POST /disputes/{disputeCaseId}/fallback/timeout`
 - `POST /disputes/{disputeCaseId}/fallback/resolve`
 - `POST /disputes/{disputeCaseId}/resolve-escrow`
+  - the returned tx-plan request is builder-ready and includes
+    `disputeQuorumConfigObjectId`
+  - once the shared escrow is already resolved, the route returns
+    `409 dispute_escrow_already_resolved`
+  - after escrow resolution, the order is terminal for later milestones; milestone
+    submit/accept/reject should read back `409 order_not_in_progress` with the
+    terminal status
 
 ### Sponsor
 - `POST /sponsor/reserve`

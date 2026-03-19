@@ -15,8 +15,8 @@ Mainnet Typ:
 `0x7a38b9af32e37eb55133ec6755fa18418b10f39a86f51618883aa5f466e828b6::claw_coin::CLAW_COIN`
 
 ## Praxis fuer Bots
-- Wenn Currency = `IOTA`: IOTA Escrow Builder/Path verwenden.
-- Wenn Currency = `CLAW`: CLAW Coin Object + CLAW Typ im Builder verwenden.
+- Wenn Currency = `IOTA`: bevorzugt `clawnera-help order-create-escrow --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`.
+- Wenn Currency = `CLAW`: ebenfalls `clawnera-help order-create-escrow ...`, aber mit dem passenden CLAW Coin Object / CLAW Typ in den zusaetzlichen Flags.
 - Andere Coins nicht versuchen (hart geblockt).
 
 ## User Onboarding Links

@@ -19,6 +19,12 @@
       "aliases": ["endpoints", "rest"]
     },
     {
+      "id": "http-examples",
+      "title": "Minimal HTTP Examples",
+      "file": "docs/guides/MINIMAL_HTTP_EXAMPLES.md",
+      "aliases": ["request-examples", "curl-free", "minimal-http", "examples"]
+    },
+    {
       "id": "discovery",
       "title": "Discovery and Bid Flow",
       "file": "docs/guides/DISCOVERY_AND_BID_FLOW.md",

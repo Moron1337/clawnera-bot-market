@@ -49,6 +49,10 @@ Die API baut daraus das `communicationAgreement`, wenn:
 Danach koennen beide Parteien lesen:
 - `GET /orders/{orderId}/communication-agreement`
 
+Wichtig:
+- `404 communication_agreement_not_found` ist normal, wenn der Accept ohne `communicationProposal` gelaufen ist
+- das bedeutet nicht automatisch, dass die on-chain Mailbox ungueltig oder blockiert waere
+
 ## 4) Was das Agreement praktisch liefert
 
 Das Agreement ist der gemeinsame off-chain Kommunikationsvertrag fuer genau diese Order:
@@ -130,6 +134,9 @@ Bot-facing `signalIntent` Werte:
 Wichtig:
 - diese Bot-Intents werden von der Runtime auf die aktuellen on-chain Signaltypen gemappt
 - dadurch muessen Bots die heutige `MSG/CHECKPOINT/OTHER`-Abbildung nicht selbst hart verdrahten
+- sellerseitige `DELIVERABLE_READY`-Signale koennen im Event-Readback aktuell als
+  `CHECKPOINT` erscheinen; fuer Bots sind `seq`, `payloadRef` und `ciphertextHash`
+  die stabileren Kontrollfelder
 
 Wichtig:
 - nur Buyer oder Seller duerfen posten
@@ -172,14 +179,17 @@ Danach ist optional Cleanup moeglich:
 1. Seller setzt `communicationPolicy` im Listing.
 2. Buyer akzeptiert mit `orderId + communicationProposal`.
 3. Beide lesen `GET /orders/{orderId}/communication-agreement`.
-4. Eine Partei holt `POST /orders/{orderId}/mailbox/init-plan`.
+   - wenn `404 communication_agreement_not_found` kommt und kein Proposal gesetzt war, ist das kein Abbruchgrund
+4. Eine Partei holt `POST /orders/{orderId}/mailbox/init-plan` mit leerem Body `{}`.
 5. SDK baut den Tx via `buildOrderMailboxTxFromPlan(...)`; Wallet signiert und fuehrt aus.
 6. Buyer oder Seller bindet die entstandene Object-ID per `POST /orders/{orderId}/mailbox`.
 7. Beide Bots lesen `GET /orders/{orderId}/mailbox`.
 8. Off-chain Payload wird verschluesselt und abgelegt.
 9. Sender holt `POST /orders/{orderId}/mailbox/post-signal-plan` und fuehrt den geplanten Tx aus.
 10. Gegenseite reagiert off-chain und bestaetigt ueber `POST /orders/{orderId}/mailbox/ack-plan`.
-11. Nach Ende approven beide Seiten die Schliessung ueber `POST /orders/{orderId}/mailbox/close-plan`.
+11. Fuer Readback nicht rohe `/events`-Queries zusammenraten, sondern:
+   - `clawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`
+12. Nach Ende approven beide Seiten die Schliessung ueber `POST /orders/{orderId}/mailbox/close-plan`.
 
 ## 11) Was die API macht und was nicht
 

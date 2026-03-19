@@ -2,20 +2,57 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execSync, spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {
   appendEd25519KeystoreEntry,
   buildAuthEnvText,
+  keypairFromSecretKey,
   defaultAuthStatePath,
   defaultIotaKeystorePath,
   loadAuthState,
   loadKeystoreEntries,
+  refreshAuthState,
   resolveKeystoreEntry,
   saveAuthState,
   signInWithKeystoreEntry,
   validateRuntimeAuthState
 } from "../lib/runtime-auth.mjs";
+import {
+  DEFAULT_ORDER_ESCROW_DEADLINE_DELTA_MS,
+  buildCreateReputationProfileTx,
+  buildManagedStorageFeeTx,
+  buildMilestoneAnchorTx,
+  buildClawdexTxFromPlan,
+  buildCreateOrderEscrowTx,
+  buildInitOrderBondTx,
+  executeTransaction,
+  extractCreatedObjectIdByTypeFragment,
+  extractCreatedObjectIdByTypeSuffix,
+  extractCreatedObjects,
+  resolveClawdexChainConfig,
+  resolveClawdexReputationProfileObjectIdByOwner,
+  dryRunTransaction,
+} from "../lib/clawdex-onchain.mjs";
+import {
+  DEFAULT_E2EE_CIPHER_SUITE,
+  assertIpfsManifestCid,
+  assertLowerHex64,
+  buildKeyAgreementBindingMessage,
+  buildManagedDeliverablePayload,
+  buildSignedMilestoneSubmitPayload,
+  createEncryptedDeliverable,
+  decryptDeliverableForRecipient,
+  normalizeManagedDeliverablePayload,
+  defaultKeyAgreementRecordPath,
+  generateKeyAgreementKeypair,
+  loadKeyAgreementRecord,
+  prepareMilestoneManifestForSigning,
+  saveKeyAgreementRecord,
+  sha256Hex,
+  writeManagedDeliverablePayload,
+  keyAgreementPublicKeyHex,
+} from "../lib/e2ee-local.mjs";
 import {
   DEFAULT_IOTA_NETWORK,
   IOTA_COIN_TYPE,
@@ -24,6 +61,7 @@ import {
   getIotaBalance,
   getIotaGas,
   normalizeIotaAddress,
+  resolveIotaRpcUrl,
   prepareIotaTransfer,
   dryRunIotaTransfer
 } from "../lib/iota-local.mjs";
@@ -61,6 +99,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
+const DEFAULT_CLAWNERA_API_BASE = "https://api.clawnera.com";
 const packageJsonFile = path.join(repoRoot, "package.json");
 const topicsFile = path.join(repoRoot, "config", "topics.json");
 const recipesFile = path.join(repoRoot, "config", "recipes.json");
@@ -75,6 +114,24 @@ const ABSOLUTE_PATH_PATTERN = /(?:^|[\s`("'])\/home\/[^\s`)"']+/;
 const TOPIC_INDEX_ENTRY_PATTERN = /^-\s+`([a-z0-9-]+)`:/;
 const ISSUE_TRACKER_URL = "https://github.com/Moron1337/clawnera-bot-market/issues";
 const ISSUE_NEW_URL = `${ISSUE_TRACKER_URL}/new/choose`;
+const MANAGED_STORAGE_MIME_BY_EXTENSION = Object.freeze({
+  json: "application/json",
+  txt: "text/plain",
+  log: "text/plain",
+  csv: "text/plain",
+  tsv: "text/plain",
+  yaml: "text/plain",
+  yml: "text/plain",
+  ini: "text/plain",
+  conf: "text/plain",
+  toml: "text/plain",
+  md: "text/markdown",
+  markdown: "text/markdown",
+  zip: "application/zip",
+  gz: "application/gzip",
+  tgz: "application/gzip",
+  tar: "application/x-tar",
+});
 const ISSUE_CATEGORY_CONFIG = Object.freeze({
   bug: {
     template: "bug_report.md",
@@ -227,7 +284,29 @@ function printUsage() {
   console.log("  clawnera-help report-issue [options]      Generate a structured GitHub issue scaffold");
   console.log("  clawnera-help path                        Print repository path");
   console.log("  clawnera-help wallet-init [options]       Create a local IOTA keystore entry without the IOTA CLI");
+  console.log("  clawnera-help wallet-list [options]       List local wallet aliases and addresses");
   console.log("  clawnera-help auth-login [options]        Create JWT + refresh token from local IOTA keystore");
+  console.log("  clawnera-help request <METHOD> <path>     Call Clawnera API with auth/env shortcuts");
+  console.log("  clawnera-help chain-config [options]      Resolve live Clawdex package/config object ids");
+  console.log("  clawnera-help tx-plan-dry-run <METHOD> <path>  Fetch API tx plan, build it locally, then dry-run");
+  console.log("  clawnera-help tx-plan-execute <METHOD> <path>  Fetch API tx plan, build it locally, sign, and broadcast");
+  console.log("  clawnera-help order-init-bond [options]   Build and execute the initial dispute-bond object locally");
+  console.log("  clawnera-help order-create-escrow [options]  Build and execute the buyer escrow creation locally");
+  console.log("  clawnera-help key-agreement-upsert [options]  Bind a local E2EE key-agreement key to the actor wallet");
+  console.log("  clawnera-help reputation-init [options]   Create the actor reputation profile on-chain locally");
+  console.log("  clawnera-help reviewer-register [options]  Register the actor as a reviewer with auto-filled live config");
+  console.log("  clawnera-help deliverable-encrypt [options]  Encrypt one seller deliverable for seller + buyer locally");
+  console.log("  clawnera-help managed-storage-fee-pay [options]  Pay the managed storage fee on-chain locally");
+  console.log("  clawnera-help managed-storage-presign [options]  Get a signed managed-storage upload URL");
+  console.log("  clawnera-help managed-storage-upload [options]   Upload the encrypted JSON payload to managed storage");
+  console.log("  clawnera-help reviewer-shortlist [options]   Build the canonical operator shortlist body with live checkpoint digest");
+  console.log("  clawnera-help mailbox-events [options]      Read mailbox posted/acked events without raw /events guessing");
+  console.log("  clawnera-help pinata-upload-json [options]    Upload encrypted deliverable JSON to Pinata");
+  console.log("  clawnera-help milestone-submit-byo [options]  Sign and submit one managed milestone manifest");
+  console.log("  clawnera-help milestone-anchor [options]      Create and bind the on-chain manifest anchor locally");
+  console.log("  clawnera-help milestone-reject [options]      Compute rejectionReasonHash locally and reject a milestone");
+  console.log("  clawnera-help deliverable-decrypt [options]   Decrypt one managed deliverable locally");
+  console.log("  clawnera-help reviewer-vote-prepare [options]  Compute canonical reviewer commit/reveal payloads");
   console.log("  clawnera-help iota-active-env [options]   Show local IOTA RPC/keystore runtime config");
   console.log("  clawnera-help iota-get-balance [options]  Read local wallet balances via the IOTA SDK");
   console.log("  clawnera-help iota-get-gas [options]      Read local IOTA gas coins via the IOTA SDK");
@@ -331,6 +410,14 @@ function printRecipe(recipe) {
     console.log("Steps:");
     for (let index = 0; index < recipe.steps.length; index += 1) {
       console.log(`${index + 1}. ${recipe.steps[index]}`);
+    }
+  }
+  if (Array.isArray(recipe.examples) && recipe.examples.length > 0) {
+    console.log("");
+    console.log("Examples:");
+    for (const example of recipe.examples) {
+      console.log(example);
+      console.log("");
     }
   }
   if (Array.isArray(recipe.stopConditions) && recipe.stopConditions.length > 0) {
@@ -956,6 +1043,10 @@ function parseLongOptions(args) {
   return { options, positionals };
 }
 
+function normalizeString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function parsePositiveIntOption(rawValue, fieldName, fallback) {
   if (rawValue === undefined || rawValue === null || rawValue === "") {
     return fallback;
@@ -971,6 +1062,21 @@ function parsePositiveIntOption(rawValue, fieldName, fallback) {
   return parsed;
 }
 
+function parseU8Option(rawValue, fieldName, fallback) {
+  if (rawValue === undefined || rawValue === null || rawValue === "") {
+    return fallback;
+  }
+  const normalized = String(rawValue).trim();
+  if (!/^\d+$/.test(normalized)) {
+    throw new Error(`invalid_${fieldName}`);
+  }
+  const parsed = Number(normalized);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 255) {
+    throw new Error(`invalid_${fieldName}`);
+  }
+  return parsed;
+}
+
 function parsePositiveBigIntOption(rawValue, fieldName) {
   const normalized = String(rawValue ?? "").trim();
   if (!normalized || !/^\d+$/.test(normalized)) {
@@ -981,6 +1087,136 @@ function parsePositiveBigIntOption(rawValue, fieldName) {
     throw new Error(`invalid_${fieldName}`);
   }
   return parsed;
+}
+
+function parseOptionalIsoTimestamp(rawValue) {
+  const normalized = typeof rawValue === "string" ? rawValue.trim() : "";
+  if (!normalized) {
+    return null;
+  }
+  const parsed = Date.parse(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function inferManagedStorageMimeType(filePath, explicitValue = "") {
+  const explicit = typeof explicitValue === "string" ? explicitValue.trim().toLowerCase() : "";
+  if (explicit) {
+    return explicit;
+  }
+  const extension = path.extname(String(filePath || "")).replace(/^\./, "").toLowerCase();
+  return MANAGED_STORAGE_MIME_BY_EXTENSION[extension] || "";
+}
+
+function computeFileMetadata(targetPath, explicitMimeType = "") {
+  const buffer = fs.readFileSync(targetPath);
+  const fileName = path.basename(targetPath);
+  const mimeType = inferManagedStorageMimeType(targetPath, explicitMimeType);
+  if (!mimeType) {
+    throw new Error("missing_mime_type");
+  }
+  return {
+    fileName,
+    mimeType,
+    fileSizeBytes: buffer.length,
+    sha256: createHash("sha256").update(buffer).digest("hex"),
+    buffer,
+  };
+}
+
+function defaultManagedStorageFeeProofPath(orderId, milestoneId) {
+  return path.resolve(process.cwd(), `clawnera-managed-storage-fee-${orderId}-${milestoneId}.json`);
+}
+
+function defaultManagedStoragePresignPath(orderId, milestoneId) {
+  return path.resolve(process.cwd(), `clawnera-managed-storage-presign-${orderId}-${milestoneId}.json`);
+}
+
+function defaultManagedStorageUploadPath(orderId, milestoneId) {
+  return path.resolve(process.cwd(), `clawnera-managed-storage-upload-${orderId}-${milestoneId}.json`);
+}
+
+function normalizeManagedStoragePaymentProof(input) {
+  const candidate =
+    input && typeof input === "object" && !Array.isArray(input) && input.paymentProof && typeof input.paymentProof === "object"
+      ? input.paymentProof
+      : input;
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    throw new Error("invalid_payment_proof_file");
+  }
+  const txDigest = typeof candidate.txDigest === "string" ? candidate.txDigest.trim() : "";
+  const amountAtomic = typeof candidate.amountAtomic === "string" ? candidate.amountAtomic.trim() : "";
+  const asset = typeof candidate.asset === "string" ? candidate.asset.trim().toUpperCase() : "";
+  const recipientAddress =
+    typeof candidate.recipientAddress === "string" && candidate.recipientAddress.trim()
+      ? normalizeIotaAddress(candidate.recipientAddress)
+      : "";
+  if (!txDigest || !amountAtomic || !/^[1-9][0-9]*$/.test(amountAtomic) || !asset) {
+    throw new Error("invalid_payment_proof_file");
+  }
+  return {
+    txDigest,
+    amountAtomic,
+    asset,
+    recipientAddress: recipientAddress || undefined,
+  };
+}
+
+function parseManagedStoragePresignBundle(input) {
+  const record = input && typeof input === "object" && !Array.isArray(input) ? input : null;
+  if (!record) {
+    throw new Error("invalid_managed_storage_presign_file");
+  }
+  const signedUrl =
+    typeof record?.response?.upload?.signedUrl === "string"
+      ? record.response.upload.signedUrl.trim()
+      : typeof record?.upload?.signedUrl === "string"
+        ? record.upload.signedUrl.trim()
+        : typeof record?.signedUrl === "string"
+          ? record.signedUrl.trim()
+          : "";
+  const expiresAtRaw =
+    typeof record?.response?.upload?.expiresAt === "string"
+      ? record.response.upload.expiresAt
+      : typeof record?.upload?.expiresAt === "string"
+        ? record.upload.expiresAt
+        : typeof record?.expiresAt === "string"
+          ? record.expiresAt
+          : "";
+  const request = record.request && typeof record.request === "object" && !Array.isArray(record.request) ? record.request : {};
+  return {
+    signedUrl,
+    expiresAt: expiresAtRaw || null,
+    fileName: typeof request.fileName === "string" ? request.fileName.trim() : "",
+    mimeType: typeof request.mimeType === "string" ? request.mimeType.trim().toLowerCase() : "",
+    fileSizeBytes: Number.isInteger(request.fileSizeBytes) ? request.fileSizeBytes : null,
+    sha256: typeof request.sha256 === "string" ? request.sha256.trim().toLowerCase() : "",
+    orderId: typeof record.orderId === "string" ? record.orderId.trim() : "",
+    milestoneId: typeof record.milestoneId === "string" ? record.milestoneId.trim() : "",
+    raw: record,
+  };
+}
+
+function parseSignedUploadPayload(rawBody) {
+  const payload =
+    rawBody && typeof rawBody === "object" && !Array.isArray(rawBody)
+      ? rawBody
+      : {};
+  const data =
+    payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)
+      ? payload.data
+      : {};
+  const cid = typeof payload.IpfsHash === "string"
+    ? payload.IpfsHash.trim()
+    : typeof data.cid === "string"
+      ? data.cid.trim()
+      : "";
+  return {
+    cid,
+    ipfsUri: cid ? `ipfs://${cid}` : null,
+    pinSize: Number.isFinite(payload.PinSize) ? payload.PinSize : Number.isFinite(data.size) ? data.size : null,
+    timestamp: typeof payload.Timestamp === "string" ? payload.Timestamp : typeof data.created_at === "string" ? data.created_at : null,
+    raw: payload,
+  };
 }
 
 function parseCommaSeparatedIotaAddresses(rawValue, fieldName) {
@@ -1076,6 +1312,12 @@ async function requestJson(url, init, timeoutMs) {
   } finally {
     clearTimeout(timeoutHandle);
   }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function parseBuildOutputPayload(stdout) {
@@ -1286,11 +1528,47 @@ function iotaExecuteTransferUsageLines() {
     "- Optional local signer selector: --signer-address <0x...> or --signer-alias <alias>",
     "- Optional: --signature <base64> to execute a pre-signed tx instead of signing locally",
     "- Signs and broadcasts locally on the user machine; the Clawnera worker does not custody user keys",
+    "- The returned tx_digest is the canonical handle for later on-chain readback",
   ];
 }
 
 function shellQuote(value) {
   return `'${String(value ?? "").replace(/'/g, `'\"'\"'`)}'`;
+}
+
+function bufferFromHex(value, fieldName) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (!/^[a-f0-9]+$/.test(normalized) || normalized.length % 2 !== 0) {
+    throw new Error(`invalid_${fieldName}`);
+  }
+  return Buffer.from(normalized, "hex");
+}
+
+function normalizeReviewerVoteValue(value) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (normalized === "0" || normalized === "buyer") {
+    return 0;
+  }
+  if (normalized === "1" || normalized === "seller") {
+    return 1;
+  }
+  throw new Error("invalid_vote");
+}
+
+function computeReviewerVoteCommitHashHex(caseId, reviewerAddress, vote, nonceHex) {
+  const normalizedCaseId = normalizeIotaAddress(caseId);
+  const normalizedReviewerAddress = normalizeIotaAddress(reviewerAddress);
+  if (!normalizedCaseId) {
+    throw new Error("invalid_case_id");
+  }
+  if (!normalizedReviewerAddress) {
+    throw new Error("invalid_reviewer_address");
+  }
+  const caseBytes = Buffer.from(normalizedCaseId.slice(2), "hex");
+  const reviewerBytes = Buffer.from(normalizedReviewerAddress.slice(2), "hex");
+  const nonceBytes = bufferFromHex(nonceHex, "nonce_hex");
+  const payload = Buffer.concat([Buffer.from([vote]), caseBytes, reviewerBytes, nonceBytes]);
+  return createHash("sha256").update(payload).digest("hex");
 }
 
 function parseCliJsonStdout(rawValue) {
@@ -1898,6 +2176,117 @@ function parseSimpleEnvFile(raw) {
   return out;
 }
 
+function resolveOptionalPathOption(rawValue) {
+  return typeof rawValue === "string" && rawValue.trim() ? path.resolve(String(rawValue).trim()) : "";
+}
+
+function inferHomeDirFromAuthStatePath(authStateFile) {
+  const resolved = resolveOptionalPathOption(authStateFile);
+  if (!resolved) {
+    return "";
+  }
+  const normalized = resolved.split(path.sep).join("/");
+  const marker = "/.config/clawnera/";
+  const markerIndex = normalized.lastIndexOf(marker);
+  if (markerIndex <= 0) {
+    return "";
+  }
+  return path.resolve(normalized.slice(0, markerIndex));
+}
+
+function resolvePreferredKeystorePath(options = {}, context = {}) {
+  const explicitPath = resolveOptionalPathOption(options["keystore-path"]);
+  if (explicitPath) {
+    return explicitPath;
+  }
+  const inferredHome = inferHomeDirFromAuthStatePath(context?.authStateFile || "");
+  if (inferredHome) {
+    const inferredKeystorePath = defaultIotaKeystorePath(inferredHome);
+    if (fs.existsSync(inferredKeystorePath)) {
+      return inferredKeystorePath;
+    }
+  }
+  return defaultIotaKeystorePath();
+}
+
+async function resolveApiRuntimeContext(options = {}) {
+  const envFile = resolveOptionalPathOption(options["env-file"]);
+  const authStateFile = resolveOptionalPathOption(options["auth-state-file"]);
+  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 8_000);
+  const explicitApiBase = normalizeApiBase(options["api-base"] || process.env.CLAWNERA_API_BASE_URL);
+  const explicitJwt =
+    typeof options.jwt === "string" ? String(options.jwt).trim() : String(process.env.CLAWNERA_API_JWT || "").trim();
+  let envValues = {};
+  let authState = null;
+  let authStateRefreshed = false;
+
+  if (envFile) {
+    if (!fs.existsSync(envFile)) {
+      throw new Error("missing_env_file");
+    }
+    envValues = parseSimpleEnvFile(fs.readFileSync(envFile, "utf8"));
+  }
+
+  if (authStateFile) {
+    if (!fs.existsSync(authStateFile)) {
+      throw new Error("missing_auth_state_file");
+    }
+    authState = await loadAuthState(authStateFile);
+    const apiBaseForValidation =
+      explicitApiBase ||
+      normalizeApiBase(envValues.CLAWNERA_API_BASE_URL || process.env.CLAWNERA_API_BASE_URL || authState.apiBase) ||
+      DEFAULT_CLAWNERA_API_BASE;
+    let authValidation = validateRuntimeAuthState(authState, {
+      apiBaseFallback: apiBaseForValidation,
+      requiredApiBase: explicitApiBase || "",
+      refreshSkewMs: 60_000
+    });
+    const shouldTryRefresh =
+      authState.refreshToken &&
+      apiBaseForValidation &&
+      authValidation.issues.length > 0 &&
+      authValidation.issues.every((issue) =>
+        ["missing_or_invalid_auth_token", "invalid_auth_token_format", "expired_auth_no_refresh"].includes(issue)
+      );
+    if (!authValidation.ok && shouldTryRefresh) {
+      authState = await refreshAuthState({
+        apiBase: apiBaseForValidation,
+        authState,
+        timeoutMs
+      });
+      await saveAuthState(authStateFile, authState);
+      authStateRefreshed = true;
+      authValidation = validateRuntimeAuthState(authState, {
+        apiBaseFallback: apiBaseForValidation,
+        requiredApiBase: explicitApiBase || "",
+        refreshSkewMs: 60_000
+      });
+    }
+    if (!authValidation.ok) {
+      throw new Error(authValidation.issues[0] || "invalid_auth_state");
+    }
+    authState = authValidation.authState;
+  }
+
+  const apiBase =
+    explicitApiBase ||
+    normalizeApiBase(envValues.CLAWNERA_API_BASE_URL || process.env.CLAWNERA_API_BASE_URL) ||
+    authState?.apiBase ||
+    DEFAULT_CLAWNERA_API_BASE ||
+    null;
+  const jwt = explicitJwt || String(envValues.CLAWNERA_API_JWT || "").trim() || authState?.token || "";
+
+  return {
+    apiBase,
+    jwt,
+    envFile: envFile || null,
+    envValues,
+    authStateFile: authStateFile || null,
+    authState,
+    authStateRefreshed
+  };
+}
+
 function notificationsPresetPayload() {
   return notificationPresetNames().map((name) => ({
     id: name,
@@ -2392,6 +2781,4102 @@ async function runNotifications(commandArgs) {
   };
 }
 
+async function runWalletList(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: walletListUsageLines()
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals
+    };
+  }
+
+  const keystorePath = resolveOptionalPathOption(options["keystore-path"]) || defaultIotaKeystorePath();
+  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 5_000);
+  const iotaCliPath = String(options["iota-cli"] || process.env.IOTA_CLI_PATH || "iota").trim() || "iota";
+
+  try {
+    const entries = await loadKeystoreEntries(keystorePath);
+    const activeAddressResult = detectActiveAddressViaCli(iotaCliPath, timeoutMs);
+    const activeCliAddress =
+      activeAddressResult.ok && activeAddressResult.address ? normalizeIotaAddress(activeAddressResult.address) : "";
+    return {
+      ok: true,
+      keystorePath,
+      entryCount: entries.length,
+      activeCliAddress: activeCliAddress || null,
+      activeCliAddressDetected: Boolean(activeCliAddress),
+      entries: entries.map((entry) => ({
+        alias: entry.alias || null,
+        address: entry.address,
+        active: Boolean(activeCliAddress && normalizeIotaAddress(entry.address) === activeCliAddress)
+      }))
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "wallet_list_failed"
+    };
+  }
+}
+
+function parseApiMethodPath(positionals) {
+  if (positionals.length < 2) {
+    throw new Error("missing_request_method_or_path");
+  }
+
+  const method = String(positionals[0] || "").trim().toUpperCase();
+  const rawPath = String(positionals[1] || "").trim();
+  if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    throw new Error("invalid_request_method");
+  }
+  if (!rawPath) {
+    throw new Error("missing_request_path");
+  }
+  return { method, rawPath };
+}
+
+function resolveBodySelectionPath(jsonBody, selector) {
+  const selection = String(selector || "").trim();
+  if (!selection) {
+    return jsonBody;
+  }
+  const segments = selection
+    .split(".")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  if (segments.length === 0) {
+    return jsonBody;
+  }
+  let current = jsonBody;
+  for (const segment of segments) {
+    if (!current || typeof current !== "object" || Array.isArray(current) || !(segment in current)) {
+      throw new Error(`body_select_not_found:${selection}`);
+    }
+    current = current[segment];
+  }
+  return current;
+}
+
+function loadApiRequestBody(options = {}) {
+  const bodyFile = resolveOptionalPathOption(options["body-file"]);
+  const bodySelect = typeof options["body-select"] === "string" ? options["body-select"].trim() : "";
+  const bodyRaw =
+    typeof options.body === "string" && options.body.trim()
+      ? options.body
+      : bodyFile
+        ? fs.readFileSync(bodyFile, "utf8")
+        : "";
+  let body = "";
+  let jsonBody = null;
+  if (bodyRaw) {
+    jsonBody = JSON.parse(bodyRaw);
+    jsonBody = resolveBodySelectionPath(jsonBody, bodySelect);
+    body = JSON.stringify(jsonBody);
+  }
+  return { body, jsonBody, bodyFile: bodyFile || null, bodySelect: bodySelect || null };
+}
+
+async function callApiRoute({ method, rawPath, options = {}, timeoutMs = 20_000 }) {
+  const context = await resolveApiRuntimeContext({
+    ...options,
+    "timeout-ms": timeoutMs
+  });
+  const runtimeContext = { ...context };
+  const { body, jsonBody, bodyFile, bodySelect } = loadApiRequestBody(options);
+  const apiBase = normalizeApiBase(rawPath) ? "" : runtimeContext.apiBase;
+  if (!normalizeApiBase(rawPath) && !apiBase) {
+    throw new Error("missing_or_invalid_api_base");
+  }
+
+  const idempotencyMode =
+    typeof options["idempotency-key"] === "string" && options["idempotency-key"].trim()
+      ? String(options["idempotency-key"]).trim()
+      : ["POST", "PUT", "PATCH"].includes(method)
+        ? "auto"
+        : "";
+  const idempotencyKey = idempotencyMode === "auto" ? randomUUID() : idempotencyMode;
+  const url = normalizeApiBase(rawPath) ? rawPath : `${apiBase}${rawPath.startsWith("/") ? rawPath : `/${rawPath}`}`;
+  const buildHeaders = () => {
+    const headers = {};
+    if (runtimeContext.jwt) {
+      headers.authorization = `Bearer ${runtimeContext.jwt}`;
+    }
+    if (body) {
+      headers["content-type"] = "application/json";
+    }
+    if (idempotencyKey) {
+      headers["idempotency-key"] = idempotencyKey;
+    }
+    return headers;
+  };
+
+  let result = await requestJson(
+    url,
+    {
+      method,
+      headers: buildHeaders(),
+      ...(body ? { body } : {})
+    },
+    timeoutMs
+  );
+
+  const shouldRetryInvalidToken =
+    result.status === 401 &&
+    runtimeContext.authStateFile &&
+    runtimeContext.authState?.refreshToken &&
+    !runtimeContext.authStateRefreshed &&
+    result.body &&
+    typeof result.body === "object" &&
+    !Array.isArray(result.body) &&
+    result.body.error === "invalid_token" &&
+    !options.jwt;
+
+  if (shouldRetryInvalidToken) {
+    const refreshedAuthState = await refreshAuthState({
+      apiBase: apiBase || normalizeApiBase(rawPath),
+      authState: runtimeContext.authState,
+      timeoutMs,
+    });
+    await saveAuthState(runtimeContext.authStateFile, refreshedAuthState);
+    runtimeContext.authState = refreshedAuthState;
+    runtimeContext.jwt = refreshedAuthState.token;
+    runtimeContext.authStateRefreshed = true;
+    result = await requestJson(
+      url,
+      {
+        method,
+        headers: buildHeaders(),
+        ...(body ? { body } : {})
+      },
+      timeoutMs
+    );
+  }
+
+  return {
+    context: runtimeContext,
+    apiBase: apiBase || normalizeApiBase(rawPath),
+    idempotencyKey: idempotencyKey || null,
+    method,
+    rawPath,
+    url,
+    body,
+    jsonBody,
+    bodyFile,
+    bodySelect,
+    result,
+  };
+}
+
+function detectTxPlanPayload(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return null;
+  }
+  const txBuilder = typeof body.txBuilder === "string" ? body.txBuilder.trim() : "";
+  const request = body.request;
+  if (!txBuilder || !request || typeof request !== "object" || Array.isArray(request)) {
+    return null;
+  }
+  return {
+    txBuilder,
+    request,
+    inviteBinding:
+      body.inviteBinding && typeof body.inviteBinding === "object" && !Array.isArray(body.inviteBinding)
+        ? body.inviteBinding
+        : null,
+    txMoveCall: body.txMoveCall ?? null,
+  };
+}
+
+function resolveTxExecutionDigest(executed) {
+  return typeof executed?.result?.digest === "string" && executed.result.digest.trim()
+    ? executed.result.digest.trim()
+    : typeof executed?.digest === "string" && executed.digest.trim()
+      ? executed.digest.trim()
+      : null;
+}
+
+function resolveDisputeCaseObjectIdForInviteBinding(txPlan, executed) {
+  const requestDisputeCaseObjectId = normalizeIotaAddress(txPlan?.request?.disputeCaseObjectId || "");
+  if (requestDisputeCaseObjectId) {
+    return requestDisputeCaseObjectId;
+  }
+  return (
+    extractCreatedObjectIdByTypeSuffix(executed, "::dispute_quorum::MilestoneDisputeCase") ||
+    extractCreatedObjectIdByTypeFragment(executed, "::dispute_quorum::MilestoneDisputeCase") ||
+    null
+  );
+}
+
+function resolveRuntimeSigner(options = {}, context = {}) {
+  const keystorePath = resolvePreferredKeystorePath(options, context);
+  const explicitAlias = typeof options.alias === "string" ? options.alias.trim() : "";
+  const explicitAddress = normalizeIotaAddress(options.address || "");
+  const envAlias =
+    typeof context?.envValues?.CLAWNERA_API_ADDRESS_ALIAS === "string"
+      ? context.envValues.CLAWNERA_API_ADDRESS_ALIAS.trim()
+      : "";
+  const authAlias = typeof context?.authState?.alias === "string" ? context.authState.alias.trim() : "";
+  const authAddress = normalizeIotaAddress(context?.authState?.address || context?.envValues?.CLAWNERA_API_ADDRESS || "");
+  return {
+    keystorePath,
+    alias: explicitAlias || envAlias || authAlias || null,
+    address: explicitAddress || authAddress || null,
+  };
+}
+
+async function resolveRuntimeSignerEntry(options = {}, context = {}) {
+  const signer = resolveRuntimeSigner(options, context);
+  const entries = await loadKeystoreEntries(signer.keystorePath);
+  if (entries.length === 0) {
+    throw new Error("no_local_keystore_entries");
+  }
+  const selected = resolveKeystoreEntry(entries, { address: signer.address, alias: signer.alias });
+  if (!selected) {
+    throw new Error("keystore_entry_not_found");
+  }
+  const keypair = await keypairFromSecretKey(selected.secretKey);
+  return {
+    ...signer,
+    entry: selected,
+    keypair,
+  };
+}
+
+function readJsonFileSync(targetPath, errorCode) {
+  try {
+    return JSON.parse(fs.readFileSync(targetPath, "utf8"));
+  } catch (error) {
+    throw new Error(errorCode || (error instanceof Error ? error.message : "json_read_failed"));
+  }
+}
+
+function asRecord(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value;
+}
+
+function normalizeSha256HashOption(rawValue, fieldName) {
+  const normalized = String(rawValue ?? "").trim().toLowerCase();
+  if (!normalized) {
+    throw new Error(`missing_${fieldName}`);
+  }
+  const withoutPrefix = normalized.startsWith("sha256:") ? normalized.slice("sha256:".length) : normalized;
+  return assertLowerHex64(withoutPrefix, fieldName);
+}
+
+function resolveKeyAgreementRecordPathOption(address, keyVersion, value, authStateFile = "") {
+  if (typeof value === "string" && value.trim()) {
+    return path.resolve(value.trim());
+  }
+  const inferredHome = inferHomeDirFromAuthStatePath(authStateFile);
+  return defaultKeyAgreementRecordPath(address, keyVersion, inferredHome || undefined);
+}
+
+function buildTxPlanNextCommandHint(method, rawPath, { body, bodyFile, bodySelect } = {}) {
+  const parts = ["clawnera-help", "tx-plan-execute", method, shellQuote(rawPath)];
+  if (bodyFile) {
+    parts.push("--body-file", shellQuote(bodyFile));
+    if (bodySelect) {
+      parts.push("--body-select", shellQuote(bodySelect));
+    }
+  } else if (body) {
+    parts.push("--body", shellQuote(body));
+  }
+  return parts.join(" ");
+}
+
+function resolveApiPathname(rawPath, apiBase = "") {
+  try {
+    const url = normalizeApiBase(rawPath)
+      ? rawPath
+      : `${apiBase}${String(rawPath || "").startsWith("/") ? rawPath : `/${rawPath}`}`;
+    return new URL(url).pathname;
+  } catch {
+    return "";
+  }
+}
+
+function classifyReviewerSelfTxPlanRoute(method, rawPath, apiBase = "") {
+  if (String(method || "").toUpperCase() !== "POST") {
+    return null;
+  }
+  const pathname = resolveApiPathname(rawPath, apiBase);
+  if (!pathname) {
+    return null;
+  }
+  const acceptMatch = pathname.match(/^\/disputes\/(0x[a-f0-9]+)\/reviewers\/accept$/i);
+  if (acceptMatch) {
+    return {
+      kind: "accept",
+      disputeCaseId: normalizeIotaAddress(acceptMatch[1] || ""),
+    };
+  }
+  const commitMatch = pathname.match(/^\/disputes\/(0x[a-f0-9]+)\/votes\/commit$/i);
+  if (commitMatch) {
+    return {
+      kind: "commit",
+      disputeCaseId: normalizeIotaAddress(commitMatch[1] || ""),
+    };
+  }
+  const revealMatch = pathname.match(/^\/disputes\/(0x[a-f0-9]+)\/votes\/reveal$/i);
+  if (revealMatch) {
+    return {
+      kind: "reveal",
+      disputeCaseId: normalizeIotaAddress(revealMatch[1] || ""),
+    };
+  }
+  const claimMetricsMatch = pathname.match(/^\/reviewers\/(0x[a-f0-9]+)\/claim-metrics$/i);
+  if (claimMetricsMatch) {
+    return {
+      kind: "claim_metrics",
+      reviewerAddress: normalizeIotaAddress(claimMetricsMatch[1] || ""),
+    };
+  }
+  return null;
+}
+
+function resolveClaimMetricsDisputeCaseCandidate(invitesBody, reviewerAddress) {
+  const reviewer = normalizeIotaAddress(reviewerAddress || "");
+  const inviteList = Array.isArray(invitesBody?.invites) ? invitesBody.invites : [];
+  const closedStatuses = new Set(["closed", "stale", "expired", "superseded", "unavailable"]);
+  const candidates = [];
+  for (const entry of inviteList) {
+    const invite = asRecord(entry);
+    if (!invite) {
+      continue;
+    }
+    const inviteReviewer = normalizeIotaAddress(invite.reviewerAddress || "");
+    if (!inviteReviewer || (reviewer && inviteReviewer !== reviewer)) {
+      continue;
+    }
+    const inviteStatus = typeof invite.status === "string" ? invite.status.toLowerCase() : "";
+    if (!closedStatuses.has(inviteStatus)) {
+      continue;
+    }
+    const disputeCaseObjectId = normalizeIotaAddress(invite.disputeCaseObjectId || "");
+    if (!disputeCaseObjectId) {
+      continue;
+    }
+    const disputeCase = asRecord(invite.disputeCase);
+    const closedAtMs = Number(disputeCase?.closedAtMs || 0);
+    const invitedAtMs = Number(invite.invitedAtMs || 0);
+    candidates.push({
+      disputeCaseObjectId,
+      closedAtMs: Number.isFinite(closedAtMs) ? closedAtMs : 0,
+      invitedAtMs: Number.isFinite(invitedAtMs) ? invitedAtMs : 0,
+    });
+  }
+  const uniqueCandidateIds = [...new Set(candidates.map((candidate) => candidate.disputeCaseObjectId))];
+  if (uniqueCandidateIds.length !== 1) {
+    return {
+      ok: false,
+      disputeCaseObjectIds: uniqueCandidateIds,
+    };
+  }
+  const bestCandidate = candidates
+    .filter((candidate) => candidate.disputeCaseObjectId === uniqueCandidateIds[0])
+    .sort((left, right) => (right.closedAtMs - left.closedAtMs) || (right.invitedAtMs - left.invitedAtMs))[0];
+  return {
+    ok: true,
+    disputeCaseObjectId: bestCandidate?.disputeCaseObjectId || uniqueCandidateIds[0],
+  };
+}
+
+async function maybeRetryReviewerSelfTxPlanRequest({ method, rawPath, options, timeoutMs, apiCall }) {
+  if (apiCall.result.ok) {
+    return null;
+  }
+  const route = classifyReviewerSelfTxPlanRoute(method, rawPath, apiCall.apiBase);
+  if (!route) {
+    return null;
+  }
+  const responseError = typeof apiCall.result.body?.error === "string" ? apiCall.result.body.error : "";
+  const shouldRetry =
+    (apiCall.result.status === 400 && responseError === "invalid_request") ||
+    (apiCall.result.status === 400 && responseError === "dispute_case_object_id_required") ||
+    (apiCall.result.status === 409 &&
+      responseError === "reviewer_reputation_profile_not_found");
+  if (!shouldRetry) {
+    return null;
+  }
+  const helperOptions = { ...options };
+  delete helperOptions.body;
+  delete helperOptions["body-file"];
+  delete helperOptions["body-select"];
+  delete helperOptions["idempotency-key"];
+  const currentBody = asRecord(apiCall.jsonBody) || {};
+  const metricsCall = await callApiRoute({
+    method: "GET",
+    rawPath: "/reviewers/me/metrics",
+    options: helperOptions,
+    timeoutMs,
+  });
+  if (!metricsCall.result.ok) {
+    return {
+      ok: false,
+      error: "reviewer_self_context_lookup_failed",
+      metricsStatus: metricsCall.result.status,
+      metricsResponse: metricsCall.result.body,
+    };
+  }
+  const reviewer = asRecord(metricsCall.result.body?.reviewer);
+  const reviewerRuntime = asRecord(metricsCall.result.body?.runtime);
+  if (metricsCall.result.body?.registered !== true || !reviewer) {
+      return {
+        ok: false,
+        error: "reviewer_not_registered",
+      };
+  }
+  const reviewerEntryObjectId = normalizeIotaAddress(reviewer.objectId || "");
+  const reviewerOwnerAddress =
+    normalizeIotaAddress(metricsCall.result.body?.reviewerAddress || "") || normalizeIotaAddress(reviewer.owner || "");
+  if (!reviewerEntryObjectId) {
+    return {
+      ok: false,
+      error: "reviewer_entry_object_missing",
+    };
+  }
+  const mergedBody = { ...currentBody };
+  let reviewerRegistryObjectIdHint = normalizeIotaAddress(reviewerRuntime?.reviewerRegistryObjectId || "");
+  let disputeQuorumConfigObjectIdHint = normalizeIotaAddress(reviewerRuntime?.disputeQuorumConfigObjectId || "");
+  let resolvedReputationProfileObjectId = "";
+  if (route.kind === "accept") {
+    const { chainConfig } = await fetchPolicyAndChainConfig(helperOptions, {
+      requireDisputeQuorumConfig: true,
+      requireEscrowFeeConfig: false,
+      requireGovernanceConfig: false,
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+    reviewerRegistryObjectIdHint = reviewerRegistryObjectIdHint || chainConfig.reviewerRegistryObjectId || "";
+    disputeQuorumConfigObjectIdHint = disputeQuorumConfigObjectIdHint || chainConfig.disputeQuorumConfigObjectId;
+    resolvedReputationProfileObjectId = normalizeIotaAddress(metricsCall.result.body?.reputationProfileObjectId || "");
+    if (!resolvedReputationProfileObjectId) {
+      try {
+        resolvedReputationProfileObjectId = await resolveClawdexReputationProfileObjectIdByOwner({
+          packageId: chainConfig.packageId,
+          ownerAddress: reviewerOwnerAddress,
+          disputeQuorumConfigObjectId: disputeQuorumConfigObjectIdHint,
+          network: options.network,
+          rpcUrl: options["rpc-url"],
+        });
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : "reviewer_reputation_profile_lookup_failed",
+        };
+      }
+    }
+    mergedBody.reviewerRegistryObjectId =
+      normalizeIotaAddress(mergedBody.reviewerRegistryObjectId || "") || reviewerRegistryObjectIdHint;
+    mergedBody.reviewerEntryObjectId =
+      normalizeIotaAddress(mergedBody.reviewerEntryObjectId || "") || reviewerEntryObjectId;
+    mergedBody.reputationProfileObjectId =
+      normalizeIotaAddress(mergedBody.reputationProfileObjectId || "") || resolvedReputationProfileObjectId;
+    mergedBody.disputeQuorumConfigObjectId =
+      normalizeIotaAddress(mergedBody.disputeQuorumConfigObjectId || "") || disputeQuorumConfigObjectIdHint;
+    if (
+      !mergedBody.reviewerRegistryObjectId ||
+      !mergedBody.reviewerEntryObjectId ||
+      !mergedBody.reputationProfileObjectId ||
+      !mergedBody.disputeQuorumConfigObjectId
+    ) {
+      return {
+        ok: false,
+        error: "reviewer_self_context_incomplete",
+        route: route.kind,
+      };
+    }
+  } else if (route.kind === "commit" || route.kind === "reveal") {
+    mergedBody.reviewerEntryObjectId =
+      normalizeIotaAddress(mergedBody.reviewerEntryObjectId || "") || reviewerEntryObjectId;
+    if (!mergedBody.reviewerEntryObjectId) {
+      return {
+        ok: false,
+        error: "reviewer_self_context_incomplete",
+        route: route.kind,
+      };
+    }
+  } else if (route.kind === "claim_metrics") {
+    const pendingDecisionMetricsClaimRequired =
+      typeof reviewer.pendingDecisionMetricsClaimRequired === "boolean"
+        ? reviewer.pendingDecisionMetricsClaimRequired
+        : undefined;
+    if (pendingDecisionMetricsClaimRequired === false) {
+      return {
+        ok: false,
+        error: "reviewer_metrics_claim_not_required",
+        status: 409,
+        response: {
+          error: "reviewer_metrics_claim_not_required",
+          reviewerAddress: reviewerOwnerAddress || null,
+        },
+      };
+    }
+    if (!reviewerRegistryObjectIdHint || !disputeQuorumConfigObjectIdHint) {
+      const { chainConfig } = await fetchPolicyAndChainConfig(helperOptions, {
+        requireDisputeQuorumConfig: true,
+        requireEscrowFeeConfig: false,
+        requireGovernanceConfig: false,
+        network: options.network,
+        rpcUrl: options["rpc-url"],
+      });
+      reviewerRegistryObjectIdHint = reviewerRegistryObjectIdHint || chainConfig.reviewerRegistryObjectId || "";
+      disputeQuorumConfigObjectIdHint = disputeQuorumConfigObjectIdHint || chainConfig.disputeQuorumConfigObjectId;
+    }
+    mergedBody.reviewerRegistryObjectId =
+      normalizeIotaAddress(mergedBody.reviewerRegistryObjectId || "") || reviewerRegistryObjectIdHint;
+    mergedBody.reviewerEntryObjectId =
+      normalizeIotaAddress(mergedBody.reviewerEntryObjectId || "") || reviewerEntryObjectId;
+    mergedBody.disputeQuorumConfigObjectId =
+      normalizeIotaAddress(mergedBody.disputeQuorumConfigObjectId || "") || disputeQuorumConfigObjectIdHint;
+    mergedBody.disputeCaseObjectId = normalizeIotaAddress(mergedBody.disputeCaseObjectId || "");
+    if (!mergedBody.disputeCaseObjectId) {
+      const invitesCall = await callApiRoute({
+        method: "GET",
+        rawPath: "/reviewers/me/invites",
+        options: helperOptions,
+        timeoutMs,
+      });
+      if (!invitesCall.result.ok) {
+        return {
+          ok: false,
+          error: "reviewer_invites_lookup_failed",
+          invitesStatus: invitesCall.result.status,
+          invitesResponse: invitesCall.result.body,
+        };
+      }
+      const resolvedClaimMetricsCase = resolveClaimMetricsDisputeCaseCandidate(
+        invitesCall.result.body,
+        reviewerOwnerAddress
+      );
+      if (!resolvedClaimMetricsCase.ok) {
+        return {
+          ok: false,
+          error:
+            resolvedClaimMetricsCase.disputeCaseObjectIds.length === 0
+              ? "claim_metrics_dispute_case_required"
+              : "claim_metrics_dispute_case_ambiguous",
+          disputeCaseObjectIds: resolvedClaimMetricsCase.disputeCaseObjectIds,
+        };
+      }
+      mergedBody.disputeCaseObjectId = resolvedClaimMetricsCase.disputeCaseObjectId;
+    }
+    if (
+      !mergedBody.disputeCaseObjectId ||
+      !mergedBody.reviewerRegistryObjectId ||
+      !mergedBody.reviewerEntryObjectId ||
+      !mergedBody.disputeQuorumConfigObjectId
+    ) {
+      return {
+        ok: false,
+        error: "reviewer_self_context_incomplete",
+        route: route.kind,
+      };
+    }
+  }
+
+  const retriedCall = await callApiRoute({
+    method,
+    rawPath,
+    options: {
+      ...helperOptions,
+      body: JSON.stringify(mergedBody),
+    },
+    timeoutMs,
+  });
+  return {
+    ok: true,
+    mergedBody,
+    retriedCall,
+    autoHydrated: {
+      route: route.kind,
+      reviewerEntryObjectId,
+      reputationProfileObjectId: resolvedReputationProfileObjectId || null,
+      reviewerRegistryObjectId: reviewerRegistryObjectIdHint || null,
+      disputeQuorumConfigObjectId: disputeQuorumConfigObjectIdHint || null,
+      disputeCaseObjectId:
+        route.kind === "claim_metrics" ? normalizeIotaAddress(mergedBody.disputeCaseObjectId || "") || null : null,
+    },
+  };
+}
+
+async function fetchLatestCheckpointRefForCli(options = {}) {
+  const { rpcUrl } = resolveIotaRpcUrl({
+    network: options.network,
+    rpcUrl: options["rpc-url"],
+  });
+  const latestSequence = await requestJson(
+    rpcUrl,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: "clawnera-help-latest-checkpoint-sequence",
+        method: "iota_getLatestCheckpointSequenceNumber",
+        params: [],
+      }),
+    },
+    parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+  );
+  if (!latestSequence.ok) {
+    throw new Error(latestSequence.error || "latest_checkpoint_sequence_failed");
+  }
+  const latestPayload = asRecord(latestSequence.body);
+  const sequenceNumber = typeof latestPayload?.result === "string"
+    ? latestPayload.result.trim()
+    : Number.isFinite(latestPayload?.result)
+      ? String(latestPayload.result)
+      : "";
+  if (!/^[0-9]+$/.test(sequenceNumber)) {
+    throw new Error("invalid_checkpoint_sequence_payload");
+  }
+  const checkpoint = await requestJson(
+    rpcUrl,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: `clawnera-help-checkpoint-${sequenceNumber}`,
+        method: "iota_getCheckpoint",
+        params: [sequenceNumber],
+      }),
+    },
+    parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+  );
+  if (!checkpoint.ok) {
+    throw new Error(checkpoint.error || "checkpoint_fetch_failed");
+  }
+  const checkpointPayload = asRecord(checkpoint.body);
+  const checkpointRecord = asRecord(checkpointPayload?.result);
+  const digest = typeof checkpointRecord?.digest === "string" ? checkpointRecord.digest.trim() : "";
+  if (!digest) {
+    throw new Error("invalid_checkpoint_payload");
+  }
+  return {
+    rpcUrl,
+    digest,
+    sequenceNumber,
+    timestampMs:
+      typeof checkpointRecord?.timestampMs === "string" && /^[0-9]+$/.test(checkpointRecord.timestampMs)
+        ? Number.parseInt(checkpointRecord.timestampMs, 10)
+        : Number.isFinite(checkpointRecord?.timestampMs)
+          ? Number.parseInt(String(checkpointRecord.timestampMs), 10)
+          : null,
+  };
+}
+
+function extractPackageIdFromPolicyResponse(responseBody) {
+  const policy = responseBody?.policy;
+  if (!policy || typeof policy !== "object" || Array.isArray(policy)) {
+    throw new Error("policy_fees_payload_invalid");
+  }
+  const packageIdCandidates = [
+    policy?.chainConfig?.marketplacePackageId,
+    policy?.listingDeposit?.packageId,
+    policy?.reputationInitFee?.packageId,
+    policy?.chain?.packageId,
+    policy?.packageId,
+  ];
+  for (const candidate of packageIdCandidates) {
+    const normalized = normalizeIotaAddress(candidate || "");
+    if (normalized) {
+      return normalized;
+    }
+  }
+  throw new Error("marketplace_package_id_missing");
+}
+
+function extractChainConfigHintsFromPolicyResponse(responseBody) {
+  const policy = asRecord(responseBody?.policy);
+  const chainConfig = asRecord(policy?.chainConfig || policy?.chain);
+  return {
+    marketplacePackageId: normalizeIotaAddress(chainConfig?.marketplacePackageId || chainConfig?.packageId || ""),
+    marketplaceFeeConfigObjectId: normalizeIotaAddress(
+      chainConfig?.marketplaceFeeConfigObjectId || chainConfig?.escrowFeeConfigObjectId || "",
+    ),
+    governanceConfigObjectId: normalizeIotaAddress(chainConfig?.governanceConfigObjectId || ""),
+    disputeQuorumConfigObjectId: normalizeIotaAddress(chainConfig?.disputeQuorumConfigObjectId || ""),
+    reputationInitFeeConfigObjectId: normalizeIotaAddress(chainConfig?.reputationInitFeeConfigObjectId || ""),
+    listingDepositConfigObjectId: normalizeIotaAddress(chainConfig?.listingDepositConfigObjectId || ""),
+  };
+}
+
+function extractReputationInitFeePolicy(responseBody) {
+  const policy = asRecord(responseBody?.policy);
+  const reputationInitFee = asRecord(policy?.reputationInitFee);
+  const configObjectId = normalizeIotaAddress(reputationInitFee?.configObjectId || "");
+  const amount =
+    typeof reputationInitFee?.amount === "string" && /^[0-9]+$/.test(reputationInitFee.amount.trim())
+      ? reputationInitFee.amount.trim()
+      : "";
+  if (!configObjectId || !amount) {
+    throw new Error("reputation_init_fee_policy_missing");
+  }
+  return {
+    configObjectId,
+    amount,
+  };
+}
+
+function formatDryRunGasSummary(result) {
+  const gasUsed = result?.effects?.gasUsed;
+  if (!gasUsed || typeof gasUsed !== "object") {
+    return null;
+  }
+  return JSON.stringify(gasUsed);
+}
+
+async function runApiRequest(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: apiRequestUsageLines()
+    };
+  }
+
+  let method;
+  let rawPath;
+  try {
+    ({ method, rawPath } = parseApiMethodPath(positionals));
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "invalid_request"
+    };
+  }
+
+  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+  let apiCall;
+  try {
+    apiCall = await callApiRoute({ method, rawPath, options, timeoutMs });
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "request_failed",
+      hint: "set --api-base, --env-file, or --auth-state-file"
+    };
+  }
+  const { context, apiBase, idempotencyKey, url, result } = apiCall;
+  const txPlan = detectTxPlanPayload(result.body);
+  const responseOut = resolveOptionalPathOption(options["response-out"]);
+  if (responseOut) {
+    const responsePayload =
+      result.body !== null && result.body !== undefined
+        ? `${JSON.stringify(result.body, null, 2)}\n`
+        : `${result.raw || ""}`;
+    writeOptionalOutputFile(responseOut, responsePayload);
+  }
+
+  return {
+    ok: result.ok,
+    method,
+    url,
+    apiBase,
+    idempotencyKey: idempotencyKey || null,
+    usedJwt: Boolean(context.jwt),
+    authStateFile: context.authStateFile,
+    envFile: context.envFile,
+    authStateRefreshed: context.authStateRefreshed,
+    status: result.status,
+    responseOut: responseOut || null,
+    response: result.body,
+    txPlanDetected: Boolean(txPlan),
+    nextCommandHint: txPlan ? buildTxPlanNextCommandHint(method, rawPath, apiCall) : null,
+    raw: result.raw || "",
+    error: result.ok ? null : summarizeApiFailure(result)
+  };
+}
+
+function resolveActorAddressForSignedRun(options = {}, context = {}) {
+  return normalizeIotaAddress(
+    options.address ||
+      context?.authState?.address ||
+      context?.envValues?.CLAWNERA_API_ADDRESS ||
+      "",
+  );
+}
+
+function writeOptionalOutputFile(targetPath, payload, mode = 0o600) {
+  if (!targetPath) {
+    return null;
+  }
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.writeFileSync(targetPath, payload, { mode });
+  fs.chmodSync(targetPath, mode);
+  return targetPath;
+}
+
+function ensureOrderPayload(responseBody) {
+  const order = responseBody?.order;
+  if (!order || typeof order !== "object" || Array.isArray(order)) {
+    throw new Error("order_payload_invalid");
+  }
+  return order;
+}
+
+async function fetchReviewerRuntimeHints(contextOptions = {}, timeoutMs = 20_000) {
+  const helperOptions = { ...contextOptions };
+  delete helperOptions.body;
+  delete helperOptions["body-file"];
+  delete helperOptions["idempotency-key"];
+  const metricsCall = await callApiRoute({
+    method: "GET",
+    rawPath: "/reviewers/me/metrics",
+    options: helperOptions,
+    timeoutMs,
+  });
+  if (!metricsCall.result.ok) {
+    return {
+      ok: false,
+      status: metricsCall.result.status,
+      error: summarizeApiFailure(metricsCall.result),
+      response: metricsCall.result.body,
+    };
+  }
+  const runtime = asRecord(metricsCall.result.body?.runtime);
+  if (!runtime) {
+    return {
+      ok: false,
+      status: 200,
+      error: "reviewer_runtime_missing",
+      response: metricsCall.result.body,
+    };
+  }
+  return {
+    ok: true,
+    runtime,
+    registered: metricsCall.result.body?.registered === true,
+    metricsResponse: metricsCall.result.body,
+  };
+}
+
+function mergeChainConfigWithReviewerRuntime(chainConfig, reviewerRuntime) {
+  if (!reviewerRuntime || typeof reviewerRuntime !== "object" || Array.isArray(reviewerRuntime)) {
+    return chainConfig;
+  }
+  const merged = { ...chainConfig };
+  const runtimePackageId = normalizeIotaAddress(reviewerRuntime.marketplacePackageId || "");
+  const runtimeDisputeQuorumConfigObjectId = normalizeIotaAddress(
+    reviewerRuntime.disputeQuorumConfigObjectId || "",
+  );
+  const runtimeReviewerRegistryObjectId = normalizeIotaAddress(reviewerRuntime.reviewerRegistryObjectId || "");
+  let runtimeReviewerMinStakeIota = 0n;
+  if (
+    reviewerRuntime.reviewerMinStakeIota !== undefined &&
+    reviewerRuntime.reviewerMinStakeIota !== null &&
+    /^[0-9]+$/.test(String(reviewerRuntime.reviewerMinStakeIota).trim())
+  ) {
+    runtimeReviewerMinStakeIota = BigInt(String(reviewerRuntime.reviewerMinStakeIota).trim());
+  }
+  if (runtimePackageId) {
+    merged.packageId = runtimePackageId;
+  }
+  if (runtimeDisputeQuorumConfigObjectId) {
+    merged.disputeQuorumConfigObjectId = runtimeDisputeQuorumConfigObjectId;
+  }
+  if (runtimeReviewerRegistryObjectId) {
+    merged.reviewerRegistryObjectId = runtimeReviewerRegistryObjectId;
+  }
+  if (runtimeReviewerMinStakeIota > 0n) {
+    merged.reviewerMinStakeIota = runtimeReviewerMinStakeIota;
+  }
+  return merged;
+}
+
+async function fetchPolicyAndChainConfig(contextOptions = {}, runtimeOptions = {}) {
+  const feesCall = await callApiRoute({
+    method: "GET",
+    rawPath: "/policy/fees",
+    options: contextOptions,
+    timeoutMs: parsePositiveIntOption(contextOptions["timeout-ms"], "timeout_ms", 20_000),
+  });
+  if (!feesCall.result.ok) {
+    throw new Error(summarizeApiFailure(feesCall.result));
+  }
+  const packageId = extractPackageIdFromPolicyResponse(feesCall.result.body);
+  const policyChainConfig = extractChainConfigHintsFromPolicyResponse(feesCall.result.body);
+  const timeoutMs = parsePositiveIntOption(contextOptions["timeout-ms"], "timeout_ms", 20_000);
+  let reviewerRuntime = null;
+  const reviewerRuntimeResult = await fetchReviewerRuntimeHints(contextOptions, timeoutMs);
+  if (reviewerRuntimeResult.ok) {
+    reviewerRuntime = reviewerRuntimeResult.runtime;
+  }
+  const chainConfig = await resolveClawdexChainConfig({
+    packageId,
+    disputeQuorumConfigObjectId:
+      normalizeIotaAddress(reviewerRuntime?.disputeQuorumConfigObjectId || "") ||
+      policyChainConfig.disputeQuorumConfigObjectId,
+    escrowFeeConfigObjectId: policyChainConfig.marketplaceFeeConfigObjectId,
+    governanceConfigObjectId: policyChainConfig.governanceConfigObjectId,
+    reviewerRegistryObjectId: normalizeIotaAddress(reviewerRuntime?.reviewerRegistryObjectId || ""),
+    requireDisputeQuorumConfig: runtimeOptions.requireDisputeQuorumConfig,
+    requireEscrowFeeConfig: runtimeOptions.requireEscrowFeeConfig,
+    requireGovernanceConfig: runtimeOptions.requireGovernanceConfig,
+    network: runtimeOptions.network,
+    rpcUrl: runtimeOptions.rpcUrl,
+  });
+  return {
+    feesCall,
+    chainConfig: mergeChainConfigWithReviewerRuntime(chainConfig, reviewerRuntime),
+    packageId,
+    reviewerRuntime,
+  };
+}
+
+async function runChainConfig(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: chainConfigUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+  try {
+    const { feesCall, chainConfig } = await fetchPolicyAndChainConfig(options, {
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+    return {
+      ok: true,
+      apiBase: feesCall.apiBase,
+      authStateFile: feesCall.context.authStateFile,
+      envFile: feesCall.context.envFile,
+      chainConfig,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "chain_config_failed",
+    };
+  }
+}
+
+async function runTxPlanCommand(commandArgs, mode) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: txPlanUsageLines(mode),
+    };
+  }
+
+  let method;
+  let rawPath;
+  try {
+    ({ method, rawPath } = parseApiMethodPath(positionals));
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "invalid_request",
+    };
+  }
+
+  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+  let apiCall;
+  try {
+    apiCall = await callApiRoute({ method, rawPath, options, timeoutMs });
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "tx_plan_fetch_failed",
+      hint: "set --api-base, --env-file, or --auth-state-file",
+    };
+  }
+  let autoHydratedReviewerContext = null;
+  if (!apiCall.result.ok) {
+    const retried = await maybeRetryReviewerSelfTxPlanRequest({
+      method,
+      rawPath,
+      options,
+      timeoutMs,
+      apiCall,
+    });
+    if (retried && retried.ok) {
+      apiCall = retried.retriedCall;
+      autoHydratedReviewerContext = retried.autoHydrated;
+    } else if (retried && !retried.ok) {
+      return {
+        ok: false,
+        error: retried.error,
+        status: retried.status ?? apiCall.result.status,
+        response: retried.response ?? apiCall.result.body,
+      };
+    }
+  }
+  if (!apiCall.result.ok) {
+    return {
+      ok: false,
+      error: summarizeApiFailure(apiCall.result),
+      status: apiCall.result.status,
+      response: apiCall.result.body,
+      autoHydratedReviewerContext,
+    };
+  }
+
+  const txPlan = detectTxPlanPayload(apiCall.result.body);
+  if (!txPlan) {
+    return {
+      ok: false,
+      error: "response_not_tx_plan",
+      status: apiCall.result.status,
+      response: apiCall.result.body,
+    };
+  }
+
+  const planOut = resolveOptionalPathOption(options["plan-out"]);
+  const txBytesOut = resolveOptionalPathOption(options["tx-bytes-out"]);
+  try {
+    const transaction = buildClawdexTxFromPlan(txPlan);
+    const signer = resolveRuntimeSigner(options, apiCall.context);
+    if (planOut) {
+      writeOptionalOutputFile(planOut, JSON.stringify(apiCall.result.body, null, 2));
+    }
+
+    if (mode === "dry_run") {
+      const dryRun = await dryRunTransaction(transaction, {
+        network: options.network,
+        rpcUrl: options["rpc-url"],
+      });
+      if (txBytesOut) {
+        writeOptionalOutputFile(txBytesOut, `${dryRun.txBytesB64}\n`);
+      }
+      return {
+        ok: true,
+        mode,
+        method,
+        rawPath,
+        apiBase: apiCall.apiBase,
+        txBuilder: txPlan.txBuilder,
+        signerAddress: txPlan.request.sender || null,
+        autoHydratedReviewerContext,
+        txBytesOut: txBytesOut || null,
+        planOut: planOut || null,
+        dryRun: dryRun.result,
+        gasSummary: formatDryRunGasSummary(dryRun.result),
+      };
+    }
+
+    const executed = await executeTransaction(transaction, {
+      alias: signer.alias,
+      address: signer.address,
+      keystorePath: signer.keystorePath,
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+    if (txBytesOut) {
+      writeOptionalOutputFile(txBytesOut, `${executed.txBytesB64}\n`);
+    }
+    const disputeCaseObjectId = resolveDisputeCaseObjectIdForInviteBinding(txPlan, executed);
+    let postExecuteBinding = null;
+    const inviteBinding = txPlan.inviteBinding;
+    if (
+      inviteBinding &&
+      typeof inviteBinding === "object" &&
+      !Array.isArray(inviteBinding) &&
+      inviteBinding.postExecuteBindingRequired === true &&
+      typeof inviteBinding.bindRoute === "string" &&
+      inviteBinding.bindRoute.trim()
+    ) {
+      if (!disputeCaseObjectId) {
+        return {
+          ok: false,
+          error: "post_execute_invite_binding_missing_dispute_case_id",
+          txBuilder: txPlan.txBuilder,
+          txDigest: resolveTxExecutionDigest(executed),
+          bindRoute: inviteBinding.bindRoute.trim(),
+        };
+      }
+      const bindCall = await callApiRoute({
+        method: "POST",
+        rawPath: inviteBinding.bindRoute.trim(),
+        options: {
+          ...options,
+          body: JSON.stringify({
+            disputeCaseObjectId,
+            activationTxDigest: resolveTxExecutionDigest(executed),
+          }),
+        },
+        timeoutMs,
+      });
+      postExecuteBinding = {
+        route: inviteBinding.bindRoute.trim(),
+        disputeCaseObjectId,
+        ok: bindCall.result.ok,
+        status: bindCall.result.status,
+        response: bindCall.result.body,
+      };
+      if (!bindCall.result.ok) {
+        return {
+          ok: false,
+          error: "post_execute_invite_binding_failed",
+          txBuilder: txPlan.txBuilder,
+          txDigest: resolveTxExecutionDigest(executed),
+          disputeCaseObjectId,
+          bindRoute: inviteBinding.bindRoute.trim(),
+          status: bindCall.result.status,
+          response: bindCall.result.body,
+        };
+      }
+    }
+    return {
+      ok: true,
+      mode,
+      method,
+      rawPath,
+      apiBase: apiCall.apiBase,
+      txBuilder: txPlan.txBuilder,
+      signerAddress: executed.verifyResult?.signerAddress || signer.address || txPlan.request.sender || null,
+      autoHydratedReviewerContext,
+      txDigest: resolveTxExecutionDigest(executed),
+      txBytesOut: txBytesOut || null,
+      planOut: planOut || null,
+      execution: executed.result,
+      createdObjects: extractCreatedObjects(executed),
+      disputeCaseObjectId,
+      postExecuteBinding,
+      quorumResolutionTicketObjectId:
+        extractCreatedObjectIdByTypeSuffix(executed, "::dispute_quorum::QuorumResolutionTicket") || null,
+      disputeBondObjectId:
+        extractCreatedObjectIdByTypeSuffix(executed, "::dispute_quorum::OrderDisputeBond") || null,
+      orderMailboxObjectId:
+        extractCreatedObjectIdByTypeSuffix(executed, "::order_mailbox::OrderMailbox") || null,
+      orderEscrowObjectId:
+        extractCreatedObjectIdByTypeFragment(executed, "::order_escrow::OrderEscrow<") || null,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "tx_plan_execute_failed",
+      txBuilder: txPlan.txBuilder,
+    };
+  }
+}
+
+async function runOrderInitBond(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: orderInitBondUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  const orderId = typeof options["order-id"] === "string" ? options["order-id"].trim() : "";
+  if (!orderId) {
+    return {
+      ok: false,
+      error: "missing_order_id",
+    };
+  }
+
+  try {
+    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+    const orderCall = await callApiRoute({
+      method: "GET",
+      rawPath: `/orders/${orderId}`,
+      options,
+      timeoutMs,
+    });
+    if (!orderCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(orderCall.result),
+        status: orderCall.result.status,
+        response: orderCall.result.body,
+      };
+    }
+    const order = ensureOrderPayload(orderCall.result.body);
+    const actorAddress = resolveActorAddressForSignedRun(options, orderCall.context);
+    if (!actorAddress) {
+      return {
+        ok: false,
+        error: "missing_actor_address",
+      };
+    }
+    if (
+      actorAddress !== normalizeIotaAddress(order.buyerAddress || "") &&
+      actorAddress !== normalizeIotaAddress(order.sellerAddress || "")
+    ) {
+      return {
+        ok: false,
+        error: "actor_not_order_party",
+      };
+    }
+
+    const { chainConfig, packageId } = await fetchPolicyAndChainConfig(options, {
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+    const requiredReviewerVotes =
+      options["required-reviewer-votes"] !== undefined
+        ? parsePositiveBigIntOption(options["required-reviewer-votes"], "required_reviewer_votes")
+        : chainConfig.defaultRequiredReviewerVotes;
+    const requiredReviewerVotesFloor =
+      options["required-reviewer-votes-floor"] !== undefined
+        ? parsePositiveBigIntOption(options["required-reviewer-votes-floor"], "required_reviewer_votes_floor")
+        : chainConfig.minRequiredReviewerVotes;
+    const marketingCampaignId =
+      typeof options["marketing-campaign-id"] === "string" && options["marketing-campaign-id"].trim()
+        ? options["marketing-campaign-id"].trim()
+        : "";
+    const request = {
+      packageId,
+      sender: actorAddress,
+      orderId,
+      buyer: normalizeIotaAddress(order.buyerAddress),
+      seller: normalizeIotaAddress(order.sellerAddress),
+      requiredReviewerVotes,
+      requiredReviewerVotesFloor,
+      disputeQuorumConfigObjectId: chainConfig.disputeQuorumConfigObjectId,
+      ...(marketingCampaignId ? { marketingCampaignId } : {}),
+    };
+    const transaction = buildInitOrderBondTx(request);
+    const signer = resolveRuntimeSigner(options, orderCall.context);
+    const dryRun = parseBooleanOption(options["dry-run"], false);
+    if (dryRun) {
+      const result = await dryRunTransaction(transaction, {
+        network: options.network,
+        rpcUrl: options["rpc-url"],
+      });
+      return {
+        ok: true,
+        mode: "dry_run",
+        orderId,
+        packageId,
+        actorAddress,
+        chainConfig,
+        gasSummary: formatDryRunGasSummary(result.result),
+        dryRun: result.result,
+      };
+    }
+    const executed = await executeTransaction(transaction, {
+      alias: signer.alias,
+      address: signer.address,
+      keystorePath: signer.keystorePath,
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+    return {
+      ok: true,
+      mode: "execute",
+      orderId,
+      packageId,
+      actorAddress,
+      chainConfig,
+      txDigest: executed.result?.digest || null,
+      disputeBondObjectId: extractCreatedObjectIdByTypeSuffix(executed, "::dispute_quorum::OrderDisputeBond") || null,
+      createdObjects: extractCreatedObjects(executed),
+      execution: executed.result,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "order_init_bond_failed",
+    };
+  }
+}
+
+async function runOrderCreateEscrow(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: orderCreateEscrowUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  const orderId = typeof options["order-id"] === "string" ? options["order-id"].trim() : "";
+  if (!orderId) {
+    return {
+      ok: false,
+      error: "missing_order_id",
+    };
+  }
+
+  try {
+    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+    const orderCall = await callApiRoute({
+      method: "GET",
+      rawPath: `/orders/${orderId}`,
+      options,
+      timeoutMs,
+    });
+    if (!orderCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(orderCall.result),
+        status: orderCall.result.status,
+        response: orderCall.result.body,
+      };
+    }
+    const order = ensureOrderPayload(orderCall.result.body);
+    const actorAddress = resolveActorAddressForSignedRun(options, orderCall.context);
+    if (!actorAddress) {
+      return {
+        ok: false,
+        error: "missing_actor_address",
+      };
+    }
+    if (actorAddress !== normalizeIotaAddress(order.buyerAddress || "")) {
+      return {
+        ok: false,
+        error: "actor_not_order_buyer",
+      };
+    }
+
+    const { chainConfig, packageId } = await fetchPolicyAndChainConfig(options, {
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+    const deadlineMs =
+      options["deadline-ms"] !== undefined
+        ? parsePositiveBigIntOption(options["deadline-ms"], "deadline_ms")
+        : BigInt(Date.now()) + DEFAULT_ORDER_ESCROW_DEADLINE_DELTA_MS;
+    const requestBase = {
+      packageId,
+      sender: actorAddress,
+      orderId,
+      seller: normalizeIotaAddress(order.sellerAddress),
+      amount: parsePositiveBigIntOption(order.amount, "order_amount"),
+      deadlineMs,
+      governanceConfigObjectId: chainConfig.governanceConfigObjectId,
+      feeConfigObjectId: chainConfig.escrowFeeConfigObjectId,
+      currency: order.currency,
+    };
+    let request;
+    if (order.currency === "IOTA") {
+      request = {
+        ...requestBase,
+        ...(typeof options["payment-coin-object-id"] === "string" && options["payment-coin-object-id"].trim()
+          ? { paymentCoinObjectId: options["payment-coin-object-id"].trim() }
+          : {}),
+      };
+    } else if (order.currency === "CLAW") {
+      const clawCoinType = typeof options["claw-coin-type"] === "string" ? options["claw-coin-type"].trim() : "";
+      if (!clawCoinType) {
+        return {
+          ok: false,
+          error: "missing_claw_coin_type",
+        };
+      }
+      const paymentCoinObjectId =
+        typeof options["payment-coin-object-id"] === "string" ? options["payment-coin-object-id"].trim() : "";
+      const clawCoinObjectId =
+        typeof options["claw-coin-object-id"] === "string" ? options["claw-coin-object-id"].trim() : "";
+      if (!paymentCoinObjectId && !clawCoinObjectId) {
+        return {
+          ok: false,
+          error: "missing_claw_funding_source",
+        };
+      }
+      request = {
+        ...requestBase,
+        clawCoinType,
+        ...(paymentCoinObjectId ? { paymentCoinObjectId } : {}),
+        ...(clawCoinObjectId
+          ? {
+              clawCoinObjectId,
+              allowUncheckedClawCoinObjectId: true,
+            }
+          : {}),
+      };
+    } else {
+      return {
+        ok: false,
+        error: "unsupported_order_currency",
+      };
+    }
+
+    const transaction = buildCreateOrderEscrowTx(request);
+    const signer = resolveRuntimeSigner(options, orderCall.context);
+    const dryRun = parseBooleanOption(options["dry-run"], false);
+    if (dryRun) {
+      const result = await dryRunTransaction(transaction, {
+        network: options.network,
+        rpcUrl: options["rpc-url"],
+      });
+      return {
+        ok: true,
+        mode: "dry_run",
+        orderId,
+        actorAddress,
+        packageId,
+        chainConfig,
+        gasSummary: formatDryRunGasSummary(result.result),
+        dryRun: result.result,
+      };
+    }
+
+    const executed = await executeTransaction(transaction, {
+      alias: signer.alias,
+      address: signer.address,
+      keystorePath: signer.keystorePath,
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+    return {
+      ok: true,
+      mode: "execute",
+      orderId,
+      actorAddress,
+      packageId,
+      chainConfig,
+      txDigest: executed.result?.digest || null,
+      orderEscrowObjectId:
+        extractCreatedObjectIdByTypeFragment(executed, "::order_escrow::OrderEscrow<") || null,
+      createdObjects: extractCreatedObjects(executed),
+      execution: executed.result,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "order_create_escrow_failed",
+    };
+  }
+}
+
+async function runKeyAgreementUpsert(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: keyAgreementUpsertUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  try {
+    const runtimeContext = await resolveApiRuntimeContext(options);
+    if (!runtimeContext.apiBase) {
+      return {
+        ok: false,
+        error: "missing_or_invalid_api_base",
+      };
+    }
+    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const actorAddress =
+      normalizeIotaAddress(options.address || "") ||
+      normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
+      normalizeIotaAddress(signer.entry.address || "");
+    if (!actorAddress) {
+      return {
+        ok: false,
+        error: "missing_actor_address",
+      };
+    }
+    if (actorAddress !== normalizeIotaAddress(signer.entry.address)) {
+      return {
+        ok: false,
+        error: "signer_actor_mismatch",
+      };
+    }
+
+    const keyVersion = parsePositiveIntOption(options["key-version"], "key_version", 1);
+    const ttlSec = parsePositiveIntOption(options["ttl-sec"], "ttl_sec", 86_400);
+    const expiresAtMs = options["expires-at-ms"] !== undefined
+      ? parsePositiveIntOption(options["expires-at-ms"], "expires_at_ms", Date.now() + ttlSec * 1000)
+      : Date.now() + ttlSec * 1000;
+    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+    const keyFile = resolveKeyAgreementRecordPathOption(
+      actorAddress,
+      keyVersion,
+      options["key-file"],
+      runtimeContext.authStateFile,
+    );
+    const rotate = parseBooleanOption(options.rotate, false);
+    const readPath = `/users/${actorAddress}/key-agreement?keyVersion=${keyVersion}`;
+    const initialRead = await callApiRoute({
+      method: "GET",
+      rawPath: readPath,
+      options,
+      timeoutMs,
+    });
+    const remoteKeyAgreement = initialRead.result.ok ? initialRead.result.body?.keyAgreement || null : null;
+    const remoteExpiresAtMs =
+      remoteKeyAgreement && typeof remoteKeyAgreement.expiresAt === "string"
+        ? Date.parse(remoteKeyAgreement.expiresAt)
+        : null;
+
+    let keyRecord;
+    if (remoteKeyAgreement) {
+      if (rotate) {
+        return {
+          ok: false,
+          error: "remote_key_agreement_version_already_bound",
+          keyFile,
+          keyVersion,
+          remoteKeyAgreement,
+          hint: "choose a new --key-version when rotating an existing delivery key"
+        };
+      }
+      if (!fs.existsSync(keyFile)) {
+        return {
+          ok: false,
+          error: "existing_remote_key_requires_local_key_file",
+          keyFile,
+          keyVersion,
+          remoteKeyAgreement,
+          hint: "use --key-file with the matching local private key record or pick a new --key-version"
+        };
+      }
+      keyRecord = await loadKeyAgreementRecord(keyFile, {
+        expectedAddress: actorAddress,
+        expectedKeyVersion: keyVersion,
+        fallbackExpiresAtMs:
+          Number.isSafeInteger(remoteExpiresAtMs) && remoteExpiresAtMs > 0 ? remoteExpiresAtMs : expiresAtMs
+      });
+      if (keyRecord.address !== actorAddress || keyRecord.keyVersion !== keyVersion) {
+        return {
+          ok: false,
+          error: "key_agreement_file_actor_or_version_mismatch",
+          keyFile,
+        };
+      }
+      if (keyRecord.publicKeyMultibase !== remoteKeyAgreement.publicKeyMultibase) {
+        return {
+          ok: false,
+          error: "existing_remote_key_conflicts_with_local_private_key",
+          keyFile,
+          keyVersion,
+          localPublicKeyMultibase: keyRecord.publicKeyMultibase,
+          remoteKeyAgreement,
+          hint: "reuse the correct local key file or rotate with a new --key-version"
+        };
+      }
+      keyRecord = await saveKeyAgreementRecord({
+        ...keyRecord,
+        expiresAtMs,
+        filePath: keyFile,
+        createdAt: keyRecord.createdAt || undefined,
+      });
+    } else if (!rotate && fs.existsSync(keyFile)) {
+      keyRecord = await loadKeyAgreementRecord(keyFile, {
+        expectedAddress: actorAddress,
+        expectedKeyVersion: keyVersion,
+        fallbackExpiresAtMs: expiresAtMs
+      });
+      if (keyRecord.address !== actorAddress || keyRecord.keyVersion !== keyVersion) {
+        return {
+          ok: false,
+          error: "key_agreement_file_actor_or_version_mismatch",
+          keyFile,
+        };
+      }
+      keyRecord = await saveKeyAgreementRecord({
+        ...keyRecord,
+        expiresAtMs,
+        filePath: keyFile,
+        createdAt: keyRecord.createdAt || undefined,
+      });
+    } else {
+      const generated = generateKeyAgreementKeypair("u");
+      keyRecord = await saveKeyAgreementRecord({
+        address: actorAddress,
+        keyVersion,
+        publicKeyMultibase: generated.publicKeyMultibase,
+        privateKeyMultibase: generated.privateKeyMultibase,
+        expiresAtMs,
+        filePath: keyFile,
+      });
+    }
+
+    const walletBindingMessage = buildKeyAgreementBindingMessage(
+      actorAddress,
+      keyVersion,
+      keyRecord.publicKeyMultibase,
+      expiresAtMs,
+    );
+    const signed = await signer.keypair.signPersonalMessage(new TextEncoder().encode(walletBindingMessage));
+    const requestBody = {
+      publicKeyMultibase: keyRecord.publicKeyMultibase,
+      keyVersion,
+      expiresAtMs,
+      walletBindingMessage,
+      walletBindingSignature: signed.signature,
+    };
+
+    const putCall = await callApiRoute({
+      method: "PUT",
+      rawPath: "/users/me/key-agreement",
+      options: {
+        ...options,
+        body: JSON.stringify(requestBody),
+      },
+      timeoutMs,
+    });
+    if (!putCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(putCall.result),
+        status: putCall.result.status,
+        response: putCall.result.body,
+      };
+    }
+    let readCall = null;
+    for (const retryDelayMs of [0, 500, 1500, 3000, 5000]) {
+      if (retryDelayMs > 0) {
+        await sleep(retryDelayMs);
+      }
+      readCall = await callApiRoute({
+        method: "GET",
+        rawPath: readPath,
+        options,
+        timeoutMs,
+      });
+      const storedCandidate = readCall.result.body?.keyAgreement;
+      if (readCall.result.ok && storedCandidate?.publicKeyMultibase === keyRecord.publicKeyMultibase) {
+        break;
+      }
+    }
+    if (!readCall || !readCall.result.ok) {
+      return {
+        ok: true,
+        apiBase: putCall.apiBase,
+        address: actorAddress,
+        keyVersion,
+        keyFile,
+        publicKeyMultibase: keyRecord.publicKeyMultibase,
+        expiresAtMs,
+        walletBindingMessage,
+        requestBody,
+        readback: null,
+        readbackPending: true,
+        warning: "key_agreement_readback_pending",
+        verifyHint: `clawnera-help request GET '/users/${actorAddress}/key-agreement?keyVersion=${keyVersion}' --auth-state-file ${shellQuote(putCall.context.authStateFile || "~/.config/clawnera/auth-state.json")}`,
+        readbackStatus: readCall?.result?.status ?? null,
+        readbackResponse: readCall?.result?.body ?? null,
+        authStateFile: putCall.context.authStateFile,
+        authStateRefreshed: putCall.context.authStateRefreshed || readCall?.context?.authStateRefreshed || false,
+      };
+    }
+    const stored = readCall.result.body?.keyAgreement;
+    if (!stored || stored.publicKeyMultibase !== keyRecord.publicKeyMultibase) {
+      return {
+        ok: true,
+        apiBase: putCall.apiBase,
+        address: actorAddress,
+        keyVersion,
+        keyFile,
+        publicKeyMultibase: keyRecord.publicKeyMultibase,
+        expiresAtMs,
+        walletBindingMessage,
+        requestBody,
+        readback: stored || null,
+        readbackPending: true,
+        warning: "key_agreement_readback_pending",
+        verifyHint: `clawnera-help request GET '/users/${actorAddress}/key-agreement?keyVersion=${keyVersion}' --auth-state-file ${shellQuote(putCall.context.authStateFile || "~/.config/clawnera/auth-state.json")}`,
+        readbackStatus: readCall.result.status,
+        readbackResponse: readCall.result.body,
+        authStateFile: putCall.context.authStateFile,
+        authStateRefreshed: putCall.context.authStateRefreshed || readCall.context.authStateRefreshed,
+      };
+    }
+    return {
+      ok: true,
+      apiBase: putCall.apiBase,
+      address: actorAddress,
+      keyVersion,
+      keyFile,
+      publicKeyMultibase: keyRecord.publicKeyMultibase,
+      expiresAtMs,
+      walletBindingMessage,
+      requestBody,
+      readback: stored,
+      authStateFile: putCall.context.authStateFile,
+      authStateRefreshed: putCall.context.authStateRefreshed || readCall.context.authStateRefreshed,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "key_agreement_upsert_failed",
+    };
+  }
+}
+
+async function runReputationInit(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: reputationInitUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  try {
+    const runtimeContext = await resolveApiRuntimeContext(options);
+    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const actorAddress =
+      normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
+      normalizeIotaAddress(signer.entry.address || "");
+    if (!actorAddress) {
+      return {
+        ok: false,
+        error: "missing_actor_address",
+      };
+    }
+    if (actorAddress !== normalizeIotaAddress(signer.entry.address)) {
+      return {
+        ok: false,
+        error: "signer_actor_mismatch",
+      };
+    }
+
+    const { feesCall, chainConfig, packageId } = await fetchPolicyAndChainConfig(options, {
+      requireDisputeQuorumConfig: false,
+      requireEscrowFeeConfig: false,
+      requireGovernanceConfig: false,
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+    const feePolicy = extractReputationInitFeePolicy(feesCall.result.body);
+    const paymentCoinObjectId =
+      typeof options["payment-coin-object-id"] === "string" && options["payment-coin-object-id"].trim()
+        ? options["payment-coin-object-id"].trim()
+        : undefined;
+
+    try {
+      const existingObjectId = await resolveClawdexReputationProfileObjectIdByOwner({
+        packageId,
+        ownerAddress: actorAddress,
+        reputationInitFeeConfigObjectId: feePolicy.configObjectId,
+        network: options.network,
+        rpcUrl: options["rpc-url"],
+      });
+      return {
+        ok: true,
+        mode: "existing",
+        actorAddress,
+        packageId,
+        chainConfig,
+        reputationProfileObjectId: existingObjectId,
+        feePolicy,
+      };
+    } catch (error) {
+      if ((error instanceof Error ? error.message : "") !== "reputation_profile_not_found") {
+        throw error;
+      }
+    }
+
+    const request = {
+      packageId,
+      sender: actorAddress,
+      reputationFeeConfigObjectId: feePolicy.configObjectId,
+      initFeeAmount: BigInt(feePolicy.amount),
+      expectedInitFeeAmount: BigInt(feePolicy.amount),
+      ...(paymentCoinObjectId ? { paymentCoinObjectId } : {}),
+    };
+    const transaction = buildCreateReputationProfileTx(request);
+    const dryRun = parseBooleanOption(options["dry-run"], false);
+    if (dryRun) {
+      const result = await dryRunTransaction(transaction, {
+        network: options.network,
+        rpcUrl: options["rpc-url"],
+      });
+      return {
+        ok: true,
+        mode: "dry_run",
+        actorAddress,
+        packageId,
+        chainConfig,
+        feePolicy,
+        gasSummary: formatDryRunGasSummary(result.result),
+        dryRun: result.result,
+      };
+    }
+
+    const executed = await executeTransaction(transaction, {
+      alias: signer.alias,
+      address: signer.address,
+      keystorePath: signer.keystorePath,
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+
+    let reputationProfileObjectId = extractCreatedObjectIdByTypeSuffix(executed, "::reputation::ReputationProfile");
+    if (!reputationProfileObjectId) {
+      for (const retryDelayMs of [0, 500, 1200]) {
+        if (retryDelayMs > 0) {
+          await sleep(retryDelayMs);
+        }
+        try {
+          reputationProfileObjectId = await resolveClawdexReputationProfileObjectIdByOwner({
+            packageId,
+            ownerAddress: actorAddress,
+            reputationInitFeeConfigObjectId: feePolicy.configObjectId,
+            network: options.network,
+            rpcUrl: options["rpc-url"],
+          });
+          if (reputationProfileObjectId) {
+            break;
+          }
+        } catch {
+          // Continue retries against index lag.
+        }
+      }
+    }
+
+    return {
+      ok: true,
+      mode: "execute",
+      actorAddress,
+      packageId,
+      chainConfig,
+      feePolicy,
+      txDigest: executed.result?.digest || null,
+      reputationProfileObjectId: reputationProfileObjectId || null,
+      createdObjects: extractCreatedObjects(executed),
+      execution: executed.result,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "reputation_init_failed",
+    };
+  }
+}
+
+async function runReviewerRegister(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: reviewerRegisterUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  try {
+    const runtimeContext = await resolveApiRuntimeContext(options);
+    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const actorAddress =
+      normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
+      normalizeIotaAddress(signer.entry.address || "");
+    if (!actorAddress) {
+      return {
+        ok: false,
+        error: "missing_actor_address",
+      };
+    }
+    if (actorAddress !== normalizeIotaAddress(signer.entry.address)) {
+      return {
+        ok: false,
+        error: "signer_actor_mismatch",
+      };
+    }
+
+    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+    const currentMetrics = await callApiRoute({
+      method: "GET",
+      rawPath: "/reviewers/me/metrics",
+      options,
+      timeoutMs,
+    });
+    if (currentMetrics.result.ok && currentMetrics.result.body?.registered === true) {
+      return {
+        ok: true,
+        mode: "existing",
+        actorAddress,
+        reviewer: currentMetrics.result.body?.reviewer || null,
+        metrics: currentMetrics.result.body?.metrics || null,
+      };
+    }
+
+    const { chainConfig } = await fetchPolicyAndChainConfig(options, {
+      requireDisputeQuorumConfig: true,
+      requireEscrowFeeConfig: false,
+      requireGovernanceConfig: false,
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+
+    let reputationProfileObjectId = "";
+    try {
+      reputationProfileObjectId = await resolveClawdexReputationProfileObjectIdByOwner({
+        packageId: chainConfig.packageId,
+        ownerAddress: actorAddress,
+        disputeQuorumConfigObjectId: chainConfig.disputeQuorumConfigObjectId,
+        network: options.network,
+        rpcUrl: options["rpc-url"],
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "reviewer_reputation_profile_not_found",
+        hint: "run clawnera-help reputation-init first",
+      };
+    }
+
+    const transportKeyVersion = parsePositiveIntOption(options["transport-key-version"], "transport_key_version", 1);
+    const transportKeyFile = resolveKeyAgreementRecordPathOption(
+      actorAddress,
+      transportKeyVersion,
+      options["transport-key-file"] || options["key-file"],
+      runtimeContext.authStateFile,
+    );
+    let keyRecord;
+    try {
+      keyRecord = await loadKeyAgreementRecord(transportKeyFile, {
+        expectedAddress: actorAddress,
+        expectedKeyVersion: transportKeyVersion,
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "missing_key_agreement_record",
+        keyFile: transportKeyFile,
+        hint: "run clawnera-help key-agreement-upsert first",
+      };
+    }
+
+    const body = {
+      reviewerRegistryObjectId: chainConfig.reviewerRegistryObjectId,
+      disputeQuorumConfigObjectId: chainConfig.disputeQuorumConfigObjectId,
+      reputationProfileObjectId,
+      transportType: parseU8Option(options["transport-type"], "transport_type", 0),
+      transportPubkeyHex: keyAgreementPublicKeyHex(keyRecord.publicKeyMultibase),
+      minCaseRewardIota:
+        options["min-case-reward-iota"] !== undefined
+          ? parsePositiveBigIntOption(options["min-case-reward-iota"], "min_case_reward_iota").toString()
+          : "1",
+      stakeAmount:
+        options["stake-amount"] !== undefined
+          ? parsePositiveBigIntOption(options["stake-amount"], "stake_amount").toString()
+          : chainConfig.reviewerMinStakeIota.toString(),
+    };
+
+    const planCall = await callApiRoute({
+      method: "POST",
+      rawPath: "/reviewers/register",
+      options: {
+        ...options,
+        body: JSON.stringify(body),
+      },
+      timeoutMs,
+    });
+    if (!planCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(planCall.result),
+        status: planCall.result.status,
+        response: planCall.result.body,
+        requestBody: body,
+      };
+    }
+    const txPlan = detectTxPlanPayload(planCall.result.body);
+    if (!txPlan) {
+      return {
+        ok: false,
+        error: "missing_tx_plan",
+        response: planCall.result.body,
+      };
+    }
+
+    const transaction = buildClawdexTxFromPlan(planCall.result.body);
+    const dryRun = parseBooleanOption(options["dry-run"], false);
+    if (dryRun) {
+      const result = await dryRunTransaction(transaction, {
+        network: options.network,
+        rpcUrl: options["rpc-url"],
+      });
+      return {
+        ok: true,
+        mode: "dry_run",
+        actorAddress,
+        txBuilder: txPlan.txBuilder,
+        requestBody: body,
+        gasSummary: formatDryRunGasSummary(result.result),
+        dryRun: result.result,
+      };
+    }
+
+    const executed = await executeTransaction(transaction, {
+      alias: signer.alias,
+      address: signer.address,
+      keystorePath: signer.keystorePath,
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+
+    let reviewerReadback = null;
+    for (const retryDelayMs of [0, 400, 1000]) {
+      if (retryDelayMs > 0) {
+        await sleep(retryDelayMs);
+      }
+      const readback = await callApiRoute({
+        method: "GET",
+        rawPath: `/reviewers/${actorAddress}`,
+        options,
+        timeoutMs,
+      });
+      if (readback.result.ok && readback.result.body?.reviewer) {
+        reviewerReadback = readback.result.body.reviewer;
+        break;
+      }
+    }
+
+    return {
+      ok: true,
+      mode: "execute",
+      actorAddress,
+      txBuilder: txPlan.txBuilder,
+      txDigest: executed.result?.digest || null,
+      requestBody: body,
+      reviewer: reviewerReadback,
+      createdObjects: extractCreatedObjects(executed),
+      execution: executed.result,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "reviewer_register_failed",
+    };
+  }
+}
+
+async function runDeliverableEncrypt(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: deliverableEncryptUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  const orderId = typeof options["order-id"] === "string" ? options["order-id"].trim() : "";
+  const milestoneId = typeof options["milestone-id"] === "string" ? options["milestone-id"].trim() : "";
+  const plaintextFile =
+    typeof options["plaintext-file"] === "string" && options["plaintext-file"].trim()
+      ? path.resolve(String(options["plaintext-file"]).trim())
+      : "";
+  if (!orderId || !milestoneId || !plaintextFile) {
+    return {
+      ok: false,
+      error: "missing_order_id_milestone_id_or_plaintext_file",
+    };
+  }
+  if (!fs.existsSync(plaintextFile)) {
+    return {
+      ok: false,
+      error: "missing_plaintext_file",
+      plaintextFile,
+    };
+  }
+
+  try {
+    const runtimeContext = await resolveApiRuntimeContext(options);
+    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const actorAddress =
+      normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
+      normalizeIotaAddress(signer.entry.address || "");
+    const orderCall = await callApiRoute({
+      method: "GET",
+      rawPath: `/orders/${orderId}`,
+      options,
+      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+    });
+    if (!orderCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(orderCall.result),
+        status: orderCall.result.status,
+        response: orderCall.result.body,
+      };
+    }
+    const order = ensureOrderPayload(orderCall.result.body);
+    const sellerAddress = normalizeIotaAddress(order.sellerAddress || "");
+    const buyerAddress = normalizeIotaAddress(order.buyerAddress || "");
+    if (!sellerAddress || !buyerAddress) {
+      return {
+        ok: false,
+        error: "order_party_addresses_missing",
+      };
+    }
+    if (actorAddress !== sellerAddress) {
+      return {
+        ok: false,
+        error: "actor_not_order_seller",
+      };
+    }
+
+    const sellerKeyVersion = parsePositiveIntOption(options["seller-key-version"], "seller_key_version", 1);
+    const sellerKeyFile = resolveKeyAgreementRecordPathOption(
+      sellerAddress,
+      sellerKeyVersion,
+      options["seller-key-file"],
+      runtimeContext.authStateFile,
+    );
+    const sellerKeyRead = await callApiRoute({
+      method: "GET",
+      rawPath: `/users/${sellerAddress}/key-agreement?keyVersion=${sellerKeyVersion}`,
+      options,
+      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+    });
+    if (!sellerKeyRead.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(sellerKeyRead.result),
+        status: sellerKeyRead.result.status,
+        response: sellerKeyRead.result.body,
+      };
+    }
+    const sellerRemoteKeyAgreement = sellerKeyRead.result.body?.keyAgreement;
+    const sellerRemoteExpiresAtMs =
+      sellerRemoteKeyAgreement && typeof sellerRemoteKeyAgreement.expiresAt === "string"
+        ? Date.parse(sellerRemoteKeyAgreement.expiresAt)
+        : null;
+    const sellerKeyRecord = await loadKeyAgreementRecord(sellerKeyFile, {
+      expectedAddress: sellerAddress,
+      expectedKeyVersion: sellerKeyVersion,
+      fallbackExpiresAtMs:
+        Number.isSafeInteger(sellerRemoteExpiresAtMs) && sellerRemoteExpiresAtMs > 0
+          ? sellerRemoteExpiresAtMs
+          : Date.now() + 86_400_000
+    });
+    if (sellerKeyRecord.address !== sellerAddress) {
+      return {
+        ok: false,
+        error: "seller_key_file_address_mismatch",
+        sellerKeyFile,
+      };
+    }
+    if (sellerRemoteKeyAgreement?.publicKeyMultibase !== sellerKeyRecord.publicKeyMultibase) {
+      return {
+        ok: false,
+        error: "seller_key_agreement_readback_mismatch",
+      };
+    }
+
+    const buyerKeyVersion = parsePositiveIntOption(options["buyer-key-version"], "buyer_key_version", 1);
+    const buyerKeyRead = await callApiRoute({
+      method: "GET",
+      rawPath: `/users/${buyerAddress}/key-agreement?keyVersion=${buyerKeyVersion}`,
+      options,
+      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+    });
+    if (!buyerKeyRead.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(buyerKeyRead.result),
+        status: buyerKeyRead.result.status,
+        response: buyerKeyRead.result.body,
+      };
+    }
+    const buyerKeyAgreement = buyerKeyRead.result.body?.keyAgreement;
+    if (!buyerKeyAgreement?.publicKeyMultibase) {
+      return {
+        ok: false,
+        error: "buyer_key_agreement_missing",
+      };
+    }
+
+    const plaintext = fs.readFileSync(plaintextFile);
+    const plaintextLabel =
+      typeof options.label === "string" && options.label.trim()
+        ? String(options.label).trim()
+        : path.basename(plaintextFile);
+    const encrypted = await createEncryptedDeliverable({
+      plaintext,
+      recipients: [
+        {
+          recipientAddress: sellerAddress,
+          keyVersion: sellerKeyRecord.keyVersion,
+          recipientPublicKeyMultibase: sellerKeyRecord.publicKeyMultibase,
+        },
+        {
+          recipientAddress: buyerAddress,
+          keyVersion: buyerKeyVersion,
+          recipientPublicKeyMultibase: buyerKeyAgreement.publicKeyMultibase,
+        },
+      ],
+    });
+    const payload = buildManagedDeliverablePayload({
+      orderId,
+      milestoneId,
+      plaintextLabel,
+      encrypted,
+    });
+    const payloadOut =
+      resolveOptionalPathOption(options["payload-out"]) ||
+      path.resolve(process.cwd(), `clawnera-deliverable-${orderId}-${milestoneId}.json`);
+    await writeManagedDeliverablePayload(payloadOut, payload);
+    const storagePolicyCall = await callApiRoute({
+      method: "GET",
+      rawPath: "/policy/storage",
+      options,
+      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+    });
+    const managedJsonAllowed = Boolean(
+      storagePolicyCall.result.ok &&
+        storagePolicyCall.result.body?.policy?.modes?.managed?.enabled &&
+        Array.isArray(storagePolicyCall.result.body?.policy?.modes?.managed?.allowedMimeTypes) &&
+        storagePolicyCall.result.body.policy.modes.managed.allowedMimeTypes.includes("application/json"),
+    );
+    const authStateHint = shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json");
+    const managedNextUploadHint = managedJsonAllowed
+      ? `clawnera-help managed-storage-fee-pay --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} --auth-state-file ${authStateHint}`
+      : null;
+    return {
+      ok: true,
+      orderId,
+      milestoneId,
+      sellerAddress,
+      buyerAddress,
+      sellerKeyVersion: sellerKeyRecord.keyVersion,
+      buyerKeyVersion,
+      cipherSuite: encrypted.cipherSuite,
+      plaintextLabel,
+      plaintextFile,
+      plaintextBytes: plaintext.length,
+      ciphertextSha256: encrypted.blob.ciphertextSha256,
+      payloadOut,
+      payload,
+      nextUploadHint:
+        managedNextUploadHint ||
+        `clawnera-help pinata-upload-json --file ${shellQuote(payloadOut)} --jwt-env PINATA_JWT`,
+      nextSubmitHint:
+        `clawnera-help milestone-submit-byo --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} ` +
+        `--payload-file ${shellQuote(payloadOut)} --manifest-cid 'ipfs://<cid>' --auth-state-file ${authStateHint}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "deliverable_encrypt_failed",
+    };
+  }
+}
+
+async function runManagedStorageFeePay(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: managedStorageFeePayUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  const orderId = typeof options["order-id"] === "string" ? options["order-id"].trim() : "";
+  const milestoneId = typeof options["milestone-id"] === "string" ? options["milestone-id"].trim() : "";
+  if (!orderId || !milestoneId) {
+    return {
+      ok: false,
+      error: "missing_order_id_or_milestone_id",
+    };
+  }
+
+  try {
+    const runtimeContext = await resolveApiRuntimeContext(options);
+    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const actorAddress = resolveActorAddressForSignedRun(options, runtimeContext) || normalizeIotaAddress(signer.entry.address || "");
+    if (!actorAddress) {
+      return {
+        ok: false,
+        error: "missing_actor_address",
+      };
+    }
+    if (actorAddress !== normalizeIotaAddress(signer.entry.address || "")) {
+      return {
+        ok: false,
+        error: "signer_actor_mismatch",
+      };
+    }
+    const orderCall = await callApiRoute({
+      method: "GET",
+      rawPath: `/orders/${orderId}`,
+      options,
+      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+    });
+    if (!orderCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(orderCall.result),
+        status: orderCall.result.status,
+        response: orderCall.result.body,
+      };
+    }
+    const order = ensureOrderPayload(orderCall.result.body);
+    const parties = new Set([
+      normalizeIotaAddress(order.sellerAddress || ""),
+      normalizeIotaAddress(order.buyerAddress || ""),
+    ]);
+    if (!parties.has(actorAddress)) {
+      return {
+        ok: false,
+        error: "actor_not_order_party",
+      };
+    }
+
+    const storagePolicyCall = await callApiRoute({
+      method: "GET",
+      rawPath: "/policy/storage",
+      options,
+      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+    });
+    if (!storagePolicyCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(storagePolicyCall.result),
+        status: storagePolicyCall.result.status,
+        response: storagePolicyCall.result.body,
+      };
+    }
+    const managedPolicy = storagePolicyCall.result.body?.policy?.modes?.managed;
+    const feePolicy = managedPolicy?.fee;
+    if (!managedPolicy?.enabled || !feePolicy) {
+      return {
+        ok: false,
+        error: "managed_storage_disabled",
+      };
+    }
+    if (String(feePolicy.asset || "").trim().toUpperCase() !== "IOTA") {
+      return {
+        ok: false,
+        error: "managed_storage_fee_asset_unsupported",
+        feeAsset: feePolicy.asset || null,
+      };
+    }
+    const amountAtomic = parsePositiveBigIntOption(feePolicy.minAtomic, "managed_storage_fee_min_atomic");
+    const recipientAddress = normalizeIotaAddress(feePolicy.recipient || "");
+    if (!recipientAddress) {
+      return {
+        ok: false,
+        error: "managed_storage_fee_recipient_missing",
+      };
+    }
+
+    const { packageId } = await fetchPolicyAndChainConfig(options, {
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+    const tx = buildManagedStorageFeeTx({
+      packageId,
+      sender: actorAddress,
+      orderId,
+      milestoneId,
+      recipientAddress,
+      amountAtomic,
+    });
+    const dryRun = parseBooleanOption(options["dry-run"], false);
+    if (dryRun) {
+      const dryRunResult = await dryRunTransaction(tx, {
+        alias: signer.alias,
+        address: signer.address,
+        keystorePath: signer.keystorePath,
+        network: options.network,
+        rpcUrl: options["rpc-url"],
+      });
+      return {
+        ok: true,
+        mode: "dry_run",
+        orderId,
+        milestoneId,
+        actorAddress,
+        packageId,
+        managedStoragePolicy: managedPolicy,
+        paymentProof: {
+          txDigest: null,
+          amountAtomic: amountAtomic.toString(),
+          asset: "IOTA",
+          recipientAddress,
+        },
+        dryRun: dryRunResult,
+      };
+    }
+
+    const executed = await executeTransaction(tx, {
+      alias: signer.alias,
+      address: signer.address,
+      keystorePath: signer.keystorePath,
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+    const txDigest = executed.result?.digest || null;
+    if (!txDigest) {
+      return {
+        ok: false,
+        error: "managed_storage_fee_tx_digest_missing",
+      };
+    }
+    const paymentProof = {
+      txDigest,
+      amountAtomic: amountAtomic.toString(),
+      asset: "IOTA",
+      recipientAddress,
+    };
+    const proofOut = resolveOptionalPathOption(options["proof-out"]) || defaultManagedStorageFeeProofPath(orderId, milestoneId);
+    writeOptionalOutputFile(
+      proofOut,
+      `${JSON.stringify(
+        {
+          orderId,
+          milestoneId,
+          actorAddress,
+          paymentProof,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return {
+      ok: true,
+      mode: "execute",
+      orderId,
+      milestoneId,
+      actorAddress,
+      packageId,
+      txDigest,
+      paymentProof,
+      proofOut,
+      execution: executed.result,
+      nextPresignHint:
+        `clawnera-help managed-storage-presign --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} ` +
+        `--file <payload.json> --payment-proof-file ${shellQuote(proofOut)} --auth-state-file ${shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json")}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "managed_storage_fee_pay_failed",
+    };
+  }
+}
+
+async function runManagedStoragePresign(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: managedStoragePresignUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  const orderId = typeof options["order-id"] === "string" ? options["order-id"].trim() : "";
+  const milestoneId = typeof options["milestone-id"] === "string" ? options["milestone-id"].trim() : "";
+  const filePath = resolveOptionalPathOption(options.file);
+  const paymentProofFile = resolveOptionalPathOption(options["payment-proof-file"]);
+  if (!orderId || !milestoneId || !filePath || !paymentProofFile) {
+    return {
+      ok: false,
+      error: "missing_order_id_milestone_id_file_or_payment_proof_file",
+    };
+  }
+  if (!fs.existsSync(filePath)) {
+    return {
+      ok: false,
+      error: "missing_upload_file",
+      filePath,
+    };
+  }
+  if (!fs.existsSync(paymentProofFile)) {
+    return {
+      ok: false,
+      error: "missing_payment_proof_file",
+      paymentProofFile,
+    };
+  }
+
+  try {
+    const runtimeContext = await resolveApiRuntimeContext(options);
+    const fileMetadata = computeFileMetadata(filePath, typeof options["mime-type"] === "string" ? options["mime-type"] : "");
+    const paymentProof = normalizeManagedStoragePaymentProof(readJsonFileSync(paymentProofFile, "invalid_payment_proof_file"));
+    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+    const maxAttempts = parsePositiveIntOption(options["attempts"], "attempts", 8);
+    const delayMs = parsePositiveIntOption(options["delay-ms"], "delay_ms", 2_500);
+    const requestBody = {
+      orderId,
+      milestoneId,
+      mode: "managed",
+      fileName:
+        typeof options["file-name"] === "string" && options["file-name"].trim()
+          ? String(options["file-name"]).trim()
+          : fileMetadata.fileName,
+      mimeType: fileMetadata.mimeType,
+      fileSizeBytes: fileMetadata.fileSizeBytes,
+      sha256: fileMetadata.sha256,
+      paymentProof,
+    };
+
+    let lastCall = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      lastCall = await callApiRoute({
+        method: "POST",
+        rawPath: "/storage/uploads/presign",
+        options: {
+          ...options,
+          body: JSON.stringify(requestBody),
+        },
+        timeoutMs,
+      });
+      if (lastCall.result.ok) {
+        break;
+      }
+      if (lastCall.result.body?.error !== "storage_fee_event_not_found" || attempt === maxAttempts) {
+        break;
+      }
+      await sleep(delayMs);
+    }
+
+    if (!lastCall || !lastCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(lastCall?.result),
+        status: lastCall?.result?.status,
+        response: lastCall?.result?.body,
+      };
+    }
+    const signedUrl = typeof lastCall.result.body?.upload?.signedUrl === "string" ? lastCall.result.body.upload.signedUrl.trim() : "";
+    if (!signedUrl) {
+      return {
+        ok: false,
+        error: "managed_storage_presign_missing_signed_url",
+        response: lastCall.result.body,
+      };
+    }
+    const presignOut = resolveOptionalPathOption(options["presign-out"]) || defaultManagedStoragePresignPath(orderId, milestoneId);
+    const presignBundle = {
+      orderId,
+      milestoneId,
+      request: requestBody,
+      response: lastCall.result.body,
+      apiBase: lastCall.apiBase,
+      authStateFile: runtimeContext.authStateFile || null,
+    };
+    writeOptionalOutputFile(presignOut, `${JSON.stringify(presignBundle, null, 2)}\n`);
+    return {
+      ok: true,
+      orderId,
+      milestoneId,
+      filePath,
+      fileName: requestBody.fileName,
+      mimeType: requestBody.mimeType,
+      fileSizeBytes: requestBody.fileSizeBytes,
+      sha256: requestBody.sha256,
+      paymentProof,
+      presignOut,
+      response: lastCall.result.body,
+      nextUploadHint:
+        `clawnera-help managed-storage-upload --file ${shellQuote(filePath)} --presign-file ${shellQuote(presignOut)}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "managed_storage_presign_failed",
+    };
+  }
+}
+
+async function runManagedStorageUpload(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: managedStorageUploadUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  const filePath = resolveOptionalPathOption(options.file);
+  const presignFile = resolveOptionalPathOption(options["presign-file"]);
+  if (!filePath) {
+    return {
+      ok: false,
+      error: "missing_upload_file",
+    };
+  }
+  if (!fs.existsSync(filePath)) {
+    return {
+      ok: false,
+      error: "missing_upload_file",
+      filePath,
+    };
+  }
+
+  try {
+    const explicitSignedUrl = typeof options["signed-url"] === "string" ? options["signed-url"].trim() : "";
+    let presign = {
+      signedUrl: explicitSignedUrl,
+      expiresAt: null,
+      fileName: "",
+      mimeType: "",
+      fileSizeBytes: null,
+      sha256: "",
+      orderId: "",
+      milestoneId: "",
+      raw: null,
+    };
+    if (presignFile) {
+      if (!fs.existsSync(presignFile)) {
+        return {
+          ok: false,
+          error: "missing_presign_file",
+          presignFile,
+        };
+      }
+      presign = parseManagedStoragePresignBundle(readJsonFileSync(presignFile, "invalid_managed_storage_presign_file"));
+    }
+    const signedUrl = presign.signedUrl || explicitSignedUrl;
+    if (!signedUrl) {
+      return {
+        ok: false,
+        error: "missing_signed_url_or_presign_file",
+      };
+    }
+    const expiresAtMs = parseOptionalIsoTimestamp(presign.expiresAt);
+    if (expiresAtMs !== null && expiresAtMs <= Date.now() + 5_000) {
+      return {
+        ok: false,
+        error: "managed_storage_signed_url_expired",
+        expiresAt: presign.expiresAt,
+      };
+    }
+
+    const fileMetadata = computeFileMetadata(filePath, typeof options["mime-type"] === "string" ? options["mime-type"] : presign.mimeType);
+    if (presign.sha256 && presign.sha256 !== fileMetadata.sha256) {
+      return {
+        ok: false,
+        error: "managed_storage_upload_sha256_mismatch",
+        expectedSha256: presign.sha256,
+        actualSha256: fileMetadata.sha256,
+      };
+    }
+    if (presign.fileSizeBytes !== null && presign.fileSizeBytes !== fileMetadata.fileSizeBytes) {
+      return {
+        ok: false,
+        error: "managed_storage_upload_file_size_mismatch",
+        expectedFileSizeBytes: presign.fileSizeBytes,
+        actualFileSizeBytes: fileMetadata.fileSizeBytes,
+      };
+    }
+
+    const uploadFileName =
+      typeof options["file-name"] === "string" && options["file-name"].trim()
+        ? String(options["file-name"]).trim()
+        : presign.fileName || fileMetadata.fileName;
+    const formData = new FormData();
+    formData.set("file", new Blob([fileMetadata.buffer], { type: fileMetadata.mimeType }), uploadFileName);
+    const response = await fetch(signedUrl, {
+      method: "POST",
+      body: formData,
+    });
+    const raw = await response.text();
+    let parsed = null;
+    try {
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch {
+      parsed = null;
+    }
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: `managed_storage_upload_failed:${response.status}`,
+        status: response.status,
+        response: parsed,
+        raw,
+      };
+    }
+    const uploadParsed = parseSignedUploadPayload(parsed);
+    const uploadOut =
+      resolveOptionalPathOption(options["upload-out"]) ||
+      (presign.orderId && presign.milestoneId ? defaultManagedStorageUploadPath(presign.orderId, presign.milestoneId) : "");
+    if (uploadOut) {
+      writeOptionalOutputFile(
+        uploadOut,
+        `${JSON.stringify(
+          {
+            orderId: presign.orderId || null,
+            milestoneId: presign.milestoneId || null,
+            request: {
+              fileName: uploadFileName,
+              mimeType: fileMetadata.mimeType,
+              fileSizeBytes: fileMetadata.fileSizeBytes,
+              sha256: fileMetadata.sha256,
+            },
+            response: parsed,
+            ipfsUri: uploadParsed.ipfsUri,
+          },
+          null,
+          2,
+        )}\n`,
+      );
+    }
+    return {
+      ok: true,
+      orderId: presign.orderId || null,
+      milestoneId: presign.milestoneId || null,
+      filePath,
+      fileName: uploadFileName,
+      mimeType: fileMetadata.mimeType,
+      fileSizeBytes: fileMetadata.fileSizeBytes,
+      sha256: fileMetadata.sha256,
+      presignFile: presignFile || null,
+      uploadOut: uploadOut || null,
+      response: parsed,
+      cid: uploadParsed.cid || null,
+      ipfsUri: uploadParsed.ipfsUri,
+      nextSubmitHint:
+        uploadParsed.ipfsUri && presign.orderId && presign.milestoneId
+          ? `clawnera-help milestone-submit-byo --order-id ${shellQuote(presign.orderId)} --milestone-id ${shellQuote(presign.milestoneId)} --payload-file ${shellQuote(filePath)} --manifest-cid ${shellQuote(uploadParsed.ipfsUri)} --auth-state-file <file>`
+          : null,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "managed_storage_upload_failed",
+    };
+  }
+}
+
+async function runPinataUploadJson(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: pinataUploadJsonUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+  const filePath =
+    typeof options.file === "string" && options.file.trim() ? path.resolve(String(options.file).trim()) : "";
+  if (!filePath || !fs.existsSync(filePath)) {
+    return {
+      ok: false,
+      error: "missing_upload_file",
+      filePath,
+    };
+  }
+  const jwtEnvName = typeof options["jwt-env"] === "string" && options["jwt-env"].trim()
+    ? String(options["jwt-env"]).trim()
+    : "PINATA_JWT";
+  const jwtFile =
+    typeof options["jwt-file"] === "string" && options["jwt-file"].trim()
+      ? path.resolve(String(options["jwt-file"]).trim())
+      : "";
+  const fileJwt = jwtFile && fs.existsSync(jwtFile) ? fs.readFileSync(jwtFile, "utf8").trim() : "";
+  const jwt =
+    (typeof options.jwt === "string" && options.jwt.trim() ? String(options.jwt).trim() : "") ||
+    fileJwt ||
+    (typeof process.env[jwtEnvName] === "string" ? process.env[jwtEnvName].trim() : "");
+  if (!jwt) {
+    return {
+      ok: false,
+      error: "missing_pinata_jwt",
+      hint: `set --jwt <token>, --jwt-file <file>, or export ${jwtEnvName}=...`,
+    };
+  }
+
+  try {
+    const parsed = readJsonFileSync(filePath, "invalid_json_upload_file");
+    const name =
+      typeof options.name === "string" && options.name.trim()
+        ? String(options.name).trim()
+        : path.basename(filePath);
+    const response = await fetch("https://api.pinata.cloud/pinning/pinJSONToIPFS", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${jwt}`,
+      },
+      body: JSON.stringify({
+        pinataContent: parsed,
+        pinataMetadata: { name },
+      }),
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok || !body?.IpfsHash) {
+      return {
+        ok: false,
+        error: `pinata_upload_failed:${response.status}`,
+        response: body,
+      };
+    }
+    return {
+      ok: true,
+      filePath,
+      name,
+      cid: body.IpfsHash,
+      ipfsUri: `ipfs://${body.IpfsHash}`,
+      gatewayUrl: `https://gateway.pinata.cloud/ipfs/${body.IpfsHash}`,
+      pinSize: body.PinSize ?? null,
+      timestamp: body.Timestamp ?? null,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "pinata_upload_failed",
+    };
+  }
+}
+
+async function runMilestoneSubmitByo(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: milestoneSubmitByoUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+  const orderId = typeof options["order-id"] === "string" ? options["order-id"].trim() : "";
+  const milestoneId = typeof options["milestone-id"] === "string" ? options["milestone-id"].trim() : "";
+  const payloadFile =
+    typeof options["payload-file"] === "string" && options["payload-file"].trim()
+      ? path.resolve(String(options["payload-file"]).trim())
+      : "";
+  const manifestCid = typeof options["manifest-cid"] === "string" ? options["manifest-cid"].trim() : "";
+  if (!orderId || !milestoneId || !payloadFile || !manifestCid) {
+    return {
+      ok: false,
+      error: "missing_order_id_milestone_id_payload_file_or_manifest_cid",
+    };
+  }
+  if (!fs.existsSync(payloadFile)) {
+    return {
+      ok: false,
+      error: "missing_payload_file",
+      payloadFile,
+    };
+  }
+
+  try {
+    const runtimeContext = await resolveApiRuntimeContext(options);
+    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const actorAddress =
+      normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
+      normalizeIotaAddress(signer.entry.address || "");
+    const orderCall = await callApiRoute({
+      method: "GET",
+      rawPath: `/orders/${orderId}`,
+      options,
+      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+    });
+    if (!orderCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(orderCall.result),
+        status: orderCall.result.status,
+        response: orderCall.result.body,
+      };
+    }
+    const order = ensureOrderPayload(orderCall.result.body);
+    const sellerAddress = normalizeIotaAddress(order.sellerAddress || "");
+    if (actorAddress !== sellerAddress) {
+      return {
+        ok: false,
+        error: "actor_not_order_seller",
+      };
+    }
+
+    const payload = normalizeManagedDeliverablePayload(readJsonFileSync(payloadFile, "invalid_payload_file"));
+    const recipients = Array.isArray(payload?.encrypted?.cekWraps) ? payload.encrypted.cekWraps : [];
+    const sellerRecipient = recipients.find((entry) => normalizeIotaAddress(entry.recipientAddress || "") === sellerAddress);
+    if (!sellerRecipient) {
+      return {
+        ok: false,
+        error: "seller_recipient_wrap_missing",
+      };
+    }
+    const prepared = await prepareMilestoneManifestForSigning({
+      orderId,
+      milestoneId,
+      sellerAddress,
+      sellerKeyVersion: sellerRecipient.keyVersion,
+      manifestCid,
+      cipherSuite: payload?.encrypted?.blob ? DEFAULT_E2EE_CIPHER_SUITE : DEFAULT_E2EE_CIPHER_SUITE,
+      recipients,
+    });
+    const signed = await signer.keypair.signPersonalMessage(new TextEncoder().encode(prepared.signingMessage));
+    const submitBody = buildSignedMilestoneSubmitPayload(prepared, signed.signature);
+    const bodyOut =
+      resolveOptionalPathOption(options["body-out"]) ||
+      path.resolve(process.cwd(), `clawnera-milestone-submit-${orderId}-${milestoneId}.json`);
+    writeOptionalOutputFile(bodyOut, `${JSON.stringify(submitBody, null, 2)}\n`);
+
+    const submitCall = await callApiRoute({
+      method: "POST",
+      rawPath: `/orders/${orderId}/milestones/${milestoneId}/submit`,
+      options: {
+        ...options,
+        body: JSON.stringify(submitBody),
+      },
+      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+    });
+    if (!submitCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(submitCall.result),
+        status: submitCall.result.status,
+        response: submitCall.result.body,
+      };
+    }
+    return {
+      ok: true,
+      orderId,
+      milestoneId,
+      bodyOut,
+      manifestCid,
+      manifestSha256: prepared.manifest.manifestSha256,
+      sellerSignatureHash: sha256Hex(signed.signature),
+      response: submitCall.result.body,
+      nextAnchorHint:
+        `clawnera-help milestone-anchor --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} ` +
+        `--submit-body-file ${shellQuote(bodyOut)} --auth-state-file ${shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json")}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "milestone_submit_byo_failed",
+    };
+  }
+}
+
+async function runMilestoneAnchor(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: milestoneAnchorUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+  const orderId = typeof options["order-id"] === "string" ? options["order-id"].trim() : "";
+  const milestoneId = typeof options["milestone-id"] === "string" ? options["milestone-id"].trim() : "";
+  if (!orderId || !milestoneId) {
+    return {
+      ok: false,
+      error: "missing_order_id_or_milestone_id",
+    };
+  }
+
+  try {
+    const runtimeContext = await resolveApiRuntimeContext(options);
+    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const actorAddress =
+      normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
+      normalizeIotaAddress(signer.entry.address || "");
+    const orderCall = await callApiRoute({
+      method: "GET",
+      rawPath: `/orders/${orderId}`,
+      options,
+      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+    });
+    if (!orderCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(orderCall.result),
+        status: orderCall.result.status,
+        response: orderCall.result.body,
+      };
+    }
+    const order = ensureOrderPayload(orderCall.result.body);
+    const sellerAddress = normalizeIotaAddress(order.sellerAddress || "");
+    if (actorAddress !== sellerAddress) {
+      return {
+        ok: false,
+        error: "actor_not_order_seller",
+      };
+    }
+
+    let manifestCid = typeof options["manifest-cid"] === "string" ? options["manifest-cid"].trim() : "";
+    let manifestSha256 = typeof options["manifest-sha256"] === "string" ? options["manifest-sha256"].trim() : "";
+    let sellerSignature = typeof options["seller-signature"] === "string" ? options["seller-signature"].trim() : "";
+    const submitBodyFile =
+      typeof options["submit-body-file"] === "string" && options["submit-body-file"].trim()
+        ? path.resolve(String(options["submit-body-file"]).trim())
+        : "";
+    if (submitBodyFile) {
+      const submitBody = readJsonFileSync(submitBodyFile, "invalid_submit_body_file");
+      manifestCid = manifestCid || submitBody?.manifest?.manifestCid || "";
+      manifestSha256 = manifestSha256 || submitBody?.manifest?.manifestSha256 || "";
+      sellerSignature = sellerSignature || submitBody?.manifest?.sellerSignature || "";
+    }
+    manifestCid = assertIpfsManifestCid(manifestCid);
+    manifestSha256 = assertLowerHex64(manifestSha256, "manifest_sha256");
+    sellerSignature = normalizeString(sellerSignature);
+    if (!sellerSignature) {
+      return {
+        ok: false,
+        error: "missing_seller_signature",
+      };
+    }
+
+    const { packageId } = await fetchPolicyAndChainConfig(options, {
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+    const anchorTx = buildMilestoneAnchorTx({
+      packageId,
+      sender: sellerAddress,
+      sellerAddress,
+      orderId,
+      milestoneId,
+      manifestCid,
+      manifestSha256,
+      sellerSignatureHash: sha256Hex(sellerSignature),
+    });
+    const executed = await executeTransaction(anchorTx, {
+      alias: signer.alias,
+      address: signer.address,
+      keystorePath: signer.keystorePath,
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+    const txDigest = executed.result?.digest || null;
+    if (!txDigest) {
+      return {
+        ok: false,
+        error: "missing_anchor_tx_digest",
+      };
+    }
+    const postCall = await callApiRoute({
+      method: "POST",
+      rawPath: `/orders/${orderId}/milestones/${milestoneId}/anchor`,
+      options: {
+        ...options,
+        body: JSON.stringify({ txDigest }),
+      },
+      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+    });
+    if (!postCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(postCall.result),
+        status: postCall.result.status,
+        response: postCall.result.body,
+      };
+    }
+    let getCall = null;
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+      getCall = await callApiRoute({
+        method: "GET",
+        rawPath: `/orders/${orderId}/milestones/${milestoneId}/anchor`,
+        options,
+        timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+      });
+      if (getCall.result.ok) {
+        break;
+      }
+      const errorCode = asRecord(getCall.result.body)?.error;
+      if (errorCode !== "anchor_not_found" || attempt === 4) {
+        break;
+      }
+      await sleep(1_000);
+    }
+    if (!getCall?.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(getCall?.result),
+        status: getCall?.result?.status || null,
+        response: getCall?.result?.body || null,
+      };
+    }
+    return {
+      ok: true,
+      orderId,
+      milestoneId,
+      txDigest,
+      anchor: getCall.result.body?.anchor || postCall.result.body?.anchor || null,
+      reconcile: postCall.result.body?.reconcile || null,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "milestone_anchor_failed",
+    };
+  }
+}
+
+async function runDeliverableDecrypt(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: deliverableDecryptUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  const resolvedManifestFile =
+    typeof options["resolved-manifest-file"] === "string" && options["resolved-manifest-file"].trim()
+      ? path.resolve(String(options["resolved-manifest-file"]).trim())
+      : "";
+  const payloadFile =
+    typeof options["payload-file"] === "string" && options["payload-file"].trim()
+      ? path.resolve(String(options["payload-file"]).trim())
+      : "";
+  if (!resolvedManifestFile && !payloadFile) {
+    return {
+      ok: false,
+      error: "missing_resolved_manifest_file_or_payload_file",
+    };
+  }
+  const inputFile = resolvedManifestFile || payloadFile;
+  if (!fs.existsSync(inputFile)) {
+    return {
+      ok: false,
+      error: "missing_decrypt_input_file",
+      inputFile,
+    };
+  }
+
+  try {
+    const runtimeContext =
+      options["auth-state-file"] || options["env-file"] || options["api-base"] || options.jwt
+        ? await resolveApiRuntimeContext(options)
+        : { authState: null, envValues: {} };
+    const actorAddress =
+      normalizeIotaAddress(options["recipient-address"] || "") ||
+      resolveActorAddressForSignedRun(options, runtimeContext);
+    if (!actorAddress) {
+      return {
+        ok: false,
+        error: "missing_recipient_address",
+      };
+    }
+    const raw = readJsonFileSync(inputFile, "invalid_decrypt_input_file");
+    const payload = resolvedManifestFile
+      ? normalizeManagedDeliverablePayload(raw?.resolvedManifest?.payload)
+      : normalizeManagedDeliverablePayload(raw);
+    const recipients = Array.isArray(payload?.encrypted?.cekWraps) ? payload.encrypted.cekWraps : [];
+    const wrap = recipients.find((entry) => normalizeIotaAddress(entry.recipientAddress || "") === actorAddress);
+    if (!wrap) {
+      return {
+        ok: false,
+        error: "recipient_wrap_not_found",
+      };
+    }
+    const keyFile = resolveKeyAgreementRecordPathOption(
+      actorAddress,
+      wrap.keyVersion,
+      options["key-file"],
+      runtimeContext.authStateFile,
+    );
+    const keyRecord = await loadKeyAgreementRecord(keyFile, {
+      expectedAddress: actorAddress,
+      expectedKeyVersion: wrap.keyVersion,
+      fallbackExpiresAtMs: Date.now() + 86_400_000
+    });
+    if (keyRecord.address !== actorAddress || keyRecord.keyVersion !== wrap.keyVersion) {
+      return {
+        ok: false,
+        error: "key_agreement_record_mismatch",
+        keyFile,
+      };
+    }
+    const plaintext = await decryptDeliverableForRecipient({
+      blob: payload.encrypted.blob,
+      wrap,
+      recipientPrivateKeyMultibase: keyRecord.privateKeyMultibase,
+    });
+    const plaintextOut =
+      resolveOptionalPathOption(options["plaintext-out"]) ||
+      path.resolve(process.cwd(), `clawnera-deliverable-${payload.orderId}-${payload.milestoneId}-${actorAddress.slice(2, 10)}.bin`);
+    fs.mkdirSync(path.dirname(plaintextOut), { recursive: true });
+    fs.writeFileSync(plaintextOut, Buffer.from(plaintext), { mode: 0o600 });
+    fs.chmodSync(plaintextOut, 0o600);
+    return {
+      ok: true,
+      orderId: payload.orderId,
+      milestoneId: payload.milestoneId,
+      recipientAddress: actorAddress,
+      plaintextOut,
+      plaintextBytes: plaintext.length,
+      plaintextSha256: sha256Hex(Buffer.from(plaintext)),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "deliverable_decrypt_failed",
+    };
+  }
+}
+
+function normalizeMailboxPostedEvent(item) {
+  const payload = item?.payloadJson && typeof item.payloadJson === "object" && !Array.isArray(item.payloadJson)
+    ? item.payloadJson
+    : {};
+  const seq = typeof payload.seq === "string" ? payload.seq.trim() : String(payload.seq ?? "").trim();
+  return {
+    category: "posted",
+    id: typeof item?.id === "string" ? item.id : null,
+    eventType: typeof item?.eventType === "string" ? item.eventType : "mailbox.signal_posted",
+    mailboxObjectId: typeof payload.mailboxObjectId === "string" ? payload.mailboxObjectId : item?.entityId || null,
+    orderId: typeof payload.orderId === "string" ? payload.orderId : null,
+    seq: seq || null,
+    sender: typeof payload.sender === "string" ? payload.sender : null,
+    senderRole: typeof payload.senderRole === "string" ? payload.senderRole : null,
+    signalIntent: typeof payload.signalIntent === "string" ? payload.signalIntent : null,
+    payloadRef: typeof payload.payloadRef === "string" ? payload.payloadRef : null,
+    ciphertextHash: typeof payload.ciphertextHash === "string" ? payload.ciphertextHash : null,
+    txDigest: typeof payload.txDigest === "string" ? payload.txDigest : null,
+    chainTimestampMs: typeof payload.chainCreatedAtMs === "string" ? payload.chainCreatedAtMs : null,
+    createdAt: typeof item?.createdAt === "string" ? item.createdAt : null,
+    raw: item,
+  };
+}
+
+function normalizeMailboxAckedEvent(item) {
+  const payload = item?.payloadJson && typeof item.payloadJson === "object" && !Array.isArray(item.payloadJson)
+    ? item.payloadJson
+    : {};
+  const ackedSeq = typeof payload.ackedSeq === "string" ? payload.ackedSeq.trim() : String(payload.ackedSeq ?? "").trim();
+  return {
+    category: "acked",
+    id: typeof item?.id === "string" ? item.id : null,
+    eventType: typeof item?.eventType === "string" ? item.eventType : "mailbox.signal_acked",
+    mailboxObjectId: typeof payload.mailboxObjectId === "string" ? payload.mailboxObjectId : item?.entityId || null,
+    orderId: typeof payload.orderId === "string" ? payload.orderId : null,
+    ackedSeq: ackedSeq || null,
+    acker: typeof payload.acker === "string" ? payload.acker : null,
+    ackerRole: typeof payload.ackerRole === "string" ? payload.ackerRole : null,
+    txDigest: typeof payload.txDigest === "string" ? payload.txDigest : null,
+    chainTimestampMs: typeof payload.chainAckedAtMs === "string" ? payload.chainAckedAtMs : null,
+    createdAt: typeof item?.createdAt === "string" ? item.createdAt : null,
+    raw: item,
+  };
+}
+
+function mailboxEventSortKey(event) {
+  const chainMs = Number.parseInt(String(event?.chainTimestampMs ?? ""), 10);
+  if (Number.isFinite(chainMs)) {
+    return chainMs;
+  }
+  const createdAtMs = Date.parse(String(event?.createdAt ?? ""));
+  if (Number.isFinite(createdAtMs)) {
+    return createdAtMs;
+  }
+  const seq = Number.parseInt(String(event?.seq ?? event?.ackedSeq ?? ""), 10);
+  return Number.isFinite(seq) ? seq : 0;
+}
+
+async function runMailboxEvents(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: mailboxEventsUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  const orderId = typeof options["order-id"] === "string" ? options["order-id"].trim() : "";
+  if (!orderId) {
+    return {
+      ok: false,
+      error: "missing_order_id",
+    };
+  }
+
+  try {
+    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+    const limit = parsePositiveIntOption(options.limit, "limit", 20);
+    const includeAcked = parseBooleanOption(options["include-acked"], true);
+    const mailboxCall = await callApiRoute({
+      method: "GET",
+      rawPath: `/orders/${orderId}/mailbox`,
+      options,
+      timeoutMs,
+    });
+    if (!mailboxCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(mailboxCall.result),
+        status: mailboxCall.result.status,
+        response: mailboxCall.result.body,
+      };
+    }
+    const mailboxObjectId =
+      typeof mailboxCall.result.body?.mailboxObjectId === "string" ? mailboxCall.result.body.mailboxObjectId.trim() : "";
+    if (!mailboxObjectId) {
+      return {
+        ok: false,
+        error: "mailbox_object_id_missing",
+      };
+    }
+
+    const postedCall = await callApiRoute({
+      method: "GET",
+      rawPath: `/events?scope=all&type=mailbox.signal_posted&limit=${limit}`,
+      options,
+      timeoutMs,
+    });
+    if (!postedCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(postedCall.result),
+        status: postedCall.result.status,
+        response: postedCall.result.body,
+      };
+    }
+    const postedItems = Array.isArray(postedCall.result.body?.items) ? postedCall.result.body.items : [];
+    const postedEvents = postedItems
+      .filter((item) => {
+        const payload = item?.payloadJson && typeof item.payloadJson === "object" && !Array.isArray(item.payloadJson)
+          ? item.payloadJson
+          : {};
+        return payload.orderId === orderId || payload.mailboxObjectId === mailboxObjectId || item?.entityId === mailboxObjectId;
+      })
+      .map(normalizeMailboxPostedEvent);
+
+    let ackedEvents = [];
+    if (includeAcked) {
+      const ackCall = await callApiRoute({
+        method: "GET",
+        rawPath: `/events?scope=all&type=mailbox.signal_acked&limit=${limit}`,
+        options,
+        timeoutMs,
+      });
+      if (!ackCall.result.ok) {
+        return {
+          ok: false,
+          error: summarizeApiFailure(ackCall.result),
+          status: ackCall.result.status,
+          response: ackCall.result.body,
+        };
+      }
+      const ackItems = Array.isArray(ackCall.result.body?.items) ? ackCall.result.body.items : [];
+      ackedEvents = ackItems
+        .filter((item) => {
+          const payload = item?.payloadJson && typeof item.payloadJson === "object" && !Array.isArray(item.payloadJson)
+            ? item.payloadJson
+            : {};
+          return payload.orderId === orderId || payload.mailboxObjectId === mailboxObjectId || item?.entityId === mailboxObjectId;
+        })
+        .map(normalizeMailboxAckedEvent);
+    }
+
+    const events = postedEvents.concat(ackedEvents).sort((left, right) => mailboxEventSortKey(left) - mailboxEventSortKey(right));
+    const latestPostedSeq = postedEvents.reduce((max, event) => {
+      const seq = Number.parseInt(String(event.seq ?? ""), 10);
+      return Number.isFinite(seq) && seq > max ? seq : max;
+    }, 0);
+    const latestAckByRole = ackedEvents.reduce((acc, event) => {
+      const role = event.ackerRole || "unknown";
+      const seq = Number.parseInt(String(event.ackedSeq ?? ""), 10);
+      if (Number.isFinite(seq) && (!Number.isFinite(acc[role]) || seq > acc[role])) {
+        acc[role] = seq;
+      }
+      return acc;
+    }, {});
+    const eventsOut = resolveOptionalPathOption(options["events-out"]);
+    if (eventsOut) {
+      writeOptionalOutputFile(eventsOut, `${JSON.stringify({ orderId, mailboxObjectId, events }, null, 2)}\n`);
+    }
+    return {
+      ok: true,
+      orderId,
+      mailboxObjectId,
+      limit,
+      includeAcked,
+      eventCount: events.length,
+      latestPostedSeq: latestPostedSeq || null,
+      latestAckByRole,
+      eventsOut: eventsOut || null,
+      events,
+      note:
+        "Current runtime can map seller DELIVERABLE_READY signals back as CHECKPOINT in the event feed; use payloadRef + ciphertextHash + seq, not only the label.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "mailbox_events_failed",
+    };
+  }
+}
+
+async function runMilestoneReject(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: milestoneRejectUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+  const orderId = typeof options["order-id"] === "string" ? options["order-id"].trim() : "";
+  const milestoneId = typeof options["milestone-id"] === "string" ? options["milestone-id"].trim() : "";
+  if (!orderId || !milestoneId) {
+    return {
+      ok: false,
+      error: "missing_order_id_or_milestone_id",
+    };
+  }
+
+  try {
+    let rejectionReasonHash = "";
+    let reasonSource = "hash";
+    if (typeof options["reason-hash"] === "string" && options["reason-hash"].trim()) {
+      rejectionReasonHash = normalizeSha256HashOption(options["reason-hash"], "reason_hash");
+    } else if (typeof options["reason-text"] === "string") {
+      const reasonText = String(options["reason-text"]);
+      if (!reasonText.trim()) {
+        return {
+          ok: false,
+          error: "missing_reason_text",
+        };
+      }
+      rejectionReasonHash = sha256Hex(Buffer.from(reasonText, "utf8"));
+      reasonSource = "text";
+    } else if (typeof options["reason-file"] === "string" && options["reason-file"].trim()) {
+      const reasonFile = path.resolve(String(options["reason-file"]).trim());
+      if (!fs.existsSync(reasonFile)) {
+        return {
+          ok: false,
+          error: "missing_reason_file",
+          reasonFile,
+        };
+      }
+      rejectionReasonHash = sha256Hex(fs.readFileSync(reasonFile));
+      reasonSource = "file";
+    } else {
+      return {
+        ok: false,
+        error: "missing_reason_text_file_or_hash",
+      };
+    }
+
+    const hashOut = resolveOptionalPathOption(options["hash-out"]);
+    if (hashOut) {
+      writeOptionalOutputFile(hashOut, `${rejectionReasonHash}\n`);
+    }
+    const rejectCall = await callApiRoute({
+      method: "POST",
+      rawPath: `/orders/${orderId}/milestones/${milestoneId}/reject`,
+      options: {
+        ...options,
+        body: JSON.stringify({ rejectionReasonHash }),
+      },
+      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+    });
+    if (!rejectCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(rejectCall.result),
+        status: rejectCall.result.status,
+        response: rejectCall.result.body,
+        rejectionReasonHash,
+      };
+    }
+    return {
+      ok: true,
+      orderId,
+      milestoneId,
+      rejectionReasonHash,
+      reasonSource,
+      hashOut: hashOut || null,
+      response: rejectCall.result.body,
+      nextDisputeHint: "clawnera-help recipe dispute-open",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "milestone_reject_failed",
+    };
+  }
+}
+
+function defaultReviewerShortlistReceiptPath(orderId, milestoneId) {
+  return path.resolve(process.cwd(), `clawnera-reviewer-shortlist-${orderId}-${milestoneId}.json`);
+}
+
+function defaultReviewerShortlistPublishPath(orderId, milestoneId) {
+  return path.resolve(process.cwd(), `clawnera-dispute-open-${orderId}-${milestoneId}.json`);
+}
+
+function parseOrderContextFile(contextFilePath, expectedOrderId, expectedMilestoneId) {
+  const raw = readJsonFileSync(contextFilePath, "invalid_order_context_file");
+  const wrapper = asRecord(raw);
+  const response = asRecord(wrapper?.response);
+  const order = asRecord(response?.order || wrapper?.order);
+  if (!order) {
+    throw new Error("order_context_missing_order");
+  }
+  const orderId = typeof order.id === "string" ? order.id.trim() : "";
+  if (expectedOrderId && orderId !== expectedOrderId) {
+    throw new Error("order_context_order_id_mismatch");
+  }
+  const buyerAddress = normalizeIotaAddress(order.buyerAddress || "");
+  const sellerAddress = normalizeIotaAddress(order.sellerAddress || "");
+  const escrowObjectId = normalizeIotaAddress(order.escrowObjectId || "");
+  const disputeBondObjectId = normalizeIotaAddress(order.disputeBondObjectId || "");
+  const orderStatus = typeof order.status === "string" ? order.status.trim() : null;
+  if (!buyerAddress || !sellerAddress) {
+    throw new Error("order_context_party_addresses_missing");
+  }
+  const milestones = Array.isArray(response?.milestones)
+    ? response.milestones
+    : Array.isArray(wrapper?.milestones)
+      ? wrapper.milestones
+      : [];
+  let milestoneStatus = null;
+  if (expectedMilestoneId && milestones.length > 0) {
+    const milestone = milestones.find((entry) => entry && typeof entry === "object" && entry.id === expectedMilestoneId);
+    if (!milestone) {
+      throw new Error("order_context_milestone_missing");
+    }
+    milestoneStatus = typeof milestone.status === "string" ? milestone.status.trim() : null;
+  }
+  return {
+    orderId,
+    buyerAddress,
+    sellerAddress,
+    escrowObjectId,
+    disputeBondObjectId,
+    orderStatus,
+    milestoneStatus,
+  };
+}
+
+async function runReviewerShortlist(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: reviewerShortlistUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  const orderId = typeof options["order-id"] === "string" ? options["order-id"].trim() : "";
+  const milestoneId = typeof options["milestone-id"] === "string" ? options["milestone-id"].trim() : "";
+  const scopeRaw = typeof options.scope === "string" ? options.scope.trim().toUpperCase() : "OPEN";
+  const scope = scopeRaw === "REPLACEMENT" ? "REPLACEMENT" : "OPEN";
+  const contextFile =
+    typeof options["order-context-file"] === "string" && options["order-context-file"].trim()
+      ? path.resolve(String(options["order-context-file"]).trim())
+      : "";
+  if (scope === "OPEN" && (!orderId || !milestoneId)) {
+    return {
+      ok: false,
+      error: "missing_order_id_or_milestone_id",
+    };
+  }
+  if (contextFile && !fs.existsSync(contextFile)) {
+    return {
+      ok: false,
+      error: "missing_order_context_file",
+      contextFile,
+    };
+  }
+
+  try {
+    const checkpoint = await fetchLatestCheckpointRefForCli(options);
+    const { chainConfig } =
+      scope === "REPLACEMENT"
+        ? await fetchPolicyAndChainConfig(options, {
+            network: options.network,
+            rpcUrl: options["rpc-url"],
+          })
+        : { chainConfig: null };
+    let replacementRequiredReviewerVotes = null;
+    if (scope === "REPLACEMENT") {
+      const disputeCaseObjectId = normalizeIotaAddress(options["dispute-case-id"] || "");
+      if (!disputeCaseObjectId) {
+        return {
+          ok: false,
+          error: "missing_dispute_case_id",
+        };
+      }
+      const disputeRead = await callApiRoute({
+        method: "GET",
+        rawPath: `/disputes/${disputeCaseObjectId}`,
+        options,
+        timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+      });
+      if (!disputeRead.result.ok) {
+        return {
+          ok: false,
+          error: summarizeApiFailure(disputeRead.result),
+          status: disputeRead.result.status,
+          response: disputeRead.result.body,
+        };
+      }
+      const liveDispute = asRecord(disputeRead.result.body?.disputeCase) || {};
+      const requiredReviewerVotesRaw = liveDispute.requiredReviewerVotes;
+      if (typeof requiredReviewerVotesRaw === "string" && /^\d+$/.test(requiredReviewerVotesRaw)) {
+        replacementRequiredReviewerVotes = Number.parseInt(requiredReviewerVotesRaw, 10);
+      } else if (typeof requiredReviewerVotesRaw === "number" && Number.isFinite(requiredReviewerVotesRaw)) {
+        replacementRequiredReviewerVotes = requiredReviewerVotesRaw;
+      }
+    }
+    let buyerAddress = normalizeIotaAddress(options["buyer-address"] || "");
+    let sellerAddress = normalizeIotaAddress(options["seller-address"] || "");
+    let escrowObjectId = normalizeIotaAddress(options["escrow-object-id"] || "");
+    let disputeBondObjectId = normalizeIotaAddress(options["bond-object-id"] || "");
+    let milestoneStatus = null;
+    let orderStatus = null;
+    if (contextFile) {
+      const context = parseOrderContextFile(contextFile, orderId, milestoneId);
+      buyerAddress = buyerAddress || context.buyerAddress;
+      sellerAddress = sellerAddress || context.sellerAddress;
+      escrowObjectId = escrowObjectId || context.escrowObjectId;
+      disputeBondObjectId = disputeBondObjectId || context.disputeBondObjectId;
+      orderStatus = context.orderStatus;
+      milestoneStatus = context.milestoneStatus;
+    }
+    if (scope === "OPEN" && (!buyerAddress || !sellerAddress)) {
+      return {
+        ok: false,
+        error: "missing_buyer_or_seller_address",
+        hint: "pass --buyer-address and --seller-address, or provide --order-context-file from a stored order/timeline readback",
+      };
+    }
+    if (scope === "OPEN" && (!escrowObjectId || !disputeBondObjectId)) {
+      return {
+        ok: false,
+        error: "missing_escrow_or_bond_object_id",
+        hint: "pass --escrow-object-id and --bond-object-id, or provide --order-context-file from a stored order/timeline readback that includes order bindings",
+      };
+    }
+
+    const reviewerCount =
+      scope === "REPLACEMENT" && replacementRequiredReviewerVotes && options["reviewer-count"] === undefined
+        ? replacementRequiredReviewerVotes
+        : parsePositiveIntOption(options["reviewer-count"], "reviewer_count", 3);
+    if (
+      scope === "REPLACEMENT" &&
+      replacementRequiredReviewerVotes &&
+      reviewerCount < replacementRequiredReviewerVotes
+    ) {
+      return {
+        ok: false,
+        error: "replacement_reviewer_count_below_required_votes",
+        requiredReviewerVotes: replacementRequiredReviewerVotes,
+        requestedReviewerCount: reviewerCount,
+        hint: "replacement rounds fully reset reviewer assignment; use at least the live requiredReviewerVotes count unless the dispute already lowered quorum size",
+      };
+    }
+
+    let effectiveCheckpointDigest = checkpoint.digest;
+    let effectiveCheckpointSequenceNumber = checkpoint.sequenceNumber;
+    let effectiveCheckpointTimestampMs = checkpoint.timestampMs;
+    const shortlistTimeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+    const body = {
+      scope,
+      orderId: scope === "OPEN" ? orderId : undefined,
+      milestoneId: scope === "OPEN" ? milestoneId : undefined,
+      buyerAddress: scope === "OPEN" ? buyerAddress : undefined,
+      sellerAddress: scope === "OPEN" ? sellerAddress : undefined,
+      disputeCaseObjectId: scope === "REPLACEMENT" ? normalizeIotaAddress(options["dispute-case-id"] || "") || undefined : undefined,
+      checkpointDigest: effectiveCheckpointDigest,
+      reviewerCount,
+      directoryScanLimit: parsePositiveIntOption(options["directory-scan-limit"], "directory_scan_limit", 1000),
+      minPerformanceScore: parsePositiveIntOption(options["min-performance-score"], "min_performance_score", 50),
+      minReputationScore: parsePositiveIntOption(options["min-reputation-score"], "min_reputation_score", 50),
+      minReputationConfidence: parsePositiveIntOption(options["min-reputation-confidence"], "min_reputation_confidence", 20),
+      allowNewReviewers: parseBooleanOption(options["allow-new-reviewers"], true),
+      minDecisionsTotal: parsePositiveIntOption(options["min-decisions-total"], "min_decisions_total", 0),
+      maxNoshowCount: parsePositiveIntOption(options["max-noshow-count"], "max_noshow_count", 3),
+      maxCommitRevealFailures: parsePositiveIntOption(options["max-commit-reveal-failures"], "max_commit_reveal_failures", 3),
+      excludedReviewerAddresses:
+        typeof options["excluded-reviewers"] === "string" && options["excluded-reviewers"].trim()
+          ? parseCommaSeparatedIotaAddresses(options["excluded-reviewers"], "excluded_reviewers")
+          : undefined,
+      blockedReviewerAddresses:
+        typeof options["blocked-reviewers"] === "string" && options["blocked-reviewers"].trim()
+          ? parseCommaSeparatedIotaAddresses(options["blocked-reviewers"], "blocked_reviewers")
+          : undefined,
+    };
+    const requestShortlist = async () =>
+      callApiRoute({
+        method: "POST",
+        rawPath: "/admin/reviewer-selection/shortlist",
+        options: {
+          ...options,
+          body: JSON.stringify(body),
+        },
+        timeoutMs: shortlistTimeoutMs,
+      });
+    let shortlistCall = await requestShortlist();
+    let checkpointDigestRetryCount = 0;
+    const maxCheckpointDigestRetries = 4;
+    while (checkpointDigestRetryCount < maxCheckpointDigestRetries) {
+      const shortlistFailureBody = asRecord(shortlistCall.result.body) || {};
+      const latestCheckpointDigest =
+        shortlistCall.result.status === 409 && shortlistFailureBody.error === "checkpoint_digest_mismatch"
+          ? typeof shortlistFailureBody.latestCheckpointDigest === "string"
+            ? shortlistFailureBody.latestCheckpointDigest.trim()
+            : ""
+          : "";
+      if (!latestCheckpointDigest || latestCheckpointDigest === effectiveCheckpointDigest) {
+        break;
+      }
+      effectiveCheckpointDigest = latestCheckpointDigest;
+      body.checkpointDigest = latestCheckpointDigest;
+      if (
+        typeof shortlistFailureBody.latestCheckpointSequenceNumber === "string" &&
+        /^\d+$/.test(shortlistFailureBody.latestCheckpointSequenceNumber)
+      ) {
+        effectiveCheckpointSequenceNumber = shortlistFailureBody.latestCheckpointSequenceNumber;
+      } else if (
+        typeof shortlistFailureBody.latestCheckpointSequenceNumber === "number" &&
+        Number.isFinite(shortlistFailureBody.latestCheckpointSequenceNumber)
+      ) {
+        effectiveCheckpointSequenceNumber = String(shortlistFailureBody.latestCheckpointSequenceNumber);
+      }
+      checkpointDigestRetryCount += 1;
+      shortlistCall = await requestShortlist();
+    }
+    if (!shortlistCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(shortlistCall.result),
+        status: shortlistCall.result.status,
+        response: shortlistCall.result.body,
+        checkpointDigest: effectiveCheckpointDigest,
+      };
+    }
+    const payload = asRecord(shortlistCall.result.body) || {};
+    const publishTarget = asRecord(payload.publishTarget) || {};
+    const requestPatch = asRecord(publishTarget.requestPatch) || null;
+    const publishRoute = typeof publishTarget.route === "string" ? publishTarget.route.trim() : "";
+    const receipt = asRecord(payload.receipt) || null;
+    const publishBody =
+      scope === "OPEN" && requestPatch
+        ? {
+            escrowObjectId,
+            bondObjectId: disputeBondObjectId,
+            ...requestPatch,
+          }
+        : scope === "REPLACEMENT" && requestPatch
+          ? {
+              reviewerRegistryObjectId: chainConfig?.reviewerRegistryObjectId || "",
+              ...requestPatch,
+            }
+        : requestPatch;
+    const receiptOut =
+      resolveOptionalPathOption(options["receipt-out"]) ||
+      defaultReviewerShortlistReceiptPath(orderId || "replacement", milestoneId || "case");
+    writeOptionalOutputFile(receiptOut, `${JSON.stringify(payload, null, 2)}\n`);
+    const publishBodyOut =
+      publishBody && publishRoute
+        ? resolveOptionalPathOption(options["publish-body-out"]) ||
+          defaultReviewerShortlistPublishPath(orderId || "replacement", milestoneId || "case")
+        : null;
+    if (publishBodyOut && publishBody) {
+      writeOptionalOutputFile(publishBodyOut, `${JSON.stringify(publishBody, null, 2)}\n`);
+    }
+
+    const selectionComplete = payload.selectionComplete === true;
+    const directoryScanTruncated = payload.directoryScanTruncated === true;
+    const allowTruncatedScan = parseBooleanOption(options["allow-truncated-scan"], false);
+    if (!selectionComplete) {
+      return {
+        ok: false,
+        error: "selection_incomplete",
+        checkpointDigest: effectiveCheckpointDigest,
+        receiptOut,
+        publishBodyOut,
+        response: payload,
+      };
+    }
+    if (directoryScanTruncated && !allowTruncatedScan) {
+      return {
+        ok: false,
+        error: "directory_scan_truncated",
+        checkpointDigest: effectiveCheckpointDigest,
+        receiptOut,
+        publishBodyOut,
+        response: payload,
+      };
+    }
+    const publishAuthStateFile =
+      typeof options["publish-auth-state-file"] === "string" && options["publish-auth-state-file"].trim()
+        ? path.resolve(String(options["publish-auth-state-file"]).trim())
+        : null;
+    const publishAuthHint = publishAuthStateFile
+      ? shellQuote(publishAuthStateFile)
+      : "<buyer-or-seller-auth-state-file>";
+    const warnings = [];
+    if (effectiveCheckpointDigest !== checkpoint.digest) {
+      warnings.push(
+        `checkpoint_digest_advanced_to=${effectiveCheckpointDigest}; retried shortlist automatically ${checkpointDigestRetryCount} time(s) after server reported newer finalized checkpoints`
+      );
+    }
+    if (scope === "OPEN" && milestoneStatus && !["REJECTED", "DISPUTED"].includes(milestoneStatus)) {
+      warnings.push(
+        `context_milestone_status=${milestoneStatus}; the saved context file may be stale. Re-read GET /orders/${orderId}/timeline with a buyer or seller auth state before publish if unsure.`
+      );
+    }
+    if (scope === "OPEN" && orderStatus && !["DISPUTED", "IN_PROGRESS"].includes(orderStatus)) {
+      warnings.push(
+        `context_order_status=${orderStatus}; verify the freshest party timeline before publish if this looks unexpected.`
+      );
+    }
+
+    return {
+      ok: true,
+      scope,
+      orderId: orderId || null,
+      milestoneId: milestoneId || null,
+      checkpointDigest: effectiveCheckpointDigest,
+      checkpointSequenceNumber: effectiveCheckpointSequenceNumber,
+      checkpointTimestampMs: effectiveCheckpointTimestampMs,
+      receiptId: typeof receipt?.id === "string" ? receipt.id : null,
+      receiptOut,
+      publishRoute,
+      publishBodyOut,
+      contextOrderStatus: orderStatus,
+      contextMilestoneStatus: milestoneStatus,
+      shortlistedReviewerAddresses: Array.isArray(receipt?.shortlistedReviewerAddresses)
+        ? receipt.shortlistedReviewerAddresses
+        : [],
+      warnings,
+      response: payload,
+      requiredReviewerVotes: replacementRequiredReviewerVotes,
+      nextPublishHint:
+        publishRoute && publishBodyOut
+          ? `clawnera-help tx-plan-execute POST ${shellQuote(publishRoute)} --auth-state-file ${publishAuthHint} --body-file ${shellQuote(publishBodyOut)}`
+          : null,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "reviewer_shortlist_failed",
+    };
+  }
+}
+
+async function runReviewerVotePrepare(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: reviewerVotePrepareUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  const caseId = typeof options["case-id"] === "string" ? options["case-id"].trim() : "";
+  if (!normalizeIotaAddress(caseId)) {
+    return {
+      ok: false,
+      error: "invalid_case_id",
+    };
+  }
+
+  try {
+    const vote = normalizeReviewerVoteValue(options.vote);
+    const runtimeContext =
+      options["auth-state-file"] || options["env-file"] || options["api-base"] || options.jwt
+        ? await resolveApiRuntimeContext(options)
+        : { authState: null, envValues: {} };
+    const reviewerAddress =
+      normalizeIotaAddress(options.address || "") ||
+      resolveActorAddressForSignedRun(options, runtimeContext);
+    if (!reviewerAddress) {
+      return {
+        ok: false,
+        error: "missing_reviewer_address",
+      };
+    }
+
+    let nonceHex = typeof options["nonce-hex"] === "string" ? options["nonce-hex"].trim().toLowerCase() : "";
+    if (nonceHex) {
+      bufferFromHex(nonceHex, "nonce_hex");
+    } else {
+      const nonceBytes =
+        options["nonce-bytes"] !== undefined
+          ? parsePositiveIntOption(options["nonce-bytes"], "nonce_bytes", 16)
+          : 16;
+      nonceHex = randomBytes(nonceBytes).toString("hex");
+    }
+
+    const evidenceHashHexInput =
+      typeof options["evidence-hash-hex"] === "string" ? options["evidence-hash-hex"].trim().toLowerCase() : "";
+    const evidenceFile = resolveOptionalPathOption(options["evidence-file"]);
+    const evidenceText = typeof options["evidence-text"] === "string" ? options["evidence-text"] : "";
+    const evidenceModes = [Boolean(evidenceHashHexInput), Boolean(evidenceFile), Boolean(evidenceText)].filter(Boolean).length;
+    if (evidenceModes > 1) {
+      return {
+        ok: false,
+        error: "multiple_evidence_sources",
+      };
+    }
+
+    let evidenceHashHex = null;
+    if (evidenceHashHexInput) {
+      evidenceHashHex = bufferFromHex(evidenceHashHexInput, "evidence_hash_hex").toString("hex");
+    } else if (evidenceFile) {
+      evidenceHashHex = createHash("sha256").update(fs.readFileSync(evidenceFile)).digest("hex");
+    } else if (evidenceText) {
+      evidenceHashHex = createHash("sha256").update(Buffer.from(evidenceText, "utf8")).digest("hex");
+    }
+
+    const commitHashHex = computeReviewerVoteCommitHashHex(caseId, reviewerAddress, vote, nonceHex);
+    return {
+      ok: true,
+      caseId: normalizeIotaAddress(caseId),
+      reviewerAddress,
+      vote,
+      voteLabel: vote === 1 ? "seller" : "buyer",
+      settlementTarget: vote === 1 ? "seller" : "buyer",
+      nonceHex,
+      commitHashHex,
+      evidenceHashHex,
+      commitRequestBody: {
+        commitHashHex,
+      },
+      revealRequestBody: {
+        vote,
+        nonceHex,
+        ...(evidenceHashHex ? { evidenceHashHex } : {}),
+      },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "reviewer_vote_prepare_failed",
+    };
+  }
+}
+
 function sponsorPreflightUsageLines() {
   return [
     "Sponsor preflight helper:",
@@ -2708,9 +7193,260 @@ function doctorUsageLines() {
     "Doctor helper:",
     "- Default: local toolchain only",
     "- Optional remote checks: --api-base <url>",
+    "- Optional auth-state shortcut: --auth-state-file <file>",
+    "- Optional env shortcut: --env-file <file>",
     "- Optional auth check: --jwt <token>",
     "- Optional timeout override: --timeout-ms <ms>",
     `- If unresolved after doctor, report in GitHub Issues: ${ISSUE_TRACKER_URL}`
+  ];
+}
+
+function walletListUsageLines() {
+  return [
+    "Wallet list helper:",
+    `- Defaults to local keystore path ${defaultIotaKeystorePath()}`,
+    "- Optional: --keystore-path <file>",
+    "- Lists local keystore aliases and addresses so weaker bots can stop guessing selectors",
+    "- Also reports the active IOTA CLI address when available"
+  ];
+}
+
+function apiRequestUsageLines() {
+  return [
+    "Authenticated request helper:",
+    "- Usage: clawnera-help request <GET|POST|PUT|PATCH|DELETE> </path>",
+    "- Optional auth shortcuts: --auth-state-file <file> or --env-file <file>",
+    "- Optional explicit auth: --api-base <url> --jwt <token>",
+    "- Optional body: --body '{\"json\":true}' or --body-file ./payload.json",
+    "- Optional nested body selection: --body-file ./payload.json --body-select commitRequestBody",
+    "- Optional output: --response-out ./response.json",
+    "- Optional idempotency: --idempotency-key <value|auto>",
+    "- POST/PUT/PATCH default to idempotency-key=auto unless you override it",
+    "- Use this instead of ad-hoc curl when following package recipes"
+  ];
+}
+
+function chainConfigUsageLines() {
+  return [
+    "Live chain config helper:",
+    "- Usage: clawnera-help chain-config [--api-base <url>] [--auth-state-file <file>]",
+    "- Reads /policy/fees to resolve packageId, then looks up governance/dispute-quorum/escrow config ids on-chain",
+    "- Optional IOTA runtime overrides: --network <name> --rpc-url <url>",
+    "- Use this when a bot must build local bond/escrow PTBs without guessing object ids"
+  ];
+}
+
+function txPlanUsageLines(mode) {
+  const label = mode === "dry_run" ? "dry-run" : "execute";
+  const verb = mode === "dry_run" ? "dry-runs" : "signs and broadcasts";
+  return [
+    `Tx-plan ${label} helper:`,
+    `- Usage: clawnera-help tx-plan-${label} <GET|POST|PUT|PATCH|DELETE> </path>`,
+    "- Reuses the same auth/body flags as `clawnera-help request`",
+    "- Fetches a canonical API tx plan, builds the PTB locally, then dry-runs or executes it",
+    "- Optional auth shortcuts: --auth-state-file <file> or --env-file <file>",
+    "- Optional explicit auth: --api-base <url> --jwt <token>",
+    "- Optional body: --body '{\"json\":true}' or --body-file ./payload.json",
+    "- Optional nested body selection: --body-file ./vote-prepare.json --body-select commitRequestBody",
+    "- Optional signer overrides: --alias <wallet-alias> --address <0x...> --keystore-path <file>",
+    "- Optional outputs: --plan-out <file> --tx-bytes-out <file>",
+    `- The package never sends a generic user PTB through the Clawnera worker; it ${verb} locally`
+  ];
+}
+
+function orderInitBondUsageLines() {
+  return [
+    "Local order bond init helper:",
+    "- Usage: clawnera-help order-init-bond --order-id <id> --auth-state-file <file>",
+    "- Reads the order + fee policy, resolves live chain config, then builds `init_order_dispute_bond` locally",
+    "- Optional: --required-reviewer-votes <odd-int> --required-reviewer-votes-floor <odd-int>",
+    "- Optional marketing: --marketing-campaign-id <id>",
+    "- Optional execution mode: --dry-run",
+    "- Optional signer overrides: --alias <wallet-alias> --address <0x...> --keystore-path <file>",
+    "- Use this before `tx-plan-execute POST /orders/{orderId}/dispute-bond/fund ...`"
+  ];
+}
+
+function orderCreateEscrowUsageLines() {
+  return [
+    "Local order escrow create helper:",
+    "- Usage: clawnera-help order-create-escrow --order-id <id> --auth-state-file <file>",
+    "- Reads the order + fee policy, resolves live chain config, then builds the buyer escrow creation PTB locally",
+    "- Default escrow deadline is now + 172800000 ms (2 days); override with --deadline-ms <unix-ms>",
+    "- IOTA orders may omit --payment-coin-object-id to split from tx.gas",
+    "- CLAW orders require --claw-coin-type plus either --payment-coin-object-id or --claw-coin-object-id",
+    "- Optional execution mode: --dry-run",
+    "- After execute, bind the created escrow object id with `clawnera-help request POST /orders/{orderId}/escrow/bind ...`"
+  ];
+}
+
+function keyAgreementUpsertUsageLines() {
+  return [
+    "Key agreement upsert helper:",
+    "- Usage: clawnera-help key-agreement-upsert --auth-state-file <file>",
+    "- Generates or reuses a local X25519 key-agreement key, wallet-signs the binding message, then PUTs /users/me/key-agreement",
+    "- Optional key selection: --key-version <int> --key-file <file> --rotate",
+    "- Optional lifetime: --ttl-sec <sec> or --expires-at-ms <unix-ms>",
+    "- Optional signer overrides: --alias <wallet-alias> --address <0x...> --keystore-path <file>",
+    "- Run this for seller and buyer before encrypted milestone delivery",
+    "- The helper now keeps retrying readback for indexer lag; if it still prints readback_pending, re-run GET /users/{address}/key-agreement before encrypted delivery"
+  ];
+}
+
+function reputationInitUsageLines() {
+  return [
+    "Reputation profile init helper:",
+    "- Usage: clawnera-help reputation-init --auth-state-file <file>",
+    "- Reads /policy/fees, resolves the live reputation fee config, then builds `reputation::create_reputation_profile_iota_entry` locally",
+    "- Uses tx.gas by default; fund the wallet first or pass --payment-coin-object-id <coin>",
+    "- Optional: --dry-run --alias <wallet-alias> --address <0x...> --keystore-path <file>",
+    "- Safe to rerun: if the actor already owns a reputation profile, this helper returns the existing object id"
+  ];
+}
+
+function reviewerRegisterUsageLines() {
+  return [
+    "Reviewer register helper:",
+    "- Usage: clawnera-help reviewer-register --auth-state-file <file>",
+    "- Requires a local key-agreement record and an on-chain reputation profile for the same actor",
+    "- Auto-resolves reviewer registry + dispute quorum config ids from the live chain config",
+    "- Uses the actor key-agreement public key as reviewer transportPubkeyHex",
+    "- Defaults: --min-case-reward-iota 1 and --stake-amount <live reviewer_min_stake_iota>",
+    "- Optional: --transport-type <u8> --transport-key-file <file> --transport-key-version <int> --dry-run",
+    "- Run `clawnera-help key-agreement-upsert` and `clawnera-help reputation-init` first when onboarding a fresh reviewer"
+  ];
+}
+
+function deliverableEncryptUsageLines() {
+  return [
+    "Deliverable encrypt helper:",
+    "- Usage: clawnera-help deliverable-encrypt --order-id <id> --milestone-id <id> --plaintext-file <file> --auth-state-file <file>",
+    "- Reads seller + buyer key-agreement records, encrypts the file locally, and writes one managed payload JSON",
+    "- Optional: --label <display-name> --payload-out <file> --seller-key-file <file> --seller-key-version <int> --buyer-key-version <int>",
+    "- The payload JSON is the file you upload next, preferably with managed storage if application/json is allowed"
+  ];
+}
+
+function managedStorageFeePayUsageLines() {
+  return [
+    "Managed storage fee helper:",
+    "- Usage: clawnera-help managed-storage-fee-pay --order-id <id> --milestone-id <id> --auth-state-file <file>",
+    "- Reads /policy/storage + /policy/fees, builds `manifest_anchor::pay_managed_storage_fee_iota` locally, then signs and broadcasts locally",
+    "- Optional: --proof-out <file> --dry-run --alias <wallet-alias> --address <0x...> --keystore-path <file>",
+    "- Use this before managed-storage presign. The same actor must later use the payment proof."
+  ];
+}
+
+function managedStoragePresignUsageLines() {
+  return [
+    "Managed storage presign helper:",
+    "- Usage: clawnera-help managed-storage-presign --order-id <id> --milestone-id <id> --file <payload.json> --payment-proof-file <file> --auth-state-file <file>",
+    "- Computes fileSizeBytes + sha256 locally, then POSTs /storage/uploads/presign in managed mode",
+    "- Optional: --mime-type <type> --file-name <name> --presign-out <file> --attempts <n> --delay-ms <ms>",
+    "- Retries `storage_fee_event_not_found` automatically so bots do not race the indexer"
+  ];
+}
+
+function managedStorageUploadUsageLines() {
+  return [
+    "Managed storage upload helper:",
+    "- Usage: clawnera-help managed-storage-upload --file <payload.json> --presign-file <file>",
+    "- Alternative: --signed-url <url>",
+    "- Uploads the local file to the signed managed-storage URL and prints the resulting CID / ipfs:// URI",
+    "- Optional: --mime-type <type> --file-name <name> --upload-out <file>",
+    "- Fails closed if the local file no longer matches the presigned size or sha256"
+  ];
+}
+
+function reviewerShortlistUsageLines() {
+  return [
+    "Reviewer shortlist helper:",
+    "- Usage: clawnera-help reviewer-shortlist --order-id <id> --milestone-id <id> --order-context-file <file> --auth-state-file <operator-auth-state>",
+    "- Replacement usage: clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <0x...> --auth-state-file <operator-auth-state>",
+    "- Fetches the latest finalized checkpoint digest, builds the canonical shortlist body, and writes the exact publish body for dispute-open or reviewer-replace",
+    "- Optional: --reviewer-count <n> --allow-new-reviewers <true|false> --min-decisions-total <n> --allow-truncated-scan <true|false>",
+    "- Optional: --escrow-object-id <0x...> --bond-object-id <0x...> when no stored order/timeline file is available",
+    "- Optional outputs: --receipt-out <file> --publish-body-out <file> --publish-auth-state-file <buyer-or-seller-auth-state> --rpc-url <url>",
+    "- The shortlist call itself uses operator auth. The saved publish body must then be published by the buyer or seller for that order.",
+    "- Important: shortlist success only prepares the exact publish body; current runtimes can still hard-stop on 409 reviewer_invite_tx_not_supported until the live package exposes invite-aware callables.",
+    "- Important: replacement rounds are full reassignment rounds; do not request only the missing delta slots unless the live case already lowered requiredReviewerVotes."
+  ];
+}
+
+function mailboxEventsUsageLines() {
+  return [
+    "Mailbox events helper:",
+    "- Usage: clawnera-help mailbox-events --order-id <id> --auth-state-file <file>",
+    "- Reads the bound mailbox object id, then fetches mailbox.signal_posted and mailbox.signal_acked events for that order",
+    "- Optional: --limit <n> --include-acked <true|false> --events-out <file>",
+    "- Use this instead of guessing seq numbers from raw /events queries"
+  ];
+}
+
+function pinataUploadJsonUsageLines() {
+  return [
+    "Pinata JSON upload helper:",
+    "- Usage: clawnera-help pinata-upload-json --file <payload.json>",
+    "- Auth: --jwt <token>, --jwt-file <file>, or export PINATA_JWT=...",
+    "- Optional: --jwt-env <ENV_NAME> --name <pin-name>",
+    "- Uploads one JSON file with pinJSONToIPFS and prints cid + ipfs:// URI"
+  ];
+}
+
+function milestoneSubmitByoUsageLines() {
+  return [
+    "Milestone submit helper (bring your own encrypted payload):",
+    "- Usage: clawnera-help milestone-submit-byo --order-id <id> --milestone-id <id> --payload-file <file> --manifest-cid ipfs://<cid> --auth-state-file <file>",
+    "- Builds the canonical managed-deliverable manifest, signs it with the seller wallet, and POSTs /orders/{orderId}/milestones/{milestoneId}/submit",
+    "- Optional output: --body-out <file>",
+    "- Run this only after the encrypted payload JSON is already uploaded"
+  ];
+}
+
+function milestoneAnchorUsageLines() {
+  return [
+    "Milestone anchor helper:",
+    "- Usage: clawnera-help milestone-anchor --order-id <id> --milestone-id <id> --submit-body-file <file> --auth-state-file <file>",
+    "- Builds the on-chain manifest-anchor PTB locally, executes it locally, then POSTs /orders/{orderId}/milestones/{milestoneId}/anchor",
+    "- Optional overrides: --manifest-cid ipfs://<cid> --manifest-sha256 <hex> --seller-signature <base64>",
+    "- Use the submit body from milestone-submit-byo unless you intentionally override fields"
+  ];
+}
+
+function milestoneRejectUsageLines() {
+  return [
+    "Milestone reject helper:",
+    "- Usage: clawnera-help milestone-reject --order-id <id> --milestone-id <id> --reason-text <text> --auth-state-file <file>",
+    "- Alternative inputs: --reason-file <file> or --reason-hash <64-hex|sha256:64-hex>",
+    "- Computes the canonical rejectionReasonHash locally when text/file input is used",
+    "- Optional: --hash-out <file>",
+    "- Use this instead of hand-building /reject bodies"
+  ];
+}
+
+function deliverableDecryptUsageLines() {
+  return [
+    "Deliverable decrypt helper:",
+    "- Usage: clawnera-help deliverable-decrypt --resolved-manifest-file <file> --auth-state-file <file>",
+    "- Alternative input: --payload-file <managed-payload.json>",
+    "- Optional key selection: --recipient-address <0x...> --key-file <file>",
+    "- Optional output: --plaintext-out <file>",
+    "- Decrypts locally from the actor key-agreement private key; the worker never sees plaintext"
+  ];
+}
+
+function reviewerVotePrepareUsageLines() {
+  return [
+    "Reviewer vote prepare helper:",
+    "- Usage: clawnera-help reviewer-vote-prepare --case-id <0x...> --vote <seller|buyer|0|1> [auth options]",
+    "- Optional auth shortcuts: --auth-state-file <file> or --env-file <file>",
+    "- Optional explicit reviewer selector: --address <0x...>",
+    "- Optional nonce input: --nonce-hex <hex> or --nonce-bytes <n> (default 16 random bytes)",
+    "- Optional evidence sources: --evidence-hash-hex <hex> | --evidence-file <path> | --evidence-text <text>",
+    "- Output includes vote, settlementTarget, nonceHex, commitHashHex, optional evidenceHashHex, and ready-to-paste commit/reveal bodies",
+    "- Direct next step: tx-plan-execute ... --body-file ./reviewer-vote.json --body-select commitRequestBody",
+    "- Commit hash rule: sha256(vote_byte || case_id_bytes || reviewer_address_bytes || nonce_bytes)",
+    "- Contract truth: vote=1 means seller settlement, vote=0 means buyer settlement",
   ];
 }
 
@@ -2831,16 +7567,24 @@ async function runDoctorCommand(commandArgs) {
     ...doctorData()
   };
 
-  const apiBase = normalizeApiBase(options["api-base"] || process.env.CLAWNERA_API_BASE_URL);
-  const jwt = typeof options.jwt === "string" ? String(options.jwt).trim() : String(process.env.CLAWNERA_API_JWT || "").trim();
   const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 8000);
+  const runtimeContext = await resolveApiRuntimeContext({
+    ...options,
+    "timeout-ms": timeoutMs
+  });
 
-  if (apiBase) {
-    report.remote = await collectRemoteDoctor(apiBase, jwt, timeoutMs);
+  if (runtimeContext.apiBase) {
+    report.remote = await collectRemoteDoctor(runtimeContext.apiBase, runtimeContext.jwt, timeoutMs);
     report.ok = report.remote.ok;
   } else {
     report.remote = null;
   }
+
+  report.authContext = {
+    envFile: runtimeContext.envFile,
+    authStateFile: runtimeContext.authStateFile,
+    authStateRefreshed: runtimeContext.authStateRefreshed
+  };
 
   return report;
 }
@@ -2857,6 +7601,15 @@ function printDoctorReport(report) {
     console.log("Remote API doctor:");
     console.log(`- apiBase: ${report.remote.apiBase}`);
     console.log(`- jwtProvided: ${report.remote.jwtProvided ? "yes" : "no"}`);
+    if (report.authContext?.envFile) {
+      console.log(`- envFile: ${report.authContext.envFile}`);
+    }
+    if (report.authContext?.authStateFile) {
+      console.log(`- authStateFile: ${report.authContext.authStateFile}`);
+    }
+    if (report.authContext?.authStateRefreshed) {
+      console.log("- authStateRefreshed: yes");
+    }
     for (const check of report.remote.checks) {
       const httpText = check.httpStatus ? ` http=${check.httpStatus}` : "";
       console.log(`- [${check.status}] ${check.path}:${httpText} ${check.detail}`);
@@ -3135,7 +7888,13 @@ function parseArgs(argv) {
 }
 
 function printJson(payload) {
-  process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+  process.stdout.write(
+    `${JSON.stringify(
+      payload,
+      (_key, value) => (typeof value === "bigint" ? value.toString() : value),
+      2,
+    )}\n`,
+  );
 }
 
   const { flags, command: parsedCommand, commandArgs } = parseArgs(process.argv.slice(2));
@@ -3161,7 +7920,35 @@ const aliasCommands = new Map([
   ["issue", "report-issue"],
   ["login", "auth-login"],
   ["jwt-login", "auth-login"],
+  ["wallets", "wallet-list"],
+  ["wallet-ls", "wallet-list"],
+  ["chain", "chain-config"],
+  ["tx-dry-run", "tx-plan-dry-run"],
+  ["tx-execute", "tx-plan-execute"],
+  ["plan-dry-run", "tx-plan-dry-run"],
+  ["plan-execute", "tx-plan-execute"],
+  ["bond-init", "order-init-bond"],
+  ["escrow-create", "order-create-escrow"],
+  ["key-agreement", "key-agreement-upsert"],
+  ["rep-init", "reputation-init"],
+  ["reviewer-onboard", "reviewer-register"],
+  ["delivery-encrypt", "deliverable-encrypt"],
+  ["storage-fee-pay", "managed-storage-fee-pay"],
+  ["storage-presign", "managed-storage-presign"],
+  ["storage-upload", "managed-storage-upload"],
+  ["operator-shortlist", "reviewer-shortlist"],
+  ["shortlist-reviewers", "reviewer-shortlist"],
+  ["mailbox-read", "mailbox-events"],
+  ["mailbox-history", "mailbox-events"],
+  ["delivery-decrypt", "deliverable-decrypt"],
+  ["milestone-submit", "milestone-submit-byo"],
+  ["delivery-reject", "milestone-reject"],
+  ["milestone-reject-hash", "milestone-reject"],
+  ["anchor-manifest", "milestone-anchor"],
+  ["vote-prepare", "reviewer-vote-prepare"],
   ["notify", "notifications"],
+  ["api-request", "request"],
+  ["http", "request"],
   ["iota-balance", "iota-get-balance"],
   ["iota-gas", "iota-get-gas"],
   ["iota-transfer-prepare", "iota-prepare-transfer"],
@@ -3189,7 +7976,29 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "report-issue",
         "path",
         "wallet-init",
+        "wallet-list",
         "auth-login",
+        "request",
+        "chain-config",
+        "tx-plan-dry-run",
+        "tx-plan-execute",
+        "order-init-bond",
+        "order-create-escrow",
+        "key-agreement-upsert",
+        "reputation-init",
+        "reviewer-register",
+        "deliverable-encrypt",
+        "managed-storage-fee-pay",
+        "managed-storage-presign",
+        "managed-storage-upload",
+        "reviewer-shortlist",
+        "mailbox-events",
+        "pinata-upload-json",
+        "milestone-submit-byo",
+        "milestone-anchor",
+        "milestone-reject",
+        "deliverable-decrypt",
+        "reviewer-vote-prepare",
         "iota-active-env",
         "iota-get-balance",
         "iota-get-gas",
@@ -3408,6 +8217,34 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   if (!result.ok && !result.help) {
     process.exitCode = 1;
   }
+} else if (effectiveCommand === "wallet-list") {
+  const result = await runWalletList(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`wallet_list_ok entries=${result.entryCount}`);
+    console.log(`keystore_path=${result.keystorePath}`);
+    if (result.activeCliAddressDetected) {
+      console.log(`active_cli_address=${result.activeCliAddress}`);
+    } else {
+      console.log("active_cli_address=unavailable");
+    }
+    for (const entry of result.entries) {
+      const alias = entry.alias || "<no-alias>";
+      const active = entry.active ? " active" : "";
+      console.log(`- ${alias}: ${entry.address}${active}`);
+    }
+  } else {
+    console.error(`wallet_list_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
 } else if (effectiveCommand === "auth-login") {
   const result = await runAuthLogin(commandArgs);
   if (flags.json) {
@@ -3442,6 +8279,581 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`auth_login_helper_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "request") {
+  const result = await runApiRequest(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else {
+    console.log(JSON.stringify(result, null, 2));
+    if (!result.ok) {
+      process.exitCode = 1;
+    }
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "chain-config") {
+  const result = await runChainConfig(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`chain_config_ok package_id=${result.chainConfig.packageId}`);
+    console.log(`governance_config_object_id=${result.chainConfig.governanceConfigObjectId}`);
+    console.log(`dispute_quorum_config_object_id=${result.chainConfig.disputeQuorumConfigObjectId}`);
+    console.log(`escrow_fee_config_object_id=${result.chainConfig.escrowFeeConfigObjectId}`);
+    console.log(`default_required_reviewer_votes=${result.chainConfig.defaultRequiredReviewerVotes}`);
+    console.log(`min_required_reviewer_votes=${result.chainConfig.minRequiredReviewerVotes}`);
+    console.log(`min_dispute_bond_per_side_iota=${result.chainConfig.minDisputeBondPerSideIota}`);
+    console.log(`reviewer_min_stake_iota=${result.chainConfig.reviewerMinStakeIota}`);
+  } else {
+    console.error(`chain_config_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "tx-plan-dry-run") {
+  const result = await runTxPlanCommand(commandArgs, "dry_run");
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`tx_plan_dry_run_ok builder=${result.txBuilder}`);
+    console.log(`path=${result.rawPath}`);
+    if (result.gasSummary) {
+      console.log(`gas_used=${result.gasSummary}`);
+    }
+    if (result.planOut) {
+      console.log(`plan_file=${result.planOut}`);
+    }
+    if (result.txBytesOut) {
+      console.log(`tx_bytes_file=${result.txBytesOut}`);
+    }
+  } else {
+    console.error(`tx_plan_dry_run_error: ${result.error}`);
+    if (result.txBuilder) {
+      console.error(`tx_builder=${result.txBuilder}`);
+    }
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "tx-plan-execute") {
+  const result = await runTxPlanCommand(commandArgs, "execute");
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`tx_plan_execute_ok builder=${result.txBuilder}`);
+    console.log(`tx_digest=${result.txDigest || "unknown"}`);
+    if (result.signerAddress) {
+      console.log(`signer_address=${result.signerAddress}`);
+    }
+    if (result.disputeBondObjectId) {
+      console.log(`dispute_bond_object_id=${result.disputeBondObjectId}`);
+    }
+    if (result.orderEscrowObjectId) {
+      console.log(`order_escrow_object_id=${result.orderEscrowObjectId}`);
+    }
+    if (result.orderMailboxObjectId) {
+      console.log(`order_mailbox_object_id=${result.orderMailboxObjectId}`);
+    }
+    if (result.quorumResolutionTicketObjectId) {
+      console.log(`quorum_resolution_ticket_object_id=${result.quorumResolutionTicketObjectId}`);
+    }
+    if (result.planOut) {
+      console.log(`plan_file=${result.planOut}`);
+    }
+    if (result.txBytesOut) {
+      console.log(`tx_bytes_file=${result.txBytesOut}`);
+    }
+  } else {
+    console.error(`tx_plan_execute_error: ${result.error}`);
+    if (result.txBuilder) {
+      console.error(`tx_builder=${result.txBuilder}`);
+    }
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "order-init-bond") {
+  const result = await runOrderInitBond(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`order_init_bond_ok order_id=${result.orderId}`);
+    if (result.txDigest) {
+      console.log(`tx_digest=${result.txDigest}`);
+    }
+    if (result.disputeBondObjectId) {
+      console.log(`dispute_bond_object_id=${result.disputeBondObjectId}`);
+    }
+    console.log(`default_required_reviewer_votes=${result.chainConfig.defaultRequiredReviewerVotes}`);
+    console.log(`min_dispute_bond_per_side_iota=${result.chainConfig.minDisputeBondPerSideIota}`);
+  } else {
+    console.error(`order_init_bond_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "order-create-escrow") {
+  const result = await runOrderCreateEscrow(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`order_create_escrow_ok order_id=${result.orderId}`);
+    if (result.txDigest) {
+      console.log(`tx_digest=${result.txDigest}`);
+    }
+    if (result.orderEscrowObjectId) {
+      console.log(`order_escrow_object_id=${result.orderEscrowObjectId}`);
+      console.log(
+        `next_bind=clawnera-help request POST /orders/${result.orderId}/escrow/bind --auth-state-file ~/.config/clawnera/auth-state.json --body '{\"escrowObjectId\":\"${result.orderEscrowObjectId}\"}'`,
+      );
+    }
+  } else {
+    console.error(`order_create_escrow_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "key-agreement-upsert") {
+  const result = await runKeyAgreementUpsert(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`key_agreement_upsert_ok address=${result.address}`);
+    console.log(`key_version=${result.keyVersion}`);
+    console.log(`key_file=${result.keyFile}`);
+    console.log(`public_key_multibase=${result.publicKeyMultibase}`);
+    if (result.readbackPending) {
+      console.log("warning=key_agreement_readback_pending");
+      if (result.verifyHint) {
+        console.log(`verify_readback=${result.verifyHint}`);
+      }
+    }
+  } else {
+    console.error(`key_agreement_upsert_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "reputation-init") {
+  const result = await runReputationInit(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`reputation_init_ok address=${result.actorAddress}`);
+    if (result.mode === "existing") {
+      console.log("mode=existing");
+    } else if (result.mode === "dry_run") {
+      console.log("mode=dry_run");
+      if (result.gasSummary) {
+        console.log(`gas_used=${result.gasSummary}`);
+      }
+    } else {
+      console.log("mode=execute");
+      if (result.txDigest) {
+        console.log(`tx_digest=${result.txDigest}`);
+      }
+    }
+    if (result.reputationProfileObjectId) {
+      console.log(`reputation_profile_object_id=${result.reputationProfileObjectId}`);
+    }
+    if (result.feePolicy?.configObjectId) {
+      console.log(`reputation_fee_config_object_id=${result.feePolicy.configObjectId}`);
+    }
+    if (result.feePolicy?.amount) {
+      console.log(`reputation_init_fee_amount=${result.feePolicy.amount}`);
+    }
+  } else {
+    console.error(`reputation_init_error: ${result.error}`);
+    if (result.hint) {
+      console.error(`hint=${result.hint}`);
+    }
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "reviewer-register") {
+  const result = await runReviewerRegister(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`reviewer_register_ok address=${result.actorAddress}`);
+    if (result.mode) {
+      console.log(`mode=${result.mode}`);
+    }
+    if (result.txDigest) {
+      console.log(`tx_digest=${result.txDigest}`);
+    }
+    if (result.reviewer?.objectId) {
+      console.log(`reviewer_entry_object_id=${result.reviewer.objectId}`);
+    }
+    if (result.requestBody?.reputationProfileObjectId) {
+      console.log(`reputation_profile_object_id=${result.requestBody.reputationProfileObjectId}`);
+    }
+    if (result.requestBody?.stakeAmount) {
+      console.log(`stake_amount=${result.requestBody.stakeAmount}`);
+    }
+    if (result.requestBody?.transportPubkeyHex) {
+      console.log(`transport_pubkey_hex=${result.requestBody.transportPubkeyHex}`);
+    }
+  } else {
+    console.error(`reviewer_register_error: ${result.error}`);
+    if (result.hint) {
+      console.error(`hint=${result.hint}`);
+    }
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "deliverable-encrypt") {
+  const result = await runDeliverableEncrypt(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`deliverable_encrypt_ok order_id=${result.orderId} milestone_id=${result.milestoneId}`);
+    console.log(`payload_out=${result.payloadOut}`);
+    console.log(`ciphertext_sha256=${result.ciphertextSha256}`);
+    console.log(`next_upload=${result.nextUploadHint}`);
+    console.log(`next_submit=${result.nextSubmitHint}`);
+  } else {
+    console.error(`deliverable_encrypt_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "managed-storage-fee-pay") {
+  const result = await runManagedStorageFeePay(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`managed_storage_fee_pay_ok order_id=${result.orderId} milestone_id=${result.milestoneId}`);
+    if (result.txDigest) {
+      console.log(`tx_digest=${result.txDigest}`);
+    }
+    if (result.proofOut) {
+      console.log(`payment_proof_file=${result.proofOut}`);
+    }
+    if (result.nextPresignHint) {
+      console.log(`next_presign=${result.nextPresignHint}`);
+    }
+  } else {
+    console.error(`managed_storage_fee_pay_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "managed-storage-presign") {
+  const result = await runManagedStoragePresign(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`managed_storage_presign_ok order_id=${result.orderId} milestone_id=${result.milestoneId}`);
+    console.log(`presign_file=${result.presignOut}`);
+    if (result.response?.upload?.expiresAt) {
+      console.log(`expires_at=${result.response.upload.expiresAt}`);
+    }
+    console.log(`next_upload=${result.nextUploadHint}`);
+  } else {
+    console.error(`managed_storage_presign_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "managed-storage-upload") {
+  const result = await runManagedStorageUpload(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`managed_storage_upload_ok file=${result.filePath}`);
+    if (result.ipfsUri) {
+      console.log(`ipfs_uri=${result.ipfsUri}`);
+    }
+    if (result.uploadOut) {
+      console.log(`upload_file=${result.uploadOut}`);
+    }
+    if (result.nextSubmitHint) {
+      console.log(`next_submit=${result.nextSubmitHint}`);
+    }
+  } else {
+    console.error(`managed_storage_upload_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "reviewer-shortlist") {
+  const result = await runReviewerShortlist(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`reviewer_shortlist_ok scope=${result.scope}`);
+    if (result.orderId) {
+      console.log(`order_id=${result.orderId}`);
+    }
+    if (result.milestoneId) {
+      console.log(`milestone_id=${result.milestoneId}`);
+    }
+    console.log(`checkpoint_digest=${result.checkpointDigest}`);
+    console.log(`checkpoint_sequence_number=${result.checkpointSequenceNumber}`);
+    if (result.receiptId) {
+      console.log(`receipt_id=${result.receiptId}`);
+    }
+    if (result.receiptOut) {
+      console.log(`receipt_file=${result.receiptOut}`);
+    }
+    if (result.publishBodyOut) {
+      console.log(`publish_body_file=${result.publishBodyOut}`);
+    }
+    if (Array.isArray(result.shortlistedReviewerAddresses) && result.shortlistedReviewerAddresses.length > 0) {
+      console.log(`shortlisted_reviewers=${result.shortlistedReviewerAddresses.join(",")}`);
+    }
+    if (Array.isArray(result.warnings) && result.warnings.length > 0) {
+      for (const warning of result.warnings) {
+        console.log(`warning=${warning}`);
+      }
+    }
+    if (result.nextPublishHint) {
+      console.log(`next_publish=${result.nextPublishHint}`);
+    }
+  } else {
+    console.error(`reviewer_shortlist_error: ${result.error}`);
+    if (result.receiptOut) {
+      console.error(`receipt_file=${result.receiptOut}`);
+    }
+    if (result.publishBodyOut) {
+      console.error(`publish_body_file=${result.publishBodyOut}`);
+    }
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "mailbox-events") {
+  const result = await runMailboxEvents(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`mailbox_events_ok order_id=${result.orderId}`);
+    console.log(`mailbox_object_id=${result.mailboxObjectId}`);
+    console.log(`event_count=${result.eventCount}`);
+    if (result.latestPostedSeq !== null) {
+      console.log(`latest_posted_seq=${result.latestPostedSeq}`);
+    }
+    for (const [role, ackedSeq] of Object.entries(result.latestAckByRole || {})) {
+      console.log(`latest_ack_${role}=${ackedSeq}`);
+    }
+    if (result.eventsOut) {
+      console.log(`events_file=${result.eventsOut}`);
+    }
+    if (result.note) {
+      console.log(`note=${result.note}`);
+    }
+  } else {
+    console.error(`mailbox_events_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "pinata-upload-json") {
+  const result = await runPinataUploadJson(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`pinata_upload_json_ok file=${result.filePath}`);
+    console.log(`cid=${result.cid}`);
+    console.log(`ipfs_uri=${result.ipfsUri}`);
+  } else {
+    console.error(`pinata_upload_json_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "milestone-submit-byo") {
+  const result = await runMilestoneSubmitByo(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`milestone_submit_byo_ok order_id=${result.orderId} milestone_id=${result.milestoneId}`);
+    console.log(`body_out=${result.bodyOut}`);
+    console.log(`manifest_cid=${result.manifestCid}`);
+    console.log(`manifest_sha256=${result.manifestSha256}`);
+    console.log(`next_anchor=${result.nextAnchorHint}`);
+  } else {
+    console.error(`milestone_submit_byo_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "milestone-anchor") {
+  const result = await runMilestoneAnchor(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`milestone_anchor_ok order_id=${result.orderId} milestone_id=${result.milestoneId}`);
+    console.log(`tx_digest=${result.txDigest}`);
+  } else {
+    console.error(`milestone_anchor_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "milestone-reject") {
+  const result = await runMilestoneReject(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`milestone_reject_ok order_id=${result.orderId} milestone_id=${result.milestoneId}`);
+    console.log(`rejection_reason_hash=${result.rejectionReasonHash}`);
+    if (result.hashOut) {
+      console.log(`hash_file=${result.hashOut}`);
+    }
+    if (result.nextDisputeHint) {
+      console.log(`next_dispute=${result.nextDisputeHint}`);
+    }
+  } else {
+    console.error(`milestone_reject_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "deliverable-decrypt") {
+  const result = await runDeliverableDecrypt(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`deliverable_decrypt_ok order_id=${result.orderId} milestone_id=${result.milestoneId}`);
+    console.log(`plaintext_out=${result.plaintextOut}`);
+    console.log(`plaintext_sha256=${result.plaintextSha256}`);
+  } else {
+    console.error(`deliverable_decrypt_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "reviewer-vote-prepare") {
+  const result = await runReviewerVotePrepare(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`reviewer_vote_prepare_ok case_id=${result.caseId}`);
+    console.log(`reviewer_address=${result.reviewerAddress}`);
+    console.log(`vote=${result.vote}`);
+    console.log(`settlement_target=${result.settlementTarget}`);
+    console.log(`nonce_hex=${result.nonceHex}`);
+    console.log(`commit_hash_hex=${result.commitHashHex}`);
+    if (result.evidenceHashHex) {
+      console.log(`evidence_hash_hex=${result.evidenceHashHex}`);
+    }
+    console.log(`commit_body=${JSON.stringify(result.commitRequestBody)}`);
+    console.log(`reveal_body=${JSON.stringify(result.revealRequestBody)}`);
+  } else {
+    console.error(`reviewer_vote_prepare_error: ${result.error}`);
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {
@@ -3570,6 +8982,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`iota_execute_transfer_ok tx_digest=${result.txDigest || "unknown"}`);
     console.log(`signer_address=${result.signerAddress}`);
     console.log(`drafts_file=${result.draftsPath}`);
+    if (typeof result.result?.confirmedLocalExecution === "boolean") {
+      console.log(`confirmed_local_execution=${String(result.result.confirmedLocalExecution)}`);
+    }
+    console.log("next_readback=use tx_digest as the canonical on-chain lookup handle");
   } else {
     console.error(`iota_execute_transfer_error: ${result.error}`);
     process.exitCode = 1;

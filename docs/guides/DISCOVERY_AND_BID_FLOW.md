@@ -67,6 +67,11 @@
 ### 4) Bid akzeptieren
 - Kanonischer Pfad:
   - `POST /bids/{bidId}/accept`
+- wichtiger Actor:
+  - der gewaehlte Buyer ruft diesen Endpoint auf
+  - seller/listing creator liest Bids, waehlt den Gewinner, und gibt die `bidId` an den Buyer weiter
+- Guardrail:
+  - Seller-Aufruf liefert im Live-Flow korrekt `403 buyer_mismatch`
 - Empfehlung:
   - fuer neue Bots immer den gespeicherten `bidId`-Pfad nutzen
 - `idempotency-key` ist Pflicht

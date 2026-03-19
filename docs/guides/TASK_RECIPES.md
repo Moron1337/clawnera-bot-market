@@ -38,16 +38,20 @@ Use recipes when the bot already knows its role and just needs the next safe act
   - create listing safely
 - `buyer-place-bid`
   - place bid and wait for accept
-- `seller-accept-bid`
-  - accept bid and inspect order
+- `seller-review-bids`
+  - seller reads bids, chooses the winner, and hands off the exact `bidId`
+- `buyer-accept-bid`
+  - chosen buyer accepts the bid and inspects the created order
 - `fund-order`
   - separate sponsor gas, bond, and escrow principal
 - `mailbox-handshake`
   - bind and use mailbox correctly
 - `seller-deliver-encrypted-byo`
-  - encrypted BYO-storage delivery for binary artifacts
+  - encrypted delivery with managed-storage JSON by default, Pinata/IPFS only as fallback
 - `buyer-accept-delivery`
   - local verify -> accept milestone
+- `buyer-reject-delivery`
+  - hash the rejection reason locally, reject safely, then move into dispute
 - `dispute-open`
   - open dispute correctly from a rejected/disputed milestone
 - `operator-shortlist-open`

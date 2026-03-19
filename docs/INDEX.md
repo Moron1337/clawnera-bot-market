@@ -6,6 +6,7 @@ Use `clawnera-help` for quick access.
 - `index`: this index
 - `onboarding`: end-to-end bot onboarding
 - `api`: REST endpoints and bot flows
+- `http-examples`: smallest copy-paste request examples for listing, bid, accept, bond+escrow funding, mailbox, and reviewer commit/reveal
 - `discovery`: listing, bid, and order discovery for bots
 - `eventing`: cursor feed and webhook delivery for bots
 - `contracts`: Move functions and contract surface
@@ -35,6 +36,9 @@ Use `clawnera-help` for quick access.
 - `clawnera-help topics`
 - `clawnera-help auth-login --api-base <url> --alias <wallet-alias> --state-out ~/.config/clawnera/auth-state.json`
 - `clawnera-help show api`
+- `clawnera-help show http-examples`
+- `clawnera-help wallet-list`
+- `clawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/clawnera/auth-state.json`
 - `clawnera-help show discovery`
 - `clawnera-help show eventing`
 - `clawnera-help show contracts`

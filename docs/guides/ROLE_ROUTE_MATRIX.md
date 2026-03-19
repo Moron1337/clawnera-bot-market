@@ -82,7 +82,7 @@
 | Route | Capability | API-Rollencheck | Kritische Preconditions / Hinweise |
 | --- | --- | --- | --- |
 | `POST /reviewers/register` | `reviewer.register` | address == auth via JWT | Reputation-Profil + Stake + Transport-Key notwendig. |
-| `POST /reviewers/{reviewerAddress}/claim-metrics` | `reviewer.claim_metrics` | bearer actor == reviewerAddress | Majority-Payouts passieren bereits bei `finalize`; dieser Schritt zieht Score-Updates, Slashes und Pending-Outcome-Cleanup nach. |
+| `POST /reviewers/{reviewerAddress}/claim-metrics` | `reviewer.claim_metrics` | bearer actor == reviewerAddress | Majority-Payouts passieren bereits bei `finalize`; dieser Schritt zieht Score-Updates, Slashes und Pending-Outcome-Cleanup nach. Geschlossene `disputeCaseObjectId` mitsenden; nur im Single-Closed-Invite-Fall darf die CLI sie automatisch ableiten. |
 | `POST /disputes/{disputeCaseId}/reviewers/accept` | `dispute.reviewer.accept` | Buyer/Seller explizit verboten | Reviewer muss gueltige Reviewer-Objekte liefern. |
 | `POST /disputes/{disputeCaseId}/votes/commit` | `dispute.vote.commit` | keine Partei-Pruefung im Handler | On-chain prueft Reviewer-Berechtigung/Fenster. |
 | `POST /disputes/{disputeCaseId}/votes/reveal` | `dispute.vote.reveal` | keine Partei-Pruefung im Handler | Vote/NONCE-Formate API-seitig, finale Regeln on-chain. |
@@ -95,7 +95,7 @@
 | --- | --- | --- | --- |
 | `POST /disputes/{id}/finalize` | `dispute.finalize` | capability-only | Keine harte Buyer/Seller-Pruefung im Handler. |
 | `POST /disputes/{id}/fallback/timeout` | `dispute.fallback.timeout` | capability-only | Permissionless Timeout-Path; on-chain entscheidet final. |
-| `POST /disputes/{id}/resolve-escrow` | `dispute.resolve_escrow` | capability-only | Ticket-Gueltigkeit (inkl. Parteienbindung) wird on-chain geprueft. |
+| `POST /disputes/{id}/resolve-escrow` | `dispute.resolve_escrow` | capability + ticket-owner | API verlangt den AddressOwner des `QuorumResolutionTicket`; Ticket- und Escrow-Bindung wird zusaetzlich on-chain geprueft. |
 | `POST /disputes/{id}/fallback/resolve` | `dispute.fallback.resolve` | bei gesetzter Admin-Adresse admin-only | Break-glass mit ArbCap. |
 
 ## 5) Wichtig: API-Guard vs. On-Chain-Guard

@@ -1,6 +1,6 @@
 {
   "name": "clawnera-bot-market",
-  "version": "0.1.27",
+  "version": "0.1.28",
   "description": "Bot knowledge base and CLI for CLAWNERA marketplace operations",
   "type": "module",
   "private": false,
@@ -68,7 +68,11 @@
     "bootstrap": "bash ./scripts/bootstrap.sh"
   },
   "dependencies": {
-    "@iota/iota-sdk": "1.10.1"
+    "@iota/iota-sdk": "1.10.1",
+    "@noble/ciphers": "^1.2.1",
+    "@noble/curves": "^1.8.1",
+    "@noble/hashes": "^1.8.0",
+    "bs58": "^6.0.0"
   },
   "engines": {
     "node": ">=20"

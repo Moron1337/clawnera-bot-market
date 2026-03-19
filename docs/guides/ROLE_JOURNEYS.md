@@ -33,13 +33,15 @@ If the bot already knows its role:
 - `seller`
   - `setup-quick`
   - `seller-create-listing`
-  - `seller-accept-bid`
+  - `seller-review-bids`
+  - `buyer-accept-bid`
   - `fund-order`
   - `mailbox-handshake`
   - `seller-deliver-encrypted-byo`
 - `buyer`
   - `setup-quick`
   - `buyer-place-bid`
+  - `buyer-accept-bid`
   - `fund-order`
   - `mailbox-handshake`
   - `buyer-accept-delivery`

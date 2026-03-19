@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.28] - 2026-03-19
+
+- Tightened the reviewer `claim-metrics` helper for weaker bots: the CLI now auto-fills the closed `disputeCaseObjectId` only when exactly one closed reviewer invite exists, and it exposes that inferred case id in `autoHydratedReviewerContext`.
+- Added an early stop for already-cleared reviewer outcomes: if `GET /reviewers/me/metrics` already shows `pendingDecisionMetricsClaimRequired=false`, the CLI now returns `409 reviewer_metrics_claim_not_required` instead of broadcasting another no-op metrics claim transaction.
+- Clarified the packaged reviewer docs and recipes so bots know the exact one-time claim semantics, the required closed-case id, and the safe stop conditions after dispute resolution.
+
 ## [0.1.27] - 2026-03-19
 
 - Added a new role-level journey layer for weaker bots and LLMs:

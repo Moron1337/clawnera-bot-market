@@ -5,6 +5,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -70,6 +71,18 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /clawnera-help recipes/);
   assert.match(result.stdout, /clawnera-help recipe <id>/);
   assert.match(result.stdout, /clawnera-help wallet-init/);
+  assert.match(result.stdout, /clawnera-help wallet-list/);
+  assert.match(result.stdout, /clawnera-help request <METHOD> <path>/);
+  assert.match(result.stdout, /clawnera-help key-agreement-upsert/);
+  assert.match(result.stdout, /clawnera-help reputation-init/);
+  assert.match(result.stdout, /clawnera-help reviewer-register/);
+  assert.match(result.stdout, /clawnera-help deliverable-encrypt/);
+  assert.match(result.stdout, /clawnera-help mailbox-events/);
+  assert.match(result.stdout, /clawnera-help milestone-submit-byo/);
+  assert.match(result.stdout, /clawnera-help milestone-anchor/);
+  assert.match(result.stdout, /clawnera-help milestone-reject/);
+  assert.match(result.stdout, /clawnera-help deliverable-decrypt/);
+  assert.match(result.stdout, /clawnera-help reviewer-vote-prepare/);
   assert.match(result.stdout, /clawnera-help iota-get-balance/);
   assert.match(result.stdout, /clawnera-help iota-prepare-transfer/);
   assert.match(result.stdout, /clawnera-help iota-execute-transfer/);
@@ -90,8 +103,82 @@ test("help json output includes auth-login command", () => {
   assert.ok(payload.commands.includes("recipes"));
   assert.ok(payload.commands.includes("recipe"));
   assert.ok(payload.commands.includes("wallet-init"));
+  assert.ok(payload.commands.includes("wallet-list"));
+  assert.ok(payload.commands.includes("request"));
+  assert.ok(payload.commands.includes("key-agreement-upsert"));
+  assert.ok(payload.commands.includes("reputation-init"));
+  assert.ok(payload.commands.includes("reviewer-register"));
+  assert.ok(payload.commands.includes("deliverable-encrypt"));
+  assert.ok(payload.commands.includes("mailbox-events"));
+  assert.ok(payload.commands.includes("milestone-submit-byo"));
+  assert.ok(payload.commands.includes("milestone-anchor"));
+  assert.ok(payload.commands.includes("milestone-reject"));
+  assert.ok(payload.commands.includes("deliverable-decrypt"));
+  assert.ok(payload.commands.includes("reviewer-vote-prepare"));
   assert.ok(payload.commands.includes("iota-prepare-transfer"));
   assert.ok(payload.commands.includes("iota-execute-transfer"));
+});
+
+test("wallet list help prints usage", () => {
+  const result = runCli(["wallet-list", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Wallet list helper/);
+  assert.match(result.stdout, /Lists local keystore aliases and addresses/);
+});
+
+test("request help prints usage", () => {
+  const result = runCli(["request", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Authenticated request helper/);
+  assert.match(result.stdout, /--auth-state-file <file> or --env-file <file>/);
+  assert.match(result.stdout, /--response-out/);
+});
+
+test("encrypted delivery helpers print usage", () => {
+  const commands = [
+    ["key-agreement-upsert", /Key agreement upsert helper/],
+    ["reputation-init", /Reputation profile init helper/],
+    ["reviewer-register", /Reviewer register helper/],
+    ["deliverable-encrypt", /Deliverable encrypt helper/],
+    ["mailbox-events", /Mailbox events helper/],
+    ["pinata-upload-json", /Pinata JSON upload helper/],
+    ["milestone-submit-byo", /Milestone submit helper/],
+    ["milestone-anchor", /Milestone anchor helper/],
+    ["milestone-reject", /Milestone reject helper/],
+    ["deliverable-decrypt", /Deliverable decrypt helper/]
+  ];
+  for (const [command, pattern] of commands) {
+    const result = runCli([command, "--help"]);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, pattern);
+  }
+});
+
+test("reviewer vote prepare help prints usage", () => {
+  const result = runCli(["reviewer-vote-prepare", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Reviewer vote prepare helper/);
+  assert.match(result.stdout, /vote=1 means seller settlement/);
+});
+
+test("reviewer shortlist help prints operator and publish role split", () => {
+  const result = runCli(["reviewer-shortlist", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Reviewer shortlist helper/);
+  assert.match(result.stdout, /Replacement usage:/);
+  assert.match(result.stdout, /writes the exact publish body for dispute-open or reviewer-replace/);
+  assert.match(result.stdout, /The shortlist call itself uses operator auth/);
+  assert.match(result.stdout, /must then be published by the buyer or seller/);
+  assert.match(result.stdout, /full reassignment rounds/);
+});
+
+test("reviewer register help explains onboarding prerequisites", () => {
+  const result = runCli(["reviewer-register", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Reviewer register helper/);
+  assert.match(result.stdout, /Requires a local key-agreement record and an on-chain reputation profile/);
+  assert.match(result.stdout, /key-agreement-upsert/);
+  assert.match(result.stdout, /reputation-init/);
 });
 
 test("iota prepare transfer help prints usage", () => {
@@ -138,8 +225,16 @@ test("journey command prints a strict ordered role path", () => {
   assert.match(result.stdout, /# Buyer Minimal Path/);
   assert.match(result.stdout, /Do In This Order:/);
   assert.match(result.stdout, /buyer-place-bid: Buyer Place Bid/);
+  assert.match(result.stdout, /buyer-accept-bid: Buyer Accept Bid/);
   assert.match(result.stdout, /If setup is not complete: clawnera-help recipe setup-quick/);
   assert.match(result.stdout, /If setup is already complete: clawnera-help recipe buyer-place-bid/);
+});
+
+test("seller journey shows seller review and buyer accept separation", () => {
+  const result = runCli(["journey", "seller"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /seller-review-bids: Seller Review Bids/);
+  assert.match(result.stdout, /buyer-accept-bid: Buyer Accept Bid/);
 });
 
 test("recipes command lists minimal task recipes", () => {
@@ -149,6 +244,7 @@ test("recipes command lists minimal task recipes", () => {
   assert.match(result.stdout, /setup-quick: Quick Setup/);
   assert.match(result.stdout, /seller-create-listing: Seller Create Listing/);
   assert.match(result.stdout, /reviewer-vote: Reviewer Commit And Reveal Vote/);
+  assert.match(result.stdout, /operator-shortlist-replacement: Operator Shortlist Replacement/);
 });
 
 test("recipe command prints a concise task runbook", () => {
@@ -171,7 +267,82 @@ test("recipe json output is parseable", () => {
   assert.equal(payload.ok, true);
   assert.equal(payload.recipe.id, "reviewer-vote");
   assert.ok(Array.isArray(payload.recipe.steps));
-  assert.ok(payload.recipe.steps.some((step) => /votes\/commit/.test(step)));
+  assert.ok(payload.recipe.steps.some((step) => /tx-plan-execute POST .*votes\/commit/.test(step)));
+  assert.ok(payload.recipe.steps.some((step) => /reviewer-vote-prepare/.test(step)));
+});
+
+test("replacement recipe explains full reassignment semantics", () => {
+  const result = runCli(["recipe", "operator-shortlist-replacement"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /# Operator Shortlist Replacement/);
+  assert.match(result.stdout, /full replacement round/);
+  assert.match(result.stdout, /requiredReviewerVotes/);
+  assert.match(result.stdout, /do not request only the missing delta slots/);
+});
+
+test("reviewer vote prepare json output matches contract semantics", () => {
+  const result = runCli([
+    "reviewer-vote-prepare",
+    "--case-id",
+    "0x1111111111111111111111111111111111111111111111111111111111111111",
+    "--address",
+    "0x2222222222222222222222222222222222222222222222222222222222222222",
+    "--vote",
+    "seller",
+    "--nonce-hex",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--evidence-text",
+    "proof",
+    "--json",
+  ]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.vote, 1);
+  assert.equal(payload.voteLabel, "seller");
+  assert.equal(payload.settlementTarget, "seller");
+  assert.equal(payload.revealRequestBody.vote, 1);
+  assert.match(payload.commitHashHex, /^[a-f0-9]{64}$/);
+  assert.match(payload.evidenceHashHex, /^[a-f0-9]{64}$/);
+});
+
+test("milestone reject computes canonical rejection reason hash", async () => {
+  const expectedHash = createHash("sha256").update("bad jpeg", "utf8").digest("hex");
+  const server = http.createServer(async (req, res) => {
+    let raw = "";
+    for await (const chunk of req) {
+      raw += chunk;
+    }
+    assert.equal(req.method, "POST");
+    assert.equal(req.url, "/orders/order-1/milestones/milestone-2/reject");
+    const body = JSON.parse(raw);
+    assert.equal(body.rejectionReasonHash, expectedHash);
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: true, milestone: { status: "REJECTED" } }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  const result = await runCliAsync([
+    "milestone-reject",
+    "--api-base",
+    `http://127.0.0.1:${port}`,
+    "--jwt",
+    "test-jwt",
+    "--order-id",
+    "order-1",
+    "--milestone-id",
+    "milestone-2",
+    "--reason-text",
+    "bad jpeg",
+    "--json",
+  ]);
+  server.close();
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.rejectionReasonHash, expectedHash);
+  assert.equal(payload.reasonSource, "text");
 });
 
 test("recipe aliases work", () => {
@@ -179,6 +350,20 @@ test("recipe aliases work", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /# Buyer Place Bid/);
   assert.match(result.stdout, /POST \/bids/);
+});
+
+test("seller review recipe warns that seller cannot accept the bid", () => {
+  const result = runCli(["recipe", "seller-review-bids"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /403 buyer_mismatch/);
+  assert.match(result.stdout, /Tell the chosen buyer to run the buyer-accept-bid recipe/);
+});
+
+test("buyer accept recipe uses exact bid accept route", () => {
+  const result = runCli(["recipe", "buyer-accept-bid"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /POST \/bids\/\{bidId\}\/accept/);
+  assert.match(result.stdout, /403 buyer_mismatch/);
 });
 
 test("show recipes topic works", () => {
@@ -201,7 +386,7 @@ test("show canonical-flow topic works", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Canonical Live Run Checklist/);
   assert.match(result.stdout, /One live write, one readback/);
-  assert.match(result.stdout, /set up notifications before writing anything live/);
+  assert.match(result.stdout, /choose exactly one wake-up path before writing anything live/);
 });
 
 test("show live-order-flow topic works", () => {
@@ -209,7 +394,18 @@ test("show live-order-flow topic works", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Manual Live Order Flow/);
   assert.match(result.stdout, /managed upload fee proofs as single-use/);
-  assert.match(result.stdout, /Start the notifier before the first live write/);
+  assert.match(result.stdout, /explicit polling fallback/);
+  assert.match(result.stdout, /`vote=1` resolves to seller settlement/);
+});
+
+test("show http-examples topic works", () => {
+  const result = runCli(["show", "http-examples"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /# Minimal HTTP Examples/);
+  assert.match(result.stdout, /order-init-bond/);
+  assert.match(result.stdout, /POST \/bids\/<bid-id>\/accept/);
+  assert.match(result.stdout, /reviewer-vote-prepare/);
+  assert.match(result.stdout, /seller calling accept returns `403 buyer_mismatch`/);
 });
 
 test("show reviewer-selector topic works", () => {

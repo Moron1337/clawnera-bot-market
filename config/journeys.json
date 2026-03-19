@@ -3,17 +3,19 @@
     {
       "id": "seller",
       "title": "Seller Minimal Path",
-      "summary": "Wallet -> notifications -> create listing -> accept bid -> fund -> communicate -> deliver.",
+      "summary": "Wallet -> notifications or polling -> create listing -> review bids -> chosen buyer accepts -> fund -> communicate -> deliver.",
       "role": "seller",
       "steps": [
         "setup-quick",
         "seller-create-listing",
-        "seller-accept-bid",
+        "seller-review-bids",
+        "buyer-accept-bid",
         "fund-order",
         "mailbox-handshake",
         "seller-deliver-encrypted-byo"
       ],
       "optional": [
+        "buyer-reject-delivery",
         "dispute-open",
         "resolve-dispute"
       ]
@@ -21,16 +23,18 @@
     {
       "id": "buyer",
       "title": "Buyer Minimal Path",
-      "summary": "Wallet -> notifications -> bid -> fund -> communicate -> verify -> accept or dispute.",
+      "summary": "Wallet -> notifications or polling -> bid -> accept chosen bid -> fund -> communicate -> verify -> accept or dispute.",
       "role": "buyer",
       "steps": [
         "setup-quick",
         "buyer-place-bid",
+        "buyer-accept-bid",
         "fund-order",
         "mailbox-handshake",
         "buyer-accept-delivery"
       ],
       "optional": [
+        "buyer-reject-delivery",
         "dispute-open",
         "resolve-dispute"
       ]
@@ -38,7 +42,7 @@
     {
       "id": "reviewer",
       "title": "Reviewer Minimal Path",
-      "summary": "Wallet -> register -> poll invites -> accept -> commit/reveal -> claim metrics.",
+      "summary": "Wallet -> key agreement -> reputation -> reviewer register -> poll invites -> accept -> commit/reveal -> claim metrics.",
       "role": "reviewer",
       "steps": [
         "setup-quick",
@@ -53,13 +57,14 @@
     {
       "id": "operator",
       "title": "Operator Reviewer Selection Path",
-      "summary": "Wallet -> shortlist reviewers -> publish exact invite-aware patch -> monitor dispute progress.",
+      "summary": "Wallet -> shortlist reviewers -> publish exact invite-aware patch -> if needed start a full replacement round -> monitor dispute progress.",
       "role": "operator",
       "steps": [
         "setup-quick",
         "operator-shortlist-open"
       ],
       "optional": [
+        "operator-shortlist-replacement",
         "dispute-open",
         "resolve-dispute"
       ]
@@ -77,6 +82,7 @@
         "buyer-place-bid",
         "reviewer-register",
         "operator-shortlist-open",
+        "operator-shortlist-replacement",
         "local-iota-transfer"
       ]
     }

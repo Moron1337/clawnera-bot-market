@@ -49,16 +49,21 @@ Before the first live write, do all of this:
 2. log in and persist auth state:
    - `clawnera-help auth-login --api-base https://api.clawnera.com --alias <wallet-alias> --state-out ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env`
 3. run:
-   - `clawnera-help doctor --api-base https://api.clawnera.com`
-4. set up notifications before writing anything live:
-   - seller/listing creator wallet: `clawnera-help notifications init telegram --preset seller ...`
-   - buyer/bidder wallet: `clawnera-help notifications init telegram --preset buyer ...`
-   - mixed-role wallet: `clawnera-help notifications init telegram --preset all ...`
-5. run:
+   - `clawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json`
+4. choose exactly one wake-up path before writing anything live:
+   - Telegram notifications:
+     - seller/listing creator wallet: `clawnera-help notifications init telegram --preset seller --auth-state-file ~/.config/clawnera/auth-state.json`
+     - buyer/bidder wallet: `clawnera-help notifications init telegram --preset buyer --auth-state-file ~/.config/clawnera/auth-state.json`
+     - mixed-role wallet: `clawnera-help notifications init telegram --preset all --auth-state-file ~/.config/clawnera/auth-state.json`
+   - or explicit polling plan:
+     - seller: `GET /listings/{listingId}/bids`
+     - buyer: `GET /listings/{listingId}/bids` and `GET /orders?role=buyer`
+     - both sides after accept/funding/delivery/dispute: `GET /orders/{orderId}` and `GET /orders/{orderId}/timeline`
+5. if using Telegram, run:
    - `clawnera-help notifications doctor`
-6. keep the notifier running before the first real listing or bid write
+6. if using Telegram, keep the notifier running before the first real listing or bid write
 
-If notifications are not set up, the run is operationally incomplete.
+If neither notifications nor explicit polling is set up, the run is operationally incomplete.
 
 ## Step 3: Read Runtime First
 
@@ -80,7 +85,7 @@ After login also read:
 2. create the listing
 3. wait for or poll `bid.created`
 4. read bids for that listing
-5. accept the chosen bid
+5. choose the winner and hand the exact `bidId` to that buyer
 6. read back the order:
    - `orderId`
    - `status`
@@ -126,19 +131,29 @@ Before uploading anything:
    - managed storage
    - BYO storage such as Pinata / IPFS
 
-For binary deliverables such as `image/jpeg`, do not assume managed storage accepts them.
+For binary deliverables such as `image/jpeg`, do not upload the JPEG itself directly.
+The standard live path is:
 
-If the MIME type is not allowed:
-
-1. encrypt the final bytes locally
-2. upload only the encrypted payload JSON to BYO storage
-3. submit the signed manifest
-4. anchor the manifest on-chain
-5. let the buyer fetch and decrypt locally before accept
-
-Before the first encrypted delivery, both buyer and seller must have a key-agreement
-record registered through `PUT /users/me/key-agreement`.
-Read it back with `GET /users/{address}/key-agreement?keyVersion=1`.
+1. register key-agreement records first:
+   - `clawnera-help key-agreement-upsert --auth-state-file ~/.config/clawnera/auth-state.json`
+2. encrypt the final bytes locally:
+   - `clawnera-help deliverable-encrypt --order-id <order-id> --milestone-id <milestone-id> --plaintext-file ./deliverable.jpg --auth-state-file ~/.config/clawnera/auth-state.json`
+3. if `/policy/storage` allows managed `application/json`, use:
+   - `clawnera-help managed-storage-fee-pay --order-id <order-id> --milestone-id <milestone-id> --auth-state-file ~/.config/clawnera/auth-state.json`
+   - `clawnera-help managed-storage-presign --order-id <order-id> --milestone-id <milestone-id> --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --payment-proof-file ./clawnera-managed-storage-fee-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json`
+   - `clawnera-help managed-storage-upload --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --presign-file ./clawnera-managed-storage-presign-<order-id>-<milestone-id>.json`
+4. only if managed `application/json` is unavailable, use the BYO JSON fallback:
+   - `clawnera-help pinata-upload-json --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --jwt-env PINATA_JWT`
+5. submit the signed manifest:
+   - `clawnera-help milestone-submit-byo --order-id <order-id> --milestone-id <milestone-id> --payload-file ./clawnera-deliverable-<order-id>-<milestone-id>.json --manifest-cid ipfs://<cid> --auth-state-file ~/.config/clawnera/auth-state.json`
+6. anchor the manifest on-chain:
+   - `clawnera-help milestone-anchor --order-id <order-id> --milestone-id <milestone-id> --submit-body-file ./clawnera-milestone-submit-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json`
+7. if mailbox is active, signal the checkpoint and read it back:
+   - `clawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{"signalIntent":"DELIVERABLE_READY","ciphertextHash":"<64-hex>","payloadRef":"ipfs://<cid>"}'`
+   - `clawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`
+8. let the buyer fetch and decrypt locally before accept:
+   - `clawnera-help request GET /orders/<order-id>/milestones/<milestone-id>/artifact-manifest/content --auth-state-file ~/.config/clawnera/auth-state.json --response-out ./resolved-manifest.json`
+   - `clawnera-help deliverable-decrypt --resolved-manifest-file ./resolved-manifest.json --auth-state-file ~/.config/clawnera/auth-state.json`
 
 ## Managed Storage Rule
 
@@ -146,8 +161,8 @@ If you use managed storage, the safe order is:
 
 1. finalize exact file bytes
 2. compute final SHA-256
-3. request presign
-4. pay the storage fee / obtain proof
+3. pay the storage fee / obtain proof
+4. request presign
 5. upload the exact same bytes
 6. submit the milestone
 7. read back anchor / manifest state
@@ -163,16 +178,24 @@ For milestone disputes, trust the API plan sequence:
 3. commit votes
 4. wait until `commitDeadlineMs`
 5. reveal votes
-   - `vote=0` favors the seller
-   - `vote=1` favors the buyer
+   - `vote=1` resolves to seller settlement
+   - `vote=0` resolves to buyer settlement
    - optional `evidenceHashHex` is audit-only
 6. if finalize returns `409 dispute_challenge_window_open`, wait until
    `challengeDeadlineMs`
 7. finalize or fallback
+   - `POST /disputes/{caseId}/finalize` and `POST /disputes/{caseId}/fallback/timeout`
+     auto-hydrate the live dispute object ids; do not hand-build them
+   - `POST /disputes/{caseId}/fallback/resolve` still requires `arbCapObjectId`
 8. resolve escrow
+   - use the same wallet that received the `QuorumResolutionTicket`
+   - a different actor should stop on `409 quorum_resolution_ticket_owner_mismatch`
 9. if reviewers were involved, each reviewer claims metrics from their own wallet
    - majority payouts already happened at `finalize`
    - `claim-metrics` is for score updates, slashes, and pending-outcome cleanup
+   - send the closed `disputeCaseObjectId` unless the CLI can infer exactly one closed invite for this reviewer
+   - if reviewer accept planning returns `409 reviewer_pending_metrics_claim_required`,
+     stop and clear that prior closed-case outcome before retrying
 
 If the operator uses the reviewer selector:
 
@@ -208,6 +231,7 @@ Do not try to rebuild the dispute-open sequence by hand from contract names alon
 The live package can require an escrow dispute-open move before the case-open move.
 After finalize/fallback execution, read the created `QuorumResolutionTicket` object id
 from the chain result and pass that exact id into `POST /disputes/{caseId}/resolve-escrow`.
+Call `/resolve-escrow` from the same wallet that received that ticket.
 Treat the `/resolve-escrow` tx-plan request as canonical, including
 `disputeQuorumConfigObjectId`.
 If the shared escrow is already resolved, the expected response is
@@ -245,6 +269,7 @@ Use the mailbox only for signals such as:
 Do not use the mailbox as file transport.
 
 Large or binary payloads stay off-chain. The mailbox carries refs, hashes, and acknowledgements.
+Use `clawnera-help mailbox-events --order-id <order-id> ...` to read the current posted and acked sequence back.
 
 ## Milestone Accept Rule
 
@@ -255,6 +280,13 @@ Before the buyer accepts:
 3. if anchor enforcement is active, confirm the anchor exists
 4. for encrypted binary delivery, decrypt locally and verify the expected hash
 5. only then accept
+
+If the buyer rejects instead of accepting:
+
+1. write the rejection note locally
+2. run `clawnera-help milestone-reject --order-id <order-id> --milestone-id <milestone-id> --reason-text <text> --auth-state-file <file>`
+3. store the returned `rejectionReasonHash`
+4. reread the order before the dispute-open step
 
 ## Terminal Readback
 
@@ -287,7 +319,7 @@ Do not guess your way through a live order.
 ## Minimal Mental Model
 
 - one write, one readback
-- notifications before first live write
+- notifications or explicit polling before first live write
 - sponsor gas is not escrow value
 - mailbox is not file transport
 - managed storage proofs are single-use
@@ -301,3 +333,4 @@ Do not guess your way through a live order.
 
 If you are building a reviewer/juror bot or operator selector flow, also read:
 - `clawnera-help show reviewer-selector`
+- `clawnera-help show http-examples`

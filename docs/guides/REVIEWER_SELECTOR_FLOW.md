@@ -147,36 +147,52 @@ When the invite appears, the reviewer bot should:
 2. decide whether to participate
 3. if yes: `POST /disputes/{disputeCaseId}/reviewers/accept`
 4. then normal reviewer cadence:
+   - prepare the canonical commit/reveal payloads first:
+     - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json > reviewer-vote.json`
    - commit
+     - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody`
    - wait for `commitDeadlineMs`
    - reveal
-     - `vote=0` favors the seller
-     - `vote=1` favors the buyer
-     - optional `evidenceHashHex` is a hex-encoded SHA-256 audit hash, not a settlement input
-   - wait for `challengeDeadlineMs` if needed
-   - finalize or fallback
-   - resolve escrow
+     - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody`
+     - `vote=1` resolves to seller settlement
+     - `vote=0` resolves to buyer settlement
+   - optional `evidenceHashHex` is a hex-encoded SHA-256 audit hash, not a settlement input
+  - wait for `challengeDeadlineMs` if needed
+  - finalize or fallback
+    - `finalize` and `fallback/timeout` auto-hydrate the live dispute object ids
+    - `fallback/resolve` still requires `arbCapObjectId`
+  - resolve escrow
+    - use the same wallet that received the `QuorumResolutionTicket`
    - claim metrics
      - majority reviewer payouts already happened at `finalize`
      - `claim-metrics` is the reviewer-owned post-case step for score updates,
        slashes, and pending-outcome cleanup
+     - include the closed `disputeCaseObjectId` unless the CLI can infer exactly one closed invite for this reviewer
 
 If `POST /disputes/{disputeCaseId}/reviewers/accept` returns:
 
 - `403 reviewer_not_invited`
-
-stop there. The bot is not eligible for that round.
+  - stop there. The bot is not eligible for that round.
+- `409 reviewer_pending_metrics_claim_required`
+  - stop there too
+  - read `GET /reviewers/me/metrics`
+  - run `POST /reviewers/{reviewerAddress}/claim-metrics` for the prior closed case
+  - if the CLI sees zero or multiple closed invites, do not guess; pass the exact `disputeCaseObjectId`
+  - if the CLI returns `409 reviewer_metrics_claim_not_required`, stop; the pending outcome was already cleared
+  - only retry once the pending outcome state is cleared
 
 ## Replacement Rule
 
-Replacement repeats the same pattern:
+Replacement is a full reassignment round, not a delta-slot fill:
 
-1. operator calls shortlist again with `scope=REPLACEMENT`
-2. operator checks `selectionComplete`
-3. operator copies the new `publishTarget.requestPatch` exactly
-4. local tx executes
-5. new `ReviewerInvited` gets indexed
-6. replacement reviewer sees a new inbox entry
+1. operator reads the live dispute first and captures `requiredReviewerVotes`
+2. operator calls shortlist again with `scope=REPLACEMENT`
+3. operator requests at least the live `requiredReviewerVotes` count unless the dispute already lowered quorum size
+4. operator checks `selectionComplete`
+5. operator copies the new `publishTarget.requestPatch` exactly
+6. local tx executes
+7. new `ReviewerInvited` gets indexed
+8. replacement reviewers see new inbox entries
 
 Older invites can become:
 

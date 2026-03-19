@@ -248,6 +248,7 @@ Important:
   - `claim-metrics` is for score updates, slashes, and pending-outcome cleanup
   - request body must identify the closed case via `disputeCaseObjectId`
   - if omitted, expect `400 dispute_case_object_id_required`
+  - the CLI pre-hydrates reviewer context before the first POST; do not probe this route with guessed object ids
   - the CLI may auto-fill that field only when `GET /reviewers/me/invites` shows exactly one closed invite for this reviewer
   - if `GET /reviewers/me/metrics` already shows `pendingDecisionMetricsClaimRequired=false`, stop; the CLI returns `409 reviewer_metrics_claim_not_required`
   - if reviewer accept planning returns `409 reviewer_pending_metrics_claim_required`,
@@ -258,6 +259,9 @@ Invite inbox rollout note:
   `inviteSourceMode=selection_receipt`
 - that means the active invite binding came from the stored selector receipt after publish
 - the publish step itself still requires invite-aware callable support on the current package
+- after local publish execution, bind the shortlist receipt with the real tx digest:
+  - `POST /reviewer-selection-receipts/{receiptId}/bind-dispute-case`
+  - include both `disputeCaseObjectId` and `activationTxDigest`
 - if publish fails with `409 reviewer_invite_tx_not_supported`, stop and treat it as a package
   capability gap instead of constructing raw ungated dispute-open or replacement tx calls
 

@@ -551,12 +551,14 @@
       "routes": [
         "POST /admin/reviewer-selection/shortlist",
         "POST /orders/{orderId}/milestones/{milestoneId}/disputes/open",
+        "POST /reviewer-selection-receipts/{receiptId}/bind-dispute-case",
         "GET /disputes/{disputeCaseId}"
       ],
       "steps": [
         "If reviewer selection is operator-driven, build the shortlist first with clawnera-help reviewer-shortlist.",
         "POST /orders/{orderId}/milestones/{milestoneId}/disputes/open with the canonical invite patch if used.",
         "Execute the returned tx locally.",
+        "If the publish response says selection_receipt_activation, bind the receipt with the real activationTxDigest before waiting on inbox reads.",
         "Wait for indexed ReviewerInvited before expecting reviewer inbox updates.",
         "Read back GET /disputes/{disputeCaseId} and store disputeCaseId."
       ],
@@ -592,6 +594,7 @@
       ],
       "routes": [
         "POST /admin/reviewer-selection/shortlist",
+        "POST /reviewer-selection-receipts/{receiptId}/bind-dispute-case",
         "GET /admin/reviewer-selection-receipts/{receiptId}"
       ],
       "steps": [
@@ -599,6 +602,7 @@
         "Inspect selectionComplete, receipt.id, receipt.selectionPolicyVersion, and the saved publish body file.",
         "If selectionComplete=true, use the exact saved publish body file in the canonical tx-plan-execute dispute-open call.",
         "Execute the publish tx locally.",
+        "Bind the stored receipt with the exact activationTxDigest from that publish tx before treating the shortlist as live inbox authority.",
         "Read back the receipt, dispute case, and invite events."
       ],
       "examples": [

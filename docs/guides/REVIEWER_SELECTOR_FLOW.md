@@ -191,8 +191,11 @@ Replacement is a full reassignment round, not a delta-slot fill:
 4. operator checks `selectionComplete`
 5. operator copies the new `publishTarget.requestPatch` exactly
 6. local tx executes
-7. new `ReviewerInvited` gets indexed
-8. replacement reviewers see new inbox entries
+7. bind the stored receipt to the real on-chain publish tx:
+   - `POST /reviewer-selection-receipts/{receiptId}/bind-dispute-case`
+   - include `disputeCaseObjectId` and the real publish `activationTxDigest`
+8. new `ReviewerInvited` gets indexed
+9. replacement reviewers see new inbox entries
 
 Older invites can become:
 

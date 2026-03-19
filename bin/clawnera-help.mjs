@@ -3151,7 +3151,7 @@ function classifyReviewerSelfTxPlanRoute(method, rawPath, apiBase = "") {
 function resolveClaimMetricsDisputeCaseCandidate(invitesBody, reviewerAddress) {
   const reviewer = normalizeIotaAddress(reviewerAddress || "");
   const inviteList = Array.isArray(invitesBody?.invites) ? invitesBody.invites : [];
-  const closedStatuses = new Set(["closed", "stale", "expired", "superseded", "unavailable"]);
+  const closedStatuses = new Set(["closed"]);
   const candidates = [];
   for (const entry of inviteList) {
     const invite = asRecord(entry);
@@ -3195,21 +3195,39 @@ function resolveClaimMetricsDisputeCaseCandidate(invitesBody, reviewerAddress) {
   };
 }
 
-async function maybeRetryReviewerSelfTxPlanRequest({ method, rawPath, options, timeoutMs, apiCall }) {
-  if (apiCall.result.ok) {
-    return null;
-  }
-  const route = classifyReviewerSelfTxPlanRoute(method, rawPath, apiCall.apiBase);
+function reviewerSelfRouteNeedsHydration(route, currentBody) {
   if (!route) {
-    return null;
+    return false;
   }
-  const responseError = typeof apiCall.result.body?.error === "string" ? apiCall.result.body.error : "";
-  const shouldRetry =
-    (apiCall.result.status === 400 && responseError === "invalid_request") ||
-    (apiCall.result.status === 400 && responseError === "dispute_case_object_id_required") ||
-    (apiCall.result.status === 409 &&
-      responseError === "reviewer_reputation_profile_not_found");
-  if (!shouldRetry) {
+  const body = asRecord(currentBody) || {};
+  if (route.kind === "accept") {
+    return !normalizeIotaAddress(body.reviewerRegistryObjectId || "") ||
+      !normalizeIotaAddress(body.reviewerEntryObjectId || "") ||
+      !normalizeIotaAddress(body.reputationProfileObjectId || "") ||
+      !normalizeIotaAddress(body.disputeQuorumConfigObjectId || "");
+  }
+  if (route.kind === "commit" || route.kind === "reveal") {
+    return !normalizeIotaAddress(body.reviewerEntryObjectId || "");
+  }
+  if (route.kind === "claim_metrics") {
+    return !normalizeIotaAddress(body.disputeCaseObjectId || "") ||
+      !normalizeIotaAddress(body.reviewerRegistryObjectId || "") ||
+      !normalizeIotaAddress(body.reviewerEntryObjectId || "") ||
+      !normalizeIotaAddress(body.disputeQuorumConfigObjectId || "");
+  }
+  return false;
+}
+
+function buildJsonBodyOverrideOptions(options, mergedBody) {
+  const nextOptions = { ...options, body: JSON.stringify(mergedBody) };
+  delete nextOptions["body-file"];
+  delete nextOptions["body-select"];
+  return nextOptions;
+}
+
+async function hydrateReviewerSelfTxPlanRequest({ method, rawPath, options, timeoutMs, currentBody, apiBase }) {
+  const route = classifyReviewerSelfTxPlanRoute(method, rawPath, apiBase);
+  if (!route || !reviewerSelfRouteNeedsHydration(route, currentBody)) {
     return null;
   }
   const helperOptions = { ...options };
@@ -3217,7 +3235,6 @@ async function maybeRetryReviewerSelfTxPlanRequest({ method, rawPath, options, t
   delete helperOptions["body-file"];
   delete helperOptions["body-select"];
   delete helperOptions["idempotency-key"];
-  const currentBody = asRecord(apiCall.jsonBody) || {};
   const metricsCall = await callApiRoute({
     method: "GET",
     rawPath: "/reviewers/me/metrics",
@@ -3235,10 +3252,10 @@ async function maybeRetryReviewerSelfTxPlanRequest({ method, rawPath, options, t
   const reviewer = asRecord(metricsCall.result.body?.reviewer);
   const reviewerRuntime = asRecord(metricsCall.result.body?.runtime);
   if (metricsCall.result.body?.registered !== true || !reviewer) {
-      return {
-        ok: false,
-        error: "reviewer_not_registered",
-      };
+    return {
+      ok: false,
+      error: "reviewer_not_registered",
+    };
   }
   const reviewerEntryObjectId = normalizeIotaAddress(reviewer.objectId || "");
   const reviewerOwnerAddress =
@@ -3249,7 +3266,7 @@ async function maybeRetryReviewerSelfTxPlanRequest({ method, rawPath, options, t
       error: "reviewer_entry_object_missing",
     };
   }
-  const mergedBody = { ...currentBody };
+  const mergedBody = { ...(asRecord(currentBody) || {}) };
   let reviewerRegistryObjectIdHint = normalizeIotaAddress(reviewerRuntime?.reviewerRegistryObjectId || "");
   let disputeQuorumConfigObjectIdHint = normalizeIotaAddress(reviewerRuntime?.disputeQuorumConfigObjectId || "");
   let resolvedReputationProfileObjectId = "";
@@ -3388,20 +3405,9 @@ async function maybeRetryReviewerSelfTxPlanRequest({ method, rawPath, options, t
       };
     }
   }
-
-  const retriedCall = await callApiRoute({
-    method,
-    rawPath,
-    options: {
-      ...helperOptions,
-      body: JSON.stringify(mergedBody),
-    },
-    timeoutMs,
-  });
   return {
     ok: true,
     mergedBody,
-    retriedCall,
     autoHydrated: {
       route: route.kind,
       reviewerEntryObjectId,
@@ -3411,6 +3417,52 @@ async function maybeRetryReviewerSelfTxPlanRequest({ method, rawPath, options, t
       disputeCaseObjectId:
         route.kind === "claim_metrics" ? normalizeIotaAddress(mergedBody.disputeCaseObjectId || "") || null : null,
     },
+  };
+}
+
+async function maybeRetryReviewerSelfTxPlanRequest({ method, rawPath, options, timeoutMs, apiCall }) {
+  if (apiCall.result.ok) {
+    return null;
+  }
+  const route = classifyReviewerSelfTxPlanRoute(method, rawPath, apiCall.apiBase);
+  if (!route) {
+    return null;
+  }
+  const responseError = typeof apiCall.result.body?.error === "string" ? apiCall.result.body.error : "";
+  const shouldRetry =
+    (apiCall.result.status === 400 && responseError === "invalid_request") ||
+    (apiCall.result.status === 400 && responseError === "dispute_case_object_id_required") ||
+    (apiCall.result.status === 409 &&
+      responseError === "reviewer_reputation_profile_not_found");
+  if (!shouldRetry) {
+    return null;
+  }
+  const hydrated = await hydrateReviewerSelfTxPlanRequest({
+    method,
+    rawPath,
+    options,
+    timeoutMs,
+    currentBody: apiCall.jsonBody,
+    apiBase: apiCall.apiBase,
+  });
+  if (!hydrated) {
+    return null;
+  }
+  if (!hydrated.ok) {
+    return hydrated;
+  }
+
+  const retriedCall = await callApiRoute({
+    method,
+    rawPath,
+    options: buildJsonBodyOverrideOptions(options, hydrated.mergedBody),
+    timeoutMs,
+  });
+  return {
+    ok: true,
+    retriedCall,
+    mergedBody: hydrated.mergedBody,
+    autoHydrated: hydrated.autoHydrated,
   };
 }
 
@@ -3800,8 +3852,30 @@ async function runTxPlanCommand(commandArgs, mode) {
 
   const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
   let apiCall;
+  let requestOptions = options;
+  let autoHydratedReviewerContext = null;
   try {
-    apiCall = await callApiRoute({ method, rawPath, options, timeoutMs });
+    const proactiveHydration = await hydrateReviewerSelfTxPlanRequest({
+      method,
+      rawPath,
+      options,
+      timeoutMs,
+      currentBody: loadApiRequestBody(options).jsonBody,
+      apiBase: options["api-base"],
+    });
+    if (proactiveHydration) {
+      if (!proactiveHydration.ok) {
+        return {
+          ok: false,
+          error: proactiveHydration.error,
+          status: proactiveHydration.status,
+          response: proactiveHydration.response,
+        };
+      }
+      requestOptions = buildJsonBodyOverrideOptions(options, proactiveHydration.mergedBody);
+      autoHydratedReviewerContext = proactiveHydration.autoHydrated;
+    }
+    apiCall = await callApiRoute({ method, rawPath, options: requestOptions, timeoutMs });
   } catch (error) {
     return {
       ok: false,
@@ -3809,12 +3883,11 @@ async function runTxPlanCommand(commandArgs, mode) {
       hint: "set --api-base, --env-file, or --auth-state-file",
     };
   }
-  let autoHydratedReviewerContext = null;
-  if (!apiCall.result.ok) {
+  if (!apiCall.result.ok && !autoHydratedReviewerContext) {
     const retried = await maybeRetryReviewerSelfTxPlanRequest({
       method,
       rawPath,
-      options,
+      options: requestOptions,
       timeoutMs,
       apiCall,
     });

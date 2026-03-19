@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.31] - 2026-03-19
+
+- Moved reviewer self-route hydration to the first request: `tx-plan-execute` now pre-hydrates reviewer context for `accept`, `commit`, `reveal`, and `claim-metrics` before the first POST instead of intentionally burning a failed write attempt.
+- Tightened `claim-metrics` case inference so only a truly `closed` reviewer invite may auto-fill `disputeCaseObjectId`; `stale`, `expired`, `superseded`, and similar statuses no longer count as safe inference inputs.
+- Clarified the selector receipt activation flow for weaker bots: after an invite-aware publish tx executes locally, bots must bind the stored receipt with the real `activationTxDigest` before treating the shortlist as live inbox authority.
+
 ## [0.1.30] - 2026-03-19
 
 - Hardened the public CLI request path against confused-deputy token leaks: `request` and `tx-plan-execute` now reject full URLs and only accept API paths, so bots cannot accidentally send their Clawnera bearer token to a third-party host.

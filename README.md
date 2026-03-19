@@ -105,7 +105,7 @@ clawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/commit --au
 Notes:
 - when you pass `--auth-state-file ~/.config/clawnera/auth-state.json`, the CLI also tries the sibling keystore path under `~/.iota/iota_config/iota.keystore` automatically if it exists
 - `clawnera-help request ...` retries once through `/auth/refresh` on `401 invalid_token` when the saved auth state still has a refresh token; if that still fails, rerun `auth-login`
-- reviewer self-routes now auto-hydrate missing reviewer context for `accept`, `commit`, `reveal`, and `claim-metrics`
+- reviewer self-routes now pre-hydrate missing reviewer context for `accept`, `commit`, `reveal`, and `claim-metrics` before the first POST
 - `claim-metrics` still needs the closed `disputeCaseObjectId`; the CLI can infer it only when exactly one closed reviewer invite exists for that wallet
 - weaker bots should still persist the prepared vote JSON and reuse it with `--body-select`
 

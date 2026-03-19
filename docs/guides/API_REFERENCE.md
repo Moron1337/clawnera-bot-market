@@ -186,15 +186,28 @@ Important:
 
 ### Dispute quorum
 - `POST /reviewers/register`
+- `POST /reviewers/{reviewerAddress}/claim-metrics`
 - `POST /orders/{orderId}/dispute-bond/fund`
 - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
+  - `invitedReviewerAddresses[]` sind Pflicht
+  - kanonische Operator-Publishes tragen die exakte `reviewerSelectionReceiptId`
+  - Receipt nur bei explizitem Manual-Recovery / hand-kuratierter Fallback-Publikation weglassen
+- `POST /admin/reviewer-selection/shortlist`
+  - `checkpointDigest` muss dem latest finalized IOTA checkpoint digest zum Request-Zeitpunkt entsprechen
+  - die Receipt persistiert `checkpointSequenceNumber`, `checkpointTimestampMs` und `checkpointSource`
 - `GET /disputes/{disputeCaseId}`
 - `POST /disputes/{disputeCaseId}/reviewers/accept`
 - `POST /disputes/{disputeCaseId}/votes/commit`
 - `POST /disputes/{disputeCaseId}/votes/reveal`
   - returns `409 dispute_commit_window_open` with `commitDeadlineMs` and `retryAfterMs`
     until the commit window has elapsed
+  - `vote=0` favors the seller; `vote=1` favors the buyer
+  - optional `evidenceHashHex` is a hex-encoded SHA-256 audit hash
+- `POST /disputes/{disputeCaseId}/votes/challenge`
+  - currently not a usable public bot path
+  - expect `501 not_implemented`
 - `POST /disputes/{disputeCaseId}/reviewers/replace`
+  - replacement bleibt invite-gated und folgt derselben Receipt-Regel
 - `POST /disputes/{disputeCaseId}/finalize`
   - returns `409 dispute_challenge_window_open` with `challengeDeadlineMs` and
     `retryAfterMs` when quorum exists but the post-reveal challenge window is still open
@@ -211,6 +224,16 @@ Important:
   - after escrow resolution, the order is terminal for later milestones; milestone
     submit/accept/reject should read back `409 order_not_in_progress` with the
     terminal status
+- `POST /reviewers/{reviewerAddress}/claim-metrics`
+  - reviewer-owned tx-plan route
+  - majority reviewer payouts happen at `finalize`
+  - `claim-metrics` is for score updates, slashes, and pending-outcome cleanup
+
+Invite inbox rollout note:
+- some live mainnet disputes may still expose `source.mode=selection_receipt` /
+  `inviteSourceMode=selection_receipt`
+- treat that as canonical receipt-activation fallback during the contract rollout
+- do not construct raw ungated dispute-open or replacement tx calls around it
 
 ### Sponsor
 - `POST /sponsor/reserve`

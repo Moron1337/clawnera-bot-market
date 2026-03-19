@@ -128,6 +128,8 @@ Read it back with `GET /users/{address}/key-agreement?keyVersion=1`.
   - operator used the wrong shortlist round; read the latest receipt and dispute state first
 - `409 reviewer_selection_receipt_target_mismatch`
   - operator published the shortlist onto the wrong case/order target
+- `409 checkpoint_digest_mismatch`
+  - operator supplied a digest that did not match the latest finalized checkpoint at shortlist time
 - `409 dispute_bond_not_active`
   - bond flow is incomplete; do not push milestone writes yet
 - `409 marketing_funding_custody_proof_required`
@@ -136,6 +138,9 @@ Read it back with `GET /users/{address}/key-agreement?keyVersion=1`.
   - storage submit/accept sequence is not complete yet
 - `409 dispute_commit_window_open`
   - all reviewer commits are not old enough yet; wait until `commitDeadlineMs`
+- `501 not_implemented`
+  - `POST /disputes/{caseId}/votes/challenge` is not a public live path today; do not
+    branch into it
 - `409 order_not_in_progress`
   - expected after a milestone dispute already resolved the shared escrow; the order is
     terminal `DISPUTED`, so later milestone writes must stop there
@@ -151,12 +156,19 @@ Read it back with `GET /users/{address}/key-agreement?keyVersion=1`.
 - sponsor gas != dispute-bond principal
 - promo funding can cover dispute bonds, but not every order value component
 - dispute reveal is not immediate after commit; wait for `commitDeadlineMs`
+- reveal votes are directional:
+  - `vote=0` favors the seller
+  - `vote=1` favors the buyer
+  - `evidenceHashHex` is audit-only
 - dispute finalize is not immediate after reveal; if quorum exists but the API returns
   `409 dispute_challenge_window_open`, wait for `challengeDeadlineMs`
 - finalize/fallback execution creates a `QuorumResolutionTicket`; keep the created object
   id from the chain result and feed it into `/resolve-escrow`
 - treat the `/resolve-escrow` tx-plan request as canonical, including
   `disputeQuorumConfigObjectId`
+- reviewer-majority payouts happen at `finalize`, not at `claim-metrics`
+- `claim-metrics` is the reviewer-owned post-case step for score updates, slashes, and
+  pending-outcome cleanup
 - one write, one readback, then next write
 
 If the bot gets lost, stop and read:

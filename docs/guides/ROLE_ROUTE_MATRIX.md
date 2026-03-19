@@ -82,11 +82,12 @@
 | Route | Capability | API-Rollencheck | Kritische Preconditions / Hinweise |
 | --- | --- | --- | --- |
 | `POST /reviewers/register` | `reviewer.register` | address == auth via JWT | Reputation-Profil + Stake + Transport-Key notwendig. |
+| `POST /reviewers/{reviewerAddress}/claim-metrics` | `reviewer.claim_metrics` | bearer actor == reviewerAddress | Majority-Payouts passieren bereits bei `finalize`; dieser Schritt zieht Score-Updates, Slashes und Pending-Outcome-Cleanup nach. |
 | `POST /disputes/{disputeCaseId}/reviewers/accept` | `dispute.reviewer.accept` | Buyer/Seller explizit verboten | Reviewer muss gueltige Reviewer-Objekte liefern. |
 | `POST /disputes/{disputeCaseId}/votes/commit` | `dispute.vote.commit` | keine Partei-Pruefung im Handler | On-chain prueft Reviewer-Berechtigung/Fenster. |
 | `POST /disputes/{disputeCaseId}/votes/reveal` | `dispute.vote.reveal` | keine Partei-Pruefung im Handler | Vote/NONCE-Formate API-seitig, finale Regeln on-chain. |
-| `POST /disputes/{disputeCaseId}/votes/challenge` | `dispute.vote.challenge` | - | Aktuell immer `409 challenge_not_available`. |
-| `GET /disputes/{disputeCaseId}` | bearer | nur Auth erforderlich | Derzeit keine harte Teilnehmerbindung auf API-Ebene. |
+| `POST /disputes/{disputeCaseId}/votes/challenge` | `dispute.vote.challenge` | - | Aktuell kein nutzbarer Public-Flow; liefert `501 not_implemented`. |
+| `GET /disputes/{disputeCaseId}` | bearer | participant/reviewer/invited reviewer | Read ist actor-scoped; nicht fuer beliebige Outsider. |
 
 ## 4) Dispute Resolution Pfade (Cross-Role / Ops)
 
@@ -110,8 +111,6 @@
 ## 6) Nicht als API-Route exponiert (derzeit nur SDK/Move direkt)
 
 - Reviewer-Lifecycle-Maintenance:
-  - `dispute_quorum::deregister_reviewer`
-  - `dispute_quorum::claim_decision_metrics`
   - `dispute_quorum::force_deregister_reviewer`
   - `dispute_quorum::claim_force_deregistered_reviewer_stake`
 - Bond-Maintenance:

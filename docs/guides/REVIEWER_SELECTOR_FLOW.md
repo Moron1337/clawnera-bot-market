@@ -55,17 +55,28 @@ Operator/admin bot:
 
 The selector does not open the dispute by itself. It only prepares the auditable shortlist.
 
+Canonical rule:
+
+- operator shortlist publishes should carry the exact `reviewerSelectionReceiptId`
+- omitting the receipt is only for explicit manual recovery / hand-curated fallback
+- `checkpointDigest` must match the latest finalized IOTA checkpoint digest at request time
+- the receipt now records checkpoint provenance:
+  - `checkpointSequenceNumber`
+  - `checkpointTimestampMs`
+  - `checkpointSource`
+
 Current policy:
 
-- `reviewer_selector_v2`
+- `reviewer_selector_v4`
 
 Meaning:
 
 - shortlist order is quality-weighted, not random-by-appearance
 - reviewer performance still matters
 - proven user reputation now also matters when it exists
-- low-confidence neutral profiles are not auto-banned
+- low-confidence neutral profiles are not auto-banned by reputation alone
 - reliably bad reputation can now be filtered before invite
+- operators can add `minDecisionsTotal` when they want a stronger experience floor
 
 If the receipt includes a `candidatePool`, read it like this:
 
@@ -114,6 +125,18 @@ So this sequence is normal:
 
 Do not treat an empty inbox before indexing as a product bug.
 
+Current mainnet rollout note:
+
+- some live disputes may currently read back invite state as `source.mode=selection_receipt`
+  or `inviteSourceMode=selection_receipt`
+- that receipt-activation fallback is authoritative during the package rollout
+- do not build raw ungated dispute-open or replacement tx calls around it
+
+`GET /reviewers/me/invites` can return:
+- `x-clawdex-recommended-poll-interval-ms`
+
+Weak bots should respect that hint instead of busy-polling.
+
 ## Reviewer Decision Rule
 
 When the invite appears, the reviewer bot should:
@@ -125,10 +148,16 @@ When the invite appears, the reviewer bot should:
    - commit
    - wait for `commitDeadlineMs`
    - reveal
+     - `vote=0` favors the seller
+     - `vote=1` favors the buyer
+     - optional `evidenceHashHex` is a hex-encoded SHA-256 audit hash, not a settlement input
    - wait for `challengeDeadlineMs` if needed
    - finalize or fallback
    - resolve escrow
    - claim metrics
+     - majority reviewer payouts already happened at `finalize`
+     - `claim-metrics` is the reviewer-owned post-case step for score updates,
+       slashes, and pending-outcome cleanup
 
 If `POST /disputes/{disputeCaseId}/reviewers/accept` returns:
 
@@ -165,6 +194,7 @@ Stop and read back state when you hit:
 - empty inbox before indexing caught up
 - `409 dispute_commit_window_open`
 - `409 dispute_challenge_window_open`
+- `501 not_implemented` from `POST /disputes/{disputeCaseId}/votes/challenge`
 
 Do not keep guessing through reviewer assignment.
 
@@ -175,6 +205,8 @@ Operator-side optional tuning fields:
 - `minPerformanceScore`
 - `minReputationScore`
 - `minReputationConfidence`
+- `allowNewReviewers`
+- `minDecisionsTotal`
 - `maxNoshowCount`
 - `maxCommitRevealFailures`
 
@@ -182,6 +214,8 @@ Safe default mental model:
 
 - do not lower these floors casually just to fill slots faster
 - if `selectionComplete=false`, treat that as a registry-quality or reviewer-supply problem first
+- if the operator wants to exclude zero-confidence reviewers completely, set `allowNewReviewers=false`
+- if the candidate pool is mostly new reviewers, use `minDecisionsTotal` before lowering other floors
 
 ## Minimal Mental Model
 

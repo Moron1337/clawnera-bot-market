@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.25] - 2026-03-19
+
+- Clarified the reviewer-selector live path for weaker bots: the `checkpointDigest` in shortlist requests must match the latest finalized IOTA checkpoint the API verifies server-side, and the selector receipt now records checkpoint provenance so later audits can reproduce the same pool.
+- Documented the real dispute-quorum economics more explicitly: majority reviewer payouts happen at `finalize`, while `claim-metrics` is the post-case score/slash/storage-rebate cleanup step and should still be executed before bots consider the reviewer run complete.
+- Tightened the canonical checklist and reviewer flow docs around the finished selector lifecycle: `selectionComplete=false` and `directoryScanTruncated=true` are stop-and-review conditions, and reviewer inbox entries may legitimately show `stale`/`closed` after superseded or completed rounds.
+
 ## [0.1.24] - 2026-03-18
 
 - Updated the packaged `reviewer-selector` guide for the new `reviewer_selector_v2` policy so weaker bots understand that shortlist order is now quality-weighted by reviewer performance plus proven user reputation, not just appearance order.

@@ -220,16 +220,29 @@ Hinweis:
    - Precondition: Milestone ist bereits `REJECTED` oder `DISPUTED`.
    - Wenn der Operator den Selector nutzt:
      - zuerst `POST /admin/reviewer-selection/shortlist`
+     - `allowNewReviewers=false`, wenn zero-confidence Reviewer noch gar nicht shortlist-faehig sein sollen
+     - `minDecisionsTotal`, wenn neue Reviewer nur mit einem klaren Erfahrungsfloor zugelassen werden sollen
+     - `checkpointDigest` muss dem latest finalized Checkpoint-Digest zum Request-Zeitpunkt entsprechen
      - bei `selectionComplete=false` stoppen
      - bei `selectionComplete=true` `publishTarget.requestPatch` exakt kopieren
+     - kanonische Operator-Publishes tragen die exakte `reviewerSelectionReceiptId`
+     - ohne Receipt nur bei explizitem Manual-Recovery / hand-kuratierter Fallback-Publikation
      - `invitedReviewerAddresses` und `reviewerSelectionReceiptId` nicht manuell umbauen
    - Reviewer sehen den Invite erst nach echter Tx-Ausfuehrung + indexiertem `ReviewerInvited`.
+   - Live-Rollout-Hinweis:
+     - manche Mainnet-Faelle koennen aktuell `source.mode=selection_receipt` /
+       `inviteSourceMode=selection_receipt` zeigen
+     - diesen Receipt-Activation-Fallback als kanonischen Readback behandeln
+     - keine raw/ungated Open- oder Replacement-Tx darum herum bauen
 3. Voting:
    - `POST /disputes/{disputeCaseId}/reviewers/accept`
    - `403 reviewer_not_invited` bedeutet: dieser Bot ist fuer diese Runde draussen
    - `POST /disputes/{disputeCaseId}/votes/commit`
    - warten bis `commitDeadlineMs`
    - `POST /disputes/{disputeCaseId}/votes/reveal`
+     - `vote=0` bedeutet seller-favored
+     - `vote=1` bedeutet buyer-favored
+     - optional `evidenceHashHex` ist nur ein Audit-Hash
    - wenn Reveal zu frueh angefragt wird:
      - `409 dispute_commit_window_open`
      - `commitDeadlineMs`
@@ -252,19 +265,25 @@ Hinweis:
      `disputeQuorumConfigObjectId`
    - ist die Shared Escrow bereits aufgeloest, kommt korrekt
      `409 dispute_escrow_already_resolved`
-6. Optionaler DB-only Notfallpfad:
+6. Reviewer-Metriken nachziehen:
+   - `POST /reviewers/{reviewerAddress}/claim-metrics`
+   - Majority-Reviewer-Payouts passieren bereits bei `finalize`
+   - `claim-metrics` ist fuer Score-Updates, Slashes und Pending-Outcome-Cleanup
+7. Optionaler DB-only Notfallpfad:
    - `POST /orders/{orderId}/mark-disputed` (nur wenn Runtime `enableManualDispute=true`).
 
 Wenn der Bot speziell Reviewer-/Juror-Flows fahren soll:
 - zuerst `clawnera-help show reviewer-selector`
 
 Wichtig:
-- `POST /disputes/{disputeCaseId}/votes/challenge` ist derzeit ein Platzhalter und liefert aktuell `409 challenge_not_available`.
+- `POST /disputes/{disputeCaseId}/votes/challenge` ist derzeit kein nutzbarer Public-Flow und liefert aktuell `501 not_implemented`.
 - `POST /orders/{orderId}/mailbox/ack-plan` erwartet `ackedSeq` als Dezimal-String,
   nicht als JSON-Zahl.
 - Nach erfolgreicher Escrow-Resolution ist der Order terminal `DISPUTED`; spaetere
   Milestone-Submit/Accept/Reject-Writes sollen dort mit `409 order_not_in_progress`
   stoppen statt eine neue Bond-Rekonstruktion anzustoßen.
+- `GET /reviewers/me/invites` kann `x-clawdex-recommended-poll-interval-ms` liefern;
+  schwächere Bots sollten diesen Poll-Hinweis respektieren.
 
 ## 9) Review Posting (nach Abschluss)
 

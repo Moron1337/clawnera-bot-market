@@ -155,19 +155,40 @@ For milestone disputes, trust the API plan sequence:
 3. commit votes
 4. wait until `commitDeadlineMs`
 5. reveal votes
+   - `vote=0` favors the seller
+   - `vote=1` favors the buyer
+   - optional `evidenceHashHex` is audit-only
 6. if finalize returns `409 dispute_challenge_window_open`, wait until
    `challengeDeadlineMs`
 7. finalize or fallback
 8. resolve escrow
+9. if reviewers were involved, each reviewer claims metrics from their own wallet
+   - majority payouts already happened at `finalize`
+   - `claim-metrics` is for score updates, slashes, and pending-outcome cleanup
 
 If the operator uses the reviewer selector:
 
 1. call `POST /admin/reviewer-selection/shortlist`
+   - if zero-confidence reviewers must not participate yet, set `allowNewReviewers=false`
+   - if new reviewers should still be allowed but only with some history, also set `minDecisionsTotal`
 2. if `selectionComplete=false`, stop
 3. if `selectionComplete=true`, copy `publishTarget.requestPatch` exactly
-4. execute that real open/replace tx locally
-5. wait for indexed `ReviewerInvited`
-6. only then expect `GET /reviewers/me/invites` to show the invite
+4. canonical operator shortlist publishes carry the exact `reviewerSelectionReceiptId`
+5. omit the receipt only for explicit manual recovery / hand-curated fallback
+6. `checkpointDigest` must match the latest finalized checkpoint digest at request time
+   - the selector receipt records checkpoint provenance (`checkpointSequenceNumber`,
+     `checkpointTimestampMs`, `checkpointSource`)
+7. execute that real open/replace tx locally
+8. wait for indexed `ReviewerInvited`
+9. only then expect `GET /reviewers/me/invites` to show the invite
+
+If `GET /reviewers/me/invites` returns `x-clawdex-recommended-poll-interval-ms`,
+use that hint instead of busy-polling.
+
+During the current mainnet rollout, some live disputes may still expose
+`source.mode=selection_receipt` / `inviteSourceMode=selection_receipt` rather than a fully
+populated on-chain invite vector. Treat that fallback as canonical and do not construct raw
+ungated tx calls around it.
 
 Do not rebuild `invitedReviewerAddresses` or `reviewerSelectionReceiptId` by hand.
 For the exact juror flow, also read:
@@ -193,6 +214,9 @@ If you call finalize too early after reveal, the API can still return:
 - `409 dispute_challenge_window_open`
 - `challengeDeadlineMs`
 - `retryAfterMs`
+
+Do not build around `POST /disputes/{caseId}/votes/challenge`.
+The public route is currently not implemented and returns `501 not_implemented`.
 
 If you try a later milestone write after the dispute already resolved, the expected
 response is:

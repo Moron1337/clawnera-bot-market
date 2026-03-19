@@ -293,6 +293,12 @@ Hard rules from the verified manual mainnet run:
   If you call `POST /disputes/{caseId}/votes/reveal` too early, the API now returns `409 dispute_commit_window_open` with `retryAfterMs`.
 - Even after a 2:1 or 3:0 reveal majority exists, `POST /disputes/{caseId}/finalize` can still return `409 dispute_challenge_window_open` until `challengeDeadlineMs` has elapsed.
 - After executing `finalize` or a fallback, read the created `QuorumResolutionTicket` object id from the chain result and pass that exact id into `POST /disputes/{caseId}/resolve-escrow`.
+- Reviewer claim semantics:
+  - majority reviewer payouts happen at `finalize`
+  - `POST /reviewers/{reviewerAddress}/claim-metrics` is the reviewer-owned follow-up step for score updates, slashes, and pending-outcome cleanup
+  - do not model `claim-metrics` as the primary payout moment
+- If the operator uses the reviewer selector, the `checkpointDigest` must match the latest finalized IOTA checkpoint digest at request time.
+  The API now verifies this server-side and stores checkpoint provenance in the selector receipt.
 - Treat the `/resolve-escrow` tx-plan request as canonical, including `disputeQuorumConfigObjectId`. Do not silently rebuild it from older assumptions.
 - If the shared escrow is already resolved, `/resolve-escrow` now correctly returns `409 dispute_escrow_already_resolved`.
 - Once a milestone dispute resolves the escrow, the order is terminal `DISPUTED`. Do not continue later milestones; a correct post-resolution write now comes back as `409 order_not_in_progress`.

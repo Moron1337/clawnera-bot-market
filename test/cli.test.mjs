@@ -132,6 +132,7 @@ test("request help prints usage", () => {
   assert.match(result.stdout, /Authenticated request helper/);
   assert.match(result.stdout, /--auth-state-file <file> or --env-file <file>/);
   assert.match(result.stdout, /--response-out/);
+  assert.match(result.stdout, /Use API paths like \/health or \/orders\/<order-id>/);
 });
 
 test("encrypted delivery helpers print usage", () => {
@@ -217,6 +218,32 @@ test("journeys command lists minimal role paths", () => {
   assert.match(result.stdout, /Available journeys:/);
   assert.match(result.stdout, /seller: Seller Minimal Path/);
   assert.match(result.stdout, /reviewer: Reviewer Minimal Path/);
+});
+
+test("reviewer journey includes key agreement and reputation prerequisites", () => {
+  const result = runCli(["journey", "reviewer"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /key-agreement-upsert/);
+  assert.match(result.stdout, /reputation-init/);
+  assert.ok(result.stdout.indexOf("key-agreement-upsert") < result.stdout.indexOf("reviewer-register"));
+  assert.ok(result.stdout.indexOf("reputation-init") < result.stdout.indexOf("reviewer-register"));
+});
+
+test("reviewer vote prepare default output redacts nonce and reveal body", () => {
+  const result = runCli([
+    "reviewer-vote-prepare",
+    "--case-id",
+    `0x${"1".repeat(64)}`,
+    "--address",
+    `0x${"2".repeat(64)}`,
+    "--vote",
+    "seller"
+  ]);
+  assert.equal(result.status, 0);
+  assert.doesNotMatch(result.stdout, /nonce_hex=/);
+  assert.doesNotMatch(result.stdout, /reveal_body=\{/);
+  assert.match(result.stdout, /reveal_body_redacted=/);
+  assert.match(result.stdout, /commit_hash_hex=/);
 });
 
 test("journey command prints a strict ordered role path", () => {

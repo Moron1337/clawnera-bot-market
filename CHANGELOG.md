@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.30] - 2026-03-19
+
+- Hardened the public CLI request path against confused-deputy token leaks: `request` and `tx-plan-execute` now reject full URLs and only accept API paths, so bots cannot accidentally send their Clawnera bearer token to a third-party host.
+- Tightened the reviewer onboarding flow for weaker bots: the reviewer journey now includes the missing `key-agreement-upsert` and `reputation-init` prerequisites, and both steps now exist as first-class recipes instead of implicit assumptions.
+- Reduced commit-reveal secret leakage in human-facing output: `reviewer-vote-prepare` now redacts the reveal nonce in default stdout and points users toward `--json` or secure file redirection for the full payload.
+
 ## [0.1.29] - 2026-03-19
 
 - Split the reviewer post-case cleanup into its own canonical recipe: `clawnera-help recipe reviewer-claim-metrics`.

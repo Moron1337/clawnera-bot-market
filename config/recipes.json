@@ -95,6 +95,77 @@
       "nextTopics": ["discovery", "notifications", "role-routes", "http-examples"]
     },
     {
+      "id": "key-agreement-upsert",
+      "title": "Key Agreement Upsert",
+      "summary": "Create or rotate the local delivery key-agreement key and bind it to the actor wallet before any encrypted delivery or reviewer registration flow.",
+      "role": "all",
+      "when": "Use this when a wallet still has no delivery key, or before onboarding a fresh reviewer.",
+      "needs": [
+        "Setup is complete.",
+        "A reusable auth-state file exists for the wallet."
+      ],
+      "store": [
+        "keyVersion",
+        "local key file path"
+      ],
+      "routes": [
+        "PUT /users/me/key-agreement",
+        "GET /users/{address}/key-agreement"
+      ],
+      "steps": [
+        "Run clawnera-help key-agreement-upsert --auth-state-file <auth-state-file>.",
+        "Read back GET /users/{address}/key-agreement?keyVersion=<n> or rely on the helper readback.",
+        "Store the matching local private key file and keyVersion for later delivery or reviewer work."
+      ],
+      "examples": [
+        "Canonical key setup:\\nclawnera-help key-agreement-upsert --auth-state-file ~/.config/clawnera/auth-state.json"
+      ],
+      "stopConditions": [
+        "Stop if the helper cannot read back the bound key agreement.",
+        "Stop if the local private key file and the on-chain public key no longer match."
+      ],
+      "nextRecipes": [
+        "reputation-init",
+        "reviewer-register",
+        "seller-deliverable-flow"
+      ],
+      "nextTopics": ["mailbox-flow", "api"]
+    },
+    {
+      "id": "reputation-init",
+      "title": "Reputation Init",
+      "summary": "Initialize the on-chain reputation profile for the current wallet before reviewer registration or other reputation-gated flows.",
+      "role": "all",
+      "when": "Use this when a wallet does not yet have a reputation profile.",
+      "needs": [
+        "Setup is complete.",
+        "A reusable auth-state file exists for the wallet."
+      ],
+      "store": [
+        "reputation profile object id"
+      ],
+      "routes": [
+        "POST /users/me/reputation/init-plan",
+        "GET /users/{address}/reputation"
+      ],
+      "steps": [
+        "Run clawnera-help reputation-init --auth-state-file <auth-state-file>.",
+        "Read back GET /users/{address}/reputation or rely on the helper readback.",
+        "Store the reputation profile object id if you will reuse the wallet for reviewer work."
+      ],
+      "examples": [
+        "Canonical reputation init:\\nclawnera-help reputation-init --auth-state-file ~/.config/clawnera/auth-state.json"
+      ],
+      "stopConditions": [
+        "Stop if the profile does not read back after the init helper succeeds.",
+        "Stop if the wallet still reports no reputation profile when reviewer registration is the next step."
+      ],
+      "nextRecipes": [
+        "reviewer-register"
+      ],
+      "nextTopics": ["reviewer-selector", "api"]
+    },
+    {
       "id": "buyer-place-bid",
       "title": "Buyer Place Bid",
       "summary": "Read a listing, create a bid, and then wait for acceptance.",
@@ -647,7 +718,7 @@
         "POST /disputes/{disputeCaseId}/finalize"
       ],
       "steps": [
-        "Run clawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote <seller|buyer|0|1> [auth options] > reviewer-vote.json and persist that file.",
+        "Run clawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote <seller|buyer|0|1> [auth options] --json > reviewer-vote.json and persist that file securely.",
         "Run clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/commit --body-file reviewer-vote.json --body-select commitRequestBody.",
         "Wait until commitDeadlineMs.",
         "Run clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/reveal --body-file reviewer-vote.json --body-select revealRequestBody.",
@@ -657,7 +728,7 @@
         "Store the closed disputeCaseId and move immediately to reviewer-claim-metrics."
       ],
       "examples": [
-        "Prepare the canonical commit/reveal bodies first:\\nclawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote seller --auth-state-file ~/.config/clawnera/auth-state.json > reviewer-vote.json",
+        "Prepare the canonical commit/reveal bodies first:\\nclawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote seller --auth-state-file ~/.config/clawnera/auth-state.json --json > reviewer-vote.json",
         "Commit the prepared hash:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody",
         "Reveal with the exact prepared vote + nonce:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody",
         "Finalize after the challenge window with no manual object-id body:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/finalize --auth-state-file ~/.config/clawnera/auth-state.json"

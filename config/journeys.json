@@ -46,6 +46,8 @@
       "role": "reviewer",
       "steps": [
         "setup-quick",
+        "key-agreement-upsert",
+        "reputation-init",
         "reviewer-register",
         "reviewer-handle-invite",
         "reviewer-vote",

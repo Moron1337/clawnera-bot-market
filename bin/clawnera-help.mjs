@@ -2885,14 +2885,17 @@ function loadApiRequestBody(options = {}) {
 }
 
 async function callApiRoute({ method, rawPath, options = {}, timeoutMs = 20_000 }) {
+  if (normalizeApiBase(rawPath)) {
+    throw new Error("absolute_api_url_not_allowed");
+  }
   const context = await resolveApiRuntimeContext({
     ...options,
     "timeout-ms": timeoutMs
   });
   const runtimeContext = { ...context };
   const { body, jsonBody, bodyFile, bodySelect } = loadApiRequestBody(options);
-  const apiBase = normalizeApiBase(rawPath) ? "" : runtimeContext.apiBase;
-  if (!normalizeApiBase(rawPath) && !apiBase) {
+  const apiBase = runtimeContext.apiBase;
+  if (!apiBase) {
     throw new Error("missing_or_invalid_api_base");
   }
 
@@ -2903,7 +2906,7 @@ async function callApiRoute({ method, rawPath, options = {}, timeoutMs = 20_000 
         ? "auto"
         : "";
   const idempotencyKey = idempotencyMode === "auto" ? randomUUID() : idempotencyMode;
-  const url = normalizeApiBase(rawPath) ? rawPath : `${apiBase}${rawPath.startsWith("/") ? rawPath : `/${rawPath}`}`;
+  const url = `${apiBase}${rawPath.startsWith("/") ? rawPath : `/${rawPath}`}`;
   const buildHeaders = () => {
     const headers = {};
     if (runtimeContext.jwt) {
@@ -7215,6 +7218,7 @@ function apiRequestUsageLines() {
   return [
     "Authenticated request helper:",
     "- Usage: clawnera-help request <GET|POST|PUT|PATCH|DELETE> </path>",
+    "- Use API paths like /health or /orders/<order-id>; full URLs are rejected on purpose",
     "- Optional auth shortcuts: --auth-state-file <file> or --env-file <file>",
     "- Optional explicit auth: --api-base <url> --jwt <token>",
     "- Optional body: --body '{\"json\":true}' or --body-file ./payload.json",
@@ -7243,6 +7247,7 @@ function txPlanUsageLines(mode) {
     `Tx-plan ${label} helper:`,
     `- Usage: clawnera-help tx-plan-${label} <GET|POST|PUT|PATCH|DELETE> </path>`,
     "- Reuses the same auth/body flags as `clawnera-help request`",
+    "- Use API paths only; full URLs are rejected to avoid leaking auth tokens to other hosts",
     "- Fetches a canonical API tx plan, builds the PTB locally, then dry-runs or executes it",
     "- Optional auth shortcuts: --auth-state-file <file> or --env-file <file>",
     "- Optional explicit auth: --api-base <url> --jwt <token>",
@@ -7443,7 +7448,7 @@ function reviewerVotePrepareUsageLines() {
     "- Optional explicit reviewer selector: --address <0x...>",
     "- Optional nonce input: --nonce-hex <hex> or --nonce-bytes <n> (default 16 random bytes)",
     "- Optional evidence sources: --evidence-hash-hex <hex> | --evidence-file <path> | --evidence-text <text>",
-    "- Output includes vote, settlementTarget, nonceHex, commitHashHex, optional evidenceHashHex, and ready-to-paste commit/reveal bodies",
+    "- Default stdout redacts the reveal nonce; use --json or redirect stdout to a secure file for the full commit/reveal payloads",
     "- Direct next step: tx-plan-execute ... --body-file ./reviewer-vote.json --body-select commitRequestBody",
     "- Commit hash rule: sha256(vote_byte || case_id_bytes || reviewer_address_bytes || nonce_bytes)",
     "- Contract truth: vote=1 means seller settlement, vote=0 means buyer settlement",
@@ -8845,13 +8850,12 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`reviewer_address=${result.reviewerAddress}`);
     console.log(`vote=${result.vote}`);
     console.log(`settlement_target=${result.settlementTarget}`);
-    console.log(`nonce_hex=${result.nonceHex}`);
     console.log(`commit_hash_hex=${result.commitHashHex}`);
     if (result.evidenceHashHex) {
       console.log(`evidence_hash_hex=${result.evidenceHashHex}`);
     }
     console.log(`commit_body=${JSON.stringify(result.commitRequestBody)}`);
-    console.log(`reveal_body=${JSON.stringify(result.revealRequestBody)}`);
+    console.log("reveal_body_redacted=use --json or redirect stdout to a secure file");
   } else {
     console.error(`reviewer_vote_prepare_error: ${result.error}`);
     process.exitCode = 1;

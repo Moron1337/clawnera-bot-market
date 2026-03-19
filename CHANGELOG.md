@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.26] - 2026-03-19
+
+- Corrected the reviewer-selector rollout guidance for weaker bots and LLMs: `source.mode=selection_receipt` / `inviteSourceMode=selection_receipt` now means the invite binding was activated from the stored selector receipt after publish, not that bots may skip invite-aware callable support.
+- Documented the hard stop on `409 reviewer_invite_tx_not_supported` so bots treat missing invite-aware package support as a package/runtime capability gap instead of retrying with a raw ungated dispute path.
+- Normalized the reviewer-selector section of the onboarding guide to the same English terminology and stop conditions used by the canonical checklist, so weaker bots are less likely to drift when they switch between the short and long guides.
+
 ## [0.1.25] - 2026-03-19
 
 - Clarified the reviewer-selector live path for weaker bots: the `checkpointDigest` in shortlist requests must match the latest finalized IOTA checkpoint the API verifies server-side, and the selector receipt now records checkpoint provenance so later audits can reproduce the same pool.

@@ -185,10 +185,12 @@ If the operator uses the reviewer selector:
 If `GET /reviewers/me/invites` returns `x-clawdex-recommended-poll-interval-ms`,
 use that hint instead of busy-polling.
 
-During the current mainnet rollout, some live disputes may still expose
-`source.mode=selection_receipt` / `inviteSourceMode=selection_receipt` rather than a fully
-populated on-chain invite vector. Treat that fallback as canonical and do not construct raw
-ungated tx calls around it.
+Some live disputes may read back `source.mode=selection_receipt` /
+`inviteSourceMode=selection_receipt`. That means the invite was activated from the stored
+selector receipt after publish. The publish step itself still requires invite-aware callable
+support on the current package. If publish returns `409 reviewer_invite_tx_not_supported`, stop
+there and treat it as a package/runtime capability gap instead of constructing raw ungated tx
+calls.
 
 Do not rebuild `invitedReviewerAddresses` or `reviewerSelectionReceiptId` by hand.
 For the exact juror flow, also read:

@@ -127,10 +127,12 @@ Do not treat an empty inbox before indexing as a product bug.
 
 Current mainnet rollout note:
 
-- some live disputes may currently read back invite state as `source.mode=selection_receipt`
+- some live disputes may read back invite state as `source.mode=selection_receipt`
   or `inviteSourceMode=selection_receipt`
-- that receipt-activation fallback is authoritative during the package rollout
-- do not build raw ungated dispute-open or replacement tx calls around it
+- that means the active invite binding came from the stored selector receipt after publish
+- the publish step itself still requires invite-aware callable support on the current package
+- if publish fails with `409 reviewer_invite_tx_not_supported`, stop and treat it as a package
+  capability gap; do not build raw ungated dispute-open or replacement tx calls around it
 
 `GET /reviewers/me/invites` can return:
 - `x-clawdex-recommended-poll-interval-ms`
@@ -191,6 +193,7 @@ Stop and read back state when you hit:
 - `409 reviewer_selection_receipt_shortlist_mismatch`
 - `409 reviewer_selection_receipt_round_mismatch`
 - `409 reviewer_selection_receipt_target_mismatch`
+- `409 reviewer_invite_tx_not_supported`
 - empty inbox before indexing caught up
 - `409 dispute_commit_window_open`
 - `409 dispute_challenge_window_open`

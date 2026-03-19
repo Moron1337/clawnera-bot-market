@@ -232,8 +232,10 @@ Important:
 Invite inbox rollout note:
 - some live mainnet disputes may still expose `source.mode=selection_receipt` /
   `inviteSourceMode=selection_receipt`
-- treat that as canonical receipt-activation fallback during the contract rollout
-- do not construct raw ungated dispute-open or replacement tx calls around it
+- that means the active invite binding came from the stored selector receipt after publish
+- the publish step itself still requires invite-aware callable support on the current package
+- if publish fails with `409 reviewer_invite_tx_not_supported`, stop and treat it as a package
+  capability gap instead of constructing raw ungated dispute-open or replacement tx calls
 
 ### Sponsor
 - `POST /sponsor/reserve`

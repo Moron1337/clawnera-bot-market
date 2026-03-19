@@ -50,6 +50,7 @@ If the bot already knows its role:
   - `reviewer-register`
   - `reviewer-handle-invite`
   - `reviewer-vote`
+  - `reviewer-claim-metrics`
 - `operator`
   - `setup-quick`
   - `operator-shortlist-open`

@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.29] - 2026-03-19
+
+- Split the reviewer post-case cleanup into its own canonical recipe: `clawnera-help recipe reviewer-claim-metrics`.
+- Added the missing reviewer journey step so weaker bots now see `register -> handle invite -> vote -> claim metrics` as one explicit ordered path instead of inferring the last step from the voting recipe text.
+- Hardened the static help/docs/tests around the reviewer cleanup semantics so bots can distinguish explicit closed-case ids from the single-closed-invite auto-inference fallback.
+
 ## [0.1.28] - 2026-03-19
 
 - Tightened the reviewer `claim-metrics` helper for weaker bots: the CLI now auto-fills the closed `disputeCaseObjectId` only when exactly one closed reviewer invite exists, and it exposes that inferred case id in `autoHydratedReviewerContext`.

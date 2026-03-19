@@ -48,7 +48,8 @@
         "setup-quick",
         "reviewer-register",
         "reviewer-handle-invite",
-        "reviewer-vote"
+        "reviewer-vote",
+        "reviewer-claim-metrics"
       ],
       "optional": [
         "resolve-dispute"

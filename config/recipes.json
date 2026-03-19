@@ -629,7 +629,7 @@
     {
       "id": "reviewer-vote",
       "title": "Reviewer Commit And Reveal Vote",
-      "summary": "Commit, wait, reveal, finalize/fallback, then claim metrics in the correct order.",
+      "summary": "Commit, wait, reveal, then finalize or fallback in the exact order the case deadlines allow.",
       "role": "reviewer",
       "when": "Use this after a reviewer was assigned to a case.",
       "needs": [
@@ -644,8 +644,7 @@
       "routes": [
         "POST /disputes/{disputeCaseId}/votes/commit",
         "POST /disputes/{disputeCaseId}/votes/reveal",
-        "POST /disputes/{disputeCaseId}/finalize",
-        "POST /reviewers/{reviewerAddress}/claim-metrics"
+        "POST /disputes/{disputeCaseId}/finalize"
       ],
       "steps": [
         "Run clawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote <seller|buyer|0|1> [auth options] > reviewer-vote.json and persist that file.",
@@ -655,21 +654,60 @@
         "Remember: vote=1 resolves to seller settlement, vote=0 resolves to buyer settlement.",
         "If needed, wait until challengeDeadlineMs before finalize.",
         "Finalize with the canonical tx-plan path once the challenge window allows it. Do not hand-build dispute object ids for finalize or timeout-fallback; the API auto-hydrates them.",
-        "After finalize/fallback, run clawnera-help tx-plan-execute POST /reviewers/{reviewerAddress}/claim-metrics --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.",
-        "If exactly one closed reviewer invite exists for this wallet, the CLI can auto-fill disputeCaseObjectId on retry. If there are zero or multiple closed cases, stop and pass the exact case id yourself."
+        "Store the closed disputeCaseId and move immediately to reviewer-claim-metrics."
       ],
       "examples": [
         "Prepare the canonical commit/reveal bodies first:\\nclawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote seller --auth-state-file ~/.config/clawnera/auth-state.json > reviewer-vote.json",
         "Commit the prepared hash:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody",
         "Reveal with the exact prepared vote + nonce:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody",
-        "Finalize after the challenge window with no manual object-id body:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/finalize --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Claim metrics after settlement:\\nclawnera-help tx-plan-execute POST /reviewers/<reviewer-address>/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'"
+        "Finalize after the challenge window with no manual object-id body:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/finalize --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
         "Stop on dispute_commit_window_open and wait.",
         "Stop on dispute_challenge_window_open and wait.",
-        "Stop if the prepared vote/nonce no longer match what you were about to reveal.",
+        "Stop if the prepared vote/nonce no longer match what you were about to reveal."
+      ],
+      "nextRecipes": [
+        "reviewer-claim-metrics",
+        "resolve-dispute"
+      ],
+      "nextTopics": ["reviewer-selector", "api", "order-states"]
+    },
+    {
+      "id": "reviewer-claim-metrics",
+      "title": "Reviewer Claim Metrics",
+      "summary": "After a dispute closes, clear the reviewer-owned pending outcome for that exact case without burning extra gas.",
+      "role": "reviewer",
+      "when": "Use this immediately after finalize or fallback closed the dispute case.",
+      "needs": [
+        "The dispute case is already closed by finalize or fallback.",
+        "The reviewer wallet is the same wallet that served on the case."
+      ],
+      "store": [
+        "closed disputeCaseId",
+        "claim tx result or 409 no-op confirmation"
+      ],
+      "routes": [
+        "GET /reviewers/me/metrics",
+        "GET /reviewers/me/invites",
+        "POST /reviewers/{reviewerAddress}/claim-metrics"
+      ],
+      "steps": [
+        "Read GET /reviewers/me/metrics first if you are unsure whether anything is still pending.",
+        "If pendingDecisionMetricsClaimRequired=false, stop. No claim tx is needed.",
+        "If you know the exact closed disputeCaseId, run clawnera-help tx-plan-execute POST /reviewers/{reviewerAddress}/claim-metrics --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.",
+        "If you do not know the exact case id, the CLI may auto-fill it only when GET /reviewers/me/invites shows exactly one closed case for this reviewer.",
+        "If there are zero or multiple closed cases, stop and pass the exact disputeCaseId yourself.",
+        "Read back GET /reviewers/me/metrics again and confirm the pending claim flag cleared."
+      ],
+      "examples": [
+        "Explicit case id:\\nclawnera-help tx-plan-execute POST /reviewers/<reviewer-address>/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'",
+        "Safe preflight:\\nclawnera-help request GET /reviewers/me/metrics --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Single-closed-invite fallback only when the CLI can infer it safely:\\nclawnera-help tx-plan-execute POST /reviewers/<reviewer-address>/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --json"
+      ],
+      "stopConditions": [
         "Stop on 409 reviewer_metrics_claim_not_required. That reviewer already cleared all pending case outcomes; do not burn another tx.",
+        "Stop if the CLI cannot safely infer disputeCaseObjectId and you do not have the exact closed case id.",
         "Do not treat claim-metrics as the main payout step; majority payouts already happen at finalize."
       ],
       "nextRecipes": [

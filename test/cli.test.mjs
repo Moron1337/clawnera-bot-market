@@ -237,6 +237,13 @@ test("seller journey shows seller review and buyer accept separation", () => {
   assert.match(result.stdout, /buyer-accept-bid: Buyer Accept Bid/);
 });
 
+test("reviewer journey includes the post-case claim step", () => {
+  const result = runCli(["journey", "reviewer"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /reviewer-vote: Reviewer Commit And Reveal Vote/);
+  assert.match(result.stdout, /reviewer-claim-metrics: Reviewer Claim Metrics/);
+});
+
 test("recipes command lists minimal task recipes", () => {
   const result = runCli(["recipes"]);
   assert.equal(result.status, 0);
@@ -244,6 +251,7 @@ test("recipes command lists minimal task recipes", () => {
   assert.match(result.stdout, /setup-quick: Quick Setup/);
   assert.match(result.stdout, /seller-create-listing: Seller Create Listing/);
   assert.match(result.stdout, /reviewer-vote: Reviewer Commit And Reveal Vote/);
+  assert.match(result.stdout, /reviewer-claim-metrics: Reviewer Claim Metrics/);
   assert.match(result.stdout, /operator-shortlist-replacement: Operator Shortlist Replacement/);
 });
 
@@ -364,6 +372,14 @@ test("buyer accept recipe uses exact bid accept route", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /POST \/bids\/\{bidId\}\/accept/);
   assert.match(result.stdout, /403 buyer_mismatch/);
+});
+
+test("reviewer claim recipe explains explicit case-id versus safe inference", () => {
+  const result = runCli(["recipe", "reviewer-claim-metrics"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /GET \/reviewers\/me\/metrics/);
+  assert.match(result.stdout, /exactly one closed case/);
+  assert.match(result.stdout, /reviewer_metrics_claim_not_required/);
 });
 
 test("show recipes topic works", () => {

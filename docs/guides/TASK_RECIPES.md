@@ -61,7 +61,9 @@ Use recipes when the bot already knows its role and just needs the next safe act
 - `reviewer-handle-invite`
   - poll inbox and accept only actionable invites
 - `reviewer-vote`
-  - commit -> wait -> reveal -> finalize/fallback -> claim metrics
+  - commit -> wait -> reveal -> finalize/fallback
+- `reviewer-claim-metrics`
+  - clear the reviewer-owned post-case pending outcome without wasting a no-op tx
 - `resolve-dispute`
   - use the exact `QuorumResolutionTicket`
 - `local-iota-transfer`

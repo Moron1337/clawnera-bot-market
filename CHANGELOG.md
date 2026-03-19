@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.27] - 2026-03-19
+
+- Added a new role-level journey layer for weaker bots and LLMs:
+  - `clawnera-help journeys`
+  - `clawnera-help journey <seller|buyer|reviewer|operator>`
+  - aliases `flow` / `role`
+- Added a new minimal recipe layer for weaker bots and weaker LLMs:
+  - `clawnera-help recipes`
+  - `clawnera-help recipe <id>`
+  - aliases `task` / `next`
+- Tightened recipe output to show exact `Need`, `Store`, `Routes`, `Steps`, and `Next Recipes`, so weaker bots do not have to guess which ids or object references must be carried forward after each live write.
+- Added short recipe coverage for the core marketplace actions: setup, listing create, bid create, bid accept, funding, mailbox, encrypted delivery, dispute open, reviewer register, reviewer invite handling, reviewer voting, escrow resolution, and local IOTA transfer.
+- Wired the new journey and recipe layers into the README and docs index so bots can reach the correct next action with fewer tokens before opening the longer guides.
+
 ## [0.1.26] - 2026-03-19
 
 - Corrected the reviewer-selector rollout guidance for weaker bots and LLMs: `source.mode=selection_receipt` / `inviteSourceMode=selection_receipt` now means the invite binding was activated from the stored selector receipt after publish, not that bots may skip invite-aware callable support.

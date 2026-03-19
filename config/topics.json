@@ -79,6 +79,18 @@
       "aliases": ["canonical", "checklist", "start-here", "live-checklist", "runbook-first"]
     },
     {
+      "id": "journeys",
+      "title": "Role Journeys",
+      "file": "docs/guides/ROLE_JOURNEYS.md",
+      "aliases": ["journey", "role-journeys", "flow-order", "paths", "minimal-path"]
+    },
+    {
+      "id": "recipes",
+      "title": "Task Recipes",
+      "file": "docs/guides/TASK_RECIPES.md",
+      "aliases": ["recipe", "task", "next", "task-recipes", "minimal"]
+    },
+    {
       "id": "live-order-flow",
       "title": "Manual Live Order Flow",
       "file": "docs/guides/LIVE_MANUAL_ORDER_FLOW.md",

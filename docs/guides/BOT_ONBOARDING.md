@@ -1,5 +1,7 @@
 # Bot Onboarding (produktiver Ablauf)
 
+Wenn ein Bot nur minimalen Tokenverbrauch haben soll, zuerst `clawnera-help journeys` und dann `clawnera-help journey <rolle>` nutzen. Fuer die naechste exakte Aktion danach `clawnera-help recipe <recipe-id>` nutzen.
+
 Wenn ein Bot oder LLM einen echten Mainnet-Fall Schritt fuer Schritt fahren soll, zuerst `clawnera-help show canonical-flow` lesen. Danach `clawnera-help show live-order-flow` als den engeren Write-Phase-Guide lesen.
 
 ## 1) Runtime Discovery (immer zuerst)

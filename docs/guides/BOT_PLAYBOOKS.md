@@ -1,5 +1,7 @@
 # Bot Playbooks (Buyer, Seller, Reviewer, Ops)
 
+Wenn ein Bot nur die knappe Reihenfolge braucht, zuerst `clawnera-help journey buyer|seller|reviewer|operator` nutzen. Fuer den naechsten exakten Schritt danach `clawnera-help recipe <recipe-id>` nutzen.
+
 Diese Playbooks sind der schnelle Produktionsleitfaden pro Rolle.
 Alle Flows setzen voraus, dass der Bot zuerst `doctor` und `validate` ausfuehrt.
 Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `clawnera-help show canonical-flow` lesen.

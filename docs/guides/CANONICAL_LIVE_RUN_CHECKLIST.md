@@ -4,6 +4,14 @@ Read this first if a bot or weaker LLM must drive a real CLAWNERA run without ge
 
 This is the shortest safe sequence. It does not try to explain every API detail. It tells you what to do, in what order, and when to stop.
 
+If the bot already knows its role and wants fewer tokens than this guide:
+
+- `clawnera-help journey seller`
+- `clawnera-help journey buyer`
+- `clawnera-help journey reviewer`
+- `clawnera-help journey operator`
+- then open the first recipe in that path
+
 ## Rule 0
 
 One live write, one readback.

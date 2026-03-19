@@ -63,7 +63,12 @@ test("help command prints usage", () => {
   const result = runCli(["--help"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /CLAWNERA Bot Market CLI/);
+  assert.match(result.stdout, /Fast path for bots:/);
+  assert.match(result.stdout, /clawnera-help journeys/);
+  assert.match(result.stdout, /clawnera-help journey seller/);
   assert.match(result.stdout, /clawnera-help auth-login/);
+  assert.match(result.stdout, /clawnera-help recipes/);
+  assert.match(result.stdout, /clawnera-help recipe <id>/);
   assert.match(result.stdout, /clawnera-help wallet-init/);
   assert.match(result.stdout, /clawnera-help iota-get-balance/);
   assert.match(result.stdout, /clawnera-help iota-prepare-transfer/);
@@ -80,6 +85,10 @@ test("help json output includes auth-login command", () => {
   const payload = JSON.parse(result.stdout);
   assert.ok(Array.isArray(payload.commands));
   assert.ok(payload.commands.includes("auth-login"));
+  assert.ok(payload.commands.includes("journeys"));
+  assert.ok(payload.commands.includes("journey"));
+  assert.ok(payload.commands.includes("recipes"));
+  assert.ok(payload.commands.includes("recipe"));
   assert.ok(payload.commands.includes("wallet-init"));
   assert.ok(payload.commands.includes("iota-prepare-transfer"));
   assert.ok(payload.commands.includes("iota-execute-transfer"));
@@ -104,6 +113,8 @@ test("topics command includes onboarding topic", () => {
   const result = runCli(["topics"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /onboarding: Bot Onboarding/);
+  assert.match(result.stdout, /journeys: Role Journeys/);
+  assert.match(result.stdout, /recipes: Task Recipes/);
   assert.match(result.stdout, /auth-runtime: Authenticated Runtime Checks/);
   assert.match(result.stdout, /canonical-flow: Canonical Live Run Checklist/);
   assert.match(result.stdout, /live-order-flow: Manual Live Order Flow/);
@@ -111,6 +122,78 @@ test("topics command includes onboarding topic", () => {
   assert.match(result.stdout, /mailbox-flow: Mailbox Communication Flow/);
   assert.match(result.stdout, /notifications: Notifications/);
   assert.match(result.stdout, /playbooks: Role Playbooks/);
+});
+
+test("journeys command lists minimal role paths", () => {
+  const result = runCli(["journeys"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Available journeys:/);
+  assert.match(result.stdout, /seller: Seller Minimal Path/);
+  assert.match(result.stdout, /reviewer: Reviewer Minimal Path/);
+});
+
+test("journey command prints a strict ordered role path", () => {
+  const result = runCli(["journey", "buyer"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /# Buyer Minimal Path/);
+  assert.match(result.stdout, /Do In This Order:/);
+  assert.match(result.stdout, /buyer-place-bid: Buyer Place Bid/);
+  assert.match(result.stdout, /If setup is not complete: clawnera-help recipe setup-quick/);
+  assert.match(result.stdout, /If setup is already complete: clawnera-help recipe buyer-place-bid/);
+});
+
+test("recipes command lists minimal task recipes", () => {
+  const result = runCli(["recipes"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Available recipes:/);
+  assert.match(result.stdout, /setup-quick: Quick Setup/);
+  assert.match(result.stdout, /seller-create-listing: Seller Create Listing/);
+  assert.match(result.stdout, /reviewer-vote: Reviewer Commit And Reveal Vote/);
+});
+
+test("recipe command prints a concise task runbook", () => {
+  const result = runCli(["recipe", "seller-create-listing"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /# Seller Create Listing/);
+  assert.match(result.stdout, /Need:/);
+  assert.match(result.stdout, /Store:/);
+  assert.match(result.stdout, /Routes:/);
+  assert.match(result.stdout, /POST \/listings with idempotency-key/);
+  assert.match(result.stdout, /Stop Conditions:/);
+  assert.match(result.stdout, /Next Recipes:/);
+  assert.match(result.stdout, /clawnera-help show discovery/);
+});
+
+test("recipe json output is parseable", () => {
+  const result = runCli(["recipe", "reviewer-vote", "--json"]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.recipe.id, "reviewer-vote");
+  assert.ok(Array.isArray(payload.recipe.steps));
+  assert.ok(payload.recipe.steps.some((step) => /votes\/commit/.test(step)));
+});
+
+test("recipe aliases work", () => {
+  const result = runCli(["next", "buyer-place-bid"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /# Buyer Place Bid/);
+  assert.match(result.stdout, /POST \/bids/);
+});
+
+test("show recipes topic works", () => {
+  const result = runCli(["show", "recipes"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /# Task Recipes/);
+  assert.match(result.stdout, /clawnera-help journey seller/);
+  assert.match(result.stdout, /clawnera-help recipe setup-quick/);
+});
+
+test("show journeys topic works", () => {
+  const result = runCli(["show", "journeys"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /# Role Journeys/);
+  assert.match(result.stdout, /clawnera-help journey reviewer/);
 });
 
 test("show canonical-flow topic works", () => {

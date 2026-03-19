@@ -63,6 +63,8 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
 const packageJsonFile = path.join(repoRoot, "package.json");
 const topicsFile = path.join(repoRoot, "config", "topics.json");
+const recipesFile = path.join(repoRoot, "config", "recipes.json");
+const journeysFile = path.join(repoRoot, "config", "journeys.json");
 const docsRoot = path.join(repoRoot, "docs");
 const docsGuidesRoot = path.join(docsRoot, "guides");
 const docsSourcesRoot = path.join(docsRoot, "docsources");
@@ -189,13 +191,34 @@ function loadTopics() {
   return Array.isArray(parsed.topics) ? parsed.topics : [];
 }
 
+function loadRecipes() {
+  const raw = fs.readFileSync(recipesFile, "utf8");
+  const parsed = JSON.parse(raw);
+  return Array.isArray(parsed.recipes) ? parsed.recipes : [];
+}
+
+function loadJourneys() {
+  const raw = fs.readFileSync(journeysFile, "utf8");
+  const parsed = JSON.parse(raw);
+  return Array.isArray(parsed.journeys) ? parsed.journeys : [];
+}
+
 function printUsage() {
   console.log("CLAWNERA Bot Market CLI");
+  console.log("");
+  console.log("Fast path for bots:");
+  console.log("  clawnera-help journeys                    List role-based minimal paths");
+  console.log("  clawnera-help journey seller              Show the seller path in strict order");
+  console.log("  clawnera-help recipe setup-quick          Do setup before any live write");
   console.log("");
   console.log("Usage:");
   console.log("  clawnera-help                             Show usage + topics");
   console.log("  clawnera-help topics                      List all topics");
+  console.log("  clawnera-help journeys                    List all role-based minimal paths");
+  console.log("  clawnera-help journey <id>                Show one role-based minimal path");
+  console.log("  clawnera-help recipes                     List all minimal task recipes");
   console.log("  clawnera-help show <topic>                Show one topic document");
+  console.log("  clawnera-help recipe <id>                 Show one minimal task recipe");
   console.log("  clawnera-help search <keyword>            Search keyword in curated docs");
   console.log("  clawnera-help search <keyword> --all      Include docsources in search");
   console.log("  clawnera-help doctor                      Check local toolchain");
@@ -229,6 +252,149 @@ function printTopics(topics) {
     const aliasText = aliases ? ` (aliases: ${aliases})` : "";
     console.log(`- ${topic.id}: ${topic.title}${aliasText}`);
   }
+}
+
+function printRecipes(recipes) {
+  console.log("Available recipes:");
+  for (const recipe of recipes) {
+    const roleText = recipe.role ? ` [role: ${recipe.role}]` : "";
+    console.log(`- ${recipe.id}: ${recipe.title}${roleText}`);
+  }
+}
+
+function printJourneys(journeys) {
+  console.log("Available journeys:");
+  for (const journey of journeys) {
+    const roleText = journey.role ? ` [role: ${journey.role}]` : "";
+    console.log(`- ${journey.id}: ${journey.title}${roleText}`);
+  }
+}
+
+function resolveRecipe(recipes, key) {
+  const normalized = String(key || "").trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  return recipes.find((recipe) => String(recipe.id || "").trim().toLowerCase() === normalized) || null;
+}
+
+function resolveJourney(journeys, key) {
+  const normalized = String(key || "").trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  return journeys.find((journey) => String(journey.id || "").trim().toLowerCase() === normalized) || null;
+}
+
+function printRecipe(recipe) {
+  console.log(`# ${recipe.title}`);
+  console.log("");
+  console.log(`recipeId: ${recipe.id}`);
+  if (recipe.role) {
+    console.log(`role: ${recipe.role}`);
+  }
+  if (recipe.summary) {
+    console.log(`summary: ${recipe.summary}`);
+  }
+  if (recipe.when) {
+    console.log(`when: ${recipe.when}`);
+  }
+  if (Array.isArray(recipe.needs) && recipe.needs.length > 0) {
+    console.log("");
+    console.log("Need:");
+    for (const line of recipe.needs) {
+      console.log(`- ${line}`);
+    }
+  } else if (Array.isArray(recipe.preconditions) && recipe.preconditions.length > 0) {
+    console.log("");
+    console.log("Preconditions:");
+    for (const line of recipe.preconditions) {
+      console.log(`- ${line}`);
+    }
+  }
+  if (Array.isArray(recipe.store) && recipe.store.length > 0) {
+    console.log("");
+    console.log("Store:");
+    for (const line of recipe.store) {
+      console.log(`- ${line}`);
+    }
+  }
+  if (Array.isArray(recipe.routes) && recipe.routes.length > 0) {
+    console.log("");
+    console.log("Routes:");
+    for (const line of recipe.routes) {
+      console.log(`- ${line}`);
+    }
+  }
+  if (Array.isArray(recipe.steps) && recipe.steps.length > 0) {
+    console.log("");
+    console.log("Steps:");
+    for (let index = 0; index < recipe.steps.length; index += 1) {
+      console.log(`${index + 1}. ${recipe.steps[index]}`);
+    }
+  }
+  if (Array.isArray(recipe.stopConditions) && recipe.stopConditions.length > 0) {
+    console.log("");
+    console.log("Stop Conditions:");
+    for (const line of recipe.stopConditions) {
+      console.log(`- ${line}`);
+    }
+  }
+  if (Array.isArray(recipe.nextRecipes) && recipe.nextRecipes.length > 0) {
+    console.log("");
+    console.log("Next Recipes:");
+    for (const nextRecipe of recipe.nextRecipes) {
+      console.log(`- clawnera-help recipe ${nextRecipe}`);
+    }
+  }
+  if (Array.isArray(recipe.nextTopics) && recipe.nextTopics.length > 0) {
+    console.log("");
+    console.log("Next Topics:");
+    for (const topic of recipe.nextTopics) {
+      console.log(`- clawnera-help show ${topic}`);
+    }
+  }
+}
+
+function printJourney(journey, recipes) {
+  console.log(`# ${journey.title}`);
+  console.log("");
+  console.log(`journeyId: ${journey.id}`);
+  if (journey.role) {
+    console.log(`role: ${journey.role}`);
+  }
+  if (journey.summary) {
+    console.log(`summary: ${journey.summary}`);
+  }
+  if (Array.isArray(journey.steps) && journey.steps.length > 0) {
+    console.log("");
+    console.log("Do In This Order:");
+    for (const recipeId of journey.steps) {
+      const recipe = resolveRecipe(recipes, recipeId);
+      const label = recipe ? recipe.title : recipeId;
+      console.log(`- ${recipeId}: ${label}`);
+    }
+  }
+  if (Array.isArray(journey.optional) && journey.optional.length > 0) {
+    console.log("");
+    console.log("Optional Later:");
+    for (const recipeId of journey.optional) {
+      const recipe = resolveRecipe(recipes, recipeId);
+      const label = recipe ? recipe.title : recipeId;
+      console.log(`- ${recipeId}: ${label}`);
+    }
+  }
+  console.log("");
+  console.log("Next:");
+  const orderedSteps = Array.isArray(journey.steps) ? journey.steps : [];
+  if (orderedSteps.length > 0) {
+    console.log(`- If setup is not complete: clawnera-help recipe ${orderedSteps[0]}`);
+  }
+  const afterSetup = orderedSteps[0] === "setup-quick" ? orderedSteps[1] : orderedSteps[0];
+  if (afterSetup) {
+    console.log(`- If setup is already complete: clawnera-help recipe ${afterSetup}`);
+  }
+  console.log("- clawnera-help recipes");
 }
 
 function resolveTopic(topics, key) {
@@ -373,7 +539,9 @@ function doctorData() {
   return {
     tools,
     repo: repoRoot,
-    topics: loadTopics().length
+    topics: loadTopics().length,
+    recipes: loadRecipes().length,
+    journeys: loadJourneys().length
   };
 }
 
@@ -385,6 +553,8 @@ function printDoctor() {
   }
   console.log(`- repo: ${data.repo}`);
   console.log(`- topics: ${data.topics}`);
+  console.log(`- recipes: ${data.recipes}`);
+  console.log(`- journeys: ${data.journeys}`);
 }
 
 function validateTopicIndexCoverage(topics) {
@@ -424,11 +594,21 @@ function findAbsolutePathsInCuratedDocs() {
 function validateRepository(strict) {
   const checks = [];
   const topics = loadTopics();
+  const recipes = loadRecipes();
+  const journeys = loadJourneys();
   const topicIds = new Set();
   const aliasOrIds = new Set();
   const duplicateIds = [];
   const duplicateAliases = [];
   const invalidTopics = [];
+  const recipeIds = new Set();
+  const duplicateRecipeIds = [];
+  const invalidRecipes = [];
+  const recipesWithMissingTopics = [];
+  const journeyIds = new Set();
+  const duplicateJourneyIds = [];
+  const invalidJourneys = [];
+  const journeysWithMissingRecipes = [];
 
   for (const topic of topics) {
     const id = String(topic.id || "").trim();
@@ -468,6 +648,108 @@ function validateRepository(strict) {
     id: "topics_loaded",
     status: topics.length > 0 ? "pass" : "fail",
     message: `loaded ${topics.length} topics`
+  });
+
+  for (const recipe of recipes) {
+    const id = String(recipe.id || "").trim();
+    const title = String(recipe.title || "").trim();
+    if (!id || !title) {
+      invalidRecipes.push(recipe);
+      continue;
+    }
+    if (recipeIds.has(id)) {
+      duplicateRecipeIds.push(id);
+    }
+    recipeIds.add(id);
+    const nextTopics = Array.isArray(recipe.nextTopics) ? recipe.nextTopics : [];
+    const missingTopics = nextTopics.filter((topicId) => !topics.some((topic) => topic.id === topicId));
+    if (missingTopics.length > 0) {
+      recipesWithMissingTopics.push({
+        recipeId: id,
+        topics: missingTopics
+      });
+    }
+  }
+
+  checks.push({
+    id: "recipes_loaded",
+    status: recipes.length > 0 ? "pass" : "fail",
+    message: `loaded ${recipes.length} recipes`
+  });
+
+  checks.push({
+    id: "recipes_schema",
+    status: invalidRecipes.length === 0 ? "pass" : "fail",
+    message: invalidRecipes.length === 0 ? "all recipes have id/title" : `invalid recipe entries: ${invalidRecipes.length}`
+  });
+
+  checks.push({
+    id: "recipe_ids_unique",
+    status: duplicateRecipeIds.length === 0 ? "pass" : "fail",
+    message: duplicateRecipeIds.length === 0 ? "recipe ids are unique" : `duplicate recipe ids: ${duplicateRecipeIds.join(", ")}`
+  });
+
+  checks.push({
+    id: "recipe_topics_exist",
+    status: recipesWithMissingTopics.length === 0 ? "pass" : "fail",
+    message:
+      recipesWithMissingTopics.length === 0
+        ? "all recipe nextTopics resolve to real topics"
+        : `recipes reference missing topics: ${recipesWithMissingTopics
+            .map((entry) => `${entry.recipeId} -> ${entry.topics.join(", ")}`)
+            .join("; ")}`
+  });
+
+  for (const journey of journeys) {
+    const id = String(journey.id || "").trim();
+    const title = String(journey.title || "").trim();
+    if (!id || !title) {
+      invalidJourneys.push(journey);
+      continue;
+    }
+    if (journeyIds.has(id)) {
+      duplicateJourneyIds.push(id);
+    }
+    journeyIds.add(id);
+    const recipeRefs = []
+      .concat(Array.isArray(journey.steps) ? journey.steps : [])
+      .concat(Array.isArray(journey.optional) ? journey.optional : []);
+    const missingRecipes = recipeRefs.filter((recipeId) => !recipes.some((recipe) => recipe.id === recipeId));
+    if (missingRecipes.length > 0) {
+      journeysWithMissingRecipes.push({
+        journeyId: id,
+        recipes: missingRecipes
+      });
+    }
+  }
+
+  checks.push({
+    id: "journeys_loaded",
+    status: journeys.length > 0 ? "pass" : "fail",
+    message: `loaded ${journeys.length} journeys`
+  });
+
+  checks.push({
+    id: "journeys_schema",
+    status: invalidJourneys.length === 0 ? "pass" : "fail",
+    message: invalidJourneys.length === 0 ? "all journeys have id/title" : `invalid journey entries: ${invalidJourneys.length}`
+  });
+
+  checks.push({
+    id: "journey_ids_unique",
+    status: duplicateJourneyIds.length === 0 ? "pass" : "fail",
+    message: duplicateJourneyIds.length === 0 ? "journey ids are unique" : `duplicate journey ids: ${duplicateJourneyIds.join(", ")}`
+  });
+
+  checks.push({
+    id: "journey_recipes_exist",
+    status: journeysWithMissingRecipes.length === 0 ? "pass" : "fail",
+    message:
+      journeysWithMissingRecipes.length === 0
+        ? "all journey recipes resolve to real recipes"
+        : `journeys reference missing recipes: ${journeysWithMissingRecipes
+            .map((entry) => `${entry.journeyId} -> ${entry.recipes.join(", ")}`)
+            .join("; ")}`
   });
 
   checks.push({
@@ -2856,10 +3138,22 @@ function printJson(payload) {
   process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
 }
 
-const { flags, command: parsedCommand, commandArgs } = parseArgs(process.argv.slice(2));
+  const { flags, command: parsedCommand, commandArgs } = parseArgs(process.argv.slice(2));
 const topics = loadTopics();
+const recipes = loadRecipes();
+const journeys = loadJourneys();
 const aliasCommands = new Map([
   ["list", "topics"],
+  ["flows", "journeys"],
+  ["flow-list", "journeys"],
+  ["journey-list", "journeys"],
+  ["task-list", "recipes"],
+  ["tasks", "recipes"],
+  ["flow", "journey"],
+  ["role", "journey"],
+  ["task", "recipe"],
+  ["next", "recipe"],
+  ["runbook", "recipe"],
   ["sponsor-run", "sponsor-execute"],
   ["sponsor-plan", "sponsor-preflight"],
   ["ask", "triage"],
@@ -2884,7 +3178,11 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
       commands: [
         "help",
         "topics",
+        "journeys",
+        "journey",
+        "recipes",
         "show",
+        "recipe",
         "search",
         "doctor",
         "triage",
@@ -2907,18 +3205,36 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "bootstrap",
         "version"
       ],
-      topics
+      topics,
+      journeys,
+      recipes
     });
   } else {
     printUsage();
     console.log("");
     printTopics(topics);
+    console.log("");
+    printJourneys(journeys);
+    console.log("");
+    printRecipes(recipes);
   }
 } else if (effectiveCommand === "topics") {
   if (flags.json) {
     printJson({ topics });
   } else {
     printTopics(topics);
+  }
+} else if (effectiveCommand === "journeys") {
+  if (flags.json) {
+    printJson({ journeys });
+  } else {
+    printJourneys(journeys);
+  }
+} else if (effectiveCommand === "recipes") {
+  if (flags.json) {
+    printJson({ recipes });
+  } else {
+    printRecipes(recipes);
   }
 } else if (effectiveCommand === "show") {
   if (flags.json) {
@@ -2943,6 +3259,42 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     showTopic(topics, commandArgs[0]);
+  }
+} else if (effectiveCommand === "journey") {
+  const journey = resolveJourney(journeys, commandArgs[0]);
+  if (flags.json) {
+    if (!journey) {
+      printJson({ ok: false, error: `unknown_journey: ${String(commandArgs[0] || "")}` });
+      process.exitCode = 1;
+    } else {
+      printJson({
+        ok: true,
+        journey
+      });
+    }
+  } else if (!journey) {
+    console.error(`unknown_journey: ${String(commandArgs[0] || "")}`);
+    process.exitCode = 1;
+  } else {
+    printJourney(journey, recipes);
+  }
+} else if (effectiveCommand === "recipe") {
+  const recipe = resolveRecipe(recipes, commandArgs[0]);
+  if (flags.json) {
+    if (!recipe) {
+      printJson({ ok: false, error: `unknown_recipe: ${String(commandArgs[0] || "")}` });
+      process.exitCode = 1;
+    } else {
+      printJson({
+        ok: true,
+        recipe
+      });
+    }
+  } else if (!recipe) {
+    console.error(`unknown_recipe: ${String(commandArgs[0] || "")}`);
+    process.exitCode = 1;
+  } else {
+    printRecipe(recipe);
   }
 } else if (effectiveCommand === "search") {
   const keyword = commandArgs.join(" ");

@@ -1,0 +1,84 @@
+{
+  "journeys": [
+    {
+      "id": "seller",
+      "title": "Seller Minimal Path",
+      "summary": "Wallet -> notifications -> create listing -> accept bid -> fund -> communicate -> deliver.",
+      "role": "seller",
+      "steps": [
+        "setup-quick",
+        "seller-create-listing",
+        "seller-accept-bid",
+        "fund-order",
+        "mailbox-handshake",
+        "seller-deliver-encrypted-byo"
+      ],
+      "optional": [
+        "dispute-open",
+        "resolve-dispute"
+      ]
+    },
+    {
+      "id": "buyer",
+      "title": "Buyer Minimal Path",
+      "summary": "Wallet -> notifications -> bid -> fund -> communicate -> verify -> accept or dispute.",
+      "role": "buyer",
+      "steps": [
+        "setup-quick",
+        "buyer-place-bid",
+        "fund-order",
+        "mailbox-handshake",
+        "buyer-accept-delivery"
+      ],
+      "optional": [
+        "dispute-open",
+        "resolve-dispute"
+      ]
+    },
+    {
+      "id": "reviewer",
+      "title": "Reviewer Minimal Path",
+      "summary": "Wallet -> register -> poll invites -> accept -> commit/reveal -> claim metrics.",
+      "role": "reviewer",
+      "steps": [
+        "setup-quick",
+        "reviewer-register",
+        "reviewer-handle-invite",
+        "reviewer-vote"
+      ],
+      "optional": [
+        "resolve-dispute"
+      ]
+    },
+    {
+      "id": "operator",
+      "title": "Operator Reviewer Selection Path",
+      "summary": "Wallet -> shortlist reviewers -> publish exact invite-aware patch -> monitor dispute progress.",
+      "role": "operator",
+      "steps": [
+        "setup-quick",
+        "operator-shortlist-open"
+      ],
+      "optional": [
+        "dispute-open",
+        "resolve-dispute"
+      ]
+    },
+    {
+      "id": "all",
+      "title": "All Roles Index",
+      "summary": "High-level map for bots that do not yet know whether they are a seller, buyer, reviewer, or operator.",
+      "role": "all",
+      "steps": [
+        "setup-quick"
+      ],
+      "optional": [
+        "seller-create-listing",
+        "buyer-place-bid",
+        "reviewer-register",
+        "operator-shortlist-open",
+        "local-iota-transfer"
+      ]
+    }
+  ]
+}

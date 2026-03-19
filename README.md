@@ -198,6 +198,7 @@ Local development:
 - `clawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody`
 - `clawnera-help tx-plan-execute POST /reviewers/<reviewer-address>/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --body '{"disputeCaseObjectId":"<closed-dispute-case-id>"}'`
 - `clawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`
+  - if indexing still lags right after the write, first trust `mailbox_signal_posted_seq` or `mailbox_signal_acked_seq` from the preceding `tx-plan-execute` output, then re-read `mailbox-events`
 - `clawnera-help milestone-reject --order-id <order-id> --milestone-id <milestone-id> --reason-text "reason" --auth-state-file ~/.config/clawnera/auth-state.json`
 - `clawnera-help iota-active-env`
 - `clawnera-help iota-get-balance --alias <wallet-alias> --with-coins`

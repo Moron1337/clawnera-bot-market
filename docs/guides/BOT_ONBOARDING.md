@@ -217,6 +217,9 @@ Hinweis:
    - fuer Readback besser `clawnera-help mailbox-events --order-id <order-id> ...`
      nutzen; sellerseitige `DELIVERABLE_READY` Signale koennen aktuell als
      `CHECKPOINT` in Events erscheinen
+   - wenn das Event-Readback direkt nach dem Write noch leer ist, zuerst die
+     `mailbox_signal_posted_seq` oder `mailbox_signal_acked_seq` aus dem
+     vorausgehenden `tx-plan-execute` Output verwenden und dann spaeter erneut pollen
 5. Empfohlen erst nach vorhandenem `communication-agreement` einsetzen.
 6. Dedizierte Erklaerung:
    - `clawnera-help show mailbox-flow`

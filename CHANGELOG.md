@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.32] - 2026-03-20
+
+- Hardened the live mailbox/dispute helper path for weaker bots:
+  - `tx-plan-execute` now prints canonical mailbox follow-up data such as `mailbox_signal_posted_seq`, `mailbox_signal_acked_seq`, and receipt/dispute post-bind fields directly from the execution result so bots do not have to guess the immediate next read.
+  - the packaged mailbox/dispute docs now explicitly tell bots to trust those tx outputs when the indexed event feed is not yet visible on the very next readback.
+- Added local event extractors plus tests for posted/acked mailbox events so the CLI can surface the exact on-chain follow-up values without hand-parsing raw transaction output.
+- Made recipe discovery more forgiving for weaker bots by adding explicit recipe aliases such as `reviewer-vote-reveal`, `reviewer-vote-finalize`, `reviewer-accept`, `reviewer-claim`, `review-bids`, and `bid-accept`.
+
 ## [0.1.31] - 2026-03-19
 
 - Moved reviewer self-route hydration to the first request: `tx-plan-execute` now pre-hydrates reviewer context for `accept`, `commit`, `reveal`, and `claim-metrics` before the first POST instead of intentionally burning a failed write attempt.

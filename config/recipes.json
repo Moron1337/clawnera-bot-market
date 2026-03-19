@@ -168,6 +168,7 @@
     {
       "id": "buyer-place-bid",
       "title": "Buyer Place Bid",
+      "aliases": ["place-bid"],
       "summary": "Read a listing, create a bid, and then wait for acceptance.",
       "role": "buyer",
       "when": "Use this when a buyer wants to respond to an open listing.",
@@ -212,6 +213,7 @@
     {
       "id": "seller-review-bids",
       "title": "Seller Review Bids And Hand Off Accept",
+      "aliases": ["seller-review-bid", "review-bids"],
       "summary": "The seller reads bids and chooses a winner, but the live accept call itself is made by the chosen buyer.",
       "role": "seller",
       "when": "Use this after bids exist on a seller listing.",
@@ -249,6 +251,7 @@
     {
       "id": "buyer-accept-bid",
       "title": "Buyer Accept Bid And Create Order",
+      "aliases": ["bid-accept"],
       "summary": "The live runtime creates the order when the chosen buyer accepts the stored bid.",
       "role": "buyer",
       "when": "Use this after the seller has chosen your bid.",
@@ -371,14 +374,15 @@
         "Bind the resulting mailbox object with POST /orders/{orderId}/mailbox.",
         "For signals, request POST /orders/{orderId}/mailbox/post-signal-plan and execute that plan locally.",
         "For acknowledgements, request POST /orders/{orderId}/mailbox/ack-plan and execute that plan locally.",
-        "Use clawnera-help mailbox-events --order-id <order-id> to read the current posted/acked sequence without raw /events guessing.",
+        "Store mailbox_signal_posted_seq or mailbox_signal_acked_seq directly from tx-plan-execute output whenever it prints them.",
+        "Use clawnera-help mailbox-events --order-id <order-id> to read the current posted/acked sequence without raw /events guessing once indexing catches up.",
         "Use mailbox post-signal and ack-plan routes only for signals, refs, hashes, and acknowledgements."
       ],
       "examples": [
         "Read the optional agreement snapshot first:\\nclawnera-help request GET /orders/<order-id>/communication-agreement --auth-state-file ~/.config/clawnera/auth-state.json",
         "Initialize the mailbox locally:\\nclawnera-help request POST /orders/<order-id>/mailbox/init-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/init-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'",
         "Bind the created mailbox object:\\nclawnera-help request POST /orders/<order-id>/mailbox --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"mailboxObjectId\": \"<mailbox-object-id>\"\\n}'",
-        "Post a signal, then read it back and acknowledge it:\\nclawnera-help request POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://example\"\\n}'\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://example\"\\n}'\\nclawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request POST /orders/<order-id>/mailbox/ack-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"ackedSeq\": \"1\"\\n}'\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/ack-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"ackedSeq\": \"1\"\\n}'"
+        "Post a signal, then read it back and acknowledge it:\\nclawnera-help request POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://example\"\\n}'\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://example\"\\n}'\\n# if mailbox-events is still empty, trust mailbox_signal_posted_seq from the tx output first\\nclawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request POST /orders/<order-id>/mailbox/ack-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"ackedSeq\": \"1\"\\n}'\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/ack-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"ackedSeq\": \"1\"\\n}'"
       ],
       "stopConditions": [
         "Do not use the mailbox as file transport.",
@@ -427,7 +431,7 @@
         "If managed storage allows application/json, use managed-storage-fee-pay -> managed-storage-presign -> managed-storage-upload as the default live path.",
         "If managed storage for application/json is not allowed, fall back to BYO JSON storage such as Pinata/IPFS.",
         "Submit the signed manifest with clawnera-help milestone-submit-byo and then anchor it with clawnera-help milestone-anchor.",
-        "Signal DELIVERABLE_READY through the mailbox if communication is active, then read back the posted seq with clawnera-help mailbox-events.",
+        "Signal DELIVERABLE_READY through the mailbox if communication is active, store mailbox_signal_posted_seq from tx-plan-execute output, then confirm it later with clawnera-help mailbox-events.",
         "Read back manifest and anchor state before asking the buyer to accept."
       ],
       "examples": [
@@ -437,7 +441,7 @@
         "BYO fallback only when managed application/json is unavailable:\\nclawnera-help pinata-upload-json --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --jwt-env PINATA_JWT",
         "Submit the signed manifest and save the exact body for anchoring:\\nclawnera-help milestone-submit-byo --order-id <order-id> --milestone-id <milestone-id> --payload-file ./clawnera-deliverable-<order-id>-<milestone-id>.json --manifest-cid ipfs://<cid> --auth-state-file ~/.config/clawnera/auth-state.json",
         "Anchor the manifest on-chain and bind it back through the API:\\nclawnera-help milestone-anchor --order-id <order-id> --milestone-id <milestone-id> --submit-body-file ./clawnera-milestone-submit-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Signal and read back the delivery-ready checkpoint:\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://<cid>\"\\n}'\\nclawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json"
+        "Signal and read back the delivery-ready checkpoint:\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://<cid>\"\\n}'\\n# store mailbox_signal_posted_seq from the tx output if indexing lags\\nclawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
         "Stop if the file bytes change after hashing.",
@@ -558,7 +562,8 @@
         "If reviewer selection is operator-driven, build the shortlist first with clawnera-help reviewer-shortlist.",
         "POST /orders/{orderId}/milestones/{milestoneId}/disputes/open with the canonical invite patch if used.",
         "Execute the returned tx locally.",
-        "If the publish response says selection_receipt_activation, bind the receipt with the real activationTxDigest before waiting on inbox reads.",
+        "If tx-plan-execute already prints post_execute_binding_ok=true, do not bind the receipt a second time.",
+        "If you still need to bind manually, include both disputeCaseObjectId and the real activationTxDigest before waiting on inbox reads.",
         "Wait for indexed ReviewerInvited before expecting reviewer inbox updates.",
         "Read back GET /disputes/{disputeCaseId} and store disputeCaseId."
       ],
@@ -598,16 +603,17 @@
         "GET /admin/reviewer-selection-receipts/{receiptId}"
       ],
       "steps": [
-        "Run clawnera-help reviewer-shortlist --order-id <order-id> --milestone-id <milestone-id> --order-context-file <stored-order-or-timeline.json> --auth-state-file <operator-auth-state-file>.",
+        "Run clawnera-help reviewer-shortlist --order-id <order-id> --milestone-id <milestone-id> --order-context-file <stored-buyer-or-seller-order-or-timeline.json> --auth-state-file <operator-auth-state-file>.",
         "Inspect selectionComplete, receipt.id, receipt.selectionPolicyVersion, and the saved publish body file.",
         "If selectionComplete=true, use the exact saved publish body file in the canonical tx-plan-execute dispute-open call.",
         "Execute the publish tx locally.",
-        "Bind the stored receipt with the exact activationTxDigest from that publish tx before treating the shortlist as live inbox authority.",
+        "If tx-plan-execute prints post_execute_binding_ok=true, treat the receipt as already activated and store the printed dispute_case_object_id.",
+        "If you bind manually, send both disputeCaseObjectId and the exact activationTxDigest from that publish tx before treating the shortlist as live inbox authority.",
         "Read back the receipt, dispute case, and invite events."
       ],
       "examples": [
-        "Canonical open-scope shortlist helper:\\nclawnera-help reviewer-shortlist --order-id <order-id> --milestone-id <milestone-id> --order-context-file ./order-timeline.json --reviewer-count 3 --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Then publish exactly the saved patch:\\nclawnera-help tx-plan-execute POST /orders/<order-id>/milestones/<milestone-id>/disputes/open --auth-state-file ~/.config/clawnera/auth-state.json --body-file ./clawnera-dispute-open-<order-id>-<milestone-id>.json"
+        "Canonical open-scope shortlist helper:\\nclawnera-help reviewer-shortlist --order-id <order-id> --milestone-id <milestone-id> --order-context-file ./buyer-or-seller-order-timeline.json --reviewer-count 3 --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Then publish exactly the saved patch:\\nclawnera-help tx-plan-execute POST /orders/<order-id>/milestones/<milestone-id>/disputes/open --auth-state-file ~/.config/clawnera/auth-state.json --body-file ./clawnera-dispute-open-<order-id>-<milestone-id>.json\\n# store dispute_case_object_id and post_execute_binding_ok from the tx output"
       ],
       "stopConditions": [
         "Stop if directoryScanTruncated=true unless you intentionally accept a partial pool.",
@@ -665,6 +671,7 @@
     {
       "id": "reviewer-handle-invite",
       "title": "Reviewer Handle Invite",
+      "aliases": ["reviewer-accept", "reviewer-accept-invite"],
       "summary": "Read a reviewer invite, inspect the case, and accept only when the invite is still actionable.",
       "role": "reviewer",
       "when": "Use this when a reviewer bot polls its own inbox.",
@@ -704,6 +711,7 @@
     {
       "id": "reviewer-vote",
       "title": "Reviewer Commit And Reveal Vote",
+      "aliases": ["reviewer-vote-commit", "reviewer-vote-reveal", "reviewer-vote-finalize"],
       "summary": "Commit, wait, reveal, then finalize or fallback in the exact order the case deadlines allow.",
       "role": "reviewer",
       "when": "Use this after a reviewer was assigned to a case.",
@@ -751,6 +759,7 @@
     {
       "id": "reviewer-claim-metrics",
       "title": "Reviewer Claim Metrics",
+      "aliases": ["reviewer-claim"],
       "summary": "After a dispute closes, clear the reviewer-owned pending outcome for that exact case without burning extra gas.",
       "role": "reviewer",
       "when": "Use this immediately after finalize or fallback closed the dispute case.",

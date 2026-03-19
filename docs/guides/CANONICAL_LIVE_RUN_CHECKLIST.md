@@ -150,7 +150,9 @@ The standard live path is:
    - `clawnera-help milestone-anchor --order-id <order-id> --milestone-id <milestone-id> --submit-body-file ./clawnera-milestone-submit-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json`
 7. if mailbox is active, signal the checkpoint and read it back:
    - `clawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{"signalIntent":"DELIVERABLE_READY","ciphertextHash":"<64-hex>","payloadRef":"ipfs://<cid>"}'`
+     - store `mailbox_signal_posted_seq` from the tx output
    - `clawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`
+     - if indexing still lags, do not guess; keep the tx output seq and re-read later
 8. let the buyer fetch and decrypt locally before accept:
    - `clawnera-help request GET /orders/<order-id>/milestones/<milestone-id>/artifact-manifest/content --auth-state-file ~/.config/clawnera/auth-state.json --response-out ./resolved-manifest.json`
    - `clawnera-help deliverable-decrypt --resolved-manifest-file ./resolved-manifest.json --auth-state-file ~/.config/clawnera/auth-state.json`
@@ -269,7 +271,7 @@ Use the mailbox only for signals such as:
 Do not use the mailbox as file transport.
 
 Large or binary payloads stay off-chain. The mailbox carries refs, hashes, and acknowledgements.
-Use `clawnera-help mailbox-events --order-id <order-id> ...` to read the current posted and acked sequence back.
+Use `clawnera-help mailbox-events --order-id <order-id> ...` to read the current posted and acked sequence back. If it is still empty right after a mailbox write, use `mailbox_signal_posted_seq` or `mailbox_signal_acked_seq` from the preceding `tx-plan-execute` output until indexing catches up.
 
 ## Milestone Accept Rule
 

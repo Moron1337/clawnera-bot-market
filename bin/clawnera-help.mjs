@@ -30,6 +30,8 @@ import {
   extractCreatedObjectIdByTypeFragment,
   extractCreatedObjectIdByTypeSuffix,
   extractCreatedObjects,
+  extractMailboxSignalAcked,
+  extractMailboxSignalPosted,
   resolveClawdexChainConfig,
   resolveClawdexReputationProfileObjectIdByOwner,
   dryRunTransaction,
@@ -337,7 +339,10 @@ function printRecipes(recipes) {
   console.log("Available recipes:");
   for (const recipe of recipes) {
     const roleText = recipe.role ? ` [role: ${recipe.role}]` : "";
-    console.log(`- ${recipe.id}: ${recipe.title}${roleText}`);
+    const aliasText = Array.isArray(recipe.aliases) && recipe.aliases.length > 0
+      ? ` (aliases: ${recipe.aliases.join(", ")})`
+      : "";
+    console.log(`- ${recipe.id}: ${recipe.title}${roleText}${aliasText}`);
   }
 }
 
@@ -354,7 +359,15 @@ function resolveRecipe(recipes, key) {
   if (!normalized) {
     return null;
   }
-  return recipes.find((recipe) => String(recipe.id || "").trim().toLowerCase() === normalized) || null;
+  return recipes.find((recipe) => {
+    if (String(recipe.id || "").trim().toLowerCase() === normalized) {
+      return true;
+    }
+    if (!Array.isArray(recipe.aliases)) {
+      return false;
+    }
+    return recipe.aliases.some((alias) => String(alias || "").trim().toLowerCase() === normalized);
+  }) || null;
 }
 
 function resolveJourney(journeys, key) {
@@ -4034,6 +4047,8 @@ async function runTxPlanCommand(commandArgs, mode) {
       createdObjects: extractCreatedObjects(executed),
       disputeCaseObjectId,
       postExecuteBinding,
+      mailboxSignalPosted: extractMailboxSignalPosted(executed),
+      mailboxSignalAcked: extractMailboxSignalAcked(executed),
       quorumResolutionTicketObjectId:
         extractCreatedObjectIdByTypeSuffix(executed, "::dispute_quorum::QuorumResolutionTicket") || null,
       disputeBondObjectId:
@@ -7442,10 +7457,12 @@ function reviewerShortlistUsageLines() {
     "- Usage: clawnera-help reviewer-shortlist --order-id <id> --milestone-id <id> --order-context-file <file> --auth-state-file <operator-auth-state>",
     "- Replacement usage: clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <0x...> --auth-state-file <operator-auth-state>",
     "- Fetches the latest finalized checkpoint digest, builds the canonical shortlist body, and writes the exact publish body for dispute-open or reviewer-replace",
+    "- The safest --order-context-file is a freshly saved buyer/seller GET /orders/{orderId}/timeline readback; operators may not be allowed to read actor-scoped order timeline routes directly",
     "- Optional: --reviewer-count <n> --allow-new-reviewers <true|false> --min-decisions-total <n> --allow-truncated-scan <true|false>",
     "- Optional: --escrow-object-id <0x...> --bond-object-id <0x...> when no stored order/timeline file is available",
     "- Optional outputs: --receipt-out <file> --publish-body-out <file> --publish-auth-state-file <buyer-or-seller-auth-state> --rpc-url <url>",
     "- The shortlist call itself uses operator auth. The saved publish body must then be published by the buyer or seller for that order.",
+    "- After publish, tx-plan-execute prints dispute_case_object_id and post_execute_binding_ok when receipt activation succeeded automatically.",
     "- Important: shortlist success only prepares the exact publish body; current runtimes can still hard-stop on 409 reviewer_invite_tx_not_supported until the live package exposes invite-aware callables.",
     "- Important: replacement rounds are full reassignment rounds; do not request only the missing delta slots unless the live case already lowered requiredReviewerVotes."
   ];
@@ -7457,7 +7474,8 @@ function mailboxEventsUsageLines() {
     "- Usage: clawnera-help mailbox-events --order-id <id> --auth-state-file <file>",
     "- Reads the bound mailbox object id, then fetches mailbox.signal_posted and mailbox.signal_acked events for that order",
     "- Optional: --limit <n> --include-acked <true|false> --events-out <file>",
-    "- Use this instead of guessing seq numbers from raw /events queries"
+    "- Use this instead of guessing seq numbers from raw /events queries",
+    "- If indexing is still catching up, use the mailbox_signal_posted_seq or mailbox_signal_acked_seq printed by tx-plan-execute as the temporary source of truth and re-read later"
   ];
 }
 
@@ -8447,6 +8465,16 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.signerAddress) {
       console.log(`signer_address=${result.signerAddress}`);
     }
+    if (result.disputeCaseObjectId) {
+      console.log(`dispute_case_object_id=${result.disputeCaseObjectId}`);
+    }
+    if (result.postExecuteBinding?.route) {
+      console.log(`post_execute_binding_route=${result.postExecuteBinding.route}`);
+      console.log(`post_execute_binding_ok=${result.postExecuteBinding.ok === true ? "true" : "false"}`);
+      if (result.postExecuteBinding.disputeCaseObjectId) {
+        console.log(`post_execute_binding_dispute_case_id=${result.postExecuteBinding.disputeCaseObjectId}`);
+      }
+    }
     if (result.disputeBondObjectId) {
       console.log(`dispute_bond_object_id=${result.disputeBondObjectId}`);
     }
@@ -8455,6 +8483,24 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
     if (result.orderMailboxObjectId) {
       console.log(`order_mailbox_object_id=${result.orderMailboxObjectId}`);
+    }
+    if (result.mailboxSignalPosted?.seq) {
+      console.log(`mailbox_signal_posted_seq=${result.mailboxSignalPosted.seq}`);
+      if (result.mailboxSignalPosted.signalIntent) {
+        console.log(`mailbox_signal_posted_intent=${result.mailboxSignalPosted.signalIntent}`);
+      }
+      if (result.mailboxSignalPosted.payloadRef) {
+        console.log(`mailbox_signal_posted_payload_ref=${result.mailboxSignalPosted.payloadRef}`);
+      }
+      if (result.mailboxSignalPosted.ciphertextHash) {
+        console.log(`mailbox_signal_posted_ciphertext_hash=${result.mailboxSignalPosted.ciphertextHash}`);
+      }
+    }
+    if (result.mailboxSignalAcked?.ackedSeq) {
+      console.log(`mailbox_signal_acked_seq=${result.mailboxSignalAcked.ackedSeq}`);
+      if (result.mailboxSignalAcked.ackerRole) {
+        console.log(`mailbox_signal_acker_role=${result.mailboxSignalAcked.ackerRole}`);
+      }
     }
     if (result.quorumResolutionTicketObjectId) {
       console.log(`quorum_resolution_ticket_object_id=${result.quorumResolutionTicketObjectId}`);
@@ -8469,6 +8515,15 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.error(`tx_plan_execute_error: ${result.error}`);
     if (result.txBuilder) {
       console.error(`tx_builder=${result.txBuilder}`);
+    }
+    if (result.txDigest) {
+      console.error(`tx_digest=${result.txDigest}`);
+    }
+    if (result.disputeCaseObjectId) {
+      console.error(`dispute_case_object_id=${result.disputeCaseObjectId}`);
+    }
+    if (result.bindRoute) {
+      console.error(`post_execute_binding_route=${result.bindRoute}`);
     }
     process.exitCode = 1;
   }

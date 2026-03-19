@@ -168,8 +168,10 @@ test("reviewer shortlist help prints operator and publish role split", () => {
   assert.match(result.stdout, /Reviewer shortlist helper/);
   assert.match(result.stdout, /Replacement usage:/);
   assert.match(result.stdout, /writes the exact publish body for dispute-open or reviewer-replace/);
+  assert.match(result.stdout, /buyer\/seller GET \/orders\/\{orderId\}\/timeline readback/);
   assert.match(result.stdout, /The shortlist call itself uses operator auth/);
   assert.match(result.stdout, /must then be published by the buyer or seller/);
+  assert.match(result.stdout, /post_execute_binding_ok/);
   assert.match(result.stdout, /full reassignment rounds/);
 });
 
@@ -277,7 +279,7 @@ test("recipes command lists minimal task recipes", () => {
   assert.match(result.stdout, /Available recipes:/);
   assert.match(result.stdout, /setup-quick: Quick Setup/);
   assert.match(result.stdout, /seller-create-listing: Seller Create Listing/);
-  assert.match(result.stdout, /reviewer-vote: Reviewer Commit And Reveal Vote/);
+  assert.match(result.stdout, /reviewer-vote: Reviewer Commit And Reveal Vote.*reviewer-vote-reveal/);
   assert.match(result.stdout, /reviewer-claim-metrics: Reviewer Claim Metrics/);
   assert.match(result.stdout, /operator-shortlist-replacement: Operator Shortlist Replacement/);
 });
@@ -304,6 +306,21 @@ test("recipe json output is parseable", () => {
   assert.ok(Array.isArray(payload.recipe.steps));
   assert.ok(payload.recipe.steps.some((step) => /tx-plan-execute POST .*votes\/commit/.test(step)));
   assert.ok(payload.recipe.steps.some((step) => /reviewer-vote-prepare/.test(step)));
+});
+
+test("dispute-open recipe explains manual bind inputs and auto-bind success", () => {
+  const result = runCli(["recipe", "dispute-open"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /post_execute_binding_ok=true/);
+  assert.match(result.stdout, /disputeCaseObjectId/);
+  assert.match(result.stdout, /activationTxDigest/);
+});
+
+test("mailbox handshake recipe explains tx output seq fallback", () => {
+  const result = runCli(["recipe", "mailbox-handshake"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /mailbox_signal_posted_seq/);
+  assert.match(result.stdout, /mailbox_signal_acked_seq/);
 });
 
 test("replacement recipe explains full reassignment semantics", () => {
@@ -385,6 +402,15 @@ test("recipe aliases work", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /# Buyer Place Bid/);
   assert.match(result.stdout, /POST \/bids/);
+});
+
+test("reviewer reveal alias resolves to the reviewer vote recipe", () => {
+  const result = runCli(["recipe", "reviewer-vote-reveal", "--json"]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.recipe.id, "reviewer-vote");
+  assert.ok(payload.recipe.steps.some((step) => /votes\/reveal/.test(step)));
 });
 
 test("seller review recipe warns that seller cannot accept the bid", () => {

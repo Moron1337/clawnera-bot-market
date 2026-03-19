@@ -189,6 +189,7 @@ Danach ist optional Cleanup moeglich:
 10. Gegenseite reagiert off-chain und bestaetigt ueber `POST /orders/{orderId}/mailbox/ack-plan`.
 11. Fuer Readback nicht rohe `/events`-Queries zusammenraten, sondern:
    - `clawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`
+   - if the event feed is still empty immediately after the write, use `mailbox_signal_posted_seq` or `mailbox_signal_acked_seq` from the preceding `tx-plan-execute` output first and re-read `mailbox-events` later
 12. Nach Ende approven beide Seiten die Schliessung ueber `POST /orders/{orderId}/mailbox/close-plan`.
 
 ## 11) Was die API macht und was nicht

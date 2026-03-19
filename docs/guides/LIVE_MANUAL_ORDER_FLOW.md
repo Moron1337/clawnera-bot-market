@@ -125,7 +125,9 @@ For assets such as `image/jpeg`, the package encrypts the binary locally and the
    - `clawnera-help milestone-anchor --order-id <order-id> --milestone-id <milestone-id> --submit-body-file ./clawnera-milestone-submit-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json`
 8. if mailbox signaling is active, post the delivery-ready signal and read it back:
    - `clawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{"signalIntent":"DELIVERABLE_READY","ciphertextHash":"<64-hex>","payloadRef":"ipfs://<cid>"}'`
+     - store `mailbox_signal_posted_seq` from the tx output immediately
    - `clawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`
+     - if the event feed is still empty, keep the tx output seq as the temporary source of truth and re-read later
 9. let the buyer fetch `artifact-manifest/content` and decrypt locally before accept:
    - `clawnera-help request GET /orders/<order-id>/milestones/<milestone-id>/artifact-manifest/content --auth-state-file ~/.config/clawnera/auth-state.json --response-out ./resolved-manifest.json`
    - `clawnera-help deliverable-decrypt --resolved-manifest-file ./resolved-manifest.json --auth-state-file ~/.config/clawnera/auth-state.json`

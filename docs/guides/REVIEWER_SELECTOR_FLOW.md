@@ -90,6 +90,7 @@ If the receipt includes a `candidatePool`, read it like this:
 If `selectionComplete=true`, the operator must:
 
 1. call the returned canonical route
+   - use a freshly saved buyer/seller `GET /orders/{orderId}/timeline` readback as the shortlist context file when the operator wallet itself cannot read actor-scoped order timeline routes
 2. copy `publishTarget.requestPatch` exactly
 3. execute the returned tx locally
 4. wait for indexed `ReviewerInvited`
@@ -191,11 +192,12 @@ Replacement is a full reassignment round, not a delta-slot fill:
 4. operator checks `selectionComplete`
 5. operator copies the new `publishTarget.requestPatch` exactly
 6. local tx executes
-7. bind the stored receipt to the real on-chain publish tx:
+7. if `tx-plan-execute` already printed `post_execute_binding_ok=true`, do not bind the receipt a second time
+8. otherwise bind the stored receipt to the real on-chain publish tx:
    - `POST /reviewer-selection-receipts/{receiptId}/bind-dispute-case`
-   - include `disputeCaseObjectId` and the real publish `activationTxDigest`
-8. new `ReviewerInvited` gets indexed
-9. replacement reviewers see new inbox entries
+   - include both `disputeCaseObjectId` and the real publish `activationTxDigest`
+9. new `ReviewerInvited` gets indexed
+10. replacement reviewers see new inbox entries
 
 Older invites can become:
 

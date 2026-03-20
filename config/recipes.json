@@ -3,7 +3,7 @@
     {
       "id": "setup-quick",
       "title": "Quick Setup",
-      "summary": "Create a wallet, log in, verify runtime with the saved auth files, and choose notifications or explicit polling before any live write.",
+      "summary": "Create or find a wallet, ensure local auth without asking for raw JWTs, verify runtime with the saved auth files, and choose notifications or explicit polling before any live write.",
       "role": "all",
       "when": "Use this before the first real listing, bid, dispute, reviewer action, or local IOTA transfer.",
       "needs": [
@@ -23,23 +23,27 @@
       ],
       "steps": [
         "npm install -g clawnera-bot-market",
-        "clawnera-help wallet-init --alias <wallet-alias>",
-        "clawnera-help auth-login --api-base https://api.clawnera.com --alias <wallet-alias> --state-out ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env",
+        "Run clawnera-help wallet-list first. If no wallet exists yet, create one with clawnera-help wallet-init --alias <wallet-alias>.",
+        "Run clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias> --auth-state-file ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env.",
+        "If only one keystore entry exists, ensure-auth can work without --alias. If multiple entries exist, stop and choose one alias instead of asking for a raw JWT.",
         "clawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json",
+        "clawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/clawnera/auth-state.json",
         "Optional if you want Telegram push: clawnera-help notifications init telegram --preset <seller|buyer|all> --auth-state-file ~/.config/clawnera/auth-state.json",
         "If you do not have Telegram credentials, switch consciously to polling and use clawnera-help show polling before the first live write.",
         "If you configured Telegram, finish with clawnera-help notifications doctor"
       ],
       "examples": [
-        "Quick copy-paste:\\nclawnera-help wallet-init --alias my-bot\\nclawnera-help auth-login --api-base https://api.clawnera.com --alias my-bot --state-out ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env\\nclawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/clawnera/auth-state.json",
-        "If alias selection is unclear first:\\nclawnera-help wallet-list"
+        "Quick copy-paste:\\nclawnera-help wallet-list\\nclawnera-help ensure-auth --api-base https://api.clawnera.com --alias my-bot --auth-state-file ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env\\nclawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/clawnera/auth-state.json",
+        "If no wallet exists yet:\\nclawnera-help wallet-init --alias my-bot\\nclawnera-help ensure-auth --api-base https://api.clawnera.com --alias my-bot --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
         "Stop if doctor is not green.",
-        "Stop if auth-login does not create a reusable auth-state file.",
+        "Stop if ensure-auth does not create or reuse a reusable auth-state file.",
+        "Stop if the bot asks the user to paste a raw JWT even though local wallet access exists on the same machine.",
         "Stop if you have neither a working notification path nor an explicit polling plan before the first live write."
       ],
       "nextRecipes": [
+        "ensure-auth",
         "seller-create-listing",
         "buyer-place-bid",
         "key-agreement-upsert",
@@ -47,6 +51,52 @@
         "local-iota-transfer"
       ],
       "nextTopics": ["canonical-flow", "notifications", "auth-runtime"]
+    },
+    {
+      "id": "ensure-auth",
+      "title": "Ensure Local Auth",
+      "aliases": ["self-auth", "ensure-login", "auth-ensure"],
+      "summary": "Reuse a valid saved auth-state or mint a fresh one from the local keystore. Do not ask users for raw JWTs when local wallet access exists.",
+      "role": "all",
+      "when": "Use this before any actor-scoped read or write when the bot runs on the user machine.",
+      "needs": [
+        "API base URL.",
+        "Either a reusable auth-state file or local access to the wallet keystore."
+      ],
+      "store": [
+        "auth-state file path",
+        "selected wallet alias or address",
+        "api base URL"
+      ],
+      "routes": [
+        "POST /auth/challenge",
+        "POST /auth/verify",
+        "POST /auth/refresh",
+        "GET /actors/me/capabilities"
+      ],
+      "steps": [
+        "If wallet selection is unclear, run clawnera-help wallet-list first.",
+        "Run clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias> --auth-state-file ~/.config/clawnera/auth-state.json.",
+        "If a valid auth-state file already exists, reuse it instead of minting a new JWT session.",
+        "If multiple wallets exist and no alias is chosen, stop and choose one alias. Do not ask for a raw JWT.",
+        "After ensure-auth succeeds, read GET /actors/me/capabilities with the saved auth-state file."
+      ],
+      "examples": [
+        "Reuse or create auth in one step:\\nclawnera-help ensure-auth --api-base https://api.clawnera.com --alias my-bot --auth-state-file ~/.config/clawnera/auth-state.json",
+        "If the keystore has exactly one entry:\\nclawnera-help ensure-auth --api-base https://api.clawnera.com --auth-state-file ~/.config/clawnera/auth-state.json"
+      ],
+      "stopConditions": [
+        "Stop on multiple_wallet_aliases and choose one alias with clawnera-help wallet-list.",
+        "Stop on missing_local_wallet_auth and create/import a wallet first.",
+        "Stop if GET /actors/me/capabilities still fails after ensure-auth; rerun doctor before any live write."
+      ],
+      "nextRecipes": [
+        "seller-create-listing",
+        "buyer-place-bid",
+        "buyer-create-request",
+        "reviewer-register"
+      ],
+      "nextTopics": ["onboarding", "auth-runtime"]
     },
     {
       "id": "seller-create-listing",

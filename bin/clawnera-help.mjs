@@ -170,7 +170,7 @@ const TRIAGE_RULES = Object.freeze([
     keywords: ["auth", "jwt", "token", "challenge", "verify", "401", "403"],
     topics: ["onboarding", "api", "security"],
     commands: [
-      "clawnera-help auth-login --api-base <url> --alias <wallet-alias>",
+      "clawnera-help ensure-auth --api-base <url> --alias <wallet-alias>",
       "clawnera-help show onboarding",
       "clawnera-help show api",
       "clawnera-help doctor --api-base <url> --jwt <token>"
@@ -302,6 +302,7 @@ function printUsage() {
   console.log("  clawnera-help wallet-init [options]       Create a local IOTA keystore entry without the IOTA CLI");
   console.log("  clawnera-help wallet-list [options]       List local wallet aliases and addresses");
   console.log("  clawnera-help auth-login [options]        Create JWT + refresh token from local IOTA keystore");
+  console.log("  clawnera-help ensure-auth [options]       Reuse or create a saved auth-state from the local wallet");
   console.log("  clawnera-help request <METHOD> <path>     Call Clawnera API with auth/env shortcuts");
   console.log("  clawnera-help listing-categories          Show the canonical listing category slugs");
   console.log("  clawnera-help listing-create [options]    Thin helper for the first POST /listings write");
@@ -393,6 +394,10 @@ function selectReadRoutes(routes) {
 function compactRecipeCommand(recipe) {
   const auth = "--auth-state-file ~/.config/clawnera/auth-state.json";
   switch (recipe.id) {
+    case "setup-quick":
+      return "clawnera-help wallet-list && clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias> && clawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json";
+    case "ensure-auth":
+      return "clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias>";
     case "seller-create-listing":
       return `clawnera-help listing-categories --compact && clawnera-help listing-create ${auth} --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --milestones '<title:amount;title:amount>'`;
     case "buyer-create-request":
@@ -1882,7 +1887,26 @@ function authLoginUsageLines() {
     "- Default network timeout: 60000ms (override with --timeout-ms <ms>)",
     "- Optional outputs: --state-out <file> --env-out <file>",
     "- Writes short-lived access token plus refresh token for long-lived runtimes",
-    "- Use --state-out for mailbox notifiers or bots that should auto-refresh sessions"
+    "- Use --state-out for mailbox notifiers or bots that should auto-refresh sessions",
+    "- Lower-level helper: prefer `clawnera-help ensure-auth` when a bot should reuse existing auth before minting a new session"
+  ];
+}
+
+function defaultAuthEnvPath(homeDir) {
+  return path.join(path.dirname(defaultAuthStatePath(homeDir)), "auth.env");
+}
+
+function ensureAuthUsageLines() {
+  return [
+    "Ensure auth helper:",
+    "- Preferred bot path: reuse a valid saved auth-state or log in from the local keystore automatically",
+    "- Required for a fresh login: --api-base <url> (or CLAWNERA_API_BASE_URL)",
+    "- Optional selector: --alias <wallet-alias> or --address <wallet-address>",
+    `- Default auth-state output: ${defaultAuthStatePath()}`,
+    `- Default keystore path: ${defaultIotaKeystorePath()}`,
+    `- Optional outputs: --auth-state-file <file> (same meaning as --state-out), --env-out <file> (common path: ${defaultAuthEnvPath()})`,
+    "- If multiple local wallets exist and no selector is given, the helper stops and tells the bot to choose one alias",
+    "- Do not ask the user for a raw JWT when local wallet access exists on the same machine"
   ];
 }
 
@@ -2171,6 +2195,332 @@ async function runAuthLogin(commandArgs) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "auth_login_failed"
+    };
+  }
+}
+
+function normalizeWalletSelectorInput({ alias, address }) {
+  return {
+    alias: typeof alias === "string" ? alias.trim() : "",
+    address: typeof address === "string" ? address.trim() : ""
+  };
+}
+
+function authStateMatchesSelector(authState, selector) {
+  const normalizedSelector = normalizeWalletSelectorInput(selector);
+  if (!normalizedSelector.alias && !normalizedSelector.address) {
+    return true;
+  }
+  const normalizedStateAddress = normalizeIotaAddress(authState?.address || "");
+  const normalizedSelectorAddress = normalizeIotaAddress(normalizedSelector.address || "");
+  if (normalizedSelectorAddress) {
+    return Boolean(normalizedStateAddress && normalizedStateAddress === normalizedSelectorAddress);
+  }
+  const stateAlias = typeof authState?.alias === "string" ? authState.alias.trim().toLowerCase() : "";
+  return Boolean(stateAlias && stateAlias === normalizedSelector.alias.toLowerCase());
+}
+
+function buildWalletCandidates(entries) {
+  return entries.map((entry) => ({
+    alias: entry.alias || null,
+    address: entry.address
+  }));
+}
+
+async function resolveLocalKeystoreAuthEntry({
+  alias,
+  address,
+  keystorePath,
+  timeoutMs,
+  iotaCliPath
+}) {
+  const normalizedSelector = normalizeWalletSelectorInput({ alias, address });
+  const entries = await loadKeystoreEntries(keystorePath);
+  const candidates = buildWalletCandidates(entries);
+
+  if (normalizedSelector.alias || normalizedSelector.address) {
+    const entry = resolveKeystoreEntry(entries, normalizedSelector);
+    if (!entry) {
+      return {
+        ok: false,
+        error: "keystore_entry_not_found",
+        selector: {
+          alias: normalizedSelector.alias || null,
+          address: normalizedSelector.address || null
+        },
+        keystorePath,
+        candidates
+      };
+    }
+    return {
+      ok: true,
+      entry,
+      keystorePath,
+      candidates,
+      selectionSource: normalizedSelector.alias ? "explicit_alias" : "explicit_address"
+    };
+  }
+
+  if (entries.length === 0) {
+    return {
+      ok: false,
+      error: "missing_local_wallet_auth",
+      keystorePath,
+      candidates,
+      hint: "run clawnera-help wallet-init --alias <wallet-alias> first"
+    };
+  }
+
+  const activeAddress = detectActiveAddressViaCli(iotaCliPath, timeoutMs);
+  if (activeAddress.ok && activeAddress.address) {
+    const entry = resolveKeystoreEntry(entries, { address: activeAddress.address });
+    if (entry) {
+      return {
+        ok: true,
+        entry,
+        keystorePath,
+        candidates,
+        selectionSource: "active_cli_address",
+        activeCliAddress: activeAddress.address
+      };
+    }
+    return {
+      ok: false,
+      error: "active_cli_address_not_in_keystore",
+      activeCliAddress: activeAddress.address,
+      keystorePath,
+      candidates,
+      hint: "run clawnera-help wallet-list and rerun with --alias <wallet-alias>"
+    };
+  }
+
+  if (entries.length === 1) {
+    return {
+      ok: true,
+      entry: entries[0],
+      keystorePath,
+      candidates,
+      selectionSource: "sole_keystore_entry"
+    };
+  }
+
+  return {
+    ok: false,
+    error: "multiple_wallet_aliases",
+    keystorePath,
+    candidates,
+    hint: "run clawnera-help wallet-list and rerun with --alias <wallet-alias>; do not ask the user for a raw JWT"
+  };
+}
+
+async function loadReusableAuthState({
+  authStateFile,
+  apiBase,
+  timeoutMs
+}) {
+  if (!fs.existsSync(authStateFile)) {
+    return {
+      ok: false,
+      error: "missing_auth_state_file"
+    };
+  }
+
+  let authState = await loadAuthState(authStateFile);
+  const apiBaseForValidation = apiBase || authState.apiBase || DEFAULT_CLAWNERA_API_BASE;
+  let authValidation = validateRuntimeAuthState(authState, {
+    apiBaseFallback: apiBaseForValidation,
+    requiredApiBase: apiBase || "",
+    refreshSkewMs: 60_000
+  });
+  const shouldTryRefresh =
+    authState.refreshToken &&
+    apiBaseForValidation &&
+    authValidation.issues.length > 0 &&
+    authValidation.issues.every((issue) =>
+      ["missing_or_invalid_auth_token", "invalid_auth_token_format", "expired_auth_no_refresh"].includes(issue)
+    );
+  if (!authValidation.ok && shouldTryRefresh) {
+    authState = await refreshAuthState({
+      apiBase: apiBaseForValidation,
+      authState,
+      timeoutMs
+    });
+    await saveAuthState(authStateFile, authState);
+    authValidation = validateRuntimeAuthState(authState, {
+      apiBaseFallback: apiBaseForValidation,
+      requiredApiBase: apiBase || "",
+      refreshSkewMs: 60_000
+    });
+    if (authValidation.ok) {
+      return {
+        ok: true,
+        authState: authValidation.authState,
+        refreshed: true
+      };
+    }
+  }
+
+  if (!authValidation.ok) {
+    return {
+      ok: false,
+      error: authValidation.issues[0] || "invalid_auth_state"
+    };
+  }
+
+  return {
+    ok: true,
+    authState: authValidation.authState,
+    refreshed: false
+  };
+}
+
+async function runEnsureAuth(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: ensureAuthUsageLines()
+    };
+  }
+
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals
+    };
+  }
+
+  const apiBaseOption = options["api-base"] || process.env.CLAWNERA_API_BASE_URL;
+  const apiBase = normalizeApiBase(apiBaseOption);
+  if (apiBaseOption && !apiBase) {
+    return {
+      ok: false,
+      error: "missing_or_invalid_api_base",
+      hint: "set --api-base or CLAWNERA_API_BASE_URL"
+    };
+  }
+
+  const stateOutOption = resolveOptionalPathOption(options["state-out"]);
+  const authStateOption = resolveOptionalPathOption(options["auth-state-file"]);
+  if (stateOutOption && authStateOption && stateOutOption !== authStateOption) {
+    return {
+      ok: false,
+      error: "conflicting_auth_state_paths",
+      paths: {
+        stateOut: stateOutOption,
+        authStateFile: authStateOption
+      }
+    };
+  }
+
+  const authStateFile = stateOutOption || authStateOption || defaultAuthStatePath();
+  const envOut = resolveOptionalPathOption(options["env-out"]);
+  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 60_000);
+  const iotaCliPath = String(options["iota-cli"] || process.env.IOTA_CLI_PATH || "iota").trim() || "iota";
+  const selector = normalizeWalletSelectorInput({
+    alias: options.alias,
+    address: options.address
+  });
+
+  let reusable = null;
+  try {
+    reusable = await loadReusableAuthState({
+      authStateFile,
+      apiBase,
+      timeoutMs
+    });
+  } catch (error) {
+    reusable = {
+      ok: false,
+      error: error instanceof Error ? error.message : "invalid_auth_state"
+    };
+  }
+
+  if (reusable.ok && authStateMatchesSelector(reusable.authState, selector)) {
+    if (envOut) {
+      writeTextFile(envOut, buildAuthEnvText(reusable.authState), 0o600);
+    }
+    return {
+      ok: true,
+      apiBase: reusable.authState.apiBase,
+      address: reusable.authState.address,
+      alias: reusable.authState.alias || null,
+      authStateFile,
+      envOut: envOut || null,
+      keystorePath: null,
+      source: reusable.refreshed ? "refreshed_auth_state" : "existing_auth_state"
+    };
+  }
+
+  const effectiveApiBase = apiBase || (reusable.ok ? reusable.authState.apiBase : "");
+  if (!effectiveApiBase) {
+    return {
+      ok: false,
+      error: "missing_or_invalid_api_base",
+      hint: "set --api-base when no reusable auth-state file exists yet"
+    };
+  }
+
+  const keystorePath = resolvePreferredKeystorePath(options, { authStateFile });
+  let walletResolution;
+  try {
+    walletResolution = await resolveLocalKeystoreAuthEntry({
+      alias: selector.alias,
+      address: selector.address,
+      keystorePath,
+      timeoutMs,
+      iotaCliPath
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "ensure_auth_failed"
+    };
+  }
+
+  if (!walletResolution.ok) {
+    return {
+      ok: false,
+      error: walletResolution.error,
+      keystorePath: walletResolution.keystorePath || keystorePath,
+      selector: walletResolution.selector || {
+        alias: selector.alias || null,
+        address: selector.address || null
+      },
+      activeCliAddress: walletResolution.activeCliAddress || null,
+      candidates: walletResolution.candidates || [],
+      hint: walletResolution.hint || "run clawnera-help wallet-list and choose one local alias"
+    };
+  }
+
+  try {
+    const authState = await signInWithKeystoreEntry({
+      apiBase: effectiveApiBase,
+      entry: walletResolution.entry,
+      timeoutMs
+    });
+    await saveAuthState(authStateFile, authState);
+    if (envOut) {
+      writeTextFile(envOut, buildAuthEnvText(authState), 0o600);
+    }
+    return {
+      ok: true,
+      apiBase: authState.apiBase,
+      address: authState.address,
+      alias: authState.alias || null,
+      authStateFile,
+      envOut: envOut || null,
+      keystorePath,
+      source: "fresh_login",
+      selectionSource: walletResolution.selectionSource || "local_keystore"
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "ensure_auth_failed",
+      keystorePath
     };
   }
 }
@@ -3115,7 +3465,7 @@ async function runNotifications(commandArgs) {
           error: authValidation.issues[0],
           hint:
             authValidation.issues[0] === "auth_state_api_base_mismatch" && apiBase
-              ? `existing auth state points at ${authState.apiBase || "another api base"}; rerun auth-login for ${apiBase} or use a matching --auth-state-file`
+              ? `existing auth state points at ${authState.apiBase || "another api base"}; rerun ensure-auth for ${apiBase} or use a matching --auth-state-file`
               : undefined
         };
       }
@@ -3124,7 +3474,7 @@ async function runNotifications(commandArgs) {
       return {
         ok: false,
         error: "missing_auth_state_setup",
-        hint: "run clawnera-help auth-login first or pass --api-base with --alias/--address"
+        hint: "run clawnera-help ensure-auth first or pass --api-base with --alias/--address"
       };
     }
   } catch (error) {
@@ -4062,7 +4412,7 @@ async function runApiRequest(commandArgs) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "request_failed",
-      hint: "set --api-base, --env-file, or --auth-state-file"
+      hint: "run clawnera-help ensure-auth --api-base <url> first, or set --api-base with --jwt / --env-file / --auth-state-file"
     };
   }
   const { context, apiBase, idempotencyKey, url, result } = apiCall;
@@ -4156,6 +4506,7 @@ function listingCreateUsageLines() {
     "Listing create helper:",
     "- Usage: clawnera-help listing-create --title <text> --description <text> --category <slug> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>' [--listing-mode OFFER|REQUEST] [auth options]",
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
+    "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
     `- Valid category slugs: ${LISTING_CATEGORY_SLUGS.join(", ")} (or run: clawnera-help listing-categories)`,
     "- Optional: --budget-amount <atomic-int> (defaults to the milestone sum), --creator-address <0x...>, --milestones-json <json>, --milestones-file <file>",
     "- Optional human mode: add --display-values to interpret milestone and budget numbers in whole-user units for the selected currency (examples: --currency IOTA --display-values --milestones 'empty txt:1' or 'empty txt:1 IOTA')",
@@ -4173,6 +4524,7 @@ function listingCancelUsageLines() {
     "Listing cancel helper:",
     "- Usage: clawnera-help listing-cancel --listing-id <listing-id> [auth options]",
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
+    "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
     "- Thin wrapper over POST /listings/{listingId}/cancel",
     "- Use this from the listing creator wallet only",
     "- This route is POST, not DELETE or PATCH",
@@ -4185,6 +4537,7 @@ function listingRenewUsageLines() {
     "Listing renew helper:",
     "- Usage: clawnera-help listing-renew --listing-id <listing-id> (--expires-at-ms <unix-ms> | --expires-at '<iso8601>') [auth options]",
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
+    "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
     "- Thin wrapper over POST /listings/{listingId}/renew",
     "- Use this from the listing creator wallet only",
     "- This route is POST, not PUT or PATCH",
@@ -4197,6 +4550,7 @@ function bidCreateUsageLines() {
     "Bid create helper:",
     "- Usage: clawnera-help bid-create --listing-id <listing-id> --amount <int> --currency <IOTA|CLAW> [auth options]",
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
+    "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
     "- Optional: --message <text>, --bidder-address <0x...>",
     "- Optional human mode: add --display-values to interpret --amount in whole-user units for the selected currency (examples: --currency IOTA --display-values --amount 1 or --amount '1 IOTA')",
     "- Thin wrapper over POST /bids that infers bidderAddress from the saved auth state when possible",
@@ -4220,6 +4574,7 @@ function bidAcceptUsageLines() {
     "Bid accept helper:",
     "- Usage: clawnera-help bid-accept --bid-id <bid-id> [auth options]",
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
+    "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
     "- Optional advanced pair: --order-id <order-id> plus --communication-proposal-json <json> or --communication-proposal-file <file>",
     "- Thin wrapper over POST /bids/{bidId}/accept",
     "- OFFER: the chosen buyer runs this from the bid wallet",
@@ -4232,6 +4587,7 @@ function reviewerInvitesUsageLines() {
     "Reviewer invites helper:",
     "- Usage: clawnera-help reviewer-invites [auth options]",
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
+    "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
     "- Reads GET /reviewers/me/invites and surfaces invite states plus recommendedPollIntervalMs when the API sends x-clawdex-recommended-poll-interval-ms",
   ];
 }
@@ -8243,6 +8599,7 @@ function apiRequestUsageLines() {
     "- Use API paths like /health or /orders/<order-id>; full URLs are rejected on purpose",
     "- Optional auth shortcuts: --auth-state-file <file> or --env-file <file>",
     "- Optional explicit auth: --api-base <url> --jwt <token>",
+    "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
     "- Optional body: --body '{\"json\":true}' or --body-file ./payload.json",
     "- Optional nested body selection: --body-file ./payload.json --body-select commitRequestBody",
     "- Optional output: --response-out ./response.json",
@@ -8957,6 +9314,9 @@ const aliasCommands = new Map([
   ["issue", "report-issue"],
   ["login", "auth-login"],
   ["jwt-login", "auth-login"],
+  ["ensure-login", "ensure-auth"],
+  ["auth-ensure", "ensure-auth"],
+  ["self-auth", "ensure-auth"],
   ["wallets", "wallet-list"],
   ["wallet-ls", "wallet-list"],
   ["categories", "listing-categories"],
@@ -9027,6 +9387,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "wallet-init",
         "wallet-list",
         "auth-login",
+        "ensure-auth",
         "request",
         "listing-categories",
         "listing-create",
@@ -9282,7 +9643,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
       console.log(`wallet_alias=${result.alias}`);
     }
     console.log(`keystore_path=${result.keystorePath}`);
-    console.log(`clawnera-help auth-login --api-base https://api.clawnera.com --keystore-path ${shellQuote(result.keystorePath)}${result.alias ? ` --alias ${shellQuote(result.alias)}` : ""}`);
+    console.log(`clawnera-help ensure-auth --api-base https://api.clawnera.com --keystore-path ${shellQuote(result.keystorePath)}${result.alias ? ` --alias ${shellQuote(result.alias)}` : ""} --auth-state-file ${shellQuote(defaultAuthStatePath())}`);
   } else {
     console.error(`wallet_init_error: ${result.error}`);
     process.exitCode = 1;
@@ -9352,6 +9713,44 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`auth_login_helper_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "ensure-auth") {
+  const result = await runEnsureAuth(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`ensure_auth_ok address=${result.address}`);
+    if (result.alias) {
+      console.log(`wallet_alias=${result.alias}`);
+    }
+    console.log(`api_base=${result.apiBase}`);
+    console.log(`auth_source=${result.source}`);
+    if (result.selectionSource) {
+      console.log(`wallet_selection=${result.selectionSource}`);
+    }
+    console.log(`auth_state_file=${result.authStateFile}`);
+    if (result.envOut) {
+      console.log(`env_file=${result.envOut}`);
+    }
+    console.log(`next_hint=clawnera-help request GET /actors/me/capabilities --auth-state-file ${shellQuote(result.authStateFile)}`);
+  } else {
+    console.error(`ensure_auth_error: ${result.error}`);
+    if (result.hint) {
+      console.error(`hint=${result.hint}`);
+    }
+    if (Array.isArray(result.candidates) && result.candidates.length > 0) {
+      console.error(
+        `candidates=${result.candidates.map((candidate) => candidate.alias || candidate.address).join(",")}`
+      );
+    }
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {

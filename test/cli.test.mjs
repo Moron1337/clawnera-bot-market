@@ -74,6 +74,7 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /journey\|recipe --compact/);
   assert.match(result.stdout, /clawnera-help wallet-init/);
   assert.match(result.stdout, /clawnera-help wallet-list/);
+  assert.match(result.stdout, /clawnera-help ensure-auth/);
   assert.match(result.stdout, /clawnera-help request <METHOD> <path>/);
   assert.match(result.stdout, /clawnera-help listing-categories/);
   assert.match(result.stdout, /clawnera-help listing-create/);
@@ -113,6 +114,7 @@ test("help json output includes auth-login command", () => {
   assert.ok(payload.commands.includes("recipe"));
   assert.ok(payload.commands.includes("wallet-init"));
   assert.ok(payload.commands.includes("wallet-list"));
+  assert.ok(payload.commands.includes("ensure-auth"));
   assert.ok(payload.commands.includes("request"));
   assert.ok(payload.commands.includes("listing-categories"));
   assert.ok(payload.commands.includes("listing-create"));
@@ -480,6 +482,20 @@ test("request recipe compact output uses explicit request mode", () => {
   assert.match(result.stdout, /listing-categories --compact --listing-mode REQUEST/);
   assert.match(result.stdout, /listing-create .* --listing-mode REQUEST /);
   assert.match(result.stdout, /^next:buyer-review-request-bids/m);
+});
+
+test("setup-quick compact output uses ensure-auth", () => {
+  const result = runCli(["recipe", "setup-quick", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^recipe:setup-quick/m);
+  assert.match(result.stdout, /do:clawnera-help wallet-list && clawnera-help ensure-auth --api-base https:\/\/api\.clawnera\.com --alias <wallet-alias>/);
+});
+
+test("ensure-auth recipe compact output uses the self-auth helper", () => {
+  const result = runCli(["recipe", "ensure-auth", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^recipe:ensure-auth/m);
+  assert.match(result.stdout, /do:clawnera-help ensure-auth --api-base https:\/\/api\.clawnera\.com --alias <wallet-alias>/);
 });
 
 test("recipe json output is parseable", () => {
@@ -2076,6 +2092,14 @@ test("auth-login help prints usage", () => {
   assert.match(result.stdout, /auto-refresh sessions/);
 });
 
+test("ensure-auth help prints usage", () => {
+  const result = runCli(["ensure-auth", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Ensure auth helper/);
+  assert.match(result.stdout, /Preferred bot path/);
+  assert.match(result.stdout, /Do not ask the user for a raw JWT/);
+});
+
 test("auth-login short help prints usage", () => {
   const result = runCli(["auth-login", "-h"]);
   assert.equal(result.status, 0);
@@ -2091,6 +2115,7 @@ test("wallet-init creates a local keystore entry", () => {
     assert.equal(result.status, 0);
     assert.match(result.stdout, /wallet_init_ok/);
     assert.match(result.stdout, /wallet_alias=sdk-buyer/);
+    assert.match(result.stdout, /clawnera-help ensure-auth --api-base https:\/\/api\.clawnera\.com/);
     assert.equal(existsSync(keystoreFile), true);
 
     const payload = JSON.parse(readFileSync(keystoreFile, "utf8"));
@@ -2193,6 +2218,12 @@ test("auth-login falls back to the sole keystore entry when no IOTA CLI address 
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
+});
+
+test("ensure-auth alias help resolves to the canonical helper", () => {
+  const result = runCli(["self-auth", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Ensure auth helper/);
 });
 
 test("sponsor-execute help prints usage", () => {

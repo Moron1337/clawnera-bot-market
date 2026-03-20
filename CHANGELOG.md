@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.44] - 2026-03-20
+
+- Added a bot-safe `ensure-auth` helper so weaker models stop asking users for raw JWTs when they already run on the same machine as the wallet:
+  - reuses a valid saved auth-state when possible
+  - refreshes reusable auth-state files before falling back
+  - mints a fresh auth-state from the local keystore when needed
+  - fails closed on multiple local wallets and tells the bot to choose one alias instead of guessing
+- Shifted the compact setup path and curated onboarding docs onto the new self-auth command:
+  - `setup-quick` now points at `ensure-auth`
+  - added a dedicated `ensure-auth` recipe plus weak-bot aliases:
+    - `self-auth`
+    - `ensure-login`
+    - `auth-ensure`
+- Tightened CLI hints and tests so actor-scoped commands prefer `--auth-state-file` reuse and stop suggesting raw JWT chat handoffs as the normal bot path.
+
 ## [0.1.43] - 2026-03-20
 
 - Closed a real bot-facing listing-management gap:

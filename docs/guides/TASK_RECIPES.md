@@ -26,6 +26,7 @@ Use `next` or `recipe --compact` when the bot only needs:
 Auth note:
 - `--auth-state-file <file>` stays the canonical flag in docs.
 - the CLI also accepts `--auth-state <file>` as the same input for weaker bots that guess the shorter form.
+- preferred bot bootstrap is `clawnera-help ensure-auth --api-base <url>`, not asking the user to paste a raw JWT.
 
 ## Best Start
 
@@ -51,6 +52,9 @@ Auth note:
 
 - `setup-quick`
   - wallet -> auth -> doctor -> notifications
+- `ensure-auth`
+  - reuse or create local auth-state from the wallet
+  - stop on multiple wallets and choose one alias instead of asking for a JWT
 - `seller-create-listing`
   - create an OFFER listing safely; normal seller listing needs compliance/deposit preflight, not reputation-init
 - `buyer-create-request`
@@ -115,6 +119,7 @@ Auth note:
 - Normal seller listing create is a compliance/deposit problem first; do not jump to `reputation-init` unless you are explicitly doing reviewer onboarding.
 - Normal request listing create is also not a reputation-init problem; do not send a buyer into reviewer setup just to publish a wanted request.
 - Listing cancel and renew are real public routes; do not guess `DELETE /listings/{id}` or PATCH-style status edits.
+- If the bot runs on the same machine as the wallet, it should self-auth with `ensure-auth` before actor-scoped calls and should not ask for a raw JWT.
 
 ## When To Leave Recipe Mode
 

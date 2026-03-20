@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { once } from "node:events";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -202,6 +202,154 @@ test("request accepts --auth-state as a shorthand alias for --auth-state-file", 
   } finally {
     await mock.close();
   }
+});
+
+test("ensure-auth reuses an existing valid auth-state file", async () => {
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-ensure-auth-existing-"));
+  const authStateFile = path.join(tempHome, ".config", "clawnera", "auth-state.json");
+  mkdirSync(path.dirname(authStateFile), { recursive: true });
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: "https://api.clawnera.com",
+        address: "0x1111111111111111111111111111111111111111111111111111111111111111",
+        alias: "bot",
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        expiresAtMs: 4102444800 * 1000,
+        session: {
+          id: "session-1",
+          refreshAvailable: true,
+          refreshExpiresAtMs: 4102444800 * 1000
+        }
+      },
+      null,
+      2
+    )
+  );
+
+  const result = await runCli(["ensure-auth", "--auth-state-file", authStateFile, "--json"], {
+    HOME: tempHome
+  });
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.source, "existing_auth_state");
+  assert.equal(payload.authStateFile, authStateFile);
+  assert.equal(payload.alias, "bot");
+});
+
+test("ensure-auth falls back to the sole keystore entry and saves auth state", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-ensure-auth-sole-"));
+  const keystoreFile = path.join(tempDir, "iota.keystore");
+  const stateFile = path.join(tempDir, "auth-state.json");
+  const envFile = path.join(tempDir, "auth.env");
+
+  const initResult = await runCli(["wallet-init", "--alias", "sdk-only", "--keystore-path", keystoreFile, "--json"]);
+  assert.equal(initResult.status, 0);
+  const createdKeystore = JSON.parse(readFileSync(keystoreFile, "utf8"));
+  const createdAddress = createdKeystore.keys[0].address;
+
+  const issuedToken = buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600);
+  const mock = await startMockServer({
+    "POST /auth/challenge": (request) => {
+      assert.equal(request.body?.address, createdAddress);
+      return {
+        status: 200,
+        body: {
+          messageToSign: "clawnera-auth-test",
+          nonce: "nonce-1"
+        }
+      };
+    },
+    "POST /auth/verify": (request) => {
+      assert.equal(request.body?.address, createdAddress);
+      assert.equal(request.body?.message, "clawnera-auth-test");
+      assert.equal(typeof request.body?.signature, "string");
+      return {
+        status: 200,
+        body: {
+          token: issuedToken,
+          refreshToken: "refresh-token-1",
+          expiresAtMs: Date.now() + 3600_000,
+          session: {
+            id: "session-1",
+            refreshAvailable: true,
+            refreshExpiresAtMs: Date.now() + 7200_000
+          }
+        }
+      };
+    }
+  });
+
+  try {
+    const result = await runCli(
+      [
+        "ensure-auth",
+        "--api-base",
+        mock.baseUrl,
+        "--keystore-path",
+        keystoreFile,
+        "--auth-state-file",
+        stateFile,
+        "--env-out",
+        envFile,
+        "--json"
+      ],
+      {
+        HOME: tempDir,
+        PATH: "/usr/bin:/bin"
+      }
+    );
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.source, "fresh_login");
+    assert.equal(payload.selectionSource, "sole_keystore_entry");
+    assert.equal(existsSync(stateFile), true);
+    assert.equal(existsSync(envFile), true);
+    const savedState = JSON.parse(readFileSync(stateFile, "utf8"));
+    assert.equal(savedState.address, createdAddress);
+    assert.equal(savedState.alias, "sdk-only");
+    assert.equal(savedState.token, issuedToken);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("ensure-auth stops on multiple local wallets instead of guessing or asking for JWT", async () => {
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-ensure-auth-multi-"));
+  const env = { HOME: tempHome, PATH: "/usr/bin:/bin" };
+  const first = await runCli(["wallet-init", "--alias", "buyer-a", "--json"], env);
+  const second = await runCli(["wallet-init", "--alias", "buyer-b", "--json"], env);
+  assert.equal(first.status, 0);
+  assert.equal(second.status, 0);
+
+  const result = await runCli(["ensure-auth", "--api-base", "https://api.clawnera.com", "--json"], env);
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.error, "multiple_wallet_aliases");
+  assert.equal(Array.isArray(payload.candidates), true);
+  assert.equal(payload.candidates.length, 2);
+  assert.match(payload.hint, /wallet-list/);
+  assert.match(payload.hint, /do not ask the user for a raw JWT/i);
+});
+
+test("ensure-auth stops with a local-wallet hint when no auth state and no keystore exist", async () => {
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-ensure-auth-empty-"));
+  const result = await runCli(
+    ["ensure-auth", "--api-base", "https://api.clawnera.com", "--json"],
+    {
+      HOME: tempHome,
+      PATH: "/usr/bin:/bin"
+    }
+  );
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.error, "missing_local_wallet_auth");
+  assert.match(payload.hint, /wallet-init/);
+  assert.doesNotMatch(payload.hint, /JWT/i);
 });
 
 test("tx-plan-execute rejects absolute URLs before requesting a plan", async () => {

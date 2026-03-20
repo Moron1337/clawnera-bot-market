@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.52] - 2026-03-20
+
+- Closed a real manual edge-case bug in the thin write wrappers:
+  - `listing-create` now supports the explicit `--promotion-policy STANDARD|PLATFORM_FUNDED_MARKETING` flag instead of silently ignoring it.
+  - `REQUEST` + `--promotion-policy PLATFORM_FUNDED_MARKETING` now fails truthfully through the live `request_listing_marketing_not_supported` path, matching the API/docs instead of silently falling back to `STANDARD`.
+- Tightened weak-bot safety around typos:
+  - `listing-create`, `listing-cancel`, `listing-renew`, `bid-create`, and `bid-accept` now reject unknown flags locally instead of ignoring them.
+  - this prevents silent mistakes such as `--promotion-polciy` or `--ammount` from turning into wrong live writes.
+- Updated the short docs bots actually read (`README`, `BOT_ONBOARDING`) so sponsored-offer usage and the new fail-fast typo behavior are explicit.
+- Added regression coverage for:
+  - forwarding `promotionPolicy` on `listing-create`
+  - REQUEST marketing failures with the real helper flag
+  - local unknown-option rejection on `listing-create`, `listing-renew`, and `bid-create`
+
 ## [0.1.51] - 2026-03-20
 
 - Tightened the amount-unit UX for weaker bots without adding silent write-side magic:

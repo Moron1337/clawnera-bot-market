@@ -1308,6 +1308,7 @@ test("listing-create infers creator address and posts a canonical body", async (
       description: "Manual live flow test listing.",
       category: "ops",
       listingMode: "OFFER",
+      promotionPolicy: "STANDARD",
       currency: "IOTA",
       budgetAmount: "1000000000",
       expiresAtMs,
@@ -1682,6 +1683,75 @@ test("listing-create forwards explicit request listing mode", async () => {
   }
 });
 
+test("listing-create forwards explicit promotion policy", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-promotion-policy-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const creatorAddress = "0x3333333333333333333333333333333333333333333333333333333333333333";
+  let capturedBody = null;
+  const mock = await startMockServer({
+    "POST /listings": (request) => {
+      capturedBody = request.body;
+      return {
+        status: 201,
+        body: {
+          item: {
+            id: "listing-promotion",
+            creatorAddress,
+            listingMode: "OFFER",
+            promotionPolicy: "PLATFORM_FUNDED_MARKETING",
+            expiresAt: "2026-04-20T12:00:00.000Z",
+            creatorReputationStatus: "AVAILABLE"
+          }
+        }
+      };
+    }
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: creatorAddress,
+        alias: "seller"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-create",
+      "--auth-state-file",
+      authStateFile,
+      "--title",
+      "Marketing offer",
+      "--description",
+      "Offer listing with explicit promotion policy.",
+      "--category",
+      "marketing",
+      "--currency",
+      "CLAW",
+      "--promotion-policy",
+      "PLATFORM_FUNDED_MARKETING",
+      "--use-default-expiry",
+      "--milestones",
+      "Milestone 1:500000;Milestone 2:500000",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.promotionPolicy, "PLATFORM_FUNDED_MARKETING");
+    assert.equal(capturedBody?.promotionPolicy, "PLATFORM_FUNDED_MARKETING");
+  } finally {
+    await mock.close();
+  }
+});
+
 test("listing-create rejects invalid category before posting", async () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-category-"));
   const authStateFile = path.join(tempDir, "auth-state.json");
@@ -1881,6 +1951,51 @@ test("listing-renew accepts an ISO timestamp and posts expiresAtMs to the canoni
   }
 });
 
+test("listing-renew rejects unexpected flags before posting", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-renew-unexpected-option-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const mock = await startMockServer({
+    "POST /listings/listing-1/renew": () => {
+      throw new Error("request should not be sent");
+    }
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: "0x1212121212121212121212121212121212121212121212121212121212121212",
+        alias: "seller"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-renew",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-id",
+      "listing-1",
+      "--expires-at",
+      "2026-04-20T12:00:00.000Z",
+      "--expres-at",
+      "2026-04-21T12:00:00.000Z"
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /listing_renew_error: unexpected_options/);
+    assert.match(result.stderr, /unexpected_options=--expres-at/);
+    assert.equal(mock.requests.length, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("listing-cancel prints request feed readback for request listings", async () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-cancel-request-readback-"));
   const authStateFile = path.join(tempDir, "auth-state.json");
@@ -2035,6 +2150,53 @@ test("bid-create infers bidder address and posts a canonical body", async () => 
       currency: "IOTA",
       message: "Hello from the wrapper"
     });
+  } finally {
+    await mock.close();
+  }
+});
+
+test("bid-create rejects unexpected flags before posting", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-bid-create-unexpected-option-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const mock = await startMockServer({
+    "POST /bids": () => {
+      throw new Error("request should not be sent");
+    }
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: "0x5656565656565656565656565656565656565656565656565656565656565656",
+        alias: "buyer"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "bid-create",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-id",
+      "listing-1",
+      "--amount",
+      "500000000",
+      "--currency",
+      "IOTA",
+      "--ammount",
+      "600000000"
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /bid_create_error: unexpected_options/);
+    assert.match(result.stderr, /unexpected_options=--ammount/);
+    assert.equal(mock.requests.length, 0);
   } finally {
     await mock.close();
   }
@@ -2250,6 +2412,8 @@ test("request listing-create prints offer-only marketing guidance for request ma
       "ops",
       "--currency",
       "IOTA",
+      "--promotion-policy",
+      "PLATFORM_FUNDED_MARKETING",
       "--use-default-expiry",
       "--milestones",
       "Milestone 1:500000000;Milestone 2:500000000"
@@ -2258,6 +2422,58 @@ test("request listing-create prints offer-only marketing guidance for request ma
     assert.match(result.stderr, /listing_create_error: request_listing_marketing_not_supported/);
     assert.match(result.stderr, /platform-funded-marketing_is_offer_only_in_patch_1/);
     assert.match(result.stderr, /retry_without_marketing_promotion_policy/);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("listing-create rejects unexpected flags before posting", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-unexpected-option-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const mock = await startMockServer({
+    "POST /listings": () => {
+      throw new Error("request should not be sent");
+    }
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: "0x4444444444444444444444444444444444444444444444444444444444444444",
+        alias: "seller"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-create",
+      "--auth-state-file",
+      authStateFile,
+      "--title",
+      "Unexpected option",
+      "--description",
+      "This should fail locally before a request is sent.",
+      "--category",
+      "other",
+      "--currency",
+      "IOTA",
+      "--use-default-expiry",
+      "--milestones",
+      "Milestone 1:500000000;Milestone 2:500000000",
+      "--promotion-polciy",
+      "STANDARD"
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /listing_create_error: unexpected_options/);
+    assert.match(result.stderr, /unexpected_options=--promotion-polciy/);
+    assert.equal(mock.requests.length, 0);
   } finally {
     await mock.close();
   }

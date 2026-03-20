@@ -80,10 +80,11 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
 - `OFFER`
   - Listing-Creator wird spaeter Seller.
   - Bidder wird spaeter Buyer.
-- `REQUEST`
+  - `REQUEST`
   - Listing-Creator wird spaeter Buyer.
   - Bidder wird spaeter Seller.
   - `PLATFORM_FUNDED_MARKETING` ist fuer Requests im aktuellen Public Runtime nicht erlaubt.
+  - Im npm-Helper ist `--promotion-policy PLATFORM_FUNDED_MARKETING` deshalb nur fuer echte Offer-Flows sinnvoll; Typos in Flags brechen jetzt lokal statt still ignoriert zu werden.
 - Default Discovery bleibt:
   - `GET /listings` -> `OFFER`
   - `GET /listings?listingMode=REQUEST` -> explizite Buyer-Requests
@@ -98,6 +99,7 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
    - Header `idempotency-key` ist Pflicht.
    - Capability: `listing.create`.
    - `expiresAtMs` bewusst setzen. Im npm-Helper deshalb `--expires-in-days`, `--expires-at`, `--expires-at-ms` oder bewusst `--use-default-expiry` waehlen statt still den 30-Tage-Default zu erben.
+   - Sponsored Offers im Helper explizit als `--promotion-policy PLATFORM_FUNDED_MARKETING` setzen; bei Requests hart fail-closed erwarten.
    - Amount-Truth fuer Bots:
      - `IOTA` nutzt `9` Dezimalstellen
      - `CLAW` nutzt `6`

@@ -125,6 +125,19 @@ const LISTING_CATEGORY_SLUGS = Object.freeze([
   "other",
 ]);
 const LISTING_CATEGORY_SET = new Set(LISTING_CATEGORY_SLUGS);
+const LISTING_PROMOTION_POLICIES = Object.freeze([
+  "STANDARD",
+  "PLATFORM_FUNDED_MARKETING",
+]);
+const FORWARDED_REQUEST_OPTION_NAMES = Object.freeze([
+  "auth-state-file",
+  "env-file",
+  "api-base",
+  "jwt",
+  "timeout-ms",
+  "response-out",
+  "idempotency-key",
+]);
 const packageJsonFile = path.join(repoRoot, "package.json");
 const topicsFile = path.join(repoRoot, "config", "topics.json");
 const recipesFile = path.join(repoRoot, "config", "recipes.json");
@@ -1456,6 +1469,13 @@ function parseLongOptions(args) {
   }
 
   return { options, positionals };
+}
+
+function findUnexpectedOptions(options = {}, allowedOptionNames = []) {
+  const allowed = new Set(["help", "h", ...allowedOptionNames]);
+  return Object.keys(options)
+    .filter((key) => !allowed.has(key))
+    .sort();
 }
 
 function normalizeString(value) {
@@ -4764,16 +4784,7 @@ async function runApiRequest(commandArgs) {
 
 function buildForwardedRequestArgs(method, rawPath, options = {}, body) {
   const requestArgs = [method, rawPath];
-  const forwardedOptionNames = [
-    "auth-state-file",
-    "env-file",
-    "api-base",
-    "jwt",
-    "timeout-ms",
-    "response-out",
-    "idempotency-key",
-  ];
-  for (const optionName of forwardedOptionNames) {
+  for (const optionName of FORWARDED_REQUEST_OPTION_NAMES) {
     if (options[optionName] === undefined || options[optionName] === null || options[optionName] === "") {
       continue;
     }
@@ -4822,6 +4833,7 @@ function listingCreateUsageLines() {
     `- Valid category slugs: ${LISTING_CATEGORY_SLUGS.join(", ")} (or run: clawnera-help listing-categories)`,
     "- Required milestone count: 2 to 8 milestones. The live API rejects single-milestone listing bodies.",
     "- Optional: --budget-amount <atomic-int> (defaults to the milestone sum), --creator-address <0x...>, --milestones-json <json>, --milestones-file <file>",
+    "- Optional promotion: --promotion-policy STANDARD|PLATFORM_FUNDED_MARKETING (default STANDARD)",
     "- Optional human mode: add --display-values to interpret milestone and budget numbers in whole-user units for the selected currency (examples: --currency IOTA --display-values --milestones 'file1.txt:1;file2.txt:1' or 'file1.txt:1 IOTA;file2.txt:1 IOTA')",
     ...buildCurrencyUnitLines("IOTA"),
     ...buildCurrencyUnitLines("CLAW"),
@@ -4932,6 +4944,33 @@ async function runListingCreate(commandArgs) {
   if (positionals.length > 0) {
     return { ok: false, error: "unexpected_positional_arguments", details: positionals };
   }
+  const unexpectedOptions = findUnexpectedOptions(options, [
+    ...FORWARDED_REQUEST_OPTION_NAMES,
+    "creator-address",
+    "title",
+    "description",
+    "category",
+    "currency",
+    "listing-mode",
+    "expires-at",
+    "expires-at-ms",
+    "expires-in-days",
+    "use-default-expiry",
+    "milestones",
+    "milestones-json",
+    "milestones-file",
+    "budget-amount",
+    "display-values",
+    "promotion-policy",
+  ]);
+  if (unexpectedOptions.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_options",
+      unexpectedOptions,
+      hintLines: buildListingCreateHintLines({ error: "unexpected_options", unexpectedOptions }),
+    };
+  }
   try {
     const runtimeContext = await resolveRuntimeContextForHelper(options);
     const creatorAddress =
@@ -4946,12 +4985,21 @@ async function runListingCreate(commandArgs) {
     const currency = normalizeString(options.currency).toUpperCase();
     const listingModeRaw = normalizeString(options["listing-mode"]).toUpperCase();
     const listingMode = !listingModeRaw ? "OFFER" : ["OFFER", "REQUEST"].includes(listingModeRaw) ? listingModeRaw : "";
+    const promotionPolicyRaw = normalizeString(options["promotion-policy"]).toUpperCase();
+    const promotionPolicy = !promotionPolicyRaw
+      ? "STANDARD"
+      : LISTING_PROMOTION_POLICIES.includes(promotionPolicyRaw)
+        ? promotionPolicyRaw
+        : "";
     const displayValues = isDisplayValueModeEnabled(options);
     if (!title || !description || !rawCategory || !currency) {
       return { ok: false, error: "missing_required_listing_fields" };
     }
     if (!listingMode) {
       return { ok: false, error: "invalid_listing_mode" };
+    }
+    if (!promotionPolicy) {
+      return { ok: false, error: "invalid_promotion_policy" };
     }
     if (displayValues && !ASSET_DISPLAY_DECIMALS[currency]) {
       return { ok: false, error: "display_values_require_single_currency", supportedCurrencies: Object.keys(ASSET_DISPLAY_DECIMALS) };
@@ -4983,6 +5031,7 @@ async function runListingCreate(commandArgs) {
       description,
       category,
       listingMode,
+      promotionPolicy,
       currency,
       budgetAmount,
       ...(expiry.expiresAtMs !== null ? { expiresAtMs: expiry.expiresAtMs } : {}),
@@ -4999,6 +5048,7 @@ async function runListingCreate(commandArgs) {
       ...result,
       creatorAddress,
       listingMode,
+      promotionPolicy,
       listingId: extractCommonCreatedId(result.response, [["listingId"], ["item", "id"], ["listing", "id"], ["id"]]) || null,
       budgetAmount,
       warnings,
@@ -5032,6 +5082,18 @@ async function runListingCancel(commandArgs) {
   if (positionals.length > 0) {
     return { ok: false, error: "unexpected_positional_arguments", details: positionals };
   }
+  const unexpectedOptions = findUnexpectedOptions(options, [
+    ...FORWARDED_REQUEST_OPTION_NAMES,
+    "listing-id",
+  ]);
+  if (unexpectedOptions.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_options",
+      unexpectedOptions,
+      hintLines: buildListingCancelHintLines({ error: "unexpected_options", unexpectedOptions }),
+    };
+  }
   try {
     const listingId = normalizeString(options["listing-id"]);
     if (!listingId) {
@@ -5058,6 +5120,20 @@ async function runListingRenew(commandArgs) {
   }
   if (positionals.length > 0) {
     return { ok: false, error: "unexpected_positional_arguments", details: positionals };
+  }
+  const unexpectedOptions = findUnexpectedOptions(options, [
+    ...FORWARDED_REQUEST_OPTION_NAMES,
+    "listing-id",
+    "expires-at",
+    "expires-at-ms",
+  ]);
+  if (unexpectedOptions.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_options",
+      unexpectedOptions,
+      hintLines: buildUnexpectedOptionHintLines("listing-renew", { unexpectedOptions }),
+    };
   }
   try {
     const listingId = normalizeString(options["listing-id"]);
@@ -5104,7 +5180,17 @@ function buildListingFeedReadbackHint(listingMode, authPlaceholder = "<creator-a
   return `next_readback=re-read the feed matching the original listing mode: GET /listings for OFFER or GET '/listings?listingMode=REQUEST' for REQUEST --auth-state-file ${authPlaceholder}`;
 }
 
+function buildUnexpectedOptionHintLines(commandName, result = {}) {
+  return [
+    `unexpected_options=${Array.isArray(result?.unexpectedOptions) ? result.unexpectedOptions.map((key) => `--${key}`).join(",") : ""}`,
+    `next_hint=run clawnera-help ${commandName} --help to inspect supported flags`,
+  ];
+}
+
 function buildListingCancelHintLines(result = {}) {
+  if (result?.error === "unexpected_options") {
+    return buildUnexpectedOptionHintLines("listing-cancel", result);
+  }
   if (result?.error === "listing_not_cancelable") {
     return [
       "cause=listing_already_progressed_or_closed",
@@ -5118,6 +5204,13 @@ function buildListingCancelHintLines(result = {}) {
 function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
   const error = typeof result?.error === "string" ? result.error.trim() : "";
   switch (error) {
+    case "unexpected_options":
+      return buildUnexpectedOptionHintLines("listing-create", result);
+    case "invalid_promotion_policy":
+      return [
+        `supported_promotion_policies=${LISTING_PROMOTION_POLICIES.join(",")}`,
+        "next_hint=use --promotion-policy STANDARD or --promotion-policy PLATFORM_FUNDED_MARKETING",
+      ];
     case "listing_milestones_count_out_of_range":
       return [
         "cause=listing_requires_two_to_eight_milestones",
@@ -5207,6 +5300,23 @@ async function runBidCreate(commandArgs) {
   if (positionals.length > 0) {
     return { ok: false, error: "unexpected_positional_arguments", details: positionals };
   }
+  const unexpectedOptions = findUnexpectedOptions(options, [
+    ...FORWARDED_REQUEST_OPTION_NAMES,
+    "bidder-address",
+    "listing-id",
+    "amount",
+    "currency",
+    "message",
+    "display-values",
+  ]);
+  if (unexpectedOptions.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_options",
+      unexpectedOptions,
+      hintLines: buildBidCreateHintLines({ error: "unexpected_options", unexpectedOptions }),
+    };
+  }
   try {
     const runtimeContext = await resolveRuntimeContextForHelper(options);
     const bidderAddress =
@@ -5257,6 +5367,8 @@ async function runBidCreate(commandArgs) {
 function buildBidCreateHintLines(result = {}) {
   const error = typeof result?.error === "string" ? result.error.trim() : "";
   switch (error) {
+    case "unexpected_options":
+      return buildUnexpectedOptionHintLines("bid-create", result);
     case "request_bid_requires_trader_account":
       return [
         "cause=request_bidder_becomes_future_seller",
@@ -5341,6 +5453,21 @@ async function runBidAccept(commandArgs) {
   if (positionals.length > 0) {
     return { ok: false, error: "unexpected_positional_arguments", details: positionals };
   }
+  const unexpectedOptions = findUnexpectedOptions(options, [
+    ...FORWARDED_REQUEST_OPTION_NAMES,
+    "bid-id",
+    "order-id",
+    "communication-proposal-json",
+    "communication-proposal-file",
+  ]);
+  if (unexpectedOptions.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_options",
+      unexpectedOptions,
+      hintLines: buildBidAcceptHintLines({ error: "unexpected_options", unexpectedOptions }),
+    };
+  }
   try {
     const bidId = normalizeString(options["bid-id"]);
     if (!bidId) {
@@ -5379,6 +5506,8 @@ async function runBidAccept(commandArgs) {
 function buildBidAcceptHintLines(result = {}) {
   const error = typeof result?.error === "string" ? result.error.trim() : "";
   switch (error) {
+    case "unexpected_options":
+      return buildUnexpectedOptionHintLines("bid-accept", result);
     case "buyer_mismatch":
       return [
         "cause=bid_accept_is_buyer_side",
@@ -10362,6 +10491,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   } else if (result.ok) {
     console.log(`listing_create_ok listing_id=${result.listingId || "unknown"}`);
     console.log(`listing_mode=${result.listingMode || "OFFER"}`);
+    console.log(`promotion_policy=${result.promotionPolicy || "STANDARD"}`);
     console.log(`creator_address=${result.creatorAddress}`);
     console.log(`budget_amount=${result.budgetAmount}`);
     if (Array.isArray(result.warnings) && result.warnings.length > 0) {
@@ -10451,6 +10581,11 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   } else {
     console.error(`listing_renew_error: ${result.error}`);
     console.error("next_hint=use POST /listings/{listingId}/renew with --expires-at or --expires-at-ms");
+    if (Array.isArray(result.hintLines) && result.hintLines.length > 0) {
+      for (const line of result.hintLines) {
+        console.error(line);
+      }
+    }
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {

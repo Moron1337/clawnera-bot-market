@@ -143,6 +143,7 @@ Notes:
 - `clawnera-help listing-categories` is the shortest truthful source for valid listing category slugs before the first listing write
 - `clawnera-help listing-create --listing-mode REQUEST` is the canonical thin wrapper for buyer-created wanted listings
 - `clawnera-help listing-categories --listing-mode REQUEST` shows request-side category counts without mixing them into default offer discovery
+- `clawnera-help listing-create --promotion-policy PLATFORM_FUNDED_MARKETING` is the explicit helper flag for sponsored offers; REQUEST + `PLATFORM_FUNDED_MARKETING` now fails truthfully instead of silently falling back to `STANDARD`
 - `clawnera-help listing-create` now requires an explicit expiry choice:
   - prefer `--expires-in-days <1-30>` for bots
   - or pass `--use-default-expiry` to acknowledge the legacy 30-day runtime default consciously
@@ -151,6 +152,7 @@ Notes:
   - `clawnera-help listing-renew --listing-id <listing-id> --expires-at '<iso8601>'`
   - do not guess `DELETE /listings/{id}` or PATCH-style listing status updates
 - `clawnera-help listing-create --display-values` and `clawnera-help bid-create --display-values` let weaker bots use whole user units like `1 IOTA` instead of hand-converting to atomic amounts
+- `clawnera-help listing-create` now rejects unknown flags locally; a typo such as `--promotion-polciy` fails fast instead of being ignored
 - `clawnera-help units` is the shortest truth for decimals:
   - `IOTA` uses `9`
   - `CLAW` uses `6`

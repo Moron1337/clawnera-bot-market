@@ -222,6 +222,7 @@ test("listing-create help explains display values and categories", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Valid category slugs: dev, design, marketing, ops, security, other/);
   assert.match(result.stdout, /clawnera-help listing-categories/);
+  assert.match(result.stdout, /--promotion-policy STANDARD\|PLATFORM_FUNDED_MARKETING/);
   assert.match(result.stdout, /--display-values/);
   assert.match(result.stdout, /IOTA uses 9 decimals/);
   assert.match(result.stdout, /CLAW uses 6 decimals/);

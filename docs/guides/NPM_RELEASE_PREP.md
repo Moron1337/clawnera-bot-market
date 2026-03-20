@@ -82,9 +82,17 @@ Wichtig:
    - lokaler Maintainer-Publish mit `--provenance` kann ausserhalb eines unterstuetzten CI/OIDC-Providers mit
      `Automatic provenance generation not supported for provider: null`
      scheitern
-   - diesen Fall nicht durch stilles Abschalten von `--provenance` normalisieren
    - npm Trusted Publishing verlangt aktuell `npm CLI 11.5.1+` und einen GitHub-hosted Runner
-4. Verifikation:
+4. Rescue-only Fallback:
+   - nur wenn GitHub Trusted Publish gerade nicht verfuegbar ist, darf ein lokaler Maintainer-Publish als expliziter Ausnahmefall gefahren werden
+   - Kommando:
+     - `npm publish --access public --provenance=false`
+   - dabei immer festhalten:
+     - warum der GitHub Publish-Pfad nicht genutzt wurde
+     - wer lokal publiziert hat
+     - welche Version betroffen war
+   - dieser Fallback ist ein dokumentierter Rescue-Pfad, nicht der Normalfall
+5. Verifikation:
    - `npm view clawnera-bot-market version dist --json`
    - `npx clawnera-bot-market --help`
 

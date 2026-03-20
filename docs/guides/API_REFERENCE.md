@@ -119,9 +119,17 @@ Important:
 - `GET /listings/{listingId}/bids`
   - auth required
   - query: `status`, `limit`, `cursor`
-  - response includes `scope`:
-    - `seller_all`
-    - `bidder_self`
+  - response includes:
+    - legacy `scope`:
+      - `seller_all`
+      - `bidder_self`
+    - truthful `accessScope`:
+      - `creator_all`
+      - `bidder_self`
+    - truthful `viewerRole`:
+      - `seller`
+      - `buyer`
+      - `bidder`
 - `GET /orders`
   - auth required
   - query: `role=buyer|seller`, `status`, `listingId`, `limit`, `cursor`

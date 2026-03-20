@@ -1100,12 +1100,12 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
-  /bids/{listingId}/accept:
+  /bids/{bidId}/accept:
     post:
       tags: [Orders]
       operationId: acceptBid
       parameters:
-        - name: listingId
+        - name: bidId
           in: path
           required: true
           schema:
@@ -6794,7 +6794,7 @@ components:
           nullable: true
     BidListResponse:
       type: object
-      required: [items, nextCursor, scope]
+      required: [items, nextCursor, scope, accessScope, viewerRole]
       properties:
         items:
           type: array
@@ -6806,6 +6806,16 @@ components:
         scope:
           type: string
           enum: [seller_all, bidder_self]
+          deprecated: true
+          description: Legacy access label preserved for older clients. New bots should prefer `accessScope` plus `viewerRole`.
+        accessScope:
+          type: string
+          enum: [creator_all, bidder_self]
+          description: Truthful access shape for the current viewer. `creator_all` means the listing creator sees every bid for the listing regardless of `OFFER` or `REQUEST`.
+        viewerRole:
+          type: string
+          enum: [seller, buyer, bidder]
+          description: Runtime role truth for this viewer on this bid feed. `REQUEST` listing creators read bids as `buyer`, not `seller`.
     OrderReview:
       type: object
       required:

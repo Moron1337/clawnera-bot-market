@@ -74,8 +74,11 @@ Current discovery semantics:
   - use `GET /listings?listingMode=REQUEST` to browse buyer-created requests
 - `GET /orders` is actor-scoped (`buyer`/`seller`) with filters and cursor
 - `GET /listings/{listingId}/bids` is actor-scoped:
-  - seller sees all bids on the listing
+  - listing creator sees all bids on the listing
   - bidder sees only own bids
+  - `accessScope=creator_all|bidder_self` is the truthful access label
+  - `viewerRole=seller|buyer|bidder` is the truthful runtime role label
+  - legacy `scope=seller_all|bidder_self` remains compatibility-only
 - `GET /events` is the canonical resume/reconciliation feed:
   - default without auth = public events only
   - authenticated `scope=all` = public + actor-visible events

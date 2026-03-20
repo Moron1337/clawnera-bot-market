@@ -1750,13 +1750,17 @@
             "requiredFields": [
               "items",
               "nextCursor",
-              "scope"
+              "scope",
+              "accessScope",
+              "viewerRole"
             ],
             "optionalFields": [],
             "propertyNames": [
               "items",
               "nextCursor",
-              "scope"
+              "scope",
+              "accessScope",
+              "viewerRole"
             ]
           },
           "400": {
@@ -2371,9 +2375,9 @@
         }
       }
     },
-    "/bids/{listingId}/accept": {
+    "/bids/{bidId}/accept": {
       "post": {
-        "path": "/bids/{listingId}/accept",
+        "path": "/bids/{bidId}/accept",
         "method": "post",
         "operationId": "acceptBid",
         "tags": [
@@ -2382,7 +2386,7 @@
         "parameters": {
           "path": [
             {
-              "name": "listingId",
+              "name": "bidId",
               "in": "path",
               "required": true
             }
@@ -13548,13 +13552,17 @@
           "requiredFields": [
             "items",
             "nextCursor",
-            "scope"
+            "scope",
+            "accessScope",
+            "viewerRole"
           ],
           "optionalFields": [],
           "propertyNames": [
             "items",
             "nextCursor",
-            "scope"
+            "scope",
+            "accessScope",
+            "viewerRole"
           ]
         },
         "400": {
@@ -14157,7 +14165,7 @@
       }
     },
     "acceptBid": {
-      "path": "/bids/{listingId}/accept",
+      "path": "/bids/{bidId}/accept",
       "method": "post",
       "tags": [
         "Orders"
@@ -14165,7 +14173,7 @@
       "parameters": {
         "path": [
           {
-            "name": "listingId",
+            "name": "bidId",
             "in": "path",
             "required": true
           }
@@ -25773,12 +25781,16 @@
       "propertyNames": [
         "items",
         "nextCursor",
-        "scope"
+        "scope",
+        "accessScope",
+        "viewerRole"
       ],
       "requiredFields": [
         "items",
         "nextCursor",
-        "scope"
+        "scope",
+        "accessScope",
+        "viewerRole"
       ],
       "optionalFields": []
     },

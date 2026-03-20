@@ -83,9 +83,16 @@
 - Response enthaelt:
   - `items`
   - `nextCursor`
-  - `scope`:
+  - legacy `scope`:
     - `seller_all`
     - `bidder_self`
+  - truthful `accessScope`:
+    - `creator_all`
+    - `bidder_self`
+  - truthful `viewerRole`:
+    - `seller`
+    - `buyer`
+    - `bidder`
 
 ### 4) Bid akzeptieren
 - Kanonischer Pfad:

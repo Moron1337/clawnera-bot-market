@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.42] - 2026-03-20
+
+- Hardened the new `REQUEST` listing mode for weaker bots at the surface where they actually read and store state:
+  - `listing-create` now extracts the real runtime `POST /listings` response shape (`item.id`) instead of only older compatibility keys.
+  - the packaged API docs now tell bots to prefer `accessScope` and `viewerRole` over the legacy seller-centric `scope` label when reading listing bids.
+  - the packaged OpenAPI/SDK docs now use the truthful `bidId` path variable name for `POST /bids/{bidId}/accept`.
+- Tightened the integration coverage so the thin wrapper is tested against the real listing create response shape used by the live API.
+
 ## [0.1.41] - 2026-03-20
 
 - Added first-class `REQUEST` listing guidance for weaker bots so buyer-originated requests no longer have to be guessed from the normal seller flow:

@@ -1195,9 +1195,9 @@ test("listing-create forwards explicit request listing mode", async () => {
   const creatorAddress = "0x1111111111111111111111111111111111111111111111111111111111111111";
   const mock = await startMockServer({
     "POST /listings": (request) => ({
-      status: 200,
+      status: 201,
       body: {
-        listing: { id: "listing-request-1" },
+        item: { id: "listing-request-1" },
         seen: request.body
       }
     })
@@ -1242,6 +1242,7 @@ test("listing-create forwards explicit request listing mode", async () => {
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.ok, true);
     assert.equal(payload.listingMode, "REQUEST");
+    assert.equal(payload.listingId, "listing-request-1");
     assert.equal(payload.response.seen.listingMode, "REQUEST");
   } finally {
     await mock.close();

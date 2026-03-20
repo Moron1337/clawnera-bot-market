@@ -4263,7 +4263,7 @@ async function runListingCreate(commandArgs) {
       ...result,
       creatorAddress,
       listingMode,
-      listingId: extractCommonCreatedId(result.response, [["listingId"], ["listing", "id"], ["id"]]) || null,
+      listingId: extractCommonCreatedId(result.response, [["listingId"], ["item", "id"], ["listing", "id"], ["id"]]) || null,
       budgetAmount,
       milestones,
       hintLines: buildListingCreateHintLines(result, listingMode),

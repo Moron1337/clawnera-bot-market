@@ -69,5 +69,6 @@ If token budget is tight:
 - Recipes give the exact action.
 - Full topics explain edge cases.
 - For buyer/seller delivery flows, run `key-agreement-upsert` for both sides before mailbox or encrypted delivery work.
+- For the seller listing step, check compliance/deposit state first; normal listing create does not require `reputation-init`.
 - One live write, one readback.
 - If a recipe says stop, stop and open the linked deeper topic.

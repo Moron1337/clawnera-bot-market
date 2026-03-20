@@ -46,7 +46,7 @@ Auth note:
 - `setup-quick`
   - wallet -> auth -> doctor -> notifications
 - `seller-create-listing`
-  - create listing safely
+  - create listing safely; normal seller listing needs compliance/deposit preflight, not reputation-init
 - `buyer-place-bid`
   - place bid and wait for accept
 - `seller-review-bids`
@@ -92,6 +92,7 @@ Auth note:
 - Full guides remain the source for deeper edge cases.
 - One live write, one readback.
 - Stop on the recipe stop-conditions instead of guessing.
+- Normal seller listing create is a compliance/deposit problem first; do not jump to `reputation-init` unless you are explicitly doing reviewer onboarding.
 
 ## When To Leave Recipe Mode
 

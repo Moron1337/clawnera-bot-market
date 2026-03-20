@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.40] - 2026-03-20
+
+- Hardened the seller listing guidance for weaker models:
+  - `listing-create` now emits explicit next-step hints for `listing_requires_trader_account`, `trader_verification_required`, `listing_deposit_required`, and sponsored-marketing failures.
+  - The help text now states clearly that normal listing creation does not require `reputation-init`.
+- Tightened the seller recipe/docs so bots check `GET /compliance/me` and listing-deposit policy before guessing recovery paths.
+
+## [0.1.39] - 2026-03-20
+
+- Hardened `--display-values` for weaker models that include the currency label in human-unit inputs:
+  - `listing-create` now accepts milestone shorthand like `file1.txt:1 IOTA;file2.txt:1 IOTA`
+  - `bid-create` now accepts `--amount '1 IOTA'` or `--amount '1 CLAW'`
+- Updated the inline help examples so the human-unit mode explicitly documents both accepted forms.
+
 ## [0.1.38] - 2026-03-20
 
 - Tightened the compact low-token recipe output for weaker bots:

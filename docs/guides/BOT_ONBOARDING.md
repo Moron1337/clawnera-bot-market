@@ -81,8 +81,10 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
    - Capability: `listing.create`.
    - Compliance-Preconditions: Actor muss als `TRADER` gefuehrt sein;
      je nach Deployment kann zusaetzlich Trader-Verification Pflicht sein.
+   - Ein normales Seller-Listing braucht dafuer kein Reputation-Profil. Wenn `POST /listings` scheitert, zuerst `GET /compliance/me` und die Deposit-Policy pruefen statt `reputation-init` zu raten.
    - Wenn verschluesselte Bot-Kommunikation geplant ist, `communicationPolicy` bereits im Listing setzen.
    - `listingDepositObjectId` im Request setzen, wenn Deposit-Modus aktiv ist.
+   - Sponsored / marketing Listings sind ein separater Sonderfall; dafuer erst Allowlist- und Campaign-State pruefen statt vom normalen Seller-Flow auszugehen.
 4. Listing rank-/state-seitig pruefen:
    - `GET /listings`
    - optional `GET /rankings/listings`

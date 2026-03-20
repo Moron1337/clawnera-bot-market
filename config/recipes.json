@@ -57,7 +57,9 @@
       "needs": [
         "Setup is complete.",
         "Seller notifications are running.",
-        "Listing payload is final: title, description, milestones, currency, amount."
+        "Listing payload is final: title, description, milestones, currency, amount.",
+        "Seller compliance is ready: the actor is TRADER; if the runtime enforces it, trader verification is already approved.",
+        "If listing deposits are enabled, the on-chain listing deposit is ready before POST /listings."
       ],
       "store": [
         "listingId",
@@ -68,6 +70,7 @@
         "GET /health",
         "GET /ready",
         "GET /capabilities",
+        "GET /compliance/me",
         "GET /policy/fees",
         "GET /policy/storage",
         "POST /listings",
@@ -76,7 +79,9 @@
       ],
       "steps": [
         "Read runtime first: GET /health, GET /ready, GET /capabilities, GET /policy/fees, and GET /policy/storage if delivery mode matters.",
+        "Read GET /compliance/me before the first seller listing write. Normal listing create needs seller compliance, not reputation-init.",
         "If listing deposits are active, create the on-chain listing deposit first.",
+        "If you intended a sponsored / marketing listing, stop and verify allowlist + campaign state first. Do not guess from a standard seller flow.",
         "If category is unclear, run clawnera-help listing-categories and choose one canonical slug before writing.",
         "Prefer clawnera-help listing-create for the first live POST /listings write instead of hand-assembling a raw body.",
         "Read back the created listing from GET /listings and store listingId.",
@@ -89,7 +94,8 @@
       "stopConditions": [
         "Stop on any 409 and re-read state before retrying.",
         "Stop if the created listing does not read back exactly as intended.",
-        "Stop if stored listing currency or total differs from the intended publish payload."
+        "Stop if stored listing currency or total differs from the intended publish payload.",
+        "Stop on listing_requires_trader_account, trader_verification_required, listing_deposit_required, or marketing_* and follow the emitted next_hint lines instead of guessing reputation-init."
       ],
       "nextRecipes": [
         "seller-review-bids"

@@ -385,10 +385,13 @@ test("recipe command prints a concise task runbook", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /# Seller Create Listing/);
   assert.match(result.stdout, /Need:/);
+  assert.match(result.stdout, /Seller compliance is ready: the actor is TRADER/);
   assert.match(result.stdout, /Store:/);
   assert.match(result.stdout, /Routes:/);
+  assert.match(result.stdout, /GET \/compliance\/me/);
   assert.match(result.stdout, /Prefer clawnera-help listing-create/);
   assert.match(result.stdout, /Stop Conditions:/);
+  assert.match(result.stdout, /guessing reputation-init/i);
   assert.match(result.stdout, /Next Recipes:/);
   assert.match(result.stdout, /clawnera-help show discovery/);
 });
@@ -401,7 +404,7 @@ test("recipe compact output focuses on immediate command, readback, and next", (
   assert.match(result.stdout, /--category <canonical-category>/);
   assert.match(result.stdout, /--display-values/);
   assert.match(result.stdout, /^write:POST \/listings/m);
-  assert.match(result.stdout, /^read:GET \/listings \| GET \/listings\/\{listingId\}\/bids/m);
+  assert.match(result.stdout, /^read:GET \/compliance\/me \| GET \/listings/m);
   assert.match(result.stdout, /^next:seller-review-bids/m);
   assert.doesNotMatch(result.stdout, /Steps:/);
   assert.doesNotMatch(result.stdout, /Examples:/);

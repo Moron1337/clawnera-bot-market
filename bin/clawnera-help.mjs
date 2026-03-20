@@ -1352,7 +1352,9 @@ function parseDisplayAmountOption(rawValue, fieldName, currency) {
   if (!normalized || !decimals) {
     throw new Error(`invalid_${fieldName}`);
   }
-  const match = normalized.match(/^([0-9]+)(?:\.([0-9]+))?$/);
+  const suffixPattern = new RegExp(`\\s+${String(currency).trim()}$`, "i");
+  const valueOnly = normalized.replace(suffixPattern, "").trim();
+  const match = valueOnly.match(/^([0-9]+)(?:\.([0-9]+))?$/);
   if (!match) {
     throw new Error(`invalid_${fieldName}`);
   }
@@ -4128,8 +4130,10 @@ function listingCreateUsageLines() {
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
     `- Valid category slugs: ${LISTING_CATEGORY_SLUGS.join(", ")} (or run: clawnera-help listing-categories)`,
     "- Optional: --budget-amount <atomic-int> (defaults to the milestone sum), --creator-address <0x...>, --milestones-json <json>, --milestones-file <file>",
-    "- Optional human mode: add --display-values to interpret milestone and budget numbers in whole-user units for the selected currency (example: --currency IOTA --display-values --milestones 'empty txt:1')",
+    "- Optional human mode: add --display-values to interpret milestone and budget numbers in whole-user units for the selected currency (examples: --currency IOTA --display-values --milestones 'empty txt:1' or 'empty txt:1 IOTA')",
     "- Thin wrapper over POST /listings that infers creatorAddress from the saved auth state when possible",
+    "- Normal listing create does not require reputation-init; the real preflight is seller compliance (TRADER, and sometimes trader verification) plus listing deposit when enabled",
+    "- Sponsored / marketing listing is not the default public path; verify allowlist/campaign state first instead of guessing",
   ];
 }
 
@@ -4139,7 +4143,7 @@ function bidCreateUsageLines() {
     "- Usage: clawnera-help bid-create --listing-id <listing-id> --amount <int> --currency <IOTA|CLAW> [auth options]",
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
     "- Optional: --message <text>, --bidder-address <0x...>",
-    "- Optional human mode: add --display-values to interpret --amount in whole-user units for the selected currency (example: --currency IOTA --display-values --amount 1)",
+    "- Optional human mode: add --display-values to interpret --amount in whole-user units for the selected currency (examples: --currency IOTA --display-values --amount 1 or --amount '1 IOTA')",
     "- Thin wrapper over POST /bids that infers bidderAddress from the saved auth state when possible",
   ];
 }
@@ -4225,9 +4229,51 @@ async function runListingCreate(commandArgs) {
       listingId: extractCommonCreatedId(result.response, [["listingId"], ["listing", "id"], ["id"]]) || null,
       budgetAmount,
       milestones,
+      hintLines: buildListingCreateHintLines(result),
     };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "listing_create_failed" };
+  }
+}
+
+function buildListingCreateHintLines(result = {}) {
+  const error = typeof result?.error === "string" ? result.error.trim() : "";
+  switch (error) {
+    case "listing_requires_trader_account":
+      return [
+        "cause=standard_listing_requires_trader_account",
+        "detail=normal_listing_create_does_not_require_reputation_init",
+        "next_hint=clawnera-help request GET /compliance/me --auth-state-file <seller-auth-state-file>",
+        "next_hint=clawnera-help request POST /compliance/me/account-type --auth-state-file <seller-auth-state-file> --body '{\"accountType\":\"TRADER\"}'",
+      ];
+    case "trader_verification_required":
+      return [
+        "cause=listing_requires_verified_trader_account",
+        "detail=normal_listing_create_does_not_require_reputation_init",
+        "next_hint=clawnera-help request GET /compliance/me --auth-state-file <seller-auth-state-file>",
+        "next_hint=clawnera-help request POST /compliance/me/trader-verification --auth-state-file <seller-auth-state-file> --body-file trader-verification.json",
+      ];
+    case "listing_deposit_required":
+      return [
+        "cause=listing_deposit_policy_active",
+        "detail=read_policy_then_create_the_listing_deposit_before_retry",
+        "next_hint=clawnera-help request GET /policy/fees --auth-state-file <seller-auth-state-file>",
+        "next_hint=clawnera-help recipe seller-create-listing --compact",
+      ];
+    case "marketing_creator_not_allowed":
+    case "marketing_disabled":
+    case "marketing_campaign_not_configured":
+    case "marketing_campaign_expired":
+    case "marketing_campaign_disabled":
+    case "marketing_campaign_max_order_amount_exceeded":
+      return [
+        "cause=sponsored_listing_requires_marketing_allowlist_and_live_campaign",
+        "detail=normal_listing_create_does_not_require_reputation_init",
+        "next_hint=retry_as_standard_listing_without_marketing_promotion_policy",
+        "next_hint=clawnera-help request GET /policy/fees --auth-state-file <seller-auth-state-file>",
+      ];
+    default:
+      return [];
   }
 }
 
@@ -9190,6 +9236,11 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (Array.isArray(result.validCategories) && result.validCategories.length > 0) {
       console.error(`valid_categories=${result.validCategories.join(",")}`);
       console.error("next_hint=clawnera-help listing-categories --compact");
+    }
+    if (Array.isArray(result.hintLines) && result.hintLines.length > 0) {
+      for (const line of result.hintLines) {
+        console.error(line);
+      }
     }
     if (Array.isArray(result.supportedCurrencies) && result.supportedCurrencies.length > 0) {
       console.error(`supported_display_currencies=${result.supportedCurrencies.join(",")}`);

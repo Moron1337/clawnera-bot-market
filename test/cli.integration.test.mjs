@@ -1097,6 +1097,68 @@ test("listing-create converts display values into atomic amounts", async () => {
   }
 });
 
+test("listing-create accepts display values with an explicit currency suffix", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-display-suffix-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const creatorAddress = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  const mock = await startMockServer({
+    "POST /listings": (request) => ({
+      status: 200,
+      body: {
+        listing: {
+          id: "listing-display-2"
+        },
+        seen: request.body
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: creatorAddress,
+        alias: "seller"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-create",
+      "--auth-state-file",
+      authStateFile,
+      "--title",
+      "Two empty txt files",
+      "--description",
+      "Human units with suffix test.",
+      "--category",
+      "other",
+      "--currency",
+      "IOTA",
+      "--display-values",
+      "--milestones",
+      "file1.txt:1 IOTA;file2.txt:1 IOTA",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.budgetAmount, "2000000000");
+    assert.deepEqual(payload.response.seen.milestones, [
+      { title: "file1.txt", amount: "1000000000" },
+      { title: "file2.txt", amount: "1000000000" }
+    ]);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("listing-create rejects invalid category before posting", async () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-category-"));
   const authStateFile = path.join(tempDir, "auth-state.json");
@@ -1200,6 +1262,114 @@ test("bid-create infers bidder address and posts a canonical body", async () => 
   }
 });
 
+test("listing-create prints compliance guidance for trader-account failures", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-trader-guidance-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const creatorAddress = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  const mock = await startMockServer({
+    "POST /listings": () => ({
+      status: 403,
+      body: {
+        error: "listing_requires_trader_account"
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: creatorAddress,
+        alias: "seller"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-create",
+      "--auth-state-file",
+      authStateFile,
+      "--title",
+      "Two tiny IOTA text tasks",
+      "--description",
+      "Manual live flow test listing.",
+      "--category",
+      "ops",
+      "--currency",
+      "IOTA",
+      "--milestones",
+      "Milestone 1:500000000;Milestone 2:500000000"
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /listing_create_error: listing_requires_trader_account/);
+    assert.match(result.stderr, /detail=normal_listing_create_does_not_require_reputation_init/);
+    assert.match(result.stderr, /GET \/compliance\/me/);
+    assert.match(result.stderr, /POST \/compliance\/me\/account-type/);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("listing-create prints marketing guidance for sponsored-listing failures", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-marketing-guidance-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const creatorAddress = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  const mock = await startMockServer({
+    "POST /listings": () => ({
+      status: 403,
+      body: {
+        error: "marketing_creator_not_allowed"
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: creatorAddress,
+        alias: "seller"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-create",
+      "--auth-state-file",
+      authStateFile,
+      "--title",
+      "Two tiny IOTA text tasks",
+      "--description",
+      "Manual live flow test listing.",
+      "--category",
+      "ops",
+      "--currency",
+      "IOTA",
+      "--milestones",
+      "Milestone 1:500000000;Milestone 2:500000000"
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /listing_create_error: marketing_creator_not_allowed/);
+    assert.match(result.stderr, /cause=sponsored_listing_requires_marketing_allowlist_and_live_campaign/);
+    assert.match(result.stderr, /retry_as_standard_listing_without_marketing_promotion_policy/);
+    assert.match(result.stderr, /normal_listing_create_does_not_require_reputation_init/);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("bid-create converts display values into atomic amounts", async () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-bid-create-display-"));
   const authStateFile = path.join(tempDir, "auth-state.json");
@@ -1238,6 +1408,58 @@ test("bid-create converts display values into atomic amounts", async () => {
       "listing-1",
       "--amount",
       "1",
+      "--currency",
+      "IOTA",
+      "--display-values",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.response.seen.amount, "1000000000");
+  } finally {
+    await mock.close();
+  }
+});
+
+test("bid-create accepts display values with an explicit currency suffix", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-bid-create-display-suffix-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const bidderAddress = "0x2222222222222222222222222222222222222222222222222222222222222222";
+  const mock = await startMockServer({
+    "POST /bids": (request) => ({
+      status: 200,
+      body: {
+        bidId: "bid-display-2",
+        seen: request.body
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: bidderAddress,
+        alias: "buyer"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "bid-create",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-id",
+      "listing-1",
+      "--amount",
+      "1 IOTA",
       "--currency",
       "IOTA",
       "--display-values",

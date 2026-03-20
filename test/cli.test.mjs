@@ -244,8 +244,10 @@ test("reviewer vote prepare default output redacts nonce and reveal body", () =>
   assert.equal(result.status, 0);
   assert.doesNotMatch(result.stdout, /nonce_hex=/);
   assert.doesNotMatch(result.stdout, /reveal_body=\{/);
+  assert.doesNotMatch(result.stdout, /commit_body=/);
+  assert.doesNotMatch(result.stdout, /commit_hash_hex=/);
+  assert.match(result.stdout, /commit_payload_redacted=/);
   assert.match(result.stdout, /reveal_body_redacted=/);
-  assert.match(result.stdout, /commit_hash_hex=/);
 });
 
 test("journey command prints a strict ordered role path", () => {

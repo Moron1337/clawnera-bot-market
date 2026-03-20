@@ -206,6 +206,11 @@ Runtime `private`:
 - `destroy_deposit_for_testing`
 
 ### bond.move
+Hinweis:
+- `Bond` ist seit dem F3-Refactor bewusst ein Metadaten-/Policy-Objekt ohne echte On-Chain-Coin-Custody.
+- Das Modul haelt nur `owner`, `kind`, `amount` und `state`; es nutzt kein `Balance<T>` und verwahrt keine Coins.
+- Etwaige Bond-Anforderungen werden off-chain bzw. ueber die umgebende Produkt-/Policy-Logik erzwungen, nicht durch On-Chain-Funds-Locking in `bond.move`.
+
 Runtime `public`:
 - `create_listing_bond_claw`
 - `create_worker_bond_claw`
@@ -226,6 +231,11 @@ Runtime `private`:
 - `bond_state_changed_event_at_for_testing`
 
 ### tier.move
+Hinweis:
+- `TierLock` ist seit dem F3-Refactor bewusst ein Metadaten-/Ranking-Objekt ohne echte On-Chain-Coin-Custody.
+- Das Modul berechnet Tier, Ranking-Boost und Gasless-Quota-Multiplikator aus `amount` und Lock-Dauer, haelt aber kein `Balance<T>` und verwahrt keine CLAW-Coins.
+- Tier-/Quota-Semantik wird off-chain bzw. ueber die umgebende Produkt-/Policy-Logik durchgesetzt; `tier.move` selbst ist kein Staking-/Treasury-Custody-Modul.
+
 Runtime `public`:
 - `create_tier_lock_claw`
 - `release_tier_lock<T>`

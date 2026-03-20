@@ -253,6 +253,7 @@
             "schemaName": "FeePolicy",
             "requiredFields": [
               "version",
+              "chainConfig",
               "escrowFeeBps",
               "listingFee",
               "listingDeposit",
@@ -261,6 +262,7 @@
             "optionalFields": [],
             "propertyNames": [
               "version",
+              "chainConfig",
               "escrowFeeBps",
               "listingFee",
               "listingDeposit",
@@ -1532,6 +1534,7 @@
           "optionalFields": [
             "description",
             "category",
+            "promotionPolicy",
             "expiresAtMs",
             "communicationPolicy",
             "listingDepositObjectId",
@@ -1542,6 +1545,7 @@
             "title",
             "description",
             "category",
+            "promotionPolicy",
             "currency",
             "budgetAmount",
             "expiresAtMs",
@@ -1570,6 +1574,7 @@
             ],
             "optionalFields": [
               "category",
+              "promotionPolicy",
               "communicationPolicy",
               "listingDepositObjectId",
               "listingDepositTxDigest",
@@ -1583,6 +1588,7 @@
               "title",
               "description",
               "category",
+              "promotionPolicy",
               "currency",
               "budgetAmount",
               "milestones",
@@ -1838,6 +1844,7 @@
             ],
             "optionalFields": [
               "category",
+              "promotionPolicy",
               "communicationPolicy",
               "listingDepositObjectId",
               "listingDepositTxDigest",
@@ -1851,6 +1858,7 @@
               "title",
               "description",
               "category",
+              "promotionPolicy",
               "currency",
               "budgetAmount",
               "milestones",
@@ -1988,6 +1996,7 @@
             ],
             "optionalFields": [
               "category",
+              "promotionPolicy",
               "communicationPolicy",
               "listingDepositObjectId",
               "listingDepositTxDigest",
@@ -2001,6 +2010,7 @@
               "title",
               "description",
               "category",
+              "promotionPolicy",
               "currency",
               "budgetAmount",
               "milestones",
@@ -3377,6 +3387,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -3384,6 +3395,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -3513,6 +3525,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -3520,6 +3533,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -3874,6 +3888,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -3881,6 +3896,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -4008,6 +4024,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -4015,6 +4032,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -4142,6 +4160,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -4149,6 +4168,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -4273,6 +4293,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -4280,6 +4301,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -5617,6 +5639,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -5624,6 +5647,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -5744,6 +5768,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -5751,6 +5776,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -5865,6 +5891,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -5872,6 +5899,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -5986,6 +6014,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -5993,6 +6022,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -6111,6 +6141,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -6118,6 +6149,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -6242,6 +6274,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -6249,6 +6282,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -6349,6 +6383,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -6356,6 +6391,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -6585,6 +6621,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -6592,6 +6629,840 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
+              "txBuilder",
+              "request",
+              "txMoveCall"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/reviewers": {
+      "get": {
+        "path": "/reviewers",
+        "method": "get",
+        "operationId": "listReviewers",
+        "tags": [
+          "Disputes"
+        ],
+        "parameters": {
+          "path": [],
+          "query": [
+            {
+              "name": "limit",
+              "in": "query",
+              "required": false
+            },
+            {
+              "name": "active",
+              "in": "query",
+              "required": false
+            },
+            {
+              "name": "cursorTxDigest",
+              "in": "query",
+              "required": false
+            },
+            {
+              "name": "cursorEventSeq",
+              "in": "query",
+              "required": false
+            }
+          ],
+          "header": []
+        },
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ReviewerSummary",
+            "schemaName": "ReviewerSummary",
+            "requiredFields": [
+              "objectId",
+              "type",
+              "owner",
+              "active"
+            ],
+            "optionalFields": [
+              "reputationProfileId",
+              "transportType",
+              "transportPubkeyHex",
+              "minCaseRewardIota",
+              "joinedAtMs",
+              "updatedAtMs",
+              "stakeLocked",
+              "effectiveStakeLocked",
+              "performanceScore",
+              "decisionsTotal",
+              "decisionsMajority",
+              "decisionsOverturned",
+              "commitRevealFailures",
+              "noshowCount",
+              "pendingDecisionMetricsClaimRequired",
+              "pendingReviewerOutcome"
+            ],
+            "propertyNames": [
+              "objectId",
+              "type",
+              "owner",
+              "reputationProfileId",
+              "active",
+              "transportType",
+              "transportPubkeyHex",
+              "minCaseRewardIota",
+              "joinedAtMs",
+              "updatedAtMs",
+              "stakeLocked",
+              "effectiveStakeLocked",
+              "performanceScore",
+              "decisionsTotal",
+              "decisionsMajority",
+              "decisionsOverturned",
+              "commitRevealFailures",
+              "noshowCount",
+              "pendingDecisionMetricsClaimRequired",
+              "pendingReviewerOutcome"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/reviewers/{address}": {
+      "get": {
+        "path": "/reviewers/{address}",
+        "method": "get",
+        "operationId": "getReviewer",
+        "tags": [
+          "Disputes"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "address",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ReviewerSummary",
+            "schemaName": "ReviewerSummary",
+            "requiredFields": [
+              "objectId",
+              "type",
+              "owner",
+              "active"
+            ],
+            "optionalFields": [
+              "reputationProfileId",
+              "transportType",
+              "transportPubkeyHex",
+              "minCaseRewardIota",
+              "joinedAtMs",
+              "updatedAtMs",
+              "stakeLocked",
+              "effectiveStakeLocked",
+              "performanceScore",
+              "decisionsTotal",
+              "decisionsMajority",
+              "decisionsOverturned",
+              "commitRevealFailures",
+              "noshowCount",
+              "pendingDecisionMetricsClaimRequired",
+              "pendingReviewerOutcome"
+            ],
+            "propertyNames": [
+              "objectId",
+              "type",
+              "owner",
+              "reputationProfileId",
+              "active",
+              "transportType",
+              "transportPubkeyHex",
+              "minCaseRewardIota",
+              "joinedAtMs",
+              "updatedAtMs",
+              "stakeLocked",
+              "effectiveStakeLocked",
+              "performanceScore",
+              "decisionsTotal",
+              "decisionsMajority",
+              "decisionsOverturned",
+              "commitRevealFailures",
+              "noshowCount",
+              "pendingDecisionMetricsClaimRequired",
+              "pendingReviewerOutcome"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/reviewers/me/invites": {
+      "get": {
+        "path": "/reviewers/me/invites",
+        "method": "get",
+        "operationId": "listReviewerSelfInvites",
+        "tags": [
+          "Disputes"
+        ],
+        "parameters": {
+          "path": [],
+          "query": [
+            {
+              "name": "limit",
+              "in": "query",
+              "required": false
+            }
+          ],
+          "header": []
+        },
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ReviewerInviteSummary",
+            "schemaName": "ReviewerInviteSummary",
+            "requiredFields": [
+              "disputeCaseObjectId",
+              "reviewerAddress",
+              "assignmentRound",
+              "invitedAtMs",
+              "status",
+              "actorCanAccept",
+              "source"
+            ],
+            "optionalFields": [
+              "disputeCase",
+              "fetchError"
+            ],
+            "propertyNames": [
+              "disputeCaseObjectId",
+              "reviewerAddress",
+              "assignmentRound",
+              "invitedAtMs",
+              "status",
+              "actorCanAccept",
+              "source",
+              "disputeCase",
+              "fetchError"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/reviewers/me/metrics": {
+      "get": {
+        "path": "/reviewers/me/metrics",
+        "method": "get",
+        "operationId": "getReviewerSelfMetrics",
+        "tags": [
+          "Disputes"
+        ],
+        "parameters": {
+          "path": [],
+          "query": [],
+          "header": []
+        },
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ReviewerSelfMetricsResponse",
+            "schemaName": "ReviewerSelfMetricsResponse",
+            "requiredFields": [
+              "reviewerAddress",
+              "registered"
+            ],
+            "optionalFields": [
+              "reviewer",
+              "reputationProfileObjectId",
+              "disputeQuorumConfigObjectId",
+              "reviewerRegistryObjectId",
+              "runtime",
+              "metrics"
+            ],
+            "propertyNames": [
+              "reviewerAddress",
+              "registered",
+              "reviewer",
+              "reputationProfileObjectId",
+              "disputeQuorumConfigObjectId",
+              "reviewerRegistryObjectId",
+              "runtime",
+              "metrics"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/reviewer-selection-receipts/{id}/bind-dispute-case": {
+      "post": {
+        "path": "/reviewer-selection-receipts/{id}/bind-dispute-case",
+        "method": "post",
+        "operationId": "bindReviewerSelectionReceiptToDisputeCase",
+        "tags": [
+          "Disputes"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "id",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/ReviewerSelectionReceiptBindRequest",
+          "schemaName": "ReviewerSelectionReceiptBindRequest",
+          "requiredFields": [
+            "disputeCaseObjectId",
+            "activationTxDigest"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "disputeCaseObjectId",
+            "activationTxDigest"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ReviewerSelectionReceipt",
+            "schemaName": "ReviewerSelectionReceipt",
+            "requiredFields": [],
+            "optionalFields": [
+              "id",
+              "scope",
+              "disputeCaseObjectId",
+              "orderId",
+              "milestoneId",
+              "buyerAddress",
+              "sellerAddress",
+              "assignmentRound",
+              "reviewerCountRequested",
+              "reviewerCountSelected",
+              "selectionPolicyVersion",
+              "checkpointDigest",
+              "checkpointSequenceNumber",
+              "checkpointTimestampMs",
+              "checkpointSource",
+              "seedHash",
+              "candidatePoolHash",
+              "shortlistHash",
+              "receiptHash",
+              "directoryScanTruncated",
+              "shortlistedReviewerAddresses",
+              "blockedReviewerAddresses",
+              "excludedReviewerAddresses",
+              "candidatePool",
+              "createdByActorAddress",
+              "activatedAt",
+              "activatedByActorAddress",
+              "activationTxDigest",
+              "createdAt"
+            ],
+            "propertyNames": [
+              "id",
+              "scope",
+              "disputeCaseObjectId",
+              "orderId",
+              "milestoneId",
+              "buyerAddress",
+              "sellerAddress",
+              "assignmentRound",
+              "reviewerCountRequested",
+              "reviewerCountSelected",
+              "selectionPolicyVersion",
+              "checkpointDigest",
+              "checkpointSequenceNumber",
+              "checkpointTimestampMs",
+              "checkpointSource",
+              "seedHash",
+              "candidatePoolHash",
+              "shortlistHash",
+              "receiptHash",
+              "directoryScanTruncated",
+              "shortlistedReviewerAddresses",
+              "blockedReviewerAddresses",
+              "excludedReviewerAddresses",
+              "candidatePool",
+              "createdByActorAddress",
+              "activatedAt",
+              "activatedByActorAddress",
+              "activationTxDigest",
+              "createdAt"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": "#/components/responses/Conflict",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/reviewers/update": {
+      "post": {
+        "path": "/reviewers/update",
+        "method": "post",
+        "operationId": "updateReviewerPlan",
+        "tags": [
+          "Disputes"
+        ],
+        "parameters": {
+          "path": [],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/ReviewerUpdateRequest",
+          "schemaName": "ReviewerUpdateRequest",
+          "requiredFields": [],
+          "optionalFields": [
+            "reviewerRegistryObjectId",
+            "reviewerEntryObjectId",
+            "transportType",
+            "transportPubkeyHex",
+            "minCaseRewardIota",
+            "active",
+            "clockObjectId"
+          ],
+          "propertyNames": [
+            "reviewerRegistryObjectId",
+            "reviewerEntryObjectId",
+            "transportType",
+            "transportPubkeyHex",
+            "minCaseRewardIota",
+            "active",
+            "clockObjectId"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/TxPlanResponse",
+            "schemaName": "TxPlanResponse",
+            "requiredFields": [
+              "status",
+              "txBuilder",
+              "request"
+            ],
+            "optionalFields": [
+              "txMoveCall"
+            ],
+            "propertyNames": [
+              "status",
+              "txBuilder",
+              "request",
+              "txMoveCall"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/reviewers/deregister": {
+      "post": {
+        "path": "/reviewers/deregister",
+        "method": "post",
+        "operationId": "deregisterReviewerPlan",
+        "tags": [
+          "Disputes"
+        ],
+        "parameters": {
+          "path": [],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/ReviewerDeregisterRequest",
+          "schemaName": "ReviewerDeregisterRequest",
+          "requiredFields": [
+            "reviewerRegistryObjectId",
+            "reviewerEntryObjectId"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "reviewerRegistryObjectId",
+            "reviewerEntryObjectId"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/TxPlanResponse",
+            "schemaName": "TxPlanResponse",
+            "requiredFields": [
+              "status",
+              "txBuilder",
+              "request"
+            ],
+            "optionalFields": [
+              "txMoveCall"
+            ],
+            "propertyNames": [
+              "status",
+              "txBuilder",
+              "request",
+              "txMoveCall"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/reviewers/{address}/claim-metrics": {
+      "post": {
+        "path": "/reviewers/{address}/claim-metrics",
+        "method": "post",
+        "operationId": "claimReviewerDecisionMetricsPlan",
+        "tags": [
+          "Disputes"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "address",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/ReviewerClaimMetricsRequest",
+          "schemaName": "ReviewerClaimMetricsRequest",
+          "requiredFields": [
+            "disputeCaseObjectId"
+          ],
+          "optionalFields": [
+            "reviewerRegistryObjectId",
+            "reviewerEntryObjectId",
+            "disputeQuorumConfigObjectId"
+          ],
+          "propertyNames": [
+            "disputeCaseObjectId",
+            "reviewerRegistryObjectId",
+            "reviewerEntryObjectId",
+            "disputeQuorumConfigObjectId"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/TxPlanResponse",
+            "schemaName": "TxPlanResponse",
+            "requiredFields": [
+              "status",
+              "txBuilder",
+              "request"
+            ],
+            "optionalFields": [
+              "txMoveCall"
+            ],
+            "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -6692,6 +7563,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -6699,6 +7571,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -6802,14 +7675,18 @@
           "schemaName": "DisputeOpenRequest",
           "requiredFields": [
             "escrowObjectId",
-            "bondObjectId"
+            "bondObjectId",
+            "invitedReviewerAddresses"
           ],
           "optionalFields": [
+            "reviewerSelectionReceiptId",
             "clockObjectId"
           ],
           "propertyNames": [
             "escrowObjectId",
             "bondObjectId",
+            "invitedReviewerAddresses",
+            "reviewerSelectionReceiptId",
             "clockObjectId"
           ]
         },
@@ -6820,6 +7697,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -6827,6 +7705,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -6943,6 +7822,9 @@
               "requiredReviewerVotes",
               "requiredReviewerVotesFloor",
               "assignmentRound",
+              "invitedReviewers",
+              "assignedReviewers",
+              "blockedReviewers",
               "votesYes",
               "votesNo",
               "openedAtMs",
@@ -6969,6 +7851,9 @@
               "requiredReviewerVotes",
               "requiredReviewerVotesFloor",
               "assignmentRound",
+              "invitedReviewers",
+              "assignedReviewers",
+              "blockedReviewers",
               "votesYes",
               "votesNo",
               "openedAtMs",
@@ -7069,6 +7954,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -7076,6 +7962,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -7119,6 +8006,15 @@
             "propertyNames": [
               "error"
             ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": null,
+            "schemaRef": null,
+            "schemaName": null,
+            "requiredFields": [],
+            "optionalFields": [],
+            "propertyNames": []
           }
         }
       }
@@ -7147,10 +8043,10 @@
           "schemaRef": "#/components/schemas/DisputeVoteCommitRequest",
           "schemaName": "DisputeVoteCommitRequest",
           "requiredFields": [
-            "reviewerEntryObjectId",
             "commitHashHex"
           ],
           "optionalFields": [
+            "reviewerEntryObjectId",
             "clockObjectId"
           ],
           "propertyNames": [
@@ -7166,6 +8062,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -7173,6 +8070,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -7244,11 +8142,11 @@
           "schemaRef": "#/components/schemas/DisputeVoteRevealRequest",
           "schemaName": "DisputeVoteRevealRequest",
           "requiredFields": [
-            "reviewerEntryObjectId",
             "vote",
             "nonceHex"
           ],
           "optionalFields": [
+            "reviewerEntryObjectId",
             "evidenceHashHex",
             "clockObjectId"
           ],
@@ -7267,6 +8165,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -7274,6 +8173,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -7395,13 +8295,17 @@
           "schemaRef": "#/components/schemas/DisputeReplaceReviewersRequest",
           "schemaName": "DisputeReplaceReviewersRequest",
           "requiredFields": [
-            "reviewerRegistryObjectId"
+            "reviewerRegistryObjectId",
+            "invitedReviewerAddresses"
           ],
           "optionalFields": [
+            "reviewerSelectionReceiptId",
             "clockObjectId"
           ],
           "propertyNames": [
             "reviewerRegistryObjectId",
+            "invitedReviewerAddresses",
+            "reviewerSelectionReceiptId",
             "clockObjectId"
           ]
         },
@@ -7412,6 +8316,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -7419,6 +8324,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -7486,15 +8392,14 @@
           "header": []
         },
         "requestBody": {
-          "required": true,
+          "required": false,
           "schemaRef": "#/components/schemas/DisputeFinalizeRequest",
           "schemaName": "DisputeFinalizeRequest",
-          "requiredFields": [
+          "requiredFields": [],
+          "optionalFields": [
             "bondObjectId",
             "reviewerRegistryObjectId",
-            "disputeQuorumConfigObjectId"
-          ],
-          "optionalFields": [
+            "disputeQuorumConfigObjectId",
             "clockObjectId"
           ],
           "propertyNames": [
@@ -7511,6 +8416,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -7518,6 +8424,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -7589,12 +8496,12 @@
           "schemaRef": "#/components/schemas/DisputeFallbackResolveRequest",
           "schemaName": "DisputeFallbackResolveRequest",
           "requiredFields": [
-            "arbCapObjectId",
-            "bondObjectId",
-            "reviewerRegistryObjectId",
-            "disputeQuorumConfigObjectId"
+            "arbCapObjectId"
           ],
           "optionalFields": [
+            "bondObjectId",
+            "reviewerRegistryObjectId",
+            "disputeQuorumConfigObjectId",
             "clockObjectId"
           ],
           "propertyNames": [
@@ -7612,6 +8519,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -7619,6 +8527,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -7686,15 +8595,14 @@
           "header": []
         },
         "requestBody": {
-          "required": true,
+          "required": false,
           "schemaRef": "#/components/schemas/DisputeTimeoutFallbackRequest",
           "schemaName": "DisputeTimeoutFallbackRequest",
-          "requiredFields": [
+          "requiredFields": [],
+          "optionalFields": [
             "bondObjectId",
             "reviewerRegistryObjectId",
-            "disputeQuorumConfigObjectId"
-          ],
-          "optionalFields": [
+            "disputeQuorumConfigObjectId",
             "clockObjectId"
           ],
           "propertyNames": [
@@ -7711,6 +8619,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -7718,6 +8627,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -7789,10 +8699,11 @@
           "schemaRef": "#/components/schemas/DisputeResolveEscrowWithTicketRequest",
           "schemaName": "DisputeResolveEscrowWithTicketRequest",
           "requiredFields": [
-            "escrowObjectId",
             "quorumResolutionTicketObjectId"
           ],
-          "optionalFields": [],
+          "optionalFields": [
+            "escrowObjectId"
+          ],
           "propertyNames": [
             "escrowObjectId",
             "quorumResolutionTicketObjectId"
@@ -7805,6 +8716,7 @@
             "schemaRef": "#/components/schemas/TxPlanResponse",
             "schemaName": "TxPlanResponse",
             "requiredFields": [
+              "status",
               "txBuilder",
               "request"
             ],
@@ -7812,6 +8724,7 @@
               "txMoveCall"
             ],
             "propertyNames": [
+              "status",
               "txBuilder",
               "request",
               "txMoveCall"
@@ -7846,6 +8759,19 @@
           "403": {
             "status": "403",
             "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ErrorResponse",
             "schemaName": "ErrorResponse",
             "requiredFields": [
@@ -10644,6 +11570,288 @@
           }
         }
       }
+    },
+    "/admin/reviewer-selection/shortlist": {
+      "post": {
+        "path": "/admin/reviewer-selection/shortlist",
+        "method": "post",
+        "operationId": "buildReviewerSelectionShortlist",
+        "tags": [
+          "Admin",
+          "Disputes"
+        ],
+        "parameters": {
+          "path": [],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/ReviewerSelectionShortlistRequest",
+          "schemaName": "ReviewerSelectionShortlistRequest",
+          "requiredFields": [
+            "scope",
+            "checkpointDigest"
+          ],
+          "optionalFields": [
+            "reviewerCount",
+            "directoryScanLimit",
+            "orderId",
+            "milestoneId",
+            "disputeCaseObjectId",
+            "buyerAddress",
+            "sellerAddress",
+            "excludedReviewerAddresses",
+            "blockedReviewerAddresses",
+            "minPerformanceScore",
+            "minReputationScore",
+            "minReputationConfidence",
+            "allowNewReviewers",
+            "minDecisionsTotal",
+            "maxNoshowCount",
+            "maxCommitRevealFailures"
+          ],
+          "propertyNames": [
+            "scope",
+            "reviewerCount",
+            "directoryScanLimit",
+            "checkpointDigest",
+            "orderId",
+            "milestoneId",
+            "disputeCaseObjectId",
+            "buyerAddress",
+            "sellerAddress",
+            "excludedReviewerAddresses",
+            "blockedReviewerAddresses",
+            "minPerformanceScore",
+            "minReputationScore",
+            "minReputationConfidence",
+            "allowNewReviewers",
+            "minDecisionsTotal",
+            "maxNoshowCount",
+            "maxCommitRevealFailures"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ReviewerSelectionShortlistResponse",
+            "schemaName": "ReviewerSelectionShortlistResponse",
+            "requiredFields": [
+              "receipt",
+              "selectionComplete",
+              "directoryScanTruncated",
+              "publishTarget"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "receipt",
+              "selectionComplete",
+              "directoryScanTruncated",
+              "publishTarget"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/admin/reviewer-selection-receipts/{receiptId}": {
+      "get": {
+        "path": "/admin/reviewer-selection-receipts/{receiptId}",
+        "method": "get",
+        "operationId": "getReviewerSelectionReceipt",
+        "tags": [
+          "Admin",
+          "Disputes"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "receiptId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ReviewerSelectionReceipt",
+            "schemaName": "ReviewerSelectionReceipt",
+            "requiredFields": [],
+            "optionalFields": [
+              "id",
+              "scope",
+              "disputeCaseObjectId",
+              "orderId",
+              "milestoneId",
+              "buyerAddress",
+              "sellerAddress",
+              "assignmentRound",
+              "reviewerCountRequested",
+              "reviewerCountSelected",
+              "selectionPolicyVersion",
+              "checkpointDigest",
+              "checkpointSequenceNumber",
+              "checkpointTimestampMs",
+              "checkpointSource",
+              "seedHash",
+              "candidatePoolHash",
+              "shortlistHash",
+              "receiptHash",
+              "directoryScanTruncated",
+              "shortlistedReviewerAddresses",
+              "blockedReviewerAddresses",
+              "excludedReviewerAddresses",
+              "candidatePool",
+              "createdByActorAddress",
+              "activatedAt",
+              "activatedByActorAddress",
+              "activationTxDigest",
+              "createdAt"
+            ],
+            "propertyNames": [
+              "id",
+              "scope",
+              "disputeCaseObjectId",
+              "orderId",
+              "milestoneId",
+              "buyerAddress",
+              "sellerAddress",
+              "assignmentRound",
+              "reviewerCountRequested",
+              "reviewerCountSelected",
+              "selectionPolicyVersion",
+              "checkpointDigest",
+              "checkpointSequenceNumber",
+              "checkpointTimestampMs",
+              "checkpointSource",
+              "seedHash",
+              "candidatePoolHash",
+              "shortlistHash",
+              "receiptHash",
+              "directoryScanTruncated",
+              "shortlistedReviewerAddresses",
+              "blockedReviewerAddresses",
+              "excludedReviewerAddresses",
+              "candidatePool",
+              "createdByActorAddress",
+              "activatedAt",
+              "activatedByActorAddress",
+              "activationTxDigest",
+              "createdAt"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
     }
   },
   "operationsById": {
@@ -10880,6 +12088,7 @@
           "schemaName": "FeePolicy",
           "requiredFields": [
             "version",
+            "chainConfig",
             "escrowFeeBps",
             "listingFee",
             "listingDeposit",
@@ -10888,6 +12097,7 @@
           "optionalFields": [],
           "propertyNames": [
             "version",
+            "chainConfig",
             "escrowFeeBps",
             "listingFee",
             "listingDeposit",
@@ -12110,6 +13320,7 @@
         "optionalFields": [
           "description",
           "category",
+          "promotionPolicy",
           "expiresAtMs",
           "communicationPolicy",
           "listingDepositObjectId",
@@ -12120,6 +13331,7 @@
           "title",
           "description",
           "category",
+          "promotionPolicy",
           "currency",
           "budgetAmount",
           "expiresAtMs",
@@ -12148,6 +13360,7 @@
           ],
           "optionalFields": [
             "category",
+            "promotionPolicy",
             "communicationPolicy",
             "listingDepositObjectId",
             "listingDepositTxDigest",
@@ -12161,6 +13374,7 @@
             "title",
             "description",
             "category",
+            "promotionPolicy",
             "currency",
             "budgetAmount",
             "milestones",
@@ -12407,6 +13621,7 @@
           ],
           "optionalFields": [
             "category",
+            "promotionPolicy",
             "communicationPolicy",
             "listingDepositObjectId",
             "listingDepositTxDigest",
@@ -12420,6 +13635,7 @@
             "title",
             "description",
             "category",
+            "promotionPolicy",
             "currency",
             "budgetAmount",
             "milestones",
@@ -12554,6 +13770,7 @@
           ],
           "optionalFields": [
             "category",
+            "promotionPolicy",
             "communicationPolicy",
             "listingDepositObjectId",
             "listingDepositTxDigest",
@@ -12567,6 +13784,7 @@
             "title",
             "description",
             "category",
+            "promotionPolicy",
             "currency",
             "budgetAmount",
             "milestones",
@@ -13906,6 +15124,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -13913,6 +15132,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -14039,6 +15259,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -14046,6 +15267,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -14393,6 +15615,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -14400,6 +15623,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -14524,6 +15748,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -14531,6 +15756,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -14655,6 +15881,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -14662,6 +15889,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -14783,6 +16011,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -14790,6 +16019,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -16098,6 +17328,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -16105,6 +17336,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -16222,6 +17454,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -16229,6 +17462,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -16340,6 +17574,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -16347,6 +17582,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -16458,6 +17694,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -16465,6 +17702,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -16580,6 +17818,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -16587,6 +17826,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -16708,6 +17948,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -16715,6 +17956,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -16812,6 +18054,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -16819,6 +18062,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -17042,6 +18286,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -17049,6 +18294,816 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
+            "txBuilder",
+            "request",
+            "txMoveCall"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "listReviewers": {
+      "path": "/reviewers",
+      "method": "get",
+      "tags": [
+        "Disputes"
+      ],
+      "parameters": {
+        "path": [],
+        "query": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursorTxDigest",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursorEventSeq",
+            "in": "query",
+            "required": false
+          }
+        ],
+        "header": []
+      },
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ReviewerSummary",
+          "schemaName": "ReviewerSummary",
+          "requiredFields": [
+            "objectId",
+            "type",
+            "owner",
+            "active"
+          ],
+          "optionalFields": [
+            "reputationProfileId",
+            "transportType",
+            "transportPubkeyHex",
+            "minCaseRewardIota",
+            "joinedAtMs",
+            "updatedAtMs",
+            "stakeLocked",
+            "effectiveStakeLocked",
+            "performanceScore",
+            "decisionsTotal",
+            "decisionsMajority",
+            "decisionsOverturned",
+            "commitRevealFailures",
+            "noshowCount",
+            "pendingDecisionMetricsClaimRequired",
+            "pendingReviewerOutcome"
+          ],
+          "propertyNames": [
+            "objectId",
+            "type",
+            "owner",
+            "reputationProfileId",
+            "active",
+            "transportType",
+            "transportPubkeyHex",
+            "minCaseRewardIota",
+            "joinedAtMs",
+            "updatedAtMs",
+            "stakeLocked",
+            "effectiveStakeLocked",
+            "performanceScore",
+            "decisionsTotal",
+            "decisionsMajority",
+            "decisionsOverturned",
+            "commitRevealFailures",
+            "noshowCount",
+            "pendingDecisionMetricsClaimRequired",
+            "pendingReviewerOutcome"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "getReviewer": {
+      "path": "/reviewers/{address}",
+      "method": "get",
+      "tags": [
+        "Disputes"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ReviewerSummary",
+          "schemaName": "ReviewerSummary",
+          "requiredFields": [
+            "objectId",
+            "type",
+            "owner",
+            "active"
+          ],
+          "optionalFields": [
+            "reputationProfileId",
+            "transportType",
+            "transportPubkeyHex",
+            "minCaseRewardIota",
+            "joinedAtMs",
+            "updatedAtMs",
+            "stakeLocked",
+            "effectiveStakeLocked",
+            "performanceScore",
+            "decisionsTotal",
+            "decisionsMajority",
+            "decisionsOverturned",
+            "commitRevealFailures",
+            "noshowCount",
+            "pendingDecisionMetricsClaimRequired",
+            "pendingReviewerOutcome"
+          ],
+          "propertyNames": [
+            "objectId",
+            "type",
+            "owner",
+            "reputationProfileId",
+            "active",
+            "transportType",
+            "transportPubkeyHex",
+            "minCaseRewardIota",
+            "joinedAtMs",
+            "updatedAtMs",
+            "stakeLocked",
+            "effectiveStakeLocked",
+            "performanceScore",
+            "decisionsTotal",
+            "decisionsMajority",
+            "decisionsOverturned",
+            "commitRevealFailures",
+            "noshowCount",
+            "pendingDecisionMetricsClaimRequired",
+            "pendingReviewerOutcome"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "listReviewerSelfInvites": {
+      "path": "/reviewers/me/invites",
+      "method": "get",
+      "tags": [
+        "Disputes"
+      ],
+      "parameters": {
+        "path": [],
+        "query": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          }
+        ],
+        "header": []
+      },
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ReviewerInviteSummary",
+          "schemaName": "ReviewerInviteSummary",
+          "requiredFields": [
+            "disputeCaseObjectId",
+            "reviewerAddress",
+            "assignmentRound",
+            "invitedAtMs",
+            "status",
+            "actorCanAccept",
+            "source"
+          ],
+          "optionalFields": [
+            "disputeCase",
+            "fetchError"
+          ],
+          "propertyNames": [
+            "disputeCaseObjectId",
+            "reviewerAddress",
+            "assignmentRound",
+            "invitedAtMs",
+            "status",
+            "actorCanAccept",
+            "source",
+            "disputeCase",
+            "fetchError"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "getReviewerSelfMetrics": {
+      "path": "/reviewers/me/metrics",
+      "method": "get",
+      "tags": [
+        "Disputes"
+      ],
+      "parameters": {
+        "path": [],
+        "query": [],
+        "header": []
+      },
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ReviewerSelfMetricsResponse",
+          "schemaName": "ReviewerSelfMetricsResponse",
+          "requiredFields": [
+            "reviewerAddress",
+            "registered"
+          ],
+          "optionalFields": [
+            "reviewer",
+            "reputationProfileObjectId",
+            "disputeQuorumConfigObjectId",
+            "reviewerRegistryObjectId",
+            "runtime",
+            "metrics"
+          ],
+          "propertyNames": [
+            "reviewerAddress",
+            "registered",
+            "reviewer",
+            "reputationProfileObjectId",
+            "disputeQuorumConfigObjectId",
+            "reviewerRegistryObjectId",
+            "runtime",
+            "metrics"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "bindReviewerSelectionReceiptToDisputeCase": {
+      "path": "/reviewer-selection-receipts/{id}/bind-dispute-case",
+      "method": "post",
+      "tags": [
+        "Disputes"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/ReviewerSelectionReceiptBindRequest",
+        "schemaName": "ReviewerSelectionReceiptBindRequest",
+        "requiredFields": [
+          "disputeCaseObjectId",
+          "activationTxDigest"
+        ],
+        "optionalFields": [],
+        "propertyNames": [
+          "disputeCaseObjectId",
+          "activationTxDigest"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ReviewerSelectionReceipt",
+          "schemaName": "ReviewerSelectionReceipt",
+          "requiredFields": [],
+          "optionalFields": [
+            "id",
+            "scope",
+            "disputeCaseObjectId",
+            "orderId",
+            "milestoneId",
+            "buyerAddress",
+            "sellerAddress",
+            "assignmentRound",
+            "reviewerCountRequested",
+            "reviewerCountSelected",
+            "selectionPolicyVersion",
+            "checkpointDigest",
+            "checkpointSequenceNumber",
+            "checkpointTimestampMs",
+            "checkpointSource",
+            "seedHash",
+            "candidatePoolHash",
+            "shortlistHash",
+            "receiptHash",
+            "directoryScanTruncated",
+            "shortlistedReviewerAddresses",
+            "blockedReviewerAddresses",
+            "excludedReviewerAddresses",
+            "candidatePool",
+            "createdByActorAddress",
+            "activatedAt",
+            "activatedByActorAddress",
+            "activationTxDigest",
+            "createdAt"
+          ],
+          "propertyNames": [
+            "id",
+            "scope",
+            "disputeCaseObjectId",
+            "orderId",
+            "milestoneId",
+            "buyerAddress",
+            "sellerAddress",
+            "assignmentRound",
+            "reviewerCountRequested",
+            "reviewerCountSelected",
+            "selectionPolicyVersion",
+            "checkpointDigest",
+            "checkpointSequenceNumber",
+            "checkpointTimestampMs",
+            "checkpointSource",
+            "seedHash",
+            "candidatePoolHash",
+            "shortlistHash",
+            "receiptHash",
+            "directoryScanTruncated",
+            "shortlistedReviewerAddresses",
+            "blockedReviewerAddresses",
+            "excludedReviewerAddresses",
+            "candidatePool",
+            "createdByActorAddress",
+            "activatedAt",
+            "activatedByActorAddress",
+            "activationTxDigest",
+            "createdAt"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": "#/components/responses/Conflict",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "updateReviewerPlan": {
+      "path": "/reviewers/update",
+      "method": "post",
+      "tags": [
+        "Disputes"
+      ],
+      "parameters": {
+        "path": [],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/ReviewerUpdateRequest",
+        "schemaName": "ReviewerUpdateRequest",
+        "requiredFields": [],
+        "optionalFields": [
+          "reviewerRegistryObjectId",
+          "reviewerEntryObjectId",
+          "transportType",
+          "transportPubkeyHex",
+          "minCaseRewardIota",
+          "active",
+          "clockObjectId"
+        ],
+        "propertyNames": [
+          "reviewerRegistryObjectId",
+          "reviewerEntryObjectId",
+          "transportType",
+          "transportPubkeyHex",
+          "minCaseRewardIota",
+          "active",
+          "clockObjectId"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/TxPlanResponse",
+          "schemaName": "TxPlanResponse",
+          "requiredFields": [
+            "status",
+            "txBuilder",
+            "request"
+          ],
+          "optionalFields": [
+            "txMoveCall"
+          ],
+          "propertyNames": [
+            "status",
+            "txBuilder",
+            "request",
+            "txMoveCall"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "deregisterReviewerPlan": {
+      "path": "/reviewers/deregister",
+      "method": "post",
+      "tags": [
+        "Disputes"
+      ],
+      "parameters": {
+        "path": [],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/ReviewerDeregisterRequest",
+        "schemaName": "ReviewerDeregisterRequest",
+        "requiredFields": [
+          "reviewerRegistryObjectId",
+          "reviewerEntryObjectId"
+        ],
+        "optionalFields": [],
+        "propertyNames": [
+          "reviewerRegistryObjectId",
+          "reviewerEntryObjectId"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/TxPlanResponse",
+          "schemaName": "TxPlanResponse",
+          "requiredFields": [
+            "status",
+            "txBuilder",
+            "request"
+          ],
+          "optionalFields": [
+            "txMoveCall"
+          ],
+          "propertyNames": [
+            "status",
+            "txBuilder",
+            "request",
+            "txMoveCall"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "claimReviewerDecisionMetricsPlan": {
+      "path": "/reviewers/{address}/claim-metrics",
+      "method": "post",
+      "tags": [
+        "Disputes"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/ReviewerClaimMetricsRequest",
+        "schemaName": "ReviewerClaimMetricsRequest",
+        "requiredFields": [
+          "disputeCaseObjectId"
+        ],
+        "optionalFields": [
+          "reviewerRegistryObjectId",
+          "reviewerEntryObjectId",
+          "disputeQuorumConfigObjectId"
+        ],
+        "propertyNames": [
+          "disputeCaseObjectId",
+          "reviewerRegistryObjectId",
+          "reviewerEntryObjectId",
+          "disputeQuorumConfigObjectId"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/TxPlanResponse",
+          "schemaName": "TxPlanResponse",
+          "requiredFields": [
+            "status",
+            "txBuilder",
+            "request"
+          ],
+          "optionalFields": [
+            "txMoveCall"
+          ],
+          "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -17146,6 +19201,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -17153,6 +19209,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -17253,14 +19310,18 @@
         "schemaName": "DisputeOpenRequest",
         "requiredFields": [
           "escrowObjectId",
-          "bondObjectId"
+          "bondObjectId",
+          "invitedReviewerAddresses"
         ],
         "optionalFields": [
+          "reviewerSelectionReceiptId",
           "clockObjectId"
         ],
         "propertyNames": [
           "escrowObjectId",
           "bondObjectId",
+          "invitedReviewerAddresses",
+          "reviewerSelectionReceiptId",
           "clockObjectId"
         ]
       },
@@ -17271,6 +19332,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -17278,6 +19340,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -17391,6 +19454,9 @@
             "requiredReviewerVotes",
             "requiredReviewerVotesFloor",
             "assignmentRound",
+            "invitedReviewers",
+            "assignedReviewers",
+            "blockedReviewers",
             "votesYes",
             "votesNo",
             "openedAtMs",
@@ -17417,6 +19483,9 @@
             "requiredReviewerVotes",
             "requiredReviewerVotesFloor",
             "assignmentRound",
+            "invitedReviewers",
+            "assignedReviewers",
+            "blockedReviewers",
             "votesYes",
             "votesNo",
             "openedAtMs",
@@ -17514,6 +19583,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -17521,6 +19591,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -17564,6 +19635,15 @@
           "propertyNames": [
             "error"
           ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": null,
+          "schemaRef": null,
+          "schemaName": null,
+          "requiredFields": [],
+          "optionalFields": [],
+          "propertyNames": []
         }
       }
     },
@@ -17589,10 +19669,10 @@
         "schemaRef": "#/components/schemas/DisputeVoteCommitRequest",
         "schemaName": "DisputeVoteCommitRequest",
         "requiredFields": [
-          "reviewerEntryObjectId",
           "commitHashHex"
         ],
         "optionalFields": [
+          "reviewerEntryObjectId",
           "clockObjectId"
         ],
         "propertyNames": [
@@ -17608,6 +19688,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -17615,6 +19696,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -17683,11 +19765,11 @@
         "schemaRef": "#/components/schemas/DisputeVoteRevealRequest",
         "schemaName": "DisputeVoteRevealRequest",
         "requiredFields": [
-          "reviewerEntryObjectId",
           "vote",
           "nonceHex"
         ],
         "optionalFields": [
+          "reviewerEntryObjectId",
           "evidenceHashHex",
           "clockObjectId"
         ],
@@ -17706,6 +19788,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -17713,6 +19796,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -17828,13 +19912,17 @@
         "schemaRef": "#/components/schemas/DisputeReplaceReviewersRequest",
         "schemaName": "DisputeReplaceReviewersRequest",
         "requiredFields": [
-          "reviewerRegistryObjectId"
+          "reviewerRegistryObjectId",
+          "invitedReviewerAddresses"
         ],
         "optionalFields": [
+          "reviewerSelectionReceiptId",
           "clockObjectId"
         ],
         "propertyNames": [
           "reviewerRegistryObjectId",
+          "invitedReviewerAddresses",
+          "reviewerSelectionReceiptId",
           "clockObjectId"
         ]
       },
@@ -17845,6 +19933,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -17852,6 +19941,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -17916,15 +20006,14 @@
         "header": []
       },
       "requestBody": {
-        "required": true,
+        "required": false,
         "schemaRef": "#/components/schemas/DisputeFinalizeRequest",
         "schemaName": "DisputeFinalizeRequest",
-        "requiredFields": [
+        "requiredFields": [],
+        "optionalFields": [
           "bondObjectId",
           "reviewerRegistryObjectId",
-          "disputeQuorumConfigObjectId"
-        ],
-        "optionalFields": [
+          "disputeQuorumConfigObjectId",
           "clockObjectId"
         ],
         "propertyNames": [
@@ -17941,6 +20030,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -17948,6 +20038,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -18016,12 +20107,12 @@
         "schemaRef": "#/components/schemas/DisputeFallbackResolveRequest",
         "schemaName": "DisputeFallbackResolveRequest",
         "requiredFields": [
-          "arbCapObjectId",
-          "bondObjectId",
-          "reviewerRegistryObjectId",
-          "disputeQuorumConfigObjectId"
+          "arbCapObjectId"
         ],
         "optionalFields": [
+          "bondObjectId",
+          "reviewerRegistryObjectId",
+          "disputeQuorumConfigObjectId",
           "clockObjectId"
         ],
         "propertyNames": [
@@ -18039,6 +20130,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -18046,6 +20138,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -18110,15 +20203,14 @@
         "header": []
       },
       "requestBody": {
-        "required": true,
+        "required": false,
         "schemaRef": "#/components/schemas/DisputeTimeoutFallbackRequest",
         "schemaName": "DisputeTimeoutFallbackRequest",
-        "requiredFields": [
+        "requiredFields": [],
+        "optionalFields": [
           "bondObjectId",
           "reviewerRegistryObjectId",
-          "disputeQuorumConfigObjectId"
-        ],
-        "optionalFields": [
+          "disputeQuorumConfigObjectId",
           "clockObjectId"
         ],
         "propertyNames": [
@@ -18135,6 +20227,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -18142,6 +20235,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -18210,10 +20304,11 @@
         "schemaRef": "#/components/schemas/DisputeResolveEscrowWithTicketRequest",
         "schemaName": "DisputeResolveEscrowWithTicketRequest",
         "requiredFields": [
-          "escrowObjectId",
           "quorumResolutionTicketObjectId"
         ],
-        "optionalFields": [],
+        "optionalFields": [
+          "escrowObjectId"
+        ],
         "propertyNames": [
           "escrowObjectId",
           "quorumResolutionTicketObjectId"
@@ -18226,6 +20321,7 @@
           "schemaRef": "#/components/schemas/TxPlanResponse",
           "schemaName": "TxPlanResponse",
           "requiredFields": [
+            "status",
             "txBuilder",
             "request"
           ],
@@ -18233,6 +20329,7 @@
             "txMoveCall"
           ],
           "propertyNames": [
+            "status",
             "txBuilder",
             "request",
             "txMoveCall"
@@ -18267,6 +20364,19 @@
         "403": {
           "status": "403",
           "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ErrorResponse",
           "schemaName": "ErrorResponse",
           "requiredFields": [
@@ -21001,6 +23111,282 @@
           ]
         }
       }
+    },
+    "buildReviewerSelectionShortlist": {
+      "path": "/admin/reviewer-selection/shortlist",
+      "method": "post",
+      "tags": [
+        "Admin",
+        "Disputes"
+      ],
+      "parameters": {
+        "path": [],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/ReviewerSelectionShortlistRequest",
+        "schemaName": "ReviewerSelectionShortlistRequest",
+        "requiredFields": [
+          "scope",
+          "checkpointDigest"
+        ],
+        "optionalFields": [
+          "reviewerCount",
+          "directoryScanLimit",
+          "orderId",
+          "milestoneId",
+          "disputeCaseObjectId",
+          "buyerAddress",
+          "sellerAddress",
+          "excludedReviewerAddresses",
+          "blockedReviewerAddresses",
+          "minPerformanceScore",
+          "minReputationScore",
+          "minReputationConfidence",
+          "allowNewReviewers",
+          "minDecisionsTotal",
+          "maxNoshowCount",
+          "maxCommitRevealFailures"
+        ],
+        "propertyNames": [
+          "scope",
+          "reviewerCount",
+          "directoryScanLimit",
+          "checkpointDigest",
+          "orderId",
+          "milestoneId",
+          "disputeCaseObjectId",
+          "buyerAddress",
+          "sellerAddress",
+          "excludedReviewerAddresses",
+          "blockedReviewerAddresses",
+          "minPerformanceScore",
+          "minReputationScore",
+          "minReputationConfidence",
+          "allowNewReviewers",
+          "minDecisionsTotal",
+          "maxNoshowCount",
+          "maxCommitRevealFailures"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ReviewerSelectionShortlistResponse",
+          "schemaName": "ReviewerSelectionShortlistResponse",
+          "requiredFields": [
+            "receipt",
+            "selectionComplete",
+            "directoryScanTruncated",
+            "publishTarget"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "receipt",
+            "selectionComplete",
+            "directoryScanTruncated",
+            "publishTarget"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "getReviewerSelectionReceipt": {
+      "path": "/admin/reviewer-selection-receipts/{receiptId}",
+      "method": "get",
+      "tags": [
+        "Admin",
+        "Disputes"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "receiptId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ReviewerSelectionReceipt",
+          "schemaName": "ReviewerSelectionReceipt",
+          "requiredFields": [],
+          "optionalFields": [
+            "id",
+            "scope",
+            "disputeCaseObjectId",
+            "orderId",
+            "milestoneId",
+            "buyerAddress",
+            "sellerAddress",
+            "assignmentRound",
+            "reviewerCountRequested",
+            "reviewerCountSelected",
+            "selectionPolicyVersion",
+            "checkpointDigest",
+            "checkpointSequenceNumber",
+            "checkpointTimestampMs",
+            "checkpointSource",
+            "seedHash",
+            "candidatePoolHash",
+            "shortlistHash",
+            "receiptHash",
+            "directoryScanTruncated",
+            "shortlistedReviewerAddresses",
+            "blockedReviewerAddresses",
+            "excludedReviewerAddresses",
+            "candidatePool",
+            "createdByActorAddress",
+            "activatedAt",
+            "activatedByActorAddress",
+            "activationTxDigest",
+            "createdAt"
+          ],
+          "propertyNames": [
+            "id",
+            "scope",
+            "disputeCaseObjectId",
+            "orderId",
+            "milestoneId",
+            "buyerAddress",
+            "sellerAddress",
+            "assignmentRound",
+            "reviewerCountRequested",
+            "reviewerCountSelected",
+            "selectionPolicyVersion",
+            "checkpointDigest",
+            "checkpointSequenceNumber",
+            "checkpointTimestampMs",
+            "checkpointSource",
+            "seedHash",
+            "candidatePoolHash",
+            "shortlistHash",
+            "receiptHash",
+            "directoryScanTruncated",
+            "shortlistedReviewerAddresses",
+            "blockedReviewerAddresses",
+            "excludedReviewerAddresses",
+            "candidatePool",
+            "createdByActorAddress",
+            "activatedAt",
+            "activatedByActorAddress",
+            "activationTxDigest",
+            "createdAt"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
     }
   },
   "reusableResponses": {
@@ -21301,6 +23687,7 @@
         "title",
         "description",
         "category",
+        "promotionPolicy",
         "currency",
         "budgetAmount",
         "expiresAtMs",
@@ -21319,6 +23706,7 @@
       "optionalFields": [
         "description",
         "category",
+        "promotionPolicy",
         "expiresAtMs",
         "communicationPolicy",
         "listingDepositObjectId",
@@ -21346,6 +23734,12 @@
     },
     "ListingCategory": {
       "name": "ListingCategory",
+      "propertyNames": [],
+      "requiredFields": [],
+      "optionalFields": []
+    },
+    "ListingPromotionPolicy": {
+      "name": "ListingPromotionPolicy",
       "propertyNames": [],
       "requiredFields": [],
       "optionalFields": []
@@ -22066,6 +24460,57 @@
         "clockObjectId"
       ]
     },
+    "ReviewerUpdateRequest": {
+      "name": "ReviewerUpdateRequest",
+      "propertyNames": [
+        "reviewerRegistryObjectId",
+        "reviewerEntryObjectId",
+        "transportType",
+        "transportPubkeyHex",
+        "minCaseRewardIota",
+        "active",
+        "clockObjectId"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "reviewerRegistryObjectId",
+        "reviewerEntryObjectId",
+        "transportType",
+        "transportPubkeyHex",
+        "minCaseRewardIota",
+        "active",
+        "clockObjectId"
+      ]
+    },
+    "ReviewerDeregisterRequest": {
+      "name": "ReviewerDeregisterRequest",
+      "propertyNames": [
+        "reviewerRegistryObjectId",
+        "reviewerEntryObjectId"
+      ],
+      "requiredFields": [
+        "reviewerRegistryObjectId",
+        "reviewerEntryObjectId"
+      ],
+      "optionalFields": []
+    },
+    "ReviewerClaimMetricsRequest": {
+      "name": "ReviewerClaimMetricsRequest",
+      "propertyNames": [
+        "disputeCaseObjectId",
+        "reviewerRegistryObjectId",
+        "reviewerEntryObjectId",
+        "disputeQuorumConfigObjectId"
+      ],
+      "requiredFields": [
+        "disputeCaseObjectId"
+      ],
+      "optionalFields": [
+        "reviewerRegistryObjectId",
+        "reviewerEntryObjectId",
+        "disputeQuorumConfigObjectId"
+      ]
+    },
     "DisputeBondFundRequest": {
       "name": "DisputeBondFundRequest",
       "propertyNames": [
@@ -22112,13 +24557,17 @@
       "propertyNames": [
         "escrowObjectId",
         "bondObjectId",
+        "invitedReviewerAddresses",
+        "reviewerSelectionReceiptId",
         "clockObjectId"
       ],
       "requiredFields": [
         "escrowObjectId",
-        "bondObjectId"
+        "bondObjectId",
+        "invitedReviewerAddresses"
       ],
       "optionalFields": [
+        "reviewerSelectionReceiptId",
         "clockObjectId"
       ]
     },
@@ -22148,10 +24597,10 @@
         "clockObjectId"
       ],
       "requiredFields": [
-        "reviewerEntryObjectId",
         "commitHashHex"
       ],
       "optionalFields": [
+        "reviewerEntryObjectId",
         "clockObjectId"
       ]
     },
@@ -22165,11 +24614,11 @@
         "clockObjectId"
       ],
       "requiredFields": [
-        "reviewerEntryObjectId",
         "vote",
         "nonceHex"
       ],
       "optionalFields": [
+        "reviewerEntryObjectId",
         "evidenceHashHex",
         "clockObjectId"
       ]
@@ -22178,12 +24627,16 @@
       "name": "DisputeReplaceReviewersRequest",
       "propertyNames": [
         "reviewerRegistryObjectId",
+        "invitedReviewerAddresses",
+        "reviewerSelectionReceiptId",
         "clockObjectId"
       ],
       "requiredFields": [
-        "reviewerRegistryObjectId"
+        "reviewerRegistryObjectId",
+        "invitedReviewerAddresses"
       ],
       "optionalFields": [
+        "reviewerSelectionReceiptId",
         "clockObjectId"
       ]
     },
@@ -22195,12 +24648,11 @@
         "disputeQuorumConfigObjectId",
         "clockObjectId"
       ],
-      "requiredFields": [
+      "requiredFields": [],
+      "optionalFields": [
         "bondObjectId",
         "reviewerRegistryObjectId",
-        "disputeQuorumConfigObjectId"
-      ],
-      "optionalFields": [
+        "disputeQuorumConfigObjectId",
         "clockObjectId"
       ]
     },
@@ -22212,12 +24664,11 @@
         "disputeQuorumConfigObjectId",
         "clockObjectId"
       ],
-      "requiredFields": [
+      "requiredFields": [],
+      "optionalFields": [
         "bondObjectId",
         "reviewerRegistryObjectId",
-        "disputeQuorumConfigObjectId"
-      ],
-      "optionalFields": [
+        "disputeQuorumConfigObjectId",
         "clockObjectId"
       ]
     },
@@ -22231,12 +24682,12 @@
         "clockObjectId"
       ],
       "requiredFields": [
-        "arbCapObjectId",
-        "bondObjectId",
-        "reviewerRegistryObjectId",
-        "disputeQuorumConfigObjectId"
+        "arbCapObjectId"
       ],
       "optionalFields": [
+        "bondObjectId",
+        "reviewerRegistryObjectId",
+        "disputeQuorumConfigObjectId",
         "clockObjectId"
       ]
     },
@@ -22247,10 +24698,11 @@
         "quorumResolutionTicketObjectId"
       ],
       "requiredFields": [
-        "escrowObjectId",
         "quorumResolutionTicketObjectId"
       ],
-      "optionalFields": []
+      "optionalFields": [
+        "escrowObjectId"
+      ]
     },
     "TxMoveCallSummary": {
       "name": "TxMoveCallSummary",
@@ -22269,17 +24721,524 @@
     "TxPlanResponse": {
       "name": "TxPlanResponse",
       "propertyNames": [
+        "status",
         "txBuilder",
         "request",
         "txMoveCall"
       ],
       "requiredFields": [
+        "status",
         "txBuilder",
         "request"
       ],
       "optionalFields": [
         "txMoveCall"
       ]
+    },
+    "ReviewerSummary": {
+      "name": "ReviewerSummary",
+      "propertyNames": [
+        "objectId",
+        "type",
+        "owner",
+        "reputationProfileId",
+        "active",
+        "transportType",
+        "transportPubkeyHex",
+        "minCaseRewardIota",
+        "joinedAtMs",
+        "updatedAtMs",
+        "stakeLocked",
+        "effectiveStakeLocked",
+        "performanceScore",
+        "decisionsTotal",
+        "decisionsMajority",
+        "decisionsOverturned",
+        "commitRevealFailures",
+        "noshowCount",
+        "pendingDecisionMetricsClaimRequired",
+        "pendingReviewerOutcome"
+      ],
+      "requiredFields": [
+        "objectId",
+        "type",
+        "owner",
+        "active"
+      ],
+      "optionalFields": [
+        "reputationProfileId",
+        "transportType",
+        "transportPubkeyHex",
+        "minCaseRewardIota",
+        "joinedAtMs",
+        "updatedAtMs",
+        "stakeLocked",
+        "effectiveStakeLocked",
+        "performanceScore",
+        "decisionsTotal",
+        "decisionsMajority",
+        "decisionsOverturned",
+        "commitRevealFailures",
+        "noshowCount",
+        "pendingDecisionMetricsClaimRequired",
+        "pendingReviewerOutcome"
+      ]
+    },
+    "PendingReviewerOutcomeSummary": {
+      "name": "PendingReviewerOutcomeSummary",
+      "propertyNames": [
+        "pendingDecisionsTotal",
+        "pendingDecisionsMajority",
+        "pendingDecisionsOverturned",
+        "pendingCommitRevealFailures",
+        "pendingNoshowCount",
+        "pendingSlashCount",
+        "pendingSlashBpsTotal",
+        "effectiveStakeLocked"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "pendingDecisionsTotal",
+        "pendingDecisionsMajority",
+        "pendingDecisionsOverturned",
+        "pendingCommitRevealFailures",
+        "pendingNoshowCount",
+        "pendingSlashCount",
+        "pendingSlashBpsTotal",
+        "effectiveStakeLocked"
+      ]
+    },
+    "ReviewerPage": {
+      "name": "ReviewerPage",
+      "propertyNames": [
+        "limit",
+        "hasNextPage",
+        "nextCursor"
+      ],
+      "requiredFields": [
+        "limit",
+        "hasNextPage"
+      ],
+      "optionalFields": [
+        "nextCursor"
+      ]
+    },
+    "ReviewerInviteSource": {
+      "name": "ReviewerInviteSource",
+      "propertyNames": [
+        "mode",
+        "receiptId",
+        "txDigest",
+        "eventSeq",
+        "type"
+      ],
+      "requiredFields": [
+        "mode",
+        "type"
+      ],
+      "optionalFields": [
+        "receiptId",
+        "txDigest",
+        "eventSeq"
+      ]
+    },
+    "ReviewerInviteCaseSummary": {
+      "name": "ReviewerInviteCaseSummary",
+      "propertyNames": [
+        "orderId",
+        "milestoneId",
+        "buyerAddress",
+        "sellerAddress",
+        "state",
+        "requiredReviewerVotes",
+        "requiredReviewerVotesFloor",
+        "currentAssignmentRound",
+        "acceptDeadlineMs",
+        "commitDeadlineMs",
+        "revealDeadlineMs",
+        "challengeDeadlineMs",
+        "hardTimeoutMs",
+        "fallbackEligibleAtMs",
+        "closedAtMs",
+        "bondObjectId",
+        "escrowObjectId",
+        "inviteSourceMode",
+        "invitedReviewerAddresses"
+      ],
+      "requiredFields": [
+        "orderId",
+        "milestoneId"
+      ],
+      "optionalFields": [
+        "buyerAddress",
+        "sellerAddress",
+        "state",
+        "requiredReviewerVotes",
+        "requiredReviewerVotesFloor",
+        "currentAssignmentRound",
+        "acceptDeadlineMs",
+        "commitDeadlineMs",
+        "revealDeadlineMs",
+        "challengeDeadlineMs",
+        "hardTimeoutMs",
+        "fallbackEligibleAtMs",
+        "closedAtMs",
+        "bondObjectId",
+        "escrowObjectId",
+        "inviteSourceMode",
+        "invitedReviewerAddresses"
+      ]
+    },
+    "ReviewerInviteFetchError": {
+      "name": "ReviewerInviteFetchError",
+      "propertyNames": [
+        "error",
+        "detail"
+      ],
+      "requiredFields": [
+        "error"
+      ],
+      "optionalFields": [
+        "detail"
+      ]
+    },
+    "ReviewerInviteSummary": {
+      "name": "ReviewerInviteSummary",
+      "propertyNames": [
+        "disputeCaseObjectId",
+        "reviewerAddress",
+        "assignmentRound",
+        "invitedAtMs",
+        "status",
+        "actorCanAccept",
+        "source",
+        "disputeCase",
+        "fetchError"
+      ],
+      "requiredFields": [
+        "disputeCaseObjectId",
+        "reviewerAddress",
+        "assignmentRound",
+        "invitedAtMs",
+        "status",
+        "actorCanAccept",
+        "source"
+      ],
+      "optionalFields": [
+        "disputeCase",
+        "fetchError"
+      ]
+    },
+    "ReviewerSelfMetrics": {
+      "name": "ReviewerSelfMetrics",
+      "propertyNames": [
+        "performanceScore",
+        "decisionsTotal",
+        "decisionsMajority",
+        "decisionsOverturned",
+        "commitRevealFailures",
+        "noshowCount",
+        "stakeLocked",
+        "effectiveStakeLocked",
+        "pendingDecisionMetricsClaimRequired",
+        "pendingReviewerOutcome",
+        "joinedAtMs",
+        "updatedAtMs"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "performanceScore",
+        "decisionsTotal",
+        "decisionsMajority",
+        "decisionsOverturned",
+        "commitRevealFailures",
+        "noshowCount",
+        "stakeLocked",
+        "effectiveStakeLocked",
+        "pendingDecisionMetricsClaimRequired",
+        "pendingReviewerOutcome",
+        "joinedAtMs",
+        "updatedAtMs"
+      ]
+    },
+    "ReviewerSelfMetricsResponse": {
+      "name": "ReviewerSelfMetricsResponse",
+      "propertyNames": [
+        "reviewerAddress",
+        "registered",
+        "reviewer",
+        "reputationProfileObjectId",
+        "disputeQuorumConfigObjectId",
+        "reviewerRegistryObjectId",
+        "runtime",
+        "metrics"
+      ],
+      "requiredFields": [
+        "reviewerAddress",
+        "registered"
+      ],
+      "optionalFields": [
+        "reviewer",
+        "reputationProfileObjectId",
+        "disputeQuorumConfigObjectId",
+        "reviewerRegistryObjectId",
+        "runtime",
+        "metrics"
+      ]
+    },
+    "ReviewerRuntimeSummary": {
+      "name": "ReviewerRuntimeSummary",
+      "propertyNames": [
+        "marketplacePackageId",
+        "disputeQuorumConfigObjectId",
+        "reviewerRegistryObjectId",
+        "reviewerMinStakeIota"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "marketplacePackageId",
+        "disputeQuorumConfigObjectId",
+        "reviewerRegistryObjectId",
+        "reviewerMinStakeIota"
+      ]
+    },
+    "ReviewerPendingMetricsClaimRequiredResponse": {
+      "name": "ReviewerPendingMetricsClaimRequiredResponse",
+      "propertyNames": [
+        "error",
+        "reviewerAddress",
+        "reviewerEntryObjectId",
+        "effectiveStakeLocked",
+        "pendingReviewerOutcome",
+        "nextStep"
+      ],
+      "requiredFields": [
+        "error",
+        "reviewerAddress",
+        "reviewerEntryObjectId",
+        "nextStep"
+      ],
+      "optionalFields": [
+        "effectiveStakeLocked",
+        "pendingReviewerOutcome"
+      ]
+    },
+    "ReviewerStakeBelowMinimumResponse": {
+      "name": "ReviewerStakeBelowMinimumResponse",
+      "propertyNames": [
+        "error",
+        "reviewerAddress",
+        "reviewerEntryObjectId",
+        "effectiveStakeLocked",
+        "reviewerMinStakeIota"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "error",
+        "reviewerAddress",
+        "reviewerEntryObjectId",
+        "effectiveStakeLocked",
+        "reviewerMinStakeIota"
+      ]
+    },
+    "ReviewerSelectionShortlistRequest": {
+      "name": "ReviewerSelectionShortlistRequest",
+      "propertyNames": [
+        "scope",
+        "reviewerCount",
+        "directoryScanLimit",
+        "checkpointDigest",
+        "orderId",
+        "milestoneId",
+        "disputeCaseObjectId",
+        "buyerAddress",
+        "sellerAddress",
+        "excludedReviewerAddresses",
+        "blockedReviewerAddresses",
+        "minPerformanceScore",
+        "minReputationScore",
+        "minReputationConfidence",
+        "allowNewReviewers",
+        "minDecisionsTotal",
+        "maxNoshowCount",
+        "maxCommitRevealFailures"
+      ],
+      "requiredFields": [
+        "scope",
+        "checkpointDigest"
+      ],
+      "optionalFields": [
+        "reviewerCount",
+        "directoryScanLimit",
+        "orderId",
+        "milestoneId",
+        "disputeCaseObjectId",
+        "buyerAddress",
+        "sellerAddress",
+        "excludedReviewerAddresses",
+        "blockedReviewerAddresses",
+        "minPerformanceScore",
+        "minReputationScore",
+        "minReputationConfidence",
+        "allowNewReviewers",
+        "minDecisionsTotal",
+        "maxNoshowCount",
+        "maxCommitRevealFailures"
+      ]
+    },
+    "ReviewerSelectionCandidate": {
+      "name": "ReviewerSelectionCandidate",
+      "propertyNames": [
+        "reviewerAddress",
+        "reviewerObjectId",
+        "active",
+        "performanceScore",
+        "reputationScore",
+        "reputationConfidence",
+        "reputationLevel",
+        "decisionsTotal",
+        "decisionsMajority",
+        "decisionsOverturned",
+        "commitRevealFailures",
+        "noshowCount",
+        "stakeLocked",
+        "effectiveStakeLocked",
+        "pendingDecisionMetricsClaimRequired",
+        "pendingReviewerOutcome",
+        "minCaseRewardIota",
+        "transportType",
+        "transportPubkeyHex",
+        "joinedAtMs",
+        "updatedAtMs",
+        "exclusionReasons",
+        "eligible",
+        "selectionScore",
+        "selectionSignals",
+        "computedWeight"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "reviewerAddress",
+        "reviewerObjectId",
+        "active",
+        "performanceScore",
+        "reputationScore",
+        "reputationConfidence",
+        "reputationLevel",
+        "decisionsTotal",
+        "decisionsMajority",
+        "decisionsOverturned",
+        "commitRevealFailures",
+        "noshowCount",
+        "stakeLocked",
+        "effectiveStakeLocked",
+        "pendingDecisionMetricsClaimRequired",
+        "pendingReviewerOutcome",
+        "minCaseRewardIota",
+        "transportType",
+        "transportPubkeyHex",
+        "joinedAtMs",
+        "updatedAtMs",
+        "exclusionReasons",
+        "eligible",
+        "selectionScore",
+        "selectionSignals",
+        "computedWeight"
+      ]
+    },
+    "ReviewerSelectionReceipt": {
+      "name": "ReviewerSelectionReceipt",
+      "propertyNames": [
+        "id",
+        "scope",
+        "disputeCaseObjectId",
+        "orderId",
+        "milestoneId",
+        "buyerAddress",
+        "sellerAddress",
+        "assignmentRound",
+        "reviewerCountRequested",
+        "reviewerCountSelected",
+        "selectionPolicyVersion",
+        "checkpointDigest",
+        "checkpointSequenceNumber",
+        "checkpointTimestampMs",
+        "checkpointSource",
+        "seedHash",
+        "candidatePoolHash",
+        "shortlistHash",
+        "receiptHash",
+        "directoryScanTruncated",
+        "shortlistedReviewerAddresses",
+        "blockedReviewerAddresses",
+        "excludedReviewerAddresses",
+        "candidatePool",
+        "createdByActorAddress",
+        "activatedAt",
+        "activatedByActorAddress",
+        "activationTxDigest",
+        "createdAt"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "id",
+        "scope",
+        "disputeCaseObjectId",
+        "orderId",
+        "milestoneId",
+        "buyerAddress",
+        "sellerAddress",
+        "assignmentRound",
+        "reviewerCountRequested",
+        "reviewerCountSelected",
+        "selectionPolicyVersion",
+        "checkpointDigest",
+        "checkpointSequenceNumber",
+        "checkpointTimestampMs",
+        "checkpointSource",
+        "seedHash",
+        "candidatePoolHash",
+        "shortlistHash",
+        "receiptHash",
+        "directoryScanTruncated",
+        "shortlistedReviewerAddresses",
+        "blockedReviewerAddresses",
+        "excludedReviewerAddresses",
+        "candidatePool",
+        "createdByActorAddress",
+        "activatedAt",
+        "activatedByActorAddress",
+        "activationTxDigest",
+        "createdAt"
+      ]
+    },
+    "ReviewerSelectionReceiptBindRequest": {
+      "name": "ReviewerSelectionReceiptBindRequest",
+      "propertyNames": [
+        "disputeCaseObjectId",
+        "activationTxDigest"
+      ],
+      "requiredFields": [
+        "disputeCaseObjectId",
+        "activationTxDigest"
+      ],
+      "optionalFields": []
+    },
+    "ReviewerSelectionShortlistResponse": {
+      "name": "ReviewerSelectionShortlistResponse",
+      "propertyNames": [
+        "receipt",
+        "selectionComplete",
+        "directoryScanTruncated",
+        "publishTarget"
+      ],
+      "requiredFields": [
+        "receipt",
+        "selectionComplete",
+        "directoryScanTruncated",
+        "publishTarget"
+      ],
+      "optionalFields": []
     },
     "DisputeCaseSnapshot": {
       "name": "DisputeCaseSnapshot",
@@ -22298,6 +25257,9 @@
         "requiredReviewerVotes",
         "requiredReviewerVotesFloor",
         "assignmentRound",
+        "invitedReviewers",
+        "assignedReviewers",
+        "blockedReviewers",
         "votesYes",
         "votesNo",
         "openedAtMs",
@@ -22326,6 +25288,9 @@
         "requiredReviewerVotes",
         "requiredReviewerVotesFloor",
         "assignmentRound",
+        "invitedReviewers",
+        "assignedReviewers",
+        "blockedReviewers",
         "votesYes",
         "votesNo",
         "openedAtMs",
@@ -22662,6 +25627,7 @@
         "title",
         "description",
         "category",
+        "promotionPolicy",
         "currency",
         "budgetAmount",
         "milestones",
@@ -22687,6 +25653,7 @@
       ],
       "optionalFields": [
         "category",
+        "promotionPolicy",
         "communicationPolicy",
         "listingDepositObjectId",
         "listingDepositTxDigest",
@@ -22694,6 +25661,24 @@
         "creatorReputation",
         "expiresAt"
       ]
+    },
+    "OperationalWarning": {
+      "name": "OperationalWarning",
+      "propertyNames": [
+        "code",
+        "severity",
+        "actorAddress",
+        "relevantEventTypes",
+        "message"
+      ],
+      "requiredFields": [
+        "code",
+        "severity",
+        "actorAddress",
+        "relevantEventTypes",
+        "message"
+      ],
+      "optionalFields": []
     },
     "BidStatus": {
       "name": "BidStatus",
@@ -23416,6 +26401,7 @@
       "name": "FeePolicy",
       "propertyNames": [
         "version",
+        "chainConfig",
         "escrowFeeBps",
         "listingFee",
         "listingDeposit",
@@ -23423,6 +26409,7 @@
       ],
       "requiredFields": [
         "version",
+        "chainConfig",
         "escrowFeeBps",
         "listingFee",
         "listingDeposit",

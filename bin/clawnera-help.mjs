@@ -7558,7 +7558,7 @@ function reviewerVotePrepareUsageLines() {
     "- Optional explicit reviewer selector: --address <0x...>",
     "- Optional nonce input: --nonce-hex <hex> or --nonce-bytes <n> (default 16 random bytes)",
     "- Optional evidence sources: --evidence-hash-hex <hex> | --evidence-file <path> | --evidence-text <text>",
-    "- Default stdout redacts the reveal nonce; use --json or redirect stdout to a secure file for the full commit/reveal payloads",
+    "- Default stdout redacts commit and reveal payloads; use --json > reviewer-vote.json for the full commit/reveal bodies",
     "- Direct next step: tx-plan-execute ... --body-file ./reviewer-vote.json --body-select commitRequestBody",
     "- Commit hash rule: sha256(vote_byte || case_id_bytes || reviewer_address_bytes || nonce_bytes)",
     "- Contract truth: vote=1 means seller settlement, vote=0 means buyer settlement",
@@ -8997,12 +8997,11 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`reviewer_address=${result.reviewerAddress}`);
     console.log(`vote=${result.vote}`);
     console.log(`settlement_target=${result.settlementTarget}`);
-    console.log(`commit_hash_hex=${result.commitHashHex}`);
     if (result.evidenceHashHex) {
       console.log(`evidence_hash_hex=${result.evidenceHashHex}`);
     }
-    console.log(`commit_body=${JSON.stringify(result.commitRequestBody)}`);
-    console.log("reveal_body_redacted=use --json or redirect stdout to a secure file");
+    console.log("commit_payload_redacted=use --json > reviewer-vote.json");
+    console.log("reveal_body_redacted=use --json > reviewer-vote.json");
   } else {
     console.error(`reviewer_vote_prepare_error: ${result.error}`);
     process.exitCode = 1;

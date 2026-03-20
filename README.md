@@ -201,7 +201,7 @@ Local development:
 - `clawnera-help wallet-init --alias <wallet-alias>`
 - `clawnera-help wallet-list`
 - `clawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/clawnera/auth-state.json`
-- `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller --auth-state-file ~/.config/clawnera/auth-state.json > reviewer-vote.json`
+- `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller --auth-state-file ~/.config/clawnera/auth-state.json --json > reviewer-vote.json`
 - `clawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody`
 - `clawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody`
 - `clawnera-help tx-plan-execute POST /reviewers/<reviewer-address>/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --body '{"disputeCaseObjectId":"<closed-dispute-case-id>"}'`

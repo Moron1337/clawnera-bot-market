@@ -263,7 +263,7 @@ Hinweis:
      `GET /reviewers/me/metrics` and run
      `POST /reviewers/{reviewerAddress}/claim-metrics` before retrying accept
    - prepare once and reuse the saved file:
-     - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json > reviewer-vote.json`
+     - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json --json > reviewer-vote.json`
    - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/commit --body-file reviewer-vote.json --body-select commitRequestBody`
    - wait until `commitDeadlineMs`
    - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/reveal --body-file reviewer-vote.json --body-select revealRequestBody`

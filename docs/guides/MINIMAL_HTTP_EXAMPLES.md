@@ -207,6 +207,7 @@ clawnera-help reviewer-vote-prepare \
   --case-id <dispute-case-id> \
   --vote seller \
   --auth-state-file ~/.config/clawnera/auth-state.json \
+  --json \
   > reviewer-vote.json
 
 clawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/commit \

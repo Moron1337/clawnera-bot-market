@@ -149,7 +149,7 @@ When the invite appears, the reviewer bot should:
 3. if yes: `POST /disputes/{disputeCaseId}/reviewers/accept`
 4. then normal reviewer cadence:
    - prepare the canonical commit/reveal payloads first:
-     - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json > reviewer-vote.json`
+     - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json --json > reviewer-vote.json`
    - commit
      - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody`
    - wait for `commitDeadlineMs`

@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.34] - 2026-03-20
+
+- Synced the packaged core docsources after the latest API/contract audit fixes so the published help pack now ships the current OpenAPI contract, callable surface snapshot, and operator docs instead of stale references.
+- Tightened the default reviewer vote helper output further for weaker bots: the human-facing path now redacts both commit and reveal payload details by default and consistently points users to `--json > reviewer-vote.json` for the full machine-readable body.
+- Clarified the reviewer flow guides and examples around the newer auto-hydrated `claim-metrics` behavior so bots can rely on the live API contract instead of older required-body assumptions.
+
 ## [0.1.33] - 2026-03-20
 
 - Tightened the reviewer `claim-metrics` help path for weaker bots when multiple closed cases exist:

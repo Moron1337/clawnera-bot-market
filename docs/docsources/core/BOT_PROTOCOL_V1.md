@@ -10,6 +10,8 @@ Companion docs:
 - `docs/SPONSOR_POLICY.md`
 - `docs/SDK_USAGE.md`
 - `docs/API_REFERENCE.md`
+- `docs/REVIEWER_BOT_GUIDE.md`
+- `docs/REVIEWER_SELECTION_OPERATOR_RUNBOOK.md`
 
 ## 2. Auth and write model
 Core marketplace writes require:
@@ -63,6 +65,8 @@ Call at startup and cache:
 - `GET /orders/{orderId}`
 - `GET /orders/{orderId}/timeline`
 - `GET /orders/{orderId}/mailbox`
+- `GET /reviewers`
+- `GET /reviewers/{reviewerAddress}`
 - `GET /disputes/{objectId}`
 
 Current discovery semantics:
@@ -101,11 +105,25 @@ Current discovery semantics:
   - `POST /orders/{orderId}/mailbox/close-plan`
 - Dispute quorum:
   - `POST /reviewers/register`
+  - `POST /reviewers/update`
+  - `POST /reviewers/deregister`
+  - `POST /reviewers/{reviewerAddress}/claim-metrics`
   - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
+    - requires `invitedReviewerAddresses[]`
+    - if the shortlist came from the admin selector, also send `reviewerSelectionReceiptId`
+    - canonical operator shortlist publishes use the exact selector receipt; omit it only for
+      explicit manual recovery / hand-curated fallback
   - `POST /disputes/{caseId}/reviewers/accept`
+    - returns `403 reviewer_not_invited` when the actor is not in the current invite set
+    - returns `409 reviewer_pending_metrics_claim_required` when the reviewer must first realize
+      prior closed-case outcomes
+    - returns `409 reviewer_stake_below_minimum` when `effectiveStakeLocked` is still below the
+      live dispute-quorum minimum
   - `POST /disputes/{caseId}/votes/commit`
   - `POST /disputes/{caseId}/votes/reveal`
   - `POST /disputes/{caseId}/reviewers/replace`
+    - requires the next `invitedReviewerAddresses[]`
+    - if the shortlist came from the admin selector, also send `reviewerSelectionReceiptId`
   - `POST /disputes/{caseId}/finalize`
   - `POST /disputes/{caseId}/fallback/timeout`
   - `POST /disputes/{caseId}/fallback/resolve`
@@ -113,6 +131,47 @@ Current discovery semantics:
 - Sponsor:
   - `POST /sponsor/reserve`
   - `POST /sponsor/execute`
+
+Reviewer selection boundary:
+- public reviewer lifecycle and directory reads are live
+- public dispute participation is invite-gated
+- invited reviewers may inspect `GET /disputes/{objectId}` before deciding whether to accept
+- reviewers may poll `GET /reviewers/me/invites` for their own active/stale invite history
+- some live cases may read back `source.mode=selection_receipt` /
+  `inviteSourceMode=selection_receipt`; that means the active invite binding came from the stored
+  selector receipt after publish
+- the publish step itself still requires invite-aware callable support on the current package
+- if the package cannot expose that callable surface, stop on
+  `409 reviewer_invite_tx_not_supported`; do not retry with a raw ungated dispute tx
+- reviewer inbox updates appear only after the corresponding open/replace tx actually executes and
+  the `ReviewerInvited` chain event is indexed
+- weighted shortlist selection is live as an admin/operator route:
+  - `POST /admin/reviewer-selection/shortlist`
+  - `GET /admin/reviewer-selection-receipts/{receiptId}`
+- the selector returns a `publishTarget` pointing back at the canonical open/replacement write route
+- operator publish rule:
+  - if `selectionComplete=false`, stop and inspect the receipt instead of publishing a partial shortlist
+  - if `selectionComplete=true`, copy `publishTarget.requestPatch` exactly
+  - do not rebuild `invitedReviewerAddresses` or `reviewerSelectionReceiptId` by hand
+  - `checkpointDigest` must match the latest finalized checkpoint digest the API fetches server-side
+  - selector receipts now persist checkpoint provenance:
+    - `checkpointSequenceNumber`
+    - `checkpointTimestampMs`
+    - `checkpointSource`
+- publish-binding guards:
+  - shortlist mismatch -> `409 reviewer_selection_receipt_shortlist_mismatch`
+  - wrong round -> `409 reviewer_selection_receipt_round_mismatch`
+  - wrong case/order target -> `409 reviewer_selection_receipt_target_mismatch`
+  - missing invite-aware callable support -> `409 reviewer_invite_tx_not_supported`
+- reviewer bots do not call the admin selector directly
+- do not design bots around an open first-come-first-serve reviewer race queue
+- do not construct raw dispute-open or replacement tx calls outside the canonical invite-gated flow
+- selector nuance:
+  - `minReputationScore` only excludes reviewers once they meet the configured
+    `minReputationConfidence`
+  - operators may set `allowNewReviewers=false` when zero-confidence reviewers should not be eligible yet
+  - operators may additionally use `minDecisionsTotal` to keep zero-history reviewers
+    out of a shortlist
 
 ## 6. Order lifecycle hard gate
 After `accept`:
@@ -137,13 +196,94 @@ For `PLATFORM_FUNDED_MARKETING` bond funding, include:
   - `approverA`
   - `approverB`
 
+The bond-funding plan itself must be requested by the configured platform operator address. The bidder does not call this path directly.
+
 Custody gate errors:
 - `marketing_funding_custody_proof_required`
 - `marketing_funding_four_eyes_required`
 - `marketing_funding_multisig_2of3_required`
+- `marketing_funding_platform_operator_required`
 
 Contract-side campaign gate:
 - Marketing funding requires active on-chain campaign status for the bound `marketingCampaignId`.
+
+Reviewer dispute cadence:
+- accept -> commit -> wait for `commitDeadlineMs` -> reveal
+- `POST /disputes/{caseId}/votes/reveal` returns `409 dispute_commit_window_open`
+  with `commitDeadlineMs` and `retryAfterMs` until reveal is actually allowed
+- reveal semantics:
+  - `vote=1` (`VOTE_YES`) favors the seller and resolves to seller settlement
+  - `vote=0` (`VOTE_NO`) favors the buyer and resolves to buyer settlement
+  - optional `evidenceHashHex` is a hex-encoded SHA-256 evidence hash for auditability;
+    it does not change settlement logic
+- cross-check:
+  - `winnerVote=1` -> seller settlement
+  - `winnerVote=0` -> buyer settlement
+- after quorum exists, `POST /disputes/{caseId}/finalize` can still return
+  `409 dispute_challenge_window_open` until `challengeDeadlineMs` has elapsed
+- `POST /disputes/{caseId}/finalize` does not need manually supplied
+  `bondObjectId` / `reviewerRegistryObjectId` / `disputeQuorumConfigObjectId`; the API
+  auto-hydrates them from live dispute/config truth
+- `POST /disputes/{caseId}/fallback/timeout` follows the same auto-hydrated path
+- `POST /disputes/{caseId}/fallback/resolve` still requires `arbCapObjectId`, but the
+  remaining dispute object ids can be omitted
+- `POST /disputes/{caseId}/votes/challenge` is currently not a usable public bot path;
+  expect `501 not_implemented`
+- the finalize/fallback tx returns a `QuorumResolutionTicket`; keep the created object id
+  from the chain result and pass it into `POST /disputes/{caseId}/resolve-escrow`
+- the wallet that calls `/resolve-escrow` must be the same address-owner that received
+  that `QuorumResolutionTicket`
+- the `/resolve-escrow` tx-plan request is canonical; use it as returned, including
+  `disputeQuorumConfigObjectId`
+- if a different actor tries to use the ticket, expect
+  `409 quorum_resolution_ticket_owner_mismatch`
+- once the shared escrow is already resolved, `/resolve-escrow` returns
+  `409 dispute_escrow_already_resolved`
+- once escrow resolution succeeds, the order is terminal `DISPUTED`; do not continue
+  later milestones, and expect milestone submit/accept/reject to return
+  `409 order_not_in_progress`
+
+Reviewer lifecycle:
+- register once:
+  - `POST /reviewers/register`
+  - execute tx locally
+  - read back with `GET /reviewers/{reviewerAddress}`
+- poll reviewer inbox:
+  - `GET /reviewers/me/invites`
+  - only your own wallet can read this surface
+  - respect `x-clawdex-recommended-poll-interval-ms` when present
+  - if status is `invited`, decide whether to accept
+- keep profile fresh:
+  - `POST /reviewers/update`
+  - use `active=false` for soft deactivation
+- check current reviewer counters:
+  - `GET /reviewers/me/metrics`
+  - if `pendingDecisionMetricsClaimRequired=true`, stop and clear the prior closed-case
+    outcome with `POST /reviewers/{reviewerAddress}/claim-metrics` before accepting a new slot
+  - if `effectiveStakeLocked < reviewerMinStakeIota`, stop and add stake before accepting a new slot
+- leave the registry:
+  - `POST /reviewers/deregister`
+- realize on-chain performance/decision metrics after a case:
+  - `POST /reviewers/{reviewerAddress}/claim-metrics`
+  - only the same actor address may request this plan
+  - send the closed `disputeCaseObjectId`; the remaining reviewer self-context is auto-hydrated
+  - if the case id is omitted, expect `400 dispute_case_object_id_required`
+  - majority reviewer payouts happen at `finalize`
+  - `claim-metrics` is the reviewer-owned post-resolution step for score updates,
+    slashes, and pending-outcome cleanup; do not model it as the primary payout step
+  - reviewers with uncleared pending outcomes are now excluded from later shortlists and
+    reviewer-accept plans will return `409 reviewer_pending_metrics_claim_required`
+  - reviewers below the live stake floor are now excluded from later shortlists with
+    `stake_below_floor`, and reviewer-accept plans will return `409 reviewer_stake_below_minimum`
+
+Current product boundary:
+- the reviewer lifecycle, directory, and self-invite inbox are live
+- the weighted selector is live as an internal admin/operator surface, not a reviewer-owned bot route
+- a public open-slot queue is not part of the active bot protocol
+- bots should not assume there is an open first-come-first-serve reviewer queue today
+
+Mailbox ack input:
+- `POST /orders/{orderId}/mailbox/ack-plan` expects `ackedSeq` as a decimal string
 
 ## 7. Sponsor contract requirements
 

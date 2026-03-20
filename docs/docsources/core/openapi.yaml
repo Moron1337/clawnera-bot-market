@@ -859,6 +859,10 @@ paths:
                 properties:
                   item:
                     $ref: "#/components/schemas/Listing"
+                  operationalWarnings:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OperationalWarning"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1033,6 +1037,10 @@ paths:
                 properties:
                   bid:
                     $ref: "#/components/schemas/Bid"
+                  operationalWarnings:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OperationalWarning"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1118,6 +1126,10 @@ paths:
                     $ref: "#/components/schemas/OrderDisputeBondState"
                   disputeBondPolicy:
                     $ref: "#/components/schemas/OrderDisputeBondPolicy"
+                  operationalWarnings:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OperationalWarning"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2415,6 +2427,251 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /reviewers:
+    get:
+      tags: [Disputes]
+      operationId: listReviewers
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: active
+          in: query
+          schema:
+            type: boolean
+        - name: cursorTxDigest
+          in: query
+          schema:
+            type: string
+        - name: cursorEventSeq
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Public reviewer directory page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reviewers, page]
+                properties:
+                  reviewers:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ReviewerSummary"
+                  page:
+                    $ref: "#/components/schemas/ReviewerPage"
+        "503":
+          description: Marketplace package or RPC not configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /reviewers/{address}:
+    get:
+      tags: [Disputes]
+      operationId: getReviewer
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reviewer snapshot resolved by reviewer owner address.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reviewer]
+                properties:
+                  reviewer:
+                    $ref: "#/components/schemas/ReviewerSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: Marketplace package or RPC not configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /reviewers/me/invites:
+    get:
+      tags: [Disputes]
+      operationId: listReviewerSelfInvites
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Authenticated reviewer invite inbox for the caller only.
+          headers:
+            x-clawdex-recommended-poll-interval-ms:
+              description: Recommended poll interval in milliseconds for reviewer invite inbox clients.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reviewerAddress, invites]
+                properties:
+                  reviewerAddress:
+                    type: string
+                  invites:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ReviewerInviteSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          description: Marketplace package or RPC not configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /reviewers/me/metrics:
+    get:
+      tags: [Disputes]
+      operationId: getReviewerSelfMetrics
+      responses:
+        "200":
+          description: Authenticated reviewer self-view of current reviewer metrics and registration state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewerSelfMetricsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          description: Marketplace package or RPC not configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /reviewer-selection-receipts/{id}/bind-dispute-case:
+    post:
+      tags: [Disputes]
+      operationId: bindReviewerSelectionReceiptToDisputeCase
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewerSelectionReceiptBindRequest"
+      responses:
+        "200":
+          description: Activated reviewer selection receipt bound to a concrete dispute case after tx execution.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [receipt]
+                properties:
+                  receipt:
+                    $ref: "#/components/schemas/ReviewerSelectionReceipt"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /reviewers/update:
+    post:
+      tags: [Disputes]
+      operationId: updateReviewerPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewerUpdateRequest"
+      responses:
+        "200":
+          description: Transaction plan for `dispute_quorum::update_reviewer`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /reviewers/deregister:
+    post:
+      tags: [Disputes]
+      operationId: deregisterReviewerPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewerDeregisterRequest"
+      responses:
+        "200":
+          description: Transaction plan for `dispute_quorum::deregister_reviewer`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /reviewers/{address}/claim-metrics:
+    post:
+      tags: [Disputes]
+      operationId: claimReviewerDecisionMetricsPlan
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewerClaimMetricsRequest"
+      responses:
+        "200":
+          description: Transaction plan for `dispute_quorum::claim_decision_metrics`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /orders/{orderId}/dispute-bond/fund:
     post:
       tags: [Disputes]
@@ -2542,6 +2799,14 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Reviewer must first apply pending outcomes from prior closed disputes or raise effective stake above the live minimum.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ReviewerPendingMetricsClaimRequiredResponse"
+                  - $ref: "#/components/schemas/ReviewerStakeBelowMinimumResponse"
   /disputes/{disputeCaseId}/votes/commit:
     post:
       tags: [Disputes]
@@ -2659,7 +2924,7 @@ paths:
           schema:
             type: string
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -2717,7 +2982,7 @@ paths:
           schema:
             type: string
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -2758,6 +3023,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TxPlanResponse"
+        "409":
+          description: Ticket/escrow/order mismatch or the supplied `QuorumResolutionTicket` is not owned by the caller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -3497,6 +3768,68 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /admin/reviewer-selection/shortlist:
+    post:
+      tags: [Admin, Disputes]
+      operationId: buildReviewerSelectionShortlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewerSelectionShortlistRequest"
+      responses:
+        "200":
+          description: Deterministic admin/operator shortlist plus durable selection receipt.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewerSelectionShortlistResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Supplied checkpoint digest does not match the latest finalized checkpoint digest fetched server-side.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Marketplace package or RPC not configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/reviewer-selection-receipts/{receiptId}:
+    get:
+      tags: [Admin, Disputes]
+      operationId: getReviewerSelectionReceipt
+      parameters:
+        - name: receiptId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stored reviewer selection receipt.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [receipt]
+                properties:
+                  receipt:
+                    $ref: "#/components/schemas/ReviewerSelectionReceipt"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 components:
   securitySchemes:
     bearerAuth:
@@ -3878,6 +4211,8 @@ components:
           maxLength: 2000
         category:
           $ref: "#/components/schemas/ListingCategory"
+        promotionPolicy:
+          $ref: "#/components/schemas/ListingPromotionPolicy"
         currency:
           type: string
           enum: [IOTA, CLAW, BOTH]
@@ -3933,6 +4268,9 @@ components:
     ListingCategory:
       type: string
       enum: [dev, design, marketing, ops, security, other]
+    ListingPromotionPolicy:
+      type: string
+      enum: [STANDARD, PLATFORM_FUNDED_MARKETING]
     ListingSort:
       type: string
       enum: [newest, highest_payout, expires_soon]
@@ -5066,6 +5404,57 @@ components:
           pattern: "^[0-9]+$"
         clockObjectId:
           type: string
+    ReviewerUpdateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          reviewerRegistryObjectId,
+          reviewerEntryObjectId,
+          transportType,
+          transportPubkeyHex,
+          minCaseRewardIota,
+          active
+        ]
+      properties:
+        reviewerRegistryObjectId:
+          type: string
+        reviewerEntryObjectId:
+          type: string
+        transportType:
+          type: integer
+          minimum: 0
+          maximum: 255
+        transportPubkeyHex:
+          type: string
+        minCaseRewardIota:
+          type: string
+          pattern: "^[0-9]+$"
+        active:
+          type: boolean
+        clockObjectId:
+          type: string
+    ReviewerDeregisterRequest:
+      type: object
+      additionalProperties: false
+      required: [reviewerRegistryObjectId, reviewerEntryObjectId]
+      properties:
+        reviewerRegistryObjectId:
+          type: string
+        reviewerEntryObjectId:
+          type: string
+    ReviewerClaimMetricsRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        disputeCaseObjectId:
+          type: string
+        reviewerRegistryObjectId:
+          type: string
+        reviewerEntryObjectId:
+          type: string
+        disputeQuorumConfigObjectId:
+          type: string
     DisputeBondFundRequest:
       type: object
       additionalProperties: false
@@ -5108,19 +5497,26 @@ components:
     DisputeOpenRequest:
       type: object
       additionalProperties: false
-      required: [escrowObjectId, bondObjectId]
+      required: [escrowObjectId, bondObjectId, invitedReviewerAddresses]
       properties:
         escrowObjectId:
           type: string
         bondObjectId:
           type: string
+        invitedReviewerAddresses:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            type: string
+        reviewerSelectionReceiptId:
+          type: string
+          description: "Canonical operator shortlist publishes should carry the exact selector receipt id. Omit only for explicit manual recovery / hand-curated fallback publishing."
         clockObjectId:
           type: string
     DisputeAcceptRequest:
       type: object
       additionalProperties: false
-      required:
-        [reviewerRegistryObjectId, reviewerEntryObjectId, reputationProfileObjectId, disputeQuorumConfigObjectId]
       properties:
         reviewerRegistryObjectId:
           type: string
@@ -5135,7 +5531,7 @@ components:
     DisputeVoteCommitRequest:
       type: object
       additionalProperties: false
-      required: [reviewerEntryObjectId, commitHashHex]
+      required: [commitHashHex]
       properties:
         reviewerEntryObjectId:
           type: string
@@ -5146,76 +5542,95 @@ components:
     DisputeVoteRevealRequest:
       type: object
       additionalProperties: false
-      required: [reviewerEntryObjectId, vote, nonceHex]
+      required: [vote, nonceHex]
       properties:
         reviewerEntryObjectId:
           type: string
         vote:
           type: integer
           enum: [0, 1]
+          description: "Reviewer decision. `1` (`VOTE_YES`) favors the seller and resolves to seller settlement. `0` (`VOTE_NO`) favors the buyer and resolves to buyer settlement."
         nonceHex:
           type: string
         evidenceHashHex:
           type: string
+          description: "Optional hex-encoded SHA-256 hash of reviewer evidence. Stored for auditability; not consumed by settlement logic."
         clockObjectId:
           type: string
     DisputeReplaceReviewersRequest:
       type: object
       additionalProperties: false
-      required: [reviewerRegistryObjectId]
+      required: [reviewerRegistryObjectId, invitedReviewerAddresses]
       properties:
         reviewerRegistryObjectId:
           type: string
+        invitedReviewerAddresses:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            type: string
+        reviewerSelectionReceiptId:
+          type: string
+          description: "Canonical operator shortlist publishes should carry the exact selector receipt id. Omit only for explicit manual recovery / hand-curated fallback publishing."
         clockObjectId:
           type: string
     DisputeFinalizeRequest:
       type: object
       additionalProperties: false
-      required: [bondObjectId, reviewerRegistryObjectId, disputeQuorumConfigObjectId]
       properties:
         bondObjectId:
           type: string
+          description: "Optional. When omitted, the API auto-hydrates the bound dispute bond object id from the live dispute case."
         reviewerRegistryObjectId:
           type: string
+          description: "Optional. When omitted, the API resolves the live reviewer registry object id from the configured dispute quorum package."
         disputeQuorumConfigObjectId:
           type: string
+          description: "Optional. When omitted, the API uses the configured dispute quorum config object id."
         clockObjectId:
           type: string
     DisputeTimeoutFallbackRequest:
       type: object
       additionalProperties: false
-      required: [bondObjectId, reviewerRegistryObjectId, disputeQuorumConfigObjectId]
       properties:
         bondObjectId:
           type: string
+          description: "Optional. When omitted, the API auto-hydrates the bound dispute bond object id from the live dispute case."
         reviewerRegistryObjectId:
           type: string
+          description: "Optional. When omitted, the API resolves the live reviewer registry object id from the configured dispute quorum package."
         disputeQuorumConfigObjectId:
           type: string
+          description: "Optional. When omitted, the API uses the configured dispute quorum config object id."
         clockObjectId:
           type: string
     DisputeFallbackResolveRequest:
       type: object
       additionalProperties: false
-      required: [arbCapObjectId, bondObjectId, reviewerRegistryObjectId, disputeQuorumConfigObjectId]
+      required: [arbCapObjectId]
       properties:
         arbCapObjectId:
           type: string
         bondObjectId:
           type: string
+          description: "Optional. When omitted, the API auto-hydrates the bound dispute bond object id from the live dispute case."
         reviewerRegistryObjectId:
           type: string
+          description: "Optional. When omitted, the API resolves the live reviewer registry object id from the configured dispute quorum package."
         disputeQuorumConfigObjectId:
           type: string
+          description: "Optional. When omitted, the API uses the configured dispute quorum config object id."
         clockObjectId:
           type: string
     DisputeResolveEscrowWithTicketRequest:
       type: object
       additionalProperties: false
-      required: [escrowObjectId, quorumResolutionTicketObjectId]
+      required: [quorumResolutionTicketObjectId]
       properties:
         escrowObjectId:
           type: string
+          description: "Optional. When omitted, the API resolves the live escrow object id from the dispute case."
         quorumResolutionTicketObjectId:
           type: string
     TxMoveCallSummary:
@@ -5230,8 +5645,11 @@ components:
           type: string
     TxPlanResponse:
       type: object
-      required: [txBuilder, request]
+      required: [status, txBuilder, request]
       properties:
+        status:
+          type: string
+          enum: [tx_plan_unsigned]
         txBuilder:
           type: string
         request:
@@ -5241,6 +5659,591 @@ components:
           allOf:
             - $ref: "#/components/schemas/TxMoveCallSummary"
           nullable: true
+    ReviewerSummary:
+      type: object
+      required: [objectId, type, owner, active]
+      properties:
+        objectId:
+          type: string
+        type:
+          type: string
+        owner:
+          type: string
+        reputationProfileId:
+          type: string
+        active:
+          type: boolean
+        transportType:
+          type: integer
+        transportPubkeyHex:
+          type: string
+        minCaseRewardIota:
+          type: string
+          pattern: "^[0-9]+$"
+        joinedAtMs:
+          type: integer
+          format: int64
+        updatedAtMs:
+          type: integer
+          format: int64
+        stakeLocked:
+          type: string
+          pattern: "^[0-9]+$"
+        effectiveStakeLocked:
+          type: string
+          pattern: "^[0-9]+$"
+        performanceScore:
+          type: integer
+        decisionsTotal:
+          type: integer
+        decisionsMajority:
+          type: integer
+        decisionsOverturned:
+          type: integer
+        commitRevealFailures:
+          type: integer
+        noshowCount:
+          type: integer
+        pendingDecisionMetricsClaimRequired:
+          type: boolean
+        pendingReviewerOutcome:
+          $ref: "#/components/schemas/PendingReviewerOutcomeSummary"
+    PendingReviewerOutcomeSummary:
+      type: object
+      required:
+        [
+          pendingDecisionsTotal,
+          pendingDecisionsMajority,
+          pendingDecisionsOverturned,
+          pendingCommitRevealFailures,
+          pendingNoshowCount,
+          pendingSlashCount,
+          pendingSlashBpsTotal
+        ]
+      properties:
+        pendingDecisionsTotal:
+          type: integer
+        pendingDecisionsMajority:
+          type: integer
+        pendingDecisionsOverturned:
+          type: integer
+        pendingCommitRevealFailures:
+          type: integer
+        pendingNoshowCount:
+          type: integer
+        pendingSlashCount:
+          type: integer
+        pendingSlashBpsTotal:
+          type: integer
+        effectiveStakeLocked:
+          type: string
+          pattern: "^[0-9]+$"
+    ReviewerPage:
+      type: object
+      required: [limit, hasNextPage]
+      properties:
+        limit:
+          type: integer
+        hasNextPage:
+          type: boolean
+        nextCursor:
+          type: object
+          required: [txDigest, eventSeq]
+          properties:
+            txDigest:
+              type: string
+            eventSeq:
+              type: string
+    ReviewerInviteSource:
+      type: object
+      required: [mode, type]
+      properties:
+        mode:
+          type: string
+          enum: [chain_event, selection_receipt]
+        receiptId:
+          type: string
+        txDigest:
+          type: string
+        eventSeq:
+          type: string
+        type:
+          type: string
+    ReviewerInviteCaseSummary:
+      type: object
+      required: [orderId, milestoneId]
+      properties:
+        orderId:
+          type: string
+        milestoneId:
+          type: string
+        buyerAddress:
+          type: string
+        sellerAddress:
+          type: string
+        state:
+          type: integer
+        requiredReviewerVotes:
+          type: integer
+        requiredReviewerVotesFloor:
+          type: integer
+        currentAssignmentRound:
+          type: integer
+        acceptDeadlineMs:
+          type: integer
+          format: int64
+        commitDeadlineMs:
+          type: integer
+          format: int64
+        revealDeadlineMs:
+          type: integer
+          format: int64
+        challengeDeadlineMs:
+          type: integer
+          format: int64
+        hardTimeoutMs:
+          type: integer
+          format: int64
+        fallbackEligibleAtMs:
+          type: integer
+          format: int64
+        closedAtMs:
+          type: integer
+          format: int64
+        bondObjectId:
+          type: string
+        escrowObjectId:
+          type: string
+        inviteSourceMode:
+          type: string
+          enum: [on_chain, selection_receipt, none]
+        invitedReviewerAddresses:
+          type: array
+          items:
+            type: string
+    ReviewerInviteFetchError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+    ReviewerInviteSummary:
+      type: object
+      required: [disputeCaseObjectId, reviewerAddress, assignmentRound, invitedAtMs, status, actorCanAccept, source]
+      properties:
+        disputeCaseObjectId:
+          type: string
+        reviewerAddress:
+          type: string
+        assignmentRound:
+          type: integer
+        invitedAtMs:
+          type: integer
+          format: int64
+          nullable: true
+        status:
+          type: string
+          enum: [invited, accepted, expired, superseded, closed, stale, unavailable]
+          description: "Current invite status. `stale` means an older or now-non-actionable invite event that no longer matches the active round."
+        actorCanAccept:
+          type: boolean
+          description: "True only when the invite still matches the current actionable round, reviewer slots remain open, and the dispute is still awaiting reviewers."
+        source:
+          $ref: "#/components/schemas/ReviewerInviteSource"
+        disputeCase:
+          $ref: "#/components/schemas/ReviewerInviteCaseSummary"
+        fetchError:
+          $ref: "#/components/schemas/ReviewerInviteFetchError"
+    ReviewerSelfMetrics:
+      type: object
+      properties:
+        performanceScore:
+          type: integer
+        decisionsTotal:
+          type: integer
+        decisionsMajority:
+          type: integer
+        decisionsOverturned:
+          type: integer
+        commitRevealFailures:
+          type: integer
+        noshowCount:
+          type: integer
+        stakeLocked:
+          type: string
+          pattern: "^[0-9]+$"
+        effectiveStakeLocked:
+          type: string
+          pattern: "^[0-9]+$"
+        pendingDecisionMetricsClaimRequired:
+          type: boolean
+        pendingReviewerOutcome:
+          $ref: "#/components/schemas/PendingReviewerOutcomeSummary"
+        joinedAtMs:
+          type: integer
+          format: int64
+        updatedAtMs:
+          type: integer
+          format: int64
+    ReviewerSelfMetricsResponse:
+      type: object
+      required: [reviewerAddress, registered]
+      properties:
+        reviewerAddress:
+          type: string
+        registered:
+          type: boolean
+        reviewer:
+          $ref: "#/components/schemas/ReviewerSummary"
+        reputationProfileObjectId:
+          type: string
+        disputeQuorumConfigObjectId:
+          type: string
+        reviewerRegistryObjectId:
+          type: string
+        runtime:
+          $ref: "#/components/schemas/ReviewerRuntimeSummary"
+        metrics:
+          $ref: "#/components/schemas/ReviewerSelfMetrics"
+    ReviewerRuntimeSummary:
+      type: object
+      properties:
+        marketplacePackageId:
+          type: string
+        disputeQuorumConfigObjectId:
+          type: string
+        reviewerRegistryObjectId:
+          type: string
+        reviewerMinStakeIota:
+          type: string
+          pattern: "^[0-9]+$"
+    ReviewerPendingMetricsClaimRequiredResponse:
+      type: object
+      required: [error, reviewerAddress, reviewerEntryObjectId, nextStep]
+      properties:
+        error:
+          type: string
+          enum: [reviewer_pending_metrics_claim_required]
+        reviewerAddress:
+          type: string
+        reviewerEntryObjectId:
+          type: string
+        effectiveStakeLocked:
+          type: string
+          pattern: "^[0-9]+$"
+        pendingReviewerOutcome:
+          $ref: "#/components/schemas/PendingReviewerOutcomeSummary"
+        nextStep:
+          type: object
+          required: [method, path, note]
+          properties:
+            method:
+              type: string
+            path:
+              type: string
+            note:
+              type: string
+    ReviewerStakeBelowMinimumResponse:
+      type: object
+      required:
+        [error, reviewerAddress, reviewerEntryObjectId, effectiveStakeLocked, reviewerMinStakeIota]
+      properties:
+        error:
+          type: string
+          enum: [reviewer_stake_below_minimum]
+        reviewerAddress:
+          type: string
+        reviewerEntryObjectId:
+          type: string
+        effectiveStakeLocked:
+          type: string
+          pattern: "^[0-9]+$"
+        reviewerMinStakeIota:
+          type: string
+          pattern: "^[0-9]+$"
+    ReviewerSelectionShortlistRequest:
+      type: object
+      required: [scope, checkpointDigest]
+      properties:
+        scope:
+          type: string
+          enum: [OPEN, REPLACEMENT]
+        reviewerCount:
+          type: integer
+          minimum: 1
+          maximum: 10
+        directoryScanLimit:
+          type: integer
+          minimum: 1
+          maximum: 5000
+          description: "Maximum reviewer directory size scanned for this operator selection run. If more reviewer entries exist, the receipt marks `directoryScanTruncated=true`."
+        checkpointDigest:
+          type: string
+          description: "Must equal the latest finalized IOTA checkpoint digest fetched server-side at shortlist time. The route rejects stale or arbitrary digests with `409 checkpoint_digest_mismatch`."
+        orderId:
+          type: string
+        milestoneId:
+          type: string
+        disputeCaseObjectId:
+          type: string
+        buyerAddress:
+          type: string
+        sellerAddress:
+          type: string
+        excludedReviewerAddresses:
+          type: array
+          items:
+            type: string
+        blockedReviewerAddresses:
+          type: array
+          items:
+            type: string
+        minPerformanceScore:
+          type: integer
+        minReputationScore:
+          type: integer
+        minReputationConfidence:
+          type: integer
+        allowNewReviewers:
+          type: boolean
+          description: "Defaults to true. Set false to exclude zero-confidence / newly registered reviewers until they reach `minReputationConfidence`."
+        minDecisionsTotal:
+          type: integer
+          description: "Optional reviewer experience floor. Reviewers below this total decision count are excluded with `experience_below_floor`."
+        maxNoshowCount:
+          type: integer
+        maxCommitRevealFailures:
+          type: integer
+    ReviewerSelectionCandidate:
+      type: object
+      required:
+        [reviewerAddress, reviewerObjectId, active, exclusionReasons, eligible, selectionScore, selectionSignals, computedWeight]
+      properties:
+        reviewerAddress:
+          type: string
+        reviewerObjectId:
+          type: string
+        active:
+          type: boolean
+        performanceScore:
+          type: integer
+        reputationScore:
+          type: integer
+        reputationConfidence:
+          type: integer
+        reputationLevel:
+          type: string
+          enum: [NEW, BRONZE, SILVER, GOLD, PLATINUM]
+        decisionsTotal:
+          type: integer
+        decisionsMajority:
+          type: integer
+        decisionsOverturned:
+          type: integer
+        commitRevealFailures:
+          type: integer
+        noshowCount:
+          type: integer
+        stakeLocked:
+          type: string
+        effectiveStakeLocked:
+          type: string
+        pendingDecisionMetricsClaimRequired:
+          type: boolean
+        pendingReviewerOutcome:
+          $ref: "#/components/schemas/PendingReviewerOutcomeSummary"
+        minCaseRewardIota:
+          type: string
+        transportType:
+          type: integer
+        transportPubkeyHex:
+          type: string
+        joinedAtMs:
+          type: integer
+          format: int64
+        updatedAtMs:
+          type: integer
+          format: int64
+        exclusionReasons:
+          type: array
+          items:
+            type: string
+        eligible:
+          type: boolean
+        selectionScore:
+          type: integer
+        selectionSignals:
+          type: object
+          required:
+            [
+              reviewerPerformanceScore,
+              reputationScore,
+              reputationConfidence,
+              experienceScore,
+              freshnessScore,
+              levelBoostBps,
+              overturnPenaltyBps,
+              noshowPenaltyBps,
+              invalidRevealPenaltyBps
+            ]
+          properties:
+            reviewerPerformanceScore:
+              type: integer
+            reputationScore:
+              type: integer
+            reputationConfidence:
+              type: integer
+            experienceScore:
+              type: integer
+            freshnessScore:
+              type: integer
+            levelBoostBps:
+              type: integer
+            overturnPenaltyBps:
+              type: integer
+            noshowPenaltyBps:
+              type: integer
+            invalidRevealPenaltyBps:
+              type: integer
+        computedWeight:
+          type: integer
+    ReviewerSelectionReceipt:
+      type: object
+      required:
+        [
+          id,
+          scope,
+          buyerAddress,
+          sellerAddress,
+          assignmentRound,
+          reviewerCountRequested,
+          reviewerCountSelected,
+          selectionPolicyVersion,
+          checkpointDigest,
+          seedHash,
+          candidatePoolHash,
+          shortlistHash,
+          receiptHash,
+          directoryScanTruncated,
+          shortlistedReviewerAddresses,
+          blockedReviewerAddresses,
+          excludedReviewerAddresses,
+          candidatePool,
+          createdByActorAddress,
+          createdAt
+        ]
+      properties:
+        id:
+          type: string
+        scope:
+          type: string
+          enum: [OPEN, REPLACEMENT]
+        disputeCaseObjectId:
+          type: string
+        orderId:
+          type: string
+        milestoneId:
+          type: string
+        buyerAddress:
+          type: string
+        sellerAddress:
+          type: string
+        assignmentRound:
+          type: integer
+        reviewerCountRequested:
+          type: integer
+        reviewerCountSelected:
+          type: integer
+        selectionPolicyVersion:
+          type: string
+        checkpointDigest:
+          type: string
+        checkpointSequenceNumber:
+          type: string
+          description: "Finalized checkpoint sequence number paired with `checkpointDigest` when the receipt was created."
+        checkpointTimestampMs:
+          type: integer
+          format: int64
+          description: "Finalized checkpoint timestamp in milliseconds when available from RPC."
+        checkpointSource:
+          type: string
+          description: "Checkpoint provenance recorded at shortlist time, for example `rpc_latest_finalized`."
+        seedHash:
+          type: string
+        candidatePoolHash:
+          type: string
+        shortlistHash:
+          type: string
+        receiptHash:
+          type: string
+        directoryScanTruncated:
+          type: boolean
+          description: "True when the operator-selected directory scan hit the requested scan limit before exhausting the reviewer directory."
+        shortlistedReviewerAddresses:
+          type: array
+          items:
+            type: string
+        blockedReviewerAddresses:
+          type: array
+          items:
+            type: string
+        excludedReviewerAddresses:
+          type: array
+          items:
+            type: string
+        candidatePool:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewerSelectionCandidate"
+        createdByActorAddress:
+          type: string
+        activatedAt:
+          type: string
+          format: date-time
+        activatedByActorAddress:
+          type: string
+        activationTxDigest:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    ReviewerSelectionReceiptBindRequest:
+      type: object
+      required: [disputeCaseObjectId, activationTxDigest]
+      properties:
+        disputeCaseObjectId:
+          type: string
+        activationTxDigest:
+          type: string
+    ReviewerSelectionShortlistResponse:
+      type: object
+      required: [receipt, selectionComplete, directoryScanTruncated, publishTarget]
+      properties:
+        receipt:
+          $ref: "#/components/schemas/ReviewerSelectionReceipt"
+        selectionComplete:
+          type: boolean
+        directoryScanTruncated:
+          type: boolean
+          description: "True when the selector only scanned a truncated reviewer subset because the directory scan limit was reached."
+        publishTarget:
+          type: object
+          required: [route, requestPatch]
+          properties:
+            route:
+              type: string
+            requestPatch:
+              type: object
+              required: [invitedReviewerAddresses, reviewerSelectionReceiptId]
+              properties:
+                invitedReviewerAddresses:
+                  type: array
+                  items:
+                    type: string
+                reviewerSelectionReceiptId:
+                  type: string
     DisputeCaseSnapshot:
       type: object
       required: [objectId, type, orderId, milestoneId]
@@ -5273,6 +6276,18 @@ components:
           type: integer
         assignmentRound:
           type: integer
+        invitedReviewers:
+          type: array
+          items:
+            type: string
+        assignedReviewers:
+          type: array
+          items:
+            type: string
+        blockedReviewers:
+          type: array
+          items:
+            type: string
         votesYes:
           type: integer
         votesNo:
@@ -5671,6 +6686,8 @@ components:
           type: string
         category:
           $ref: "#/components/schemas/ListingCategory"
+        promotionPolicy:
+          $ref: "#/components/schemas/ListingPromotionPolicy"
         currency:
           type: string
           enum: [IOTA, CLAW, BOTH]
@@ -5700,6 +6717,23 @@ components:
         createdAt:
           type: string
           format: date-time
+    OperationalWarning:
+      type: object
+      required: [code, severity, actorAddress, relevantEventTypes, message]
+      properties:
+        code:
+          type: string
+        severity:
+          type: string
+          enum: [warning]
+        actorAddress:
+          type: string
+        relevantEventTypes:
+          type: array
+          items:
+            type: string
+        message:
+          type: string
     BidStatus:
       type: string
       enum: [OPEN, ACCEPTED, REJECTED, WITHDRAWN]
@@ -6642,10 +7676,25 @@ components:
             type: integer
     FeePolicy:
       type: object
-      required: [version, escrowFeeBps, listingFee, listingDeposit, reputationInitFee]
+      required: [version, chainConfig, escrowFeeBps, listingFee, listingDeposit, reputationInitFee]
       properties:
         version:
           type: string
+        chainConfig:
+          type: object
+          properties:
+            marketplacePackageId:
+              type: string
+            marketplaceFeeConfigObjectId:
+              type: string
+            governanceConfigObjectId:
+              type: string
+            disputeQuorumConfigObjectId:
+              type: string
+            reputationInitFeeConfigObjectId:
+              type: string
+            listingDepositConfigObjectId:
+              type: string
         escrowFeeBps:
           type: object
           required: [IOTA, CLAW]

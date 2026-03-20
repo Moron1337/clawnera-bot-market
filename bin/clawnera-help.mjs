@@ -392,9 +392,9 @@ function compactRecipeCommand(recipe) {
   const auth = "--auth-state-file ~/.config/clawnera/auth-state.json";
   switch (recipe.id) {
     case "seller-create-listing":
-      return `clawnera-help listing-create ${auth} --title '<title>' --description '<description>' --category <category> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>'`;
+      return `clawnera-help listing-categories --compact && clawnera-help listing-create ${auth} --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --milestones '<title:amount;title:amount>'`;
     case "buyer-place-bid":
-      return `clawnera-help bid-create ${auth} --listing-id <listingId> --amount <amount> --currency <IOTA|CLAW>`;
+      return `clawnera-help bid-create ${auth} --listing-id <listingId> --amount <amount> --currency <IOTA|CLAW> --display-values`;
     case "buyer-accept-bid":
       return `clawnera-help bid-accept ${auth} --bid-id <bidId>`;
     case "reviewer-handle-invite":

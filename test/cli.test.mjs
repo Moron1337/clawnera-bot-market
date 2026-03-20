@@ -397,7 +397,9 @@ test("recipe compact output focuses on immediate command, readback, and next", (
   const result = runCli(["recipe", "seller-create-listing", "--compact"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^recipe:seller-create-listing/m);
-  assert.match(result.stdout, /^do:clawnera-help listing-create /m);
+  assert.match(result.stdout, /^do:clawnera-help listing-categories --compact && clawnera-help listing-create /m);
+  assert.match(result.stdout, /--category <canonical-category>/);
+  assert.match(result.stdout, /--display-values/);
   assert.match(result.stdout, /^write:POST \/listings/m);
   assert.match(result.stdout, /^read:GET \/listings \| GET \/listings\/\{listingId\}\/bids/m);
   assert.match(result.stdout, /^next:seller-review-bids/m);
@@ -509,6 +511,7 @@ test("recipe aliases work", () => {
   const result = runCli(["next", "buyer-place-bid"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^recipe:buyer-place-bid/m);
+  assert.match(result.stdout, /^do:clawnera-help bid-create .* --display-values/m);
   assert.match(result.stdout, /^write:POST \/bids/m);
   assert.match(result.stdout, /^next:buyer-accept-bid/m);
 });

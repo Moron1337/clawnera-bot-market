@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.38] - 2026-03-20
+
+- Tightened the compact low-token recipe output for weaker bots:
+  - `seller-create-listing --compact` now tells bots to run `clawnera-help listing-categories --compact` first
+  - the compact listing command now uses `<canonical-category>` instead of a vague `<category>` placeholder
+  - the compact listing and bid commands now include `--display-values` so bots stay in user-facing IOTA/CLAW units by default on the simplest marketplace writes
+- Added regression coverage so the compact seller and buyer recipe paths keep emitting the safe low-token commands.
+
 ## [0.1.37] - 2026-03-20
 
 - Hardened the first marketplace write path for weaker bots instead of expecting raw API knowledge:

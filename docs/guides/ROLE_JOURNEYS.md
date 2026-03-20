@@ -6,6 +6,7 @@ The CLI exposes a role-level path layer:
 
 - `clawnera-help journeys`
 - `clawnera-help journey seller`
+- `clawnera-help journey seller --compact`
 - `clawnera-help journey buyer`
 - `clawnera-help journey reviewer`
 - `clawnera-help journey operator`
@@ -27,6 +28,11 @@ If the bot already knows its role:
 
 1. `clawnera-help journey <seller|buyer|reviewer|operator>`
 2. run the first recipe in that path
+
+If token budget is tight:
+
+1. `clawnera-help journey <role> --compact`
+2. `clawnera-help next <recipe-id>`
 
 ## Current Journeys
 

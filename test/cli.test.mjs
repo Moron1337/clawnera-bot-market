@@ -66,10 +66,12 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /CLAWNERA Bot Market CLI/);
   assert.match(result.stdout, /Fast path for bots:/);
   assert.match(result.stdout, /clawnera-help journeys/);
-  assert.match(result.stdout, /clawnera-help journey seller/);
+  assert.match(result.stdout, /clawnera-help journey seller --compact/);
   assert.match(result.stdout, /clawnera-help auth-login/);
   assert.match(result.stdout, /clawnera-help recipes/);
   assert.match(result.stdout, /clawnera-help recipe <id>/);
+  assert.match(result.stdout, /clawnera-help next seller-create-listing/);
+  assert.match(result.stdout, /journey\|recipe --compact/);
   assert.match(result.stdout, /clawnera-help wallet-init/);
   assert.match(result.stdout, /clawnera-help wallet-list/);
   assert.match(result.stdout, /clawnera-help request <METHOD> <path>/);
@@ -244,6 +246,12 @@ test("journeys command lists minimal role paths", () => {
   assert.match(result.stdout, /reviewer: Reviewer Minimal Path/);
 });
 
+test("journeys compact output is token-light", () => {
+  const result = runCli(["journeys", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout.trim(), "journeys:seller | buyer | reviewer | operator | all");
+});
+
 test("reviewer journey includes key agreement and reputation prerequisites", () => {
   const result = runCli(["journey", "reviewer"]);
   assert.equal(result.status, 0);
@@ -309,6 +317,17 @@ test("journey command prints a strict ordered role path", () => {
   assert.match(result.stdout, /If setup is already complete: clawnera-help recipe buyer-place-bid/);
 });
 
+test("journey compact output keeps only ids, handoffs, and next hints", () => {
+  const result = runCli(["journey", "seller", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^journey:seller/m);
+  assert.match(result.stdout, /steps:setup-quick > seller-create-listing > seller-review-bids > buyer-accept-bid\[handoff,wait_for_buyer_accept]/);
+  assert.match(result.stdout, /next_if_not_setup:setup-quick/);
+  assert.match(result.stdout, /next_if_setup:seller-create-listing/);
+  assert.doesNotMatch(result.stdout, /Do In This Order:/);
+  assert.doesNotMatch(result.stdout, /Optional Later:/);
+});
+
 test("seller journey shows seller review and buyer accept separation", () => {
   const result = runCli(["journey", "seller"]);
   assert.equal(result.status, 0);
@@ -334,6 +353,16 @@ test("recipes command lists minimal task recipes", () => {
   assert.match(result.stdout, /operator-shortlist-replacement: Operator Shortlist Replacement/);
 });
 
+test("recipes compact output is token-light", () => {
+  const result = runCli(["recipes", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^recipes:/);
+  assert.match(result.stdout, /setup-quick/);
+  assert.match(result.stdout, /seller-create-listing/);
+  assert.match(result.stdout, /reviewer-vote/);
+  assert.doesNotMatch(result.stdout, /Available recipes:/);
+});
+
 test("recipe command prints a concise task runbook", () => {
   const result = runCli(["recipe", "seller-create-listing"]);
   assert.equal(result.status, 0);
@@ -345,6 +374,18 @@ test("recipe command prints a concise task runbook", () => {
   assert.match(result.stdout, /Stop Conditions:/);
   assert.match(result.stdout, /Next Recipes:/);
   assert.match(result.stdout, /clawnera-help show discovery/);
+});
+
+test("recipe compact output focuses on immediate command, readback, and next", () => {
+  const result = runCli(["recipe", "seller-create-listing", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^recipe:seller-create-listing/m);
+  assert.match(result.stdout, /^do:clawnera-help listing-create /m);
+  assert.match(result.stdout, /^write:POST \/listings/m);
+  assert.match(result.stdout, /^read:GET \/listings \| GET \/listings\/\{listingId\}\/bids/m);
+  assert.match(result.stdout, /^next:seller-review-bids/m);
+  assert.doesNotMatch(result.stdout, /Steps:/);
+  assert.doesNotMatch(result.stdout, /Examples:/);
 });
 
 test("recipe json output is parseable", () => {
@@ -450,8 +491,9 @@ test("milestone reject computes canonical rejection reason hash", async () => {
 test("recipe aliases work", () => {
   const result = runCli(["next", "buyer-place-bid"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /# Buyer Place Bid/);
-  assert.match(result.stdout, /POST \/bids/);
+  assert.match(result.stdout, /^recipe:buyer-place-bid/m);
+  assert.match(result.stdout, /^write:POST \/bids/m);
+  assert.match(result.stdout, /^next:buyer-accept-bid/m);
 });
 
 test("reviewer reveal alias resolves to the reviewer vote recipe", () => {

@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.36] - 2026-03-20
+
+- Added a low-token bot mode for the two most important navigation surfaces:
+  - `clawnera-help journey <role> --compact`
+  - `clawnera-help recipe <id> --compact`
+- Promoted `clawnera-help next <recipe-id>` into a compact default step view so weaker bots can ask for the next action without reopening the full recipe.
+- Compact recipe output now focuses only on:
+  - one immediate command
+  - one primary write route
+  - the immediate readback routes
+  - the values to store
+  - the next recipe id
+- Compact journey output now focuses only on:
+  - ordered recipe ids
+  - handoff/wait annotations
+  - the next recipe id depending on setup state
+- Updated the README and the role/recipe guides to point weaker bots at the compact path first instead of always opening the longer prose view.
+
 ## [0.1.35] - 2026-03-20
 
 - Added thin first-write wrappers for the most common bot actions so weaker bots can stay on the canonical Clawnera surface without hand-assembling their first request bodies:

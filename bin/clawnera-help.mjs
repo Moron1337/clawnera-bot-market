@@ -267,8 +267,9 @@ function printUsage() {
   console.log("");
   console.log("Fast path for bots:");
   console.log("  clawnera-help journeys                    List role-based minimal paths");
-  console.log("  clawnera-help journey seller              Show the seller path in strict order");
+  console.log("  clawnera-help journey seller --compact    Show only the seller step ids + next handoff");
   console.log("  clawnera-help recipe setup-quick          Do setup before any live write");
+  console.log("  clawnera-help next seller-create-listing  Show only the immediate next write/read/store hints");
   console.log("");
   console.log("Usage:");
   console.log("  clawnera-help                             Show usage + topics");
@@ -328,6 +329,7 @@ function printUsage() {
   console.log("  clawnera-help bootstrap [--sync] [--require-sources]  Run doctor + validate (+ optional maintainer sync)");
   console.log("  clawnera-help version                     Print CLI package version");
   console.log("  clawnera-help <command> --json            Emit machine-readable JSON");
+  console.log("  clawnera-help journey|recipe --compact    Emit the low-token bot view");
 }
 
 function printTopics(topics) {
@@ -350,12 +352,62 @@ function printRecipes(recipes) {
   }
 }
 
+function normalizeCompactText(value) {
+  return String(value || "").replace(/\s+/g, " ").replace(/^[-*]\s*/, "").trim();
+}
+
+function joinCompactList(values, limit = values.length) {
+  return values
+    .map((value) => normalizeCompactText(value))
+    .filter(Boolean)
+    .slice(0, limit)
+    .join(" | ");
+}
+
+function selectPrimaryWriteRoute(routes) {
+  return routes.find((route) => /^(POST|PUT|PATCH)\s/.test(route)) || routes[0] || "";
+}
+
+function selectReadRoutes(routes) {
+  const readRoutes = routes.filter((route) => /^GET\s/.test(route));
+  const preferred = readRoutes.filter((route) => !/^GET\s\/(health|ready|capabilities|actors\/me\/capabilities|policy\/)/.test(route));
+  return (preferred.length > 0 ? preferred : readRoutes).slice(0, 2);
+}
+
+function compactRecipeCommand(recipe) {
+  const auth = "--auth-state-file ~/.config/clawnera/auth-state.json";
+  switch (recipe.id) {
+    case "seller-create-listing":
+      return `clawnera-help listing-create ${auth} --title '<title>' --description '<description>' --category <category> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>'`;
+    case "buyer-place-bid":
+      return `clawnera-help bid-create ${auth} --listing-id <listingId> --amount <amount> --currency <IOTA|CLAW>`;
+    case "buyer-accept-bid":
+      return `clawnera-help bid-accept ${auth} --bid-id <bidId>`;
+    case "reviewer-handle-invite":
+      return `clawnera-help reviewer-invites ${auth} --json`;
+    case "reviewer-vote":
+      return "clawnera-help reviewer-vote-prepare --case-id <disputeCaseId> --address <reviewerAddress> --vote seller|buyer --out reviewer-vote.json";
+    case "reviewer-claim-metrics":
+      return `clawnera-help tx-plan-execute POST /reviewers/<reviewerAddress>/claim-metrics ${auth} --body-file claim-metrics.json`;
+    default:
+      return "";
+  }
+}
+
+function printRecipesCompact(recipes) {
+  console.log(`recipes:${recipes.map((recipe) => recipe.id).join(" | ")}`);
+}
+
 function printJourneys(journeys) {
   console.log("Available journeys:");
   for (const journey of journeys) {
     const roleText = journey.role ? ` [role: ${journey.role}]` : "";
     console.log(`- ${journey.id}: ${journey.title}${roleText}`);
   }
+}
+
+function printJourneysCompact(journeys) {
+  console.log(`journeys:${journeys.map((journey) => journey.id).join(" | ")}`);
 }
 
 function resolveRecipe(recipes, key) {
@@ -460,6 +512,39 @@ function printRecipe(recipe) {
   }
 }
 
+function printRecipeCompact(recipe) {
+  const routes = Array.isArray(recipe.routes) ? recipe.routes : [];
+  const writeRoute = selectPrimaryWriteRoute(routes);
+  const readRoutes = selectReadRoutes(routes);
+  const command = compactRecipeCommand(recipe);
+
+  console.log(`recipe:${recipe.id}`);
+  if (recipe.role) {
+    console.log(`role:${recipe.role}`);
+  }
+  if (recipe.summary) {
+    console.log(`goal:${normalizeCompactText(recipe.summary)}`);
+  }
+  if (command) {
+    console.log(`do:${command}`);
+  }
+  if (writeRoute) {
+    console.log(`write:${writeRoute}`);
+  }
+  if (readRoutes.length > 0) {
+    console.log(`read:${readRoutes.join(" | ")}`);
+  }
+  if (Array.isArray(recipe.store) && recipe.store.length > 0) {
+    console.log(`store:${joinCompactList(recipe.store, 4)}`);
+  }
+  if (Array.isArray(recipe.stopConditions) && recipe.stopConditions.length > 0) {
+    console.log(`stop:${joinCompactList(recipe.stopConditions, 2)}`);
+  }
+  if (Array.isArray(recipe.nextRecipes) && recipe.nextRecipes.length > 0) {
+    console.log(`next:${recipe.nextRecipes.join(" | ")}`);
+  }
+}
+
 function printJourney(journey, recipes) {
   const annotateStep = (recipeId) => {
     const recipe = resolveRecipe(recipes, recipeId);
@@ -530,6 +615,56 @@ function printJourney(journey, recipes) {
     console.log(`- If setup is already complete: clawnera-help recipe ${afterSetup}`);
   }
   console.log("- clawnera-help recipes");
+}
+
+function printJourneyCompact(journey, recipes) {
+  const annotateStep = (recipeId) => {
+    const recipe = resolveRecipe(recipes, recipeId);
+    const annotations = [];
+    const recipeRole = recipe?.role ? String(recipe.role).trim() : "";
+    if (
+      journey.role &&
+      recipeRole &&
+      recipeRole !== journey.role &&
+      recipeRole !== "buyer_or_seller" &&
+      recipeRole !== "buyer_or_seller_or_reviewer" &&
+      recipeRole !== "all"
+    ) {
+      annotations.push("handoff");
+    }
+    if (journey.id === "buyer" && recipeId === "buyer-accept-bid") {
+      annotations.push("wait_for_seller_choice");
+    }
+    if (journey.id === "seller" && recipeId === "buyer-accept-bid") {
+      annotations.push("wait_for_buyer_accept");
+    }
+    return annotations.length > 0 ? `${recipeId}[${annotations.join(",")}]` : recipeId;
+  };
+
+  console.log(`journey:${journey.id}`);
+  if (journey.role) {
+    console.log(`role:${journey.role}`);
+  }
+  if (journey.summary) {
+    console.log(`goal:${normalizeCompactText(journey.summary)}`);
+  }
+  if (Array.isArray(journey.steps) && journey.steps.length > 0) {
+    console.log(`steps:${journey.steps.map((recipeId) => annotateStep(recipeId)).join(" > ")}`);
+  }
+  if (Array.isArray(journey.optional) && journey.optional.length > 0) {
+    console.log(`later:${journey.optional.join(" | ")}`);
+  }
+  if (journey.id === "seller" || journey.id === "buyer") {
+    console.log("prereq:key-agreement-upsert before mailbox-handshake or encrypted delivery");
+  }
+  const orderedSteps = Array.isArray(journey.steps) ? journey.steps : [];
+  if (orderedSteps.length > 0) {
+    console.log(`next_if_not_setup:${orderedSteps[0]}`);
+  }
+  const afterSetup = orderedSteps[0] === "setup-quick" ? orderedSteps[1] : orderedSteps[0];
+  if (afterSetup) {
+    console.log(`next_if_setup:${afterSetup}`);
+  }
 }
 
 function resolveTopic(topics, key) {
@@ -8420,7 +8555,8 @@ function parseArgs(argv) {
     all: false,
     strict: false,
     sync: false,
-    requireSources: false
+    requireSources: false,
+    compact: false
   };
   const positionals = [];
 
@@ -8443,6 +8579,10 @@ function parseArgs(argv) {
     }
     if (arg === "--require-sources") {
       flags.requireSources = true;
+      continue;
+    }
+    if (arg === "--compact") {
+      flags.compact = true;
       continue;
     }
     positionals.push(arg);
@@ -8611,13 +8751,21 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   if (flags.json) {
     printJson({ journeys });
   } else {
-    printJourneys(journeys);
+    if (flags.compact) {
+      printJourneysCompact(journeys);
+    } else {
+      printJourneys(journeys);
+    }
   }
 } else if (effectiveCommand === "recipes") {
   if (flags.json) {
     printJson({ recipes });
   } else {
-    printRecipes(recipes);
+    if (flags.compact) {
+      printRecipesCompact(recipes);
+    } else {
+      printRecipes(recipes);
+    }
   }
 } else if (effectiveCommand === "show") {
   if (flags.json) {
@@ -8659,10 +8807,15 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.error(`unknown_journey: ${String(commandArgs[0] || "")}`);
     process.exitCode = 1;
   } else {
-    printJourney(journey, recipes);
+    if (flags.compact) {
+      printJourneyCompact(journey, recipes);
+    } else {
+      printJourney(journey, recipes);
+    }
   }
 } else if (effectiveCommand === "recipe") {
   const recipe = resolveRecipe(recipes, commandArgs[0]);
+  const compactRecipeMode = flags.compact || parsedCommand === "next";
   if (flags.json) {
     if (!recipe) {
       printJson({ ok: false, error: `unknown_recipe: ${String(commandArgs[0] || "")}` });
@@ -8677,7 +8830,11 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.error(`unknown_recipe: ${String(commandArgs[0] || "")}`);
     process.exitCode = 1;
   } else {
-    printRecipe(recipe);
+    if (compactRecipeMode) {
+      printRecipeCompact(recipe);
+    } else {
+      printRecipe(recipe);
+    }
   }
 } else if (effectiveCommand === "search") {
   const keyword = commandArgs.join(" ");

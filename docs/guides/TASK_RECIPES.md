@@ -8,6 +8,7 @@ The CLI now exposes a short recipe layer:
 - `clawnera-help journey <seller|buyer|reviewer|operator>`
 - `clawnera-help recipes`
 - `clawnera-help recipe <recipe-id>`
+- `clawnera-help recipe <recipe-id> --compact`
 - aliases:
   - `clawnera-help role <journey-id>`
   - `clawnera-help task <recipe-id>`
@@ -16,6 +17,11 @@ The CLI now exposes a short recipe layer:
 Use journeys when the bot knows its role but not the order yet.
 
 Use recipes when the bot already knows its role and just needs the next safe action.
+
+Use `next` or `recipe --compact` when the bot only needs:
+- one immediate command
+- one immediate readback
+- the next recipe id
 
 Auth note:
 - `--auth-state-file <file>` stays the canonical flag in docs.

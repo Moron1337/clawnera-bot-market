@@ -1272,6 +1272,10 @@ test("listing-create converts display values into atomic amounts", async () => {
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.ok, true);
     assert.equal(payload.budgetAmount, "1000000000");
+    assert.equal(payload.expiresAtMs, null);
+    assert.equal(payload.expiresAt, null);
+    assert.equal(payload.explicitExpiry, false);
+    assert.equal(Object.hasOwn(payload.response.seen, "expiresAtMs"), false);
     assert.deepEqual(payload.response.seen.milestones, [
       { title: "empty txt", amount: "1000000000" }
     ]);
@@ -1334,6 +1338,9 @@ test("listing-create accepts display values with an explicit currency suffix", a
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.ok, true);
     assert.equal(payload.budgetAmount, "2000000000");
+    assert.equal(payload.expiresAtMs, null);
+    assert.equal(payload.explicitExpiry, false);
+    assert.equal(Object.hasOwn(payload.response.seen, "expiresAtMs"), false);
     assert.deepEqual(payload.response.seen.milestones, [
       { title: "file1.txt", amount: "1000000000" },
       { title: "file2.txt", amount: "1000000000" }
@@ -1768,6 +1775,118 @@ test("listing-create stops early when expiry choice is missing", async () => {
   assert.match(result.stderr, /listing_create_error: missing_listing_expiry_choice/);
   assert.match(result.stderr, /add --expires-in-days <1-30> to listing-create/);
   assert.match(result.stderr, /--use-default-expiry/);
+});
+
+test("milestone-submit-byo prints mailbox-handshake recovery for mailbox-gated submit", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-milestone-submit-mailbox-"));
+  const keystoreFile = path.join(tempDir, "iota.keystore");
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const payloadFile = path.join(tempDir, "payload.json");
+  const bodyOutFile = path.join(tempDir, "submit-body.json");
+  const wrappedCek = Buffer.alloc(48, 7).toString("base64url");
+  const hpkeEnc = `v1.${Buffer.alloc(32, 9).toString("base64url")}.${Buffer.alloc(24, 11).toString("base64url")}`;
+
+  const initResult = await runCli(["wallet-init", "--alias", "seller", "--keystore-path", keystoreFile, "--json"]);
+  assert.equal(initResult.status, 0);
+  const createdKeystore = JSON.parse(readFileSync(keystoreFile, "utf8"));
+  const sellerAddress = createdKeystore.keys[0].address;
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: "http://placeholder.invalid",
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: sellerAddress,
+        alias: "seller"
+      },
+      null,
+      2
+    )
+  );
+
+  writeFileSync(
+    payloadFile,
+    JSON.stringify(
+      {
+        orderId: "order-1",
+        milestoneId: "m1",
+        metadata: {
+          plaintextLabel: "deliverable"
+        },
+        encrypted: {
+          blob: {
+            nonceB64u: "bm9uY2U",
+            ciphertextB64u: "Y2lwaGVydGV4dA",
+            plaintextByteLength: 0,
+            ciphertextByteLength: 0,
+            ciphertextSha256: "a".repeat(64)
+          },
+          cekWraps: [
+            {
+              recipientAddress: sellerAddress,
+              keyVersion: 1,
+              wrappedCek,
+              hpkeEnc
+            }
+          ]
+        }
+      },
+      null,
+      2
+    )
+  );
+
+  const mock = await startMockServer({
+    "GET /orders/order-1": () => ({
+      status: 200,
+      body: {
+        order: {
+          id: "order-1",
+          sellerAddress
+        }
+      }
+    }),
+    "POST /orders/order-1/milestones/m1/submit": () => ({
+      status: 409,
+      body: {
+        error: "order_mailbox_required"
+      }
+    })
+  });
+
+  const savedState = JSON.parse(readFileSync(authStateFile, "utf8"));
+  savedState.apiBase = mock.baseUrl;
+  writeFileSync(authStateFile, JSON.stringify(savedState, null, 2));
+
+  try {
+    const result = await runCli([
+      "milestone-submit-byo",
+      "--auth-state-file",
+      authStateFile,
+      "--keystore-path",
+      keystoreFile,
+      "--alias",
+      "seller",
+      "--order-id",
+      "order-1",
+      "--milestone-id",
+      "m1",
+      "--payload-file",
+      payloadFile,
+      "--manifest-cid",
+      "ipfs://bafytestcid123",
+      "--body-out",
+      bodyOutFile
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /milestone_submit_byo_error: order_mailbox_required/);
+    assert.match(result.stderr, /cause=order_mailbox_required/);
+    assert.match(result.stderr, /next_hint=clawnera-help recipe mailbox-handshake/);
+  } finally {
+    await mock.close();
+  }
 });
 
 test("bid-create converts display values into atomic amounts", async () => {

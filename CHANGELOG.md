@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.46] - 2026-03-20
+
+- Corrected the weak-bot expiry helper semantics so `--use-default-expiry` now really leaves `expiresAtMs` unset and lets the API apply the legacy 30-day default instead of reimplementing it client-side.
+- Added a direct seller-submit recovery hint for `order_mailbox_required` in `milestone-submit-byo`, so weaker bots jump straight to `recipe mailbox-handshake` instead of doing a second lookup step.
+- Added regression coverage for:
+  - `listing-create --use-default-expiry` omitting `expiresAtMs`
+  - mailbox-gated milestone submit recovery
+  - ranking-side `creatorReputationStatus` truth for `AVAILABLE`, `MISSING_PROFILE`, and `UNAVAILABLE`
+
 ## [0.1.45] - 2026-03-20
 
 - Tightened the bot-facing marketplace preflight around the newest API lifecycle rules instead of leaving weaker models to guess:

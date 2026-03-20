@@ -1464,11 +1464,29 @@ function resolveListingExpiryChoice(options = {}, nowMs = Date.now()) {
     };
   }
   return {
-    expiresAtMs: nowMs + DEFAULT_LISTING_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+    expiresAtMs: null,
     explicit: false,
     source: "use_default_expiry",
     expiresInDays: DEFAULT_LISTING_EXPIRY_DAYS,
   };
+}
+
+function buildMilestoneSubmitByoHintLines(result) {
+  if (!result || typeof result !== "object") {
+    return [];
+  }
+  const response = result.response;
+  if (!response || typeof response !== "object" || Array.isArray(response)) {
+    return [];
+  }
+  if (normalizeString(response.error) !== "order_mailbox_required") {
+    return [];
+  }
+  return [
+    "cause=order_mailbox_required",
+    "detail=bind_the_order_mailbox_before_retrying_the_first_seller_submit",
+    "next_hint=clawnera-help recipe mailbox-handshake",
+  ];
 }
 
 function inferManagedStorageMimeType(filePath, explicitValue = "") {
@@ -4693,19 +4711,24 @@ async function runListingCreate(commandArgs) {
           ? parseDisplayAmountOption(options["budget-amount"], "budget_amount", currency)
           : parsePositiveBigIntOption(options["budget-amount"], "budget_amount")).toString()
       : sumMilestoneAmounts(milestones).toString();
+    const createBody = {
+      creatorAddress,
+      title,
+      description,
+      category,
+      listingMode,
+      currency,
+      budgetAmount,
+      ...(expiry.expiresAtMs !== null ? { expiresAtMs: expiry.expiresAtMs } : {}),
+      milestones,
+    };
     const result = await runApiRequest(
-      buildForwardedRequestArgs("POST", "/listings", options, {
-        creatorAddress,
-        title,
-        description,
-        category,
-        listingMode,
-        currency,
-        budgetAmount,
-        expiresAtMs: expiry.expiresAtMs,
-        milestones,
-      }),
+      buildForwardedRequestArgs("POST", "/listings", options, createBody),
     );
+    const responseExpiresAt =
+      normalizeString(result.response?.item?.expiresAt) ||
+      normalizeString(result.response?.listing?.expiresAt) ||
+      null;
     return {
       ...result,
       creatorAddress,
@@ -4713,10 +4736,7 @@ async function runListingCreate(commandArgs) {
       listingId: extractCommonCreatedId(result.response, [["listingId"], ["item", "id"], ["listing", "id"], ["id"]]) || null,
       budgetAmount,
       expiresAtMs: expiry.expiresAtMs,
-      expiresAt:
-        normalizeString(result.response?.item?.expiresAt) ||
-        normalizeString(result.response?.listing?.expiresAt) ||
-        new Date(expiry.expiresAtMs).toISOString(),
+      expiresAt: responseExpiresAt,
       explicitExpiry: expiry.explicit,
       creatorReputationStatus:
         normalizeString(result.response?.item?.creatorReputationStatus) ||
@@ -7284,11 +7304,15 @@ async function runMilestoneSubmitByo(commandArgs) {
       timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
     });
     if (!submitCall.result.ok) {
-      return {
+      const failedResult = {
         ok: false,
         error: summarizeApiFailure(submitCall.result),
         status: submitCall.result.status,
         response: submitCall.result.body,
+      };
+      return {
+        ...failedResult,
+        hintLines: buildMilestoneSubmitByoHintLines(failedResult),
       };
     }
     return {
@@ -10582,6 +10606,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`next_anchor=${result.nextAnchorHint}`);
   } else {
     console.error(`milestone_submit_byo_error: ${result.error}`);
+    for (const line of buildMilestoneSubmitByoHintLines(result)) {
+      console.error(line);
+    }
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {

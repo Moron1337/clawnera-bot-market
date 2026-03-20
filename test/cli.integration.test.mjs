@@ -1086,6 +1086,7 @@ test("listing-create infers creator address and posts a canonical body", async (
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-"));
   const authStateFile = path.join(tempDir, "auth-state.json");
   const creatorAddress = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  const expiresAtMs = 1893456000000;
   const mock = await startMockServer({
     "POST /listings": (request) => ({
       status: 200,
@@ -1126,6 +1127,8 @@ test("listing-create infers creator address and posts a canonical body", async (
       "ops",
       "--currency",
       "IOTA",
+      "--expires-at-ms",
+      String(expiresAtMs),
       "--milestones",
       "Milestone 1:500000000;Milestone 2:500000000",
       "--json"
@@ -1144,6 +1147,7 @@ test("listing-create infers creator address and posts a canonical body", async (
       listingMode: "OFFER",
       currency: "IOTA",
       budgetAmount: "1000000000",
+      expiresAtMs,
       milestones: [
         { title: "Milestone 1", amount: "500000000" },
         { title: "Milestone 2", amount: "500000000" }
@@ -1259,6 +1263,7 @@ test("listing-create converts display values into atomic amounts", async () => {
       "--currency",
       "IOTA",
       "--display-values",
+      "--use-default-expiry",
       "--milestones",
       "empty txt:1",
       "--json"
@@ -1320,6 +1325,7 @@ test("listing-create accepts display values with an explicit currency suffix", a
       "--currency",
       "IOTA",
       "--display-values",
+      "--use-default-expiry",
       "--milestones",
       "file1.txt:1 IOTA;file2.txt:1 IOTA",
       "--json"
@@ -1382,6 +1388,8 @@ test("listing-create forwards explicit request listing mode", async () => {
       "--currency",
       "IOTA",
       "--display-values",
+      "--expires-at",
+      "2026-04-20T12:00:00Z",
       "--milestones",
       "file1.txt:1;file2.txt:1",
       "--json"
@@ -1654,6 +1662,7 @@ test("listing-create prints compliance guidance for trader-account failures", as
       "ops",
       "--currency",
       "IOTA",
+      "--use-default-expiry",
       "--milestones",
       "Milestone 1:500000000;Milestone 2:500000000"
     ]);
@@ -1708,6 +1717,7 @@ test("listing-create prints marketing guidance for sponsored-listing failures", 
       "ops",
       "--currency",
       "IOTA",
+      "--use-default-expiry",
       "--milestones",
       "Milestone 1:500000000;Milestone 2:500000000"
     ]);
@@ -1719,6 +1729,45 @@ test("listing-create prints marketing guidance for sponsored-listing failures", 
   } finally {
     await mock.close();
   }
+});
+
+test("listing-create stops early when expiry choice is missing", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-missing-expiry-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: "https://api.clawnera.com",
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: "0x1111111111111111111111111111111111111111111111111111111111111111",
+        alias: "seller"
+      },
+      null,
+      2
+    )
+  );
+
+  const result = await runCli([
+    "listing-create",
+    "--auth-state-file",
+    authStateFile,
+    "--title",
+    "Missing expiry",
+    "--description",
+    "desc",
+    "--category",
+    "ops",
+    "--currency",
+    "IOTA",
+    "--milestones",
+    "Milestone 1:1000"
+  ]);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /listing_create_error: missing_listing_expiry_choice/);
+  assert.match(result.stderr, /add --expires-in-days <1-30> to listing-create/);
+  assert.match(result.stderr, /--use-default-expiry/);
 });
 
 test("bid-create converts display values into atomic amounts", async () => {

@@ -106,6 +106,8 @@ const ASSET_DISPLAY_DECIMALS = Object.freeze({
   IOTA: 9,
   CLAW: 6,
 });
+const DEFAULT_LISTING_EXPIRY_DAYS = 30;
+const MAX_LISTING_EXPIRY_DAYS = 30;
 const LISTING_CATEGORY_SLUGS = Object.freeze([
   "dev",
   "design",
@@ -204,12 +206,13 @@ const TRIAGE_RULES = Object.freeze([
   },
   {
     id: "milestone",
-    keywords: ["milestone", "manifest", "anchor", "artifact", "storage", "pinata", "submit", "accept", "reject"],
+    keywords: ["milestone", "manifest", "anchor", "artifact", "storage", "pinata", "submit", "accept", "reject", "order_mailbox_required", "mailbox"],
     topics: ["onboarding", "api", "sdk", "ops"],
     commands: [
       "clawnera-help show onboarding",
       "clawnera-help show api",
       "clawnera-help show sdk",
+      "clawnera-help recipe mailbox-handshake",
       "clawnera-help doctor --api-base <url> --jwt <token>"
     ],
     issueCategory: "integration-help"
@@ -399,9 +402,9 @@ function compactRecipeCommand(recipe) {
     case "ensure-auth":
       return "clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias>";
     case "seller-create-listing":
-      return `clawnera-help listing-categories --compact && clawnera-help listing-create ${auth} --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --milestones '<title:amount;title:amount>'`;
+      return `clawnera-help listing-categories --compact && clawnera-help listing-create ${auth} --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>'`;
     case "buyer-create-request":
-      return `clawnera-help listing-categories --compact --listing-mode REQUEST && clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --milestones '<title:amount;title:amount>'`;
+      return `clawnera-help listing-categories --compact --listing-mode REQUEST && clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>'`;
     case "creator-cancel-listing":
       return `clawnera-help listing-cancel ${auth} --listing-id <listingId>`;
     case "creator-renew-listing":
@@ -641,7 +644,7 @@ function printJourney(journey, recipes) {
   ) {
     console.log("");
     console.log("Conditional Delivery Prerequisite:");
-    console.log("- If mailbox or encrypted delivery is planned, both sides should run clawnera-help recipe key-agreement-upsert before mailbox-handshake or encrypted delivery.");
+    console.log("- Bind mailbox before the seller submits the first milestone. Run key-agreement-upsert later only when encrypted delivery or reviewer onboarding is needed.");
   }
   console.log("");
   console.log("Next:");
@@ -702,7 +705,7 @@ function printJourneyCompact(journey, recipes) {
     journey.id === "request-buyer" ||
     journey.id === "request-seller"
   ) {
-    console.log("prereq:key-agreement-upsert before mailbox-handshake or encrypted delivery");
+    console.log("prereq:mailbox-handshake before first seller submit; key-agreement-upsert before encrypted delivery or reviewer onboarding");
   }
   const orderedSteps = Array.isArray(journey.steps) ? journey.steps : [];
   if (orderedSteps.length > 0) {
@@ -1411,6 +1414,61 @@ function parseOptionalIsoTimestamp(rawValue) {
   }
   const parsed = Date.parse(normalized);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function resolveListingExpiryChoice(options = {}, nowMs = Date.now()) {
+  const expiresAtMsRaw = normalizeString(options["expires-at-ms"]);
+  const expiresAtRaw = normalizeString(options["expires-at"]);
+  const expiresInDaysRaw = options["expires-in-days"];
+  const useDefaultExpiry = parseBooleanOption(options["use-default-expiry"], false);
+  const providedInputs = [
+    expiresAtMsRaw ? "expires_at_ms" : "",
+    expiresAtRaw ? "expires_at" : "",
+    expiresInDaysRaw !== undefined && expiresInDaysRaw !== null && String(expiresInDaysRaw).trim() ? "expires_in_days" : "",
+    useDefaultExpiry ? "use_default_expiry" : "",
+  ].filter(Boolean);
+  if (providedInputs.length === 0) {
+    throw new Error("missing_listing_expiry_choice");
+  }
+  if (providedInputs.length > 1) {
+    throw new Error("multiple_listing_expiry_inputs");
+  }
+  if (expiresAtMsRaw) {
+    return {
+      expiresAtMs: parsePositiveIntOption(expiresAtMsRaw, "expires_at_ms"),
+      explicit: true,
+      source: "expires_at_ms",
+    };
+  }
+  if (expiresAtRaw) {
+    const parsed = parseOptionalIsoTimestamp(expiresAtRaw);
+    if (!parsed) {
+      throw new Error("invalid_expires_at");
+    }
+    return {
+      expiresAtMs: parsed,
+      explicit: true,
+      source: "expires_at",
+    };
+  }
+  if (expiresInDaysRaw !== undefined && expiresInDaysRaw !== null && String(expiresInDaysRaw).trim()) {
+    const expiresInDays = parsePositiveIntOption(expiresInDaysRaw, "expires_in_days");
+    if (expiresInDays > MAX_LISTING_EXPIRY_DAYS) {
+      throw new Error("listing_expiry_days_too_large");
+    }
+    return {
+      expiresAtMs: nowMs + expiresInDays * 24 * 60 * 60 * 1000,
+      explicit: true,
+      source: "expires_in_days",
+      expiresInDays,
+    };
+  }
+  return {
+    expiresAtMs: nowMs + DEFAULT_LISTING_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+    explicit: false,
+    source: "use_default_expiry",
+    expiresInDays: DEFAULT_LISTING_EXPIRY_DAYS,
+  };
 }
 
 function inferManagedStorageMimeType(filePath, explicitValue = "") {
@@ -4504,13 +4562,14 @@ async function resolveRuntimeContextForHelper(options = {}) {
 function listingCreateUsageLines() {
   return [
     "Listing create helper:",
-    "- Usage: clawnera-help listing-create --title <text> --description <text> --category <slug> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>' [--listing-mode OFFER|REQUEST] [auth options]",
+    "- Usage: clawnera-help listing-create --title <text> --description <text> --category <slug> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>' [--listing-mode OFFER|REQUEST] (--expires-at '<iso8601>' | --expires-at-ms <unix-ms> | --expires-in-days <1-30> | --use-default-expiry) [auth options]",
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
     "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
     `- Valid category slugs: ${LISTING_CATEGORY_SLUGS.join(", ")} (or run: clawnera-help listing-categories)`,
     "- Optional: --budget-amount <atomic-int> (defaults to the milestone sum), --creator-address <0x...>, --milestones-json <json>, --milestones-file <file>",
     "- Optional human mode: add --display-values to interpret milestone and budget numbers in whole-user units for the selected currency (examples: --currency IOTA --display-values --milestones 'empty txt:1' or 'empty txt:1 IOTA')",
     "- Thin wrapper over POST /listings that infers creatorAddress from the saved auth state when possible",
+    "- The helper does not silently guess listing expiry: choose an explicit expiry or pass --use-default-expiry to acknowledge the legacy 30-day runtime default",
     "- OFFER is the default if --listing-mode is omitted",
     "- REQUEST means the listing creator is the future buyer and later accepts the chosen seller bid",
     "- Normal OFFER listing create does not require reputation-init; the real preflight is seller compliance (TRADER, and sometimes trader verification) plus listing deposit when enabled",
@@ -4627,6 +4686,7 @@ async function runListingCreate(commandArgs) {
     if (!category) {
       return { ok: false, error: "invalid_listing_category", validCategories: LISTING_CATEGORY_SLUGS };
     }
+    const expiry = resolveListingExpiryChoice(options, Date.now());
     const milestones = parseListingMilestonesOptions(options, { displayValues, currency });
     const budgetAmount = options["budget-amount"] !== undefined
       ? (displayValues
@@ -4642,6 +4702,7 @@ async function runListingCreate(commandArgs) {
         listingMode,
         currency,
         budgetAmount,
+        expiresAtMs: expiry.expiresAtMs,
         milestones,
       }),
     );
@@ -4651,11 +4712,28 @@ async function runListingCreate(commandArgs) {
       listingMode,
       listingId: extractCommonCreatedId(result.response, [["listingId"], ["item", "id"], ["listing", "id"], ["id"]]) || null,
       budgetAmount,
+      expiresAtMs: expiry.expiresAtMs,
+      expiresAt:
+        normalizeString(result.response?.item?.expiresAt) ||
+        normalizeString(result.response?.listing?.expiresAt) ||
+        new Date(expiry.expiresAtMs).toISOString(),
+      explicitExpiry: expiry.explicit,
+      creatorReputationStatus:
+        normalizeString(result.response?.item?.creatorReputationStatus) ||
+        normalizeString(result.response?.listing?.creatorReputationStatus) ||
+        null,
       milestones,
       hintLines: buildListingCreateHintLines(result, listingMode),
     };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "listing_create_failed" };
+    const errorCode = error instanceof Error ? error.message : "listing_create_failed";
+    const listingModeRaw = normalizeString(options["listing-mode"]).toUpperCase();
+    const listingMode = ["OFFER", "REQUEST"].includes(listingModeRaw) ? listingModeRaw : "OFFER";
+    return {
+      ok: false,
+      error: errorCode,
+      hintLines: buildListingCreateHintLines({ error: errorCode }, listingMode)
+    };
   }
 }
 
@@ -4731,8 +4809,9 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
     case "consumer_accounts_disabled":
       return [
         `cause=${listingMode === "REQUEST" ? "request_listing_creator_blocked_by_b2b_policy" : "offer_listing_creator_blocked_by_b2b_policy"}`,
-        "detail=read_current_account_type_and_runtime_compliance_policy_before_retry",
+        "detail=baseline_market_policy_requires_trader_account_for_this_runtime",
         `next_hint=clawnera-help request GET /compliance/me --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
+        `next_hint=clawnera-help recipe ${listingMode === "REQUEST" ? "buyer-create-request" : "seller-create-listing"} --compact`,
       ];
     case "listing_requires_trader_account":
       return [
@@ -4754,6 +4833,30 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
         "detail=read_policy_then_create_the_listing_deposit_before_retry",
         `next_hint=clawnera-help request GET /policy/fees --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
         `next_hint=clawnera-help recipe ${listingMode === "REQUEST" ? "buyer-create-request" : "seller-create-listing"} --compact`,
+      ];
+    case "missing_listing_expiry_choice":
+      return [
+        "cause=listing_expiry_choice_required",
+        "detail=choose_an_explicit_expiry_or_acknowledge_the_legacy_30_day_default_before_posting",
+        "next_hint=add --expires-in-days <1-30> to listing-create",
+        "next_hint=or pass --use-default-expiry if you intentionally want the legacy 30-day runtime default",
+      ];
+    case "multiple_listing_expiry_inputs":
+      return [
+        "cause=multiple_listing_expiry_inputs",
+        "detail=pass_exactly_one_of_expires-at_expires-at-ms_expires-in-days_or_use-default-expiry",
+      ];
+    case "invalid_expires_at":
+      return [
+        "cause=invalid_listing_expiry_timestamp",
+        "detail=expires-at_must_be_a_parseable_iso8601_timestamp",
+        "next_hint=example --expires-at '2026-04-20T12:00:00Z'",
+      ];
+    case "listing_expiry_days_too_large":
+      return [
+        "cause=listing_expiry_days_too_large",
+        `detail=helper_caps_expires-in-days_at_${MAX_LISTING_EXPIRY_DAYS}_to_match_the_legacy_runtime_default_window`,
+        `next_hint=retry_with --expires-in-days <1-${MAX_LISTING_EXPIRY_DAYS}> or an earlier --expires-at`,
       ];
     case "request_listing_marketing_not_supported":
       return [
@@ -9811,6 +9914,14 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`listing_mode=${result.listingMode || "OFFER"}`);
     console.log(`creator_address=${result.creatorAddress}`);
     console.log(`budget_amount=${result.budgetAmount}`);
+    if (result.expiresAt) {
+      console.log(`expires_at=${result.expiresAt}`);
+    } else if (result.expiresAtMs) {
+      console.log(`expires_at_ms=${result.expiresAtMs}`);
+    }
+    if (result.creatorReputationStatus) {
+      console.log(`creator_reputation_status=${result.creatorReputationStatus}`);
+    }
     console.log(`milestone_count=${Array.isArray(result.milestones) ? result.milestones.length : 0}`);
     if (result.listingMode === "REQUEST") {
       console.log(

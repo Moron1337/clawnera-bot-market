@@ -96,6 +96,7 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
 3. Listing erstellen: `POST /listings`
    - Header `idempotency-key` ist Pflicht.
    - Capability: `listing.create`.
+   - `expiresAtMs` bewusst setzen. Im npm-Helper deshalb `--expires-in-days`, `--expires-at`, `--expires-at-ms` oder bewusst `--use-default-expiry` waehlen statt still den 30-Tage-Default zu erben.
    - Compliance-Preconditions: Actor muss als `TRADER` gefuehrt sein;
      je nach Deployment kann zusaetzlich Trader-Verification Pflicht sein.
    - Ein normales Seller-Listing braucht dafuer kein Reputation-Profil. Wenn `POST /listings` scheitert, zuerst `GET /compliance/me` und die Deposit-Policy pruefen statt `reputation-init` zu raten.
@@ -136,6 +137,7 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
    - wenn der falsche Actor `/accept` aufruft, liefert die Runtime korrekt `403 buyer_mismatch`.
    - `REQUEST` nie ueber den alten listingId-Kompatibilitaetspfad akzeptieren.
 4. Kommunikations-Handshake (optional):
+   - Vor dem ersten Seller-Submit praktisch Pflicht: wenn `POST /orders/{orderId}/milestones/{milestoneId}/submit` mit `409 order_mailbox_required` stoppt, zuerst Mailbox binden.
    - `orderId` und `communicationProposal` muessen zusammen gesetzt werden (oder beide weggelassen).
    - Lifecycle: Listing `communicationPolicy` -> Accept `communicationProposal` -> `GET /orders/{orderId}/communication-agreement`.
    - `404 communication_agreement_not_found` ist normal, wenn beim Accept kein Proposal mitgegeben wurde.

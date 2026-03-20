@@ -205,6 +205,8 @@ test("listing-create help explains display values and categories", () => {
   assert.match(result.stdout, /--display-values/);
   assert.match(result.stdout, /--listing-mode OFFER\|REQUEST/);
   assert.match(result.stdout, /REQUEST means the listing creator is the future buyer/);
+  assert.match(result.stdout, /--expires-in-days <1-30>/);
+  assert.match(result.stdout, /--use-default-expiry/);
 });
 
 test("listing lifecycle helpers explain canonical POST routes", () => {
@@ -403,7 +405,10 @@ test("request journeys separate buyer-created requests from offer flow", () => {
     buyerResult.stdout,
     /steps:setup-quick > buyer-create-request > buyer-review-request-bids > buyer-accept-request-bid > fund-order/
   );
-  assert.match(buyerResult.stdout, /prereq:key-agreement-upsert/);
+  assert.match(
+    buyerResult.stdout,
+    /prereq:mailbox-handshake before first seller submit; key-agreement-upsert before encrypted delivery or reviewer onboarding/
+  );
 
   const sellerResult = runCli(["journey", "request-seller", "--compact"]);
   assert.equal(sellerResult.status, 0);
@@ -468,6 +473,7 @@ test("recipe compact output focuses on immediate command, readback, and next", (
   assert.match(result.stdout, /^do:clawnera-help listing-categories --compact && clawnera-help listing-create /m);
   assert.match(result.stdout, /--category <canonical-category>/);
   assert.match(result.stdout, /--display-values/);
+  assert.match(result.stdout, /--expires-in-days 7/);
   assert.match(result.stdout, /^write:POST \/listings/m);
   assert.match(result.stdout, /^read:GET \/compliance\/me \| GET \/listings/m);
   assert.match(result.stdout, /^next:seller-review-bids/m);
@@ -481,6 +487,7 @@ test("request recipe compact output uses explicit request mode", () => {
   assert.match(result.stdout, /^recipe:buyer-create-request/m);
   assert.match(result.stdout, /listing-categories --compact --listing-mode REQUEST/);
   assert.match(result.stdout, /listing-create .* --listing-mode REQUEST /);
+  assert.match(result.stdout, /--expires-in-days 7/);
   assert.match(result.stdout, /^next:buyer-review-request-bids/m);
 });
 

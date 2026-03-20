@@ -57,8 +57,10 @@ Auth note:
   - stop on multiple wallets and choose one alias instead of asking for a JWT
 - `seller-create-listing`
   - create an OFFER listing safely; normal seller listing needs compliance/deposit preflight, not reputation-init
+  - choose expiry explicitly; prefer `--expires-in-days`, or pass `--use-default-expiry` only when you intentionally accept the legacy 30-day default
 - `buyer-create-request`
   - create a REQUEST listing safely; buyer request create needs compliance/deposit preflight, not reputation-init
+  - choose expiry explicitly; prefer `--expires-in-days`, or pass `--use-default-expiry` only when you intentionally accept the legacy 30-day default
 - `creator-cancel-listing`
   - cancel an OFFER or REQUEST listing from the creator wallet
   - use `POST /listings/{listingId}/cancel`, not `DELETE` or `PATCH`
@@ -80,7 +82,7 @@ Auth note:
 - `fund-order`
   - separate sponsor gas, bond, and escrow principal
 - `mailbox-handshake`
-  - bind and use mailbox correctly
+  - bind mailbox before the first seller milestone submit and use it only for signals/acks
   - common aliases: `mailbox-signal`, `mailbox-post-signal`, `mailbox-ack`
 - `seller-deliver-encrypted-byo`
   - encrypted delivery with managed-storage JSON by default, Pinata/IPFS only as fallback
@@ -118,6 +120,7 @@ Auth note:
 - Stop on the recipe stop-conditions instead of guessing.
 - Normal seller listing create is a compliance/deposit problem first; do not jump to `reputation-init` unless you are explicitly doing reviewer onboarding.
 - Normal request listing create is also not a reputation-init problem; do not send a buyer into reviewer setup just to publish a wanted request.
+- Treat `order_mailbox_required` as a hard stop: run `mailbox-handshake` before retrying seller submit.
 - Listing cancel and renew are real public routes; do not guess `DELETE /listings/{id}` or PATCH-style status edits.
 - If the bot runs on the same machine as the wallet, it should self-auth with `ensure-auth` before actor-scoped calls and should not ask for a raw JWT.
 

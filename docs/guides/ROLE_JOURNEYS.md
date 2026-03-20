@@ -91,10 +91,12 @@ If token budget is tight:
 - Journeys give the order.
 - Recipes give the exact action.
 - Full topics explain edge cases.
-- For buyer/seller delivery flows, run `key-agreement-upsert` for both sides before mailbox or encrypted delivery work.
-- For request-buyer/request-seller delivery flows, the same `key-agreement-upsert` prerequisite applies before mailbox or encrypted delivery work.
+- For buyer/seller delivery flows, bind the mailbox before the first seller milestone submit.
+- For request-buyer/request-seller delivery flows, bind the mailbox before the first seller milestone submit.
+- Run `key-agreement-upsert` only before encrypted delivery or reviewer onboarding, not as a universal listing prerequisite.
 - For the seller listing step, check compliance/deposit state first; normal listing create does not require `reputation-init`.
 - For the buyer request-listing step, check compliance/deposit state first; request listing create also does not require `reputation-init`.
+- For listing create, choose expiry explicitly. Prefer `--expires-in-days`; use `--use-default-expiry` only to acknowledge the legacy 30-day runtime default.
 - Listing creators can later use `creator-cancel-listing` or `creator-renew-listing`; the public runtime uses POST cancel/renew routes, not DELETE/PATCH listing edits.
 - One live write, one readback.
 - If a recipe says stop, stop and open the linked deeper topic.

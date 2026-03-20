@@ -469,7 +469,7 @@
           },
           "409": {
             "status": "409",
-            "reusableResponseRef": "#/components/responses/Conflict",
+            "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ErrorResponse",
             "schemaName": "ErrorResponse",
             "requiredFields": [
@@ -1588,6 +1588,7 @@
               "listingDepositTxDigest",
               "listingDepositStatus",
               "creatorReputation",
+              "creatorReputationStatus",
               "expiresAt"
             ],
             "propertyNames": [
@@ -1606,6 +1607,7 @@
               "listingDepositTxDigest",
               "listingDepositStatus",
               "creatorReputation",
+              "creatorReputationStatus",
               "status",
               "expiresAt",
               "createdAt"
@@ -1870,6 +1872,7 @@
               "listingDepositTxDigest",
               "listingDepositStatus",
               "creatorReputation",
+              "creatorReputationStatus",
               "expiresAt"
             ],
             "propertyNames": [
@@ -1888,6 +1891,7 @@
               "listingDepositTxDigest",
               "listingDepositStatus",
               "creatorReputation",
+              "creatorReputationStatus",
               "status",
               "expiresAt",
               "createdAt"
@@ -2024,6 +2028,7 @@
               "listingDepositTxDigest",
               "listingDepositStatus",
               "creatorReputation",
+              "creatorReputationStatus",
               "expiresAt"
             ],
             "propertyNames": [
@@ -2042,6 +2047,7 @@
               "listingDepositTxDigest",
               "listingDepositStatus",
               "creatorReputation",
+              "creatorReputationStatus",
               "status",
               "expiresAt",
               "createdAt"
@@ -12320,7 +12326,7 @@
         },
         "409": {
           "status": "409",
-          "reusableResponseRef": "#/components/responses/Conflict",
+          "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ErrorResponse",
           "schemaName": "ErrorResponse",
           "requiredFields": [
@@ -13396,6 +13402,7 @@
             "listingDepositTxDigest",
             "listingDepositStatus",
             "creatorReputation",
+            "creatorReputationStatus",
             "expiresAt"
           ],
           "propertyNames": [
@@ -13414,6 +13421,7 @@
             "listingDepositTxDigest",
             "listingDepositStatus",
             "creatorReputation",
+            "creatorReputationStatus",
             "status",
             "expiresAt",
             "createdAt"
@@ -13669,6 +13677,7 @@
             "listingDepositTxDigest",
             "listingDepositStatus",
             "creatorReputation",
+            "creatorReputationStatus",
             "expiresAt"
           ],
           "propertyNames": [
@@ -13687,6 +13696,7 @@
             "listingDepositTxDigest",
             "listingDepositStatus",
             "creatorReputation",
+            "creatorReputationStatus",
             "status",
             "expiresAt",
             "createdAt"
@@ -13820,6 +13830,7 @@
             "listingDepositTxDigest",
             "listingDepositStatus",
             "creatorReputation",
+            "creatorReputationStatus",
             "expiresAt"
           ],
           "propertyNames": [
@@ -13838,6 +13849,7 @@
             "listingDepositTxDigest",
             "listingDepositStatus",
             "creatorReputation",
+            "creatorReputationStatus",
             "status",
             "expiresAt",
             "createdAt"
@@ -25688,6 +25700,7 @@
         "listingDepositTxDigest",
         "listingDepositStatus",
         "creatorReputation",
+        "creatorReputationStatus",
         "status",
         "expiresAt",
         "createdAt"
@@ -25712,6 +25725,7 @@
         "listingDepositTxDigest",
         "listingDepositStatus",
         "creatorReputation",
+        "creatorReputationStatus",
         "expiresAt"
       ]
     },

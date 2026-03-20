@@ -40,6 +40,7 @@ clawnera-help listing-create \
   --category ops \
   --currency IOTA \
   --display-values \
+  --expires-in-days 7 \
   --milestones 'Milestone 1:1;Milestone 2:1'
 
 clawnera-help request GET '/listings?limit=5&q=Two%20tiny%20IOTA%20text%20tasks' \
@@ -63,6 +64,7 @@ clawnera-help listing-create \
   --category ops \
   --currency IOTA \
   --display-values \
+  --expires-in-days 7 \
   --milestones 'file1.txt:1;file2.txt:1'
 
 clawnera-help request GET '/listings?listingMode=REQUEST&limit=5&q=Need%20two%20empty%20txt%20files' \

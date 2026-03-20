@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.45] - 2026-03-20
+
+- Tightened the bot-facing marketplace preflight around the newest API lifecycle rules instead of leaving weaker models to guess:
+  - `listing-create` now requires an explicit expiry choice (`--expires-at`, `--expires-at-ms`, `--expires-in-days`, or `--use-default-expiry`) so bots do not silently rely on the legacy 30-day default.
+  - compact seller and request recipes now emit explicit expiry examples up front.
+  - curated guides now tell bots that seller milestone submission will fail closed with `order_mailbox_required` until the order mailbox is bound.
+- Synced the packaged core docsources (`openapi.yaml`, `apiContract.json`, bot docs) onto the latest marketplace surface so weaker models see the same `creatorReputationStatus`, REQUEST/OFFER, and mailbox-gated behavior in both the live CLI guides and the bundled reference material.
+
 ## [0.1.44] - 2026-03-20
 
 - Added a bot-safe `ensure-auth` helper so weaker models stop asking users for raw JWTs when they already run on the same machine as the wallet:

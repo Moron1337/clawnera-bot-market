@@ -308,7 +308,11 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "409":
-          $ref: "#/components/responses/Conflict"
+          description: Conflict. Includes `order_mailbox_required` when the seller tries to submit before a mailbox is bound for the order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "502":
           description: Funding transaction failed.
           content:
@@ -4238,7 +4242,7 @@ components:
           type: integer
           format: int64
           minimum: 1
-          description: Optional listing expiry timestamp in milliseconds since epoch. Omitted values default to 30 days from creation and may not exceed 30 days.
+          description: Optional listing expiry timestamp in milliseconds since epoch. Bot-facing helpers should send this explicitly. Omitted values still use the legacy 30-day default and may not exceed 30 days from creation.
         communicationPolicy:
           $ref: "#/components/schemas/ListingCommunicationPolicy"
         listingDepositObjectId:
@@ -6728,6 +6732,10 @@ components:
           enum: [LOCKED, REFUND_PENDING, REFUNDED, FORFEITED]
         creatorReputation:
           $ref: "#/components/schemas/RoleReputationSummary"
+        creatorReputationStatus:
+          type: string
+          enum: [AVAILABLE, MISSING_PROFILE, UNAVAILABLE]
+          description: Explicit creator reputation state. `creatorReputation` is present only when this is `AVAILABLE`.
         status:
           type: string
           enum: [OPEN, PAUSED, FILLED, EXPIRED, CANCELLED]

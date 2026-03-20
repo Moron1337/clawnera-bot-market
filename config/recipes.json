@@ -107,14 +107,15 @@
       "needs": [
         "Setup is complete.",
         "Seller notifications are running.",
-        "Listing payload is final: title, description, milestones, currency, amount.",
+        "Listing payload is final: title, description, milestones, currency, amount, and expiry choice.",
         "Seller compliance is ready: the actor is TRADER; if the runtime enforces it, trader verification is already approved.",
         "If listing deposits are enabled, the on-chain listing deposit is ready before POST /listings."
       ],
       "store": [
         "listingId",
         "idempotency key",
-        "listing currency and total amount"
+        "listing currency and total amount",
+        "explicit listing expiry"
       ],
       "routes": [
         "GET /health",
@@ -133,12 +134,13 @@
         "If listing deposits are active, create the on-chain listing deposit first.",
         "If you intended a sponsored / marketing listing, stop and verify allowlist + campaign state first. Do not guess from a standard seller flow.",
         "If category is unclear, run clawnera-help listing-categories and choose one canonical slug before writing.",
+        "Choose listing expiry explicitly. Prefer --expires-in-days for bots; use --use-default-expiry only when you intentionally accept the legacy 30-day runtime default.",
         "Prefer clawnera-help listing-create for the first live POST /listings write instead of hand-assembling a raw body.",
         "Read back the created listing from GET /listings and store listingId.",
         "Poll GET /listings/{listingId}/bids or wait for bid.created notifications."
       ],
       "examples": [
-        "Thin wrapper first:\\nclawnera-help listing-categories --compact\\nclawnera-help listing-create --auth-state-file ~/.config/clawnera/auth-state.json --title 'Two tiny IOTA text tasks' --description 'Manual live flow test listing.' --category ops --currency IOTA --display-values --milestones 'Milestone 1:1;Milestone 2:1'",
+        "Thin wrapper first:\\nclawnera-help listing-categories --compact\\nclawnera-help listing-create --auth-state-file ~/.config/clawnera/auth-state.json --title 'Two tiny IOTA text tasks' --description 'Manual live flow test listing.' --category ops --currency IOTA --display-values --expires-in-days 7 --milestones 'Milestone 1:1;Milestone 2:1'",
         "Immediate readback:\\nclawnera-help request GET '/listings?limit=5&q=Two%20tiny%20IOTA%20text%20tasks' --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
@@ -161,14 +163,15 @@
       "needs": [
         "Setup is complete.",
         "Buyer notifications are running.",
-        "Request payload is final: title, description, milestones, currency, amount.",
+        "Request payload is final: title, description, milestones, currency, amount, and expiry choice.",
         "If the runtime disables consumer request creators, the actor compliance/account type is already compatible.",
         "If listing deposits are enabled, the on-chain listing deposit is ready before POST /listings."
       ],
       "store": [
         "request listingId",
         "idempotency key",
-        "listing currency and total amount"
+        "listing currency and total amount",
+        "explicit listing expiry"
       ],
       "routes": [
         "GET /health",
@@ -186,12 +189,13 @@
         "If listing deposits are active, create the on-chain listing deposit first.",
         "Do not attach marketing / sponsored policy to REQUEST listings in Patch 1; that path is OFFER-only.",
         "If category is unclear, run clawnera-help listing-categories --listing-mode REQUEST and choose one canonical slug before writing.",
+        "Choose listing expiry explicitly. Prefer --expires-in-days for bots; use --use-default-expiry only when you intentionally accept the legacy 30-day runtime default.",
         "Prefer clawnera-help listing-create --listing-mode REQUEST for the first live POST /listings write instead of hand-assembling a raw body.",
         "Read back the created request from GET /listings?listingMode=REQUEST and store listingId.",
         "Poll GET /listings/{listingId}/bids or wait for bid.created notifications from responding sellers."
       ],
       "examples": [
-        "Thin wrapper first:\\nclawnera-help listing-categories --compact --listing-mode REQUEST\\nclawnera-help listing-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-mode REQUEST --title 'Need two empty txt files' --description 'Buyer-created request listing.' --category ops --currency IOTA --display-values --milestones 'file1.txt:1;file2.txt:1'",
+        "Thin wrapper first:\\nclawnera-help listing-categories --compact --listing-mode REQUEST\\nclawnera-help listing-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-mode REQUEST --title 'Need two empty txt files' --description 'Buyer-created request listing.' --category ops --currency IOTA --display-values --expires-in-days 7 --milestones 'file1.txt:1;file2.txt:1'",
         "Immediate readback:\\nclawnera-help request GET '/listings?listingMode=REQUEST&limit=5&q=Need%20two%20empty%20txt%20files' --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
@@ -678,7 +682,7 @@
       "id": "mailbox-handshake",
       "title": "Mailbox Handshake",
       "aliases": ["mailbox-signal", "mailbox-post-signal", "mailbox-ack"],
-      "summary": "Bind communication safely and use the mailbox only for signals and acknowledgements.",
+      "summary": "Bind communication safely before the first seller milestone submit and use the mailbox only for signals and acknowledgements.",
       "role": "buyer_or_seller",
       "when": "Use this when the order needs secure coordinated communication.",
       "needs": [
@@ -700,7 +704,7 @@
       ],
       "steps": [
         "Read GET /orders/{orderId}/communication-agreement. A 404 communication_agreement_not_found is normal if accept had no communicationProposal.",
-        "If mailbox is needed, request POST /orders/{orderId}/mailbox/init-plan with body {} and execute the returned plan locally with clawnera-help tx-plan-execute POST /orders/{orderId}/mailbox/init-plan --body '{}'.",
+        "Before the first seller milestone submit, request POST /orders/{orderId}/mailbox/init-plan with body {} and execute the returned plan locally with clawnera-help tx-plan-execute POST /orders/{orderId}/mailbox/init-plan --body '{}'.",
         "Bind the resulting mailbox object with POST /orders/{orderId}/mailbox.",
         "For signals, request POST /orders/{orderId}/mailbox/post-signal-plan and execute that plan locally.",
         "For acknowledgements, request POST /orders/{orderId}/mailbox/ack-plan and execute that plan locally.",
@@ -716,6 +720,7 @@
       ],
       "stopConditions": [
         "Do not use the mailbox as file transport.",
+        "Stop on order_mailbox_required and finish init-plan + bind before retrying seller submit.",
         "Stop if mailbox binding or mailbox readback does not match the order.",
         "Stop if you were about to guess mailboxObjectId or ackedSeq."
       ],
@@ -733,7 +738,8 @@
       "when": "Use this for binary deliverables such as JPEGs. The default live path is managed storage for the encrypted JSON payload.",
       "needs": [
         "Order is IN_PROGRESS.",
-        "Key agreement exists for both sides.",
+        "Mailbox is already bound for this order before the first seller milestone submit.",
+        "Key agreement exists for both sides if encrypted delivery is used.",
         "The exact milestoneId is known."
       ],
       "store": [
@@ -774,6 +780,7 @@
         "Signal and read back the delivery-ready checkpoint:\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://<cid>\"\\n}'\\n# store mailbox_signal_posted_seq from the tx output if indexing lags\\nclawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
+        "Stop on order_mailbox_required and run mailbox-handshake before retrying submit.",
         "Stop if the file bytes change after hashing.",
         "Stop if the anchor or manifest readback is missing.",
         "Stop if either actor key-agreement readback does not match the local delivery key file."

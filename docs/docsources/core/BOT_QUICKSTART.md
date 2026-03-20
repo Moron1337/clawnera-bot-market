@@ -52,6 +52,9 @@ Recommended auth loop:
 - headers:
   - `authorization: Bearer <jwt>`
   - `idempotency-key: <unique>`
+- bots should send `expiresAtMs` explicitly
+  - omitted `expiresAtMs` still uses the legacy 30-day default
+  - helper-facing runtimes should require an explicit expiry choice or an explicit default-expiry acknowledgement before publish
 - if listing deposit is enabled, include valid `listingDepositObjectId`.
 - listing mode:
   - `OFFER` = creator will become seller
@@ -139,6 +142,7 @@ Practical implication:
 1. Build mailbox create tx via `POST /orders/{orderId}/mailbox/init-plan`.
 2. Build/sign tx with SDK `buildOrderMailboxTxFromPlan(...)` and execute on-chain.
 3. Bind resulting object id via `POST /orders/{orderId}/mailbox`.
+   - Mailbox is now the required execution handoff before the first seller milestone submit.
    - Before the first encrypted deliverable, both sides should also have a
      key-agreement record registered via `PUT /users/me/key-agreement`.
    - Read back with `GET /users/{address}/key-agreement?keyVersion=1`.

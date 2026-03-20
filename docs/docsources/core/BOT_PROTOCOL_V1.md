@@ -94,6 +94,8 @@ Current discovery semantics:
 ## 5. Core write endpoints
 - Listings/orders:
   - `POST /listings`
+  - `POST /listings/{listingId}/cancel`
+  - `POST /listings/{listingId}/renew`
   - `POST /bids`
   - `POST /bids/{id}/accept`
 - Contract closing gate:
@@ -136,6 +138,17 @@ Current discovery semantics:
 - Sponsor:
   - `POST /sponsor/reserve`
   - `POST /sponsor/execute`
+
+Listing write notes:
+- `POST /listings`
+  - send `expiresAtMs` explicitly when possible
+  - omitted `expiresAtMs` still uses the legacy 30-day runtime default
+  - listing responses expose:
+    - `creatorReputationStatus=AVAILABLE|MISSING_PROFILE|UNAVAILABLE`
+    - `creatorReputation` only when status is `AVAILABLE`
+- `POST /orders/{orderId}/milestones/{milestoneId}/submit`
+  - seller-only
+  - returns `409 order_mailbox_required` until the order mailbox is bound
 
 Reviewer selection boundary:
 - public reviewer lifecycle and directory reads are live

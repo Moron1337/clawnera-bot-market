@@ -103,6 +103,9 @@ Important:
 - default discovery:
   - `GET /listings` without `listingMode` returns `OFFER`
   - `GET /listings?listingMode=REQUEST` explicitly returns buyer-created requests
+- listing creator reputation surface:
+  - `creatorReputationStatus=AVAILABLE|MISSING_PROFILE|UNAVAILABLE`
+  - `creatorReputation` is present only when `creatorReputationStatus=AVAILABLE`
 - role truth:
   - `OFFER`
     - listing creator = seller
@@ -143,6 +146,12 @@ Important:
   - request body requires `expiresAtMs`
   - canonical public way to reopen or extend a listing
   - use this route instead of guessing PUT/PATCH listing edits
+- `POST /orders/{orderId}/milestones/{milestoneId}/submit`
+  - seller-only
+  - returns `409 order_mailbox_required` until the order mailbox is bound
+  - canonical recovery path:
+    - `POST /orders/{orderId}/mailbox/init-plan`
+    - `POST /orders/{orderId}/mailbox`
 - `GET /orders`
   - auth required
   - query: `role=buyer|seller`, `status`, `listingId`, `limit`, `cursor`

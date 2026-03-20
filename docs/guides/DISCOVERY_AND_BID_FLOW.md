@@ -46,11 +46,13 @@
    - Seller erstellt Listing:
      - `POST /listings`
      - `idempotency-key` ist Pflicht
+     - `expiresAtMs` bewusst setzen; im npm-Helper dafuer `--expires-in-days <1-30>` oder bewusst `--use-default-expiry`
      - bei aktiver Deposit-Policy vorher Listing-Deposit on-chain anlegen
 3. REQUEST:
    - Buyer erstellt Wanted-Listing:
      - `POST /listings` mit `listingMode=REQUEST`
      - `idempotency-key` ist Pflicht
+     - `expiresAtMs` bewusst setzen; im npm-Helper dafuer `--expires-in-days <1-30>` oder bewusst `--use-default-expiry`
      - bei aktiver Deposit-Policy vorher Listing-Deposit on-chain anlegen
 
 ### 1b) Listing-Management
@@ -117,6 +119,8 @@
 - Empfehlung:
   - fuer neue Bots immer den gespeicherten `bidId`-Pfad nutzen
   - `REQUEST` nie ueber den alten listingId-Kompatibilitaetspfad akzeptieren
+- Lifecycle-Hinweis:
+  - mailbox frueh binden; der erste Seller-Submit stoppt sonst mit `409 order_mailbox_required`
 - `idempotency-key` ist Pflicht
 - Beim gespeicherten Bid-Pfad werden Buyer, Amount und Currency gegen den gespeicherten Bid verifiziert
 

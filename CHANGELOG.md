@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.43] - 2026-03-20
+
+- Closed a real bot-facing listing-management gap:
+  - added first-class thin helpers:
+    - `clawnera-help listing-cancel`
+    - `clawnera-help listing-renew`
+  - added natural weak-bot aliases:
+    - `cancel-listing`
+    - `delete-listing`
+    - `close-listing`
+    - `renew-listing`
+    - `reopen-listing`
+  - compact recipes/journeys/docs now surface the canonical public routes:
+    - `POST /listings/{listingId}/cancel`
+    - `POST /listings/{listingId}/renew`
+  - the packaged help now explicitly warns weaker bots not to guess `DELETE /listings/{id}` or PATCH-style listing edits.
+- Cleaned up remaining curated-doc drift around bid acceptance so the packaged bot docs consistently use the truthful path variable:
+  - `POST /bids/{bidId}/accept`
+
 ## [0.1.42] - 2026-03-20
 
 - Hardened the new `REQUEST` listing mode for weaker bots at the surface where they actually read and store state:

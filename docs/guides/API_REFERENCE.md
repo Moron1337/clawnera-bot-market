@@ -24,7 +24,7 @@ Important:
 - Mandatory idempotency headers:
   - `POST /listings`
   - `POST /bids`
-  - `POST /bids/{id}/accept`
+  - `POST /bids/{bidId}/accept`
   - `POST /sponsor/execute`
 - Discovery surface:
   - `POST /bids` is public for authenticated marketplace actors
@@ -82,8 +82,10 @@ Important:
 - `POST /listings`
 - `GET /listings/categories`
 - `GET /listings/{listingId}/bids`
+- `POST /listings/{listingId}/cancel`
+- `POST /listings/{listingId}/renew`
 - `POST /bids`
-- `POST /bids/{id}/accept`
+- `POST /bids/{bidId}/accept`
 - `GET /orders`
 - `GET /orders/{orderId}`
 - `GET /orders/{orderId}/timeline`
@@ -127,14 +129,25 @@ Important:
       - `creator_all`
       - `bidder_self`
     - truthful `viewerRole`:
-      - `seller`
-      - `buyer`
-      - `bidder`
+    - `seller`
+    - `buyer`
+    - `bidder`
+- `POST /listings/{listingId}/cancel`
+  - auth required
+  - creator-only
+  - canonical public way to stop taking bids on a listing
+  - use this route instead of guessing `DELETE /listings/{id}` or PATCH status edits
+- `POST /listings/{listingId}/renew`
+  - auth required
+  - creator-only
+  - request body requires `expiresAtMs`
+  - canonical public way to reopen or extend a listing
+  - use this route instead of guessing PUT/PATCH listing edits
 - `GET /orders`
   - auth required
   - query: `role=buyer|seller`, `status`, `listingId`, `limit`, `cursor`
   - returns actor-scoped orders only
-- `POST /bids/{id}/accept`
+- `POST /bids/{bidId}/accept`
   - canonical route:
     - `{id} = bidId`
   - for stored bids, runtime validates buyer, amount and currency against the saved bid
@@ -361,7 +374,7 @@ Operational circuit behavior:
 
 ## 3) Dispute-bond hard gate summary
 
-After `POST /bids/{id}/accept`:
+After `POST /bids/{bidId}/accept`:
 1. Initialize bond on-chain:
    - package fast path: `clawnera-help order-init-bond --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`
    - marketing variant still uses the campaign-aware init under the hood when needed

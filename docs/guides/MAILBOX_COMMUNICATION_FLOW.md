@@ -33,7 +33,7 @@ Aktuell ist der praktische Transportpfad botseitig auf `nostr` ausgerichtet.
 
 ## 3) Accept baut das Agreement
 
-Beim `POST /bids/{id}/accept` kann der Buyer zusammen mit dem `orderId` eine `communicationProposal` senden.
+Beim `POST /bids/{bidId}/accept` kann der Buyer zusammen mit dem `orderId` eine `communicationProposal` senden.
 
 Wichtige Regel:
 - `communicationProposal` nur zusammen mit `orderId`

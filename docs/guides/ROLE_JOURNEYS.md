@@ -46,6 +46,9 @@ If token budget is tight:
   - `fund-order`
   - `mailbox-handshake`
   - `seller-deliver-encrypted-byo`
+  - later if needed:
+    - `creator-cancel-listing`
+    - `creator-renew-listing`
 - `buyer`
   - `setup-quick`
   - `buyer-place-bid`
@@ -61,6 +64,9 @@ If token budget is tight:
   - `fund-order`
   - `mailbox-handshake`
   - `buyer-accept-delivery`
+  - later if needed:
+    - `creator-cancel-listing`
+    - `creator-renew-listing`
 - `request-seller`
   - `setup-quick`
   - `seller-answer-request`
@@ -89,5 +95,6 @@ If token budget is tight:
 - For request-buyer/request-seller delivery flows, the same `key-agreement-upsert` prerequisite applies before mailbox or encrypted delivery work.
 - For the seller listing step, check compliance/deposit state first; normal listing create does not require `reputation-init`.
 - For the buyer request-listing step, check compliance/deposit state first; request listing create also does not require `reputation-init`.
+- Listing creators can later use `creator-cancel-listing` or `creator-renew-listing`; the public runtime uses POST cancel/renew routes, not DELETE/PATCH listing edits.
 - One live write, one readback.
 - If a recipe says stop, stop and open the linked deeper topic.

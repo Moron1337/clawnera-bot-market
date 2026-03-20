@@ -39,6 +39,8 @@ Auth note:
    - `clawnera-help recipe setup-quick`
    - `clawnera-help recipe seller-create-listing`
    - `clawnera-help recipe buyer-create-request`
+   - `clawnera-help recipe creator-cancel-listing`
+   - `clawnera-help recipe creator-renew-listing`
    - `clawnera-help recipe buyer-place-bid`
    - `clawnera-help recipe seller-answer-request`
     - `clawnera-help recipe key-agreement-upsert`
@@ -53,6 +55,12 @@ Auth note:
   - create an OFFER listing safely; normal seller listing needs compliance/deposit preflight, not reputation-init
 - `buyer-create-request`
   - create a REQUEST listing safely; buyer request create needs compliance/deposit preflight, not reputation-init
+- `creator-cancel-listing`
+  - cancel an OFFER or REQUEST listing from the creator wallet
+  - use `POST /listings/{listingId}/cancel`, not `DELETE` or `PATCH`
+- `creator-renew-listing`
+  - reopen or extend a listing from the creator wallet
+  - use `POST /listings/{listingId}/renew`, not `PUT` or `PATCH`
 - `buyer-place-bid`
   - place a buyer bid on an OFFER listing and wait for accept
 - `seller-answer-request`
@@ -106,6 +114,7 @@ Auth note:
 - Stop on the recipe stop-conditions instead of guessing.
 - Normal seller listing create is a compliance/deposit problem first; do not jump to `reputation-init` unless you are explicitly doing reviewer onboarding.
 - Normal request listing create is also not a reputation-init problem; do not send a buyer into reviewer setup just to publish a wanted request.
+- Listing cancel and renew are real public routes; do not guess `DELETE /listings/{id}` or PATCH-style status edits.
 
 ## When To Leave Recipe Mode
 

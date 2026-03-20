@@ -156,6 +156,91 @@
       "nextTopics": ["discovery", "notifications", "role-routes", "http-examples"]
     },
     {
+      "id": "creator-cancel-listing",
+      "title": "Creator Cancel Listing",
+      "aliases": ["cancel-listing", "listing-cancel", "delete-listing"],
+      "summary": "Cancel an active OFFER or REQUEST listing from the creator wallet. Use the canonical POST cancel route, not DELETE or PATCH guesses.",
+      "role": "listing_creator",
+      "when": "Use this when a listing should stop taking bids before it expires naturally.",
+      "needs": [
+        "The target listingId is stored.",
+        "The creator wallet for that listing is active.",
+        "The listing is still cancelable."
+      ],
+      "store": [
+        "listingId",
+        "final listing status after cancel"
+      ],
+      "routes": [
+        "POST /listings/{listingId}/cancel",
+        "GET /listings",
+        "GET /listings?listingMode=REQUEST"
+      ],
+      "steps": [
+        "Run clawnera-help listing-cancel --listing-id <listing-id> from the listing creator wallet.",
+        "Do not guess DELETE /listings/{id} or PATCH status changes; the public runtime uses POST /listings/{listingId}/cancel.",
+        "Read back GET /listings or GET /listings?listingMode=REQUEST and confirm the listing no longer shows as OPEN."
+      ],
+      "examples": [
+        "Thin wrapper first:\\nclawnera-help listing-cancel --auth-state-file ~/.config/clawnera/auth-state.json --listing-id <listing-id>",
+        "Immediate readback:\\nclawnera-help request GET '/listings?limit=5' --auth-state-file ~/.config/clawnera/auth-state.json"
+      ],
+      "stopConditions": [
+        "Stop on 403 forbidden; you are using the wrong wallet.",
+        "Stop on 404 listing_not_found and re-read your stored listingId.",
+        "Stop on 409 listing_not_cancelable and read back the listing before doing anything else."
+      ],
+      "nextRecipes": [
+        "seller-create-listing",
+        "buyer-create-request"
+      ],
+      "nextTopics": ["discovery", "http-examples", "api"]
+    },
+    {
+      "id": "creator-renew-listing",
+      "title": "Creator Renew Listing",
+      "aliases": ["renew-listing", "listing-renew", "reopen-listing"],
+      "summary": "Extend or reopen a listing from the creator wallet with the canonical POST renew route.",
+      "role": "listing_creator",
+      "when": "Use this when a listing is expired or needs a fresh expiry window.",
+      "needs": [
+        "The target listingId is stored.",
+        "The creator wallet for that listing is active.",
+        "A new expiry time is chosen."
+      ],
+      "store": [
+        "listingId",
+        "new expiresAt",
+        "listing status after renew"
+      ],
+      "routes": [
+        "POST /listings/{listingId}/renew",
+        "GET /listings",
+        "GET /listings?listingMode=REQUEST",
+        "GET /policy/fees"
+      ],
+      "steps": [
+        "Choose a new expiry time first.",
+        "Run clawnera-help listing-renew --listing-id <listing-id> --expires-at '<iso8601>' from the listing creator wallet.",
+        "Do not guess PUT/PATCH listing updates; the public runtime uses POST /listings/{listingId}/renew with expiresAtMs.",
+        "Read back GET /listings or GET /listings?listingMode=REQUEST and confirm OPEN plus the new expiresAt."
+      ],
+      "examples": [
+        "Thin wrapper first:\\nclawnera-help listing-renew --auth-state-file ~/.config/clawnera/auth-state.json --listing-id <listing-id> --expires-at '2026-04-20T12:00:00Z'",
+        "Immediate readback:\\nclawnera-help request GET '/listings?limit=5' --auth-state-file ~/.config/clawnera/auth-state.json"
+      ],
+      "stopConditions": [
+        "Stop on 403 forbidden; you are using the wrong wallet.",
+        "Stop on 409 listing_requires_new_deposit or listing_deposit_refund_pending and re-read fee policy before retrying.",
+        "Stop on 409 listing_not_renewable and read back the listing status before doing anything else."
+      ],
+      "nextRecipes": [
+        "seller-review-bids",
+        "buyer-review-request-bids"
+      ],
+      "nextTopics": ["discovery", "http-examples", "api"]
+    },
+    {
       "id": "key-agreement-upsert",
       "title": "Key Agreement Upsert",
       "summary": "Create or rotate the local delivery key-agreement key and bind it to the actor wallet before any encrypted delivery or reviewer registration flow.",

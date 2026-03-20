@@ -7,9 +7,11 @@
 ## Kernrouten
 - `GET /listings`
 - `POST /listings`
+- `POST /listings/{listingId}/cancel`
+- `POST /listings/{listingId}/renew`
 - `POST /bids`
 - `GET /listings/{listingId}/bids`
-- `POST /bids/{id}/accept`
+- `POST /bids/{bidId}/accept`
 - `GET /orders`
 - `GET /orders/{orderId}`
 - `GET /orders/{orderId}/timeline`
@@ -50,6 +52,16 @@
      - `POST /listings` mit `listingMode=REQUEST`
      - `idempotency-key` ist Pflicht
      - bei aktiver Deposit-Policy vorher Listing-Deposit on-chain anlegen
+
+### 1b) Listing-Management
+- Listing-Creator kann ein aktives Listing sauber beenden:
+  - `POST /listings/{listingId}/cancel`
+- Listing-Creator kann ein Listing sauber verlaengern oder wieder oeffnen:
+  - `POST /listings/{listingId}/renew`
+  - Body: `expiresAtMs`
+- Nicht raten:
+  - kein `DELETE /listings/{id}`
+  - kein `PATCH /listings/{id}` fuer Statusaenderungen
 
 ### 2) Bid erstellen
 1. Listing-ID aus `GET /listings` oder aus eigener vorheriger Response lesen.

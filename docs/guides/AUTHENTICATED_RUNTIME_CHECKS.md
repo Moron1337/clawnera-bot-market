@@ -74,7 +74,7 @@ curl -fsS \
 Worauf du achten solltest:
 - passende Rolle fuer den Flow
 - `listing.create` vor `POST /listings`
-- `order.create_from_bid` vor `POST /bids/{id}/accept`
+- `order.create_from_bid` vor `POST /bids/{bidId}/accept`
 - sponsor policy/capabilities vor Marketing- oder Platform-funded Flows
 
 ## 3b) Session-Readback und Refresh

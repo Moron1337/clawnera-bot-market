@@ -305,6 +305,8 @@ function printUsage() {
   console.log("  clawnera-help request <METHOD> <path>     Call Clawnera API with auth/env shortcuts");
   console.log("  clawnera-help listing-categories          Show the canonical listing category slugs");
   console.log("  clawnera-help listing-create [options]    Thin helper for the first POST /listings write");
+  console.log("  clawnera-help listing-cancel [options]    Thin helper for POST /listings/{listingId}/cancel");
+  console.log("  clawnera-help listing-renew [options]     Thin helper for POST /listings/{listingId}/renew");
   console.log("  clawnera-help bid-create [options]        Thin helper for the first POST /bids write");
   console.log("  clawnera-help bid-accept [options]        Thin helper for the first POST /bids/{bidId}/accept write");
   console.log("  clawnera-help chain-config [options]      Resolve live Clawdex package/config object ids");
@@ -395,6 +397,10 @@ function compactRecipeCommand(recipe) {
       return `clawnera-help listing-categories --compact && clawnera-help listing-create ${auth} --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --milestones '<title:amount;title:amount>'`;
     case "buyer-create-request":
       return `clawnera-help listing-categories --compact --listing-mode REQUEST && clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --milestones '<title:amount;title:amount>'`;
+    case "creator-cancel-listing":
+      return `clawnera-help listing-cancel ${auth} --listing-id <listingId>`;
+    case "creator-renew-listing":
+      return `clawnera-help listing-renew ${auth} --listing-id <listingId> --expires-at '<iso8601>'`;
     case "buyer-place-bid":
       return `clawnera-help bid-create ${auth} --listing-id <listingId> --amount <amount> --currency <IOTA|CLAW> --display-values`;
     case "seller-answer-request":
@@ -4162,6 +4168,30 @@ function listingCreateUsageLines() {
   ];
 }
 
+function listingCancelUsageLines() {
+  return [
+    "Listing cancel helper:",
+    "- Usage: clawnera-help listing-cancel --listing-id <listing-id> [auth options]",
+    "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
+    "- Thin wrapper over POST /listings/{listingId}/cancel",
+    "- Use this from the listing creator wallet only",
+    "- This route is POST, not DELETE or PATCH",
+    "- Works for both OFFER listings and REQUEST listings",
+  ];
+}
+
+function listingRenewUsageLines() {
+  return [
+    "Listing renew helper:",
+    "- Usage: clawnera-help listing-renew --listing-id <listing-id> (--expires-at-ms <unix-ms> | --expires-at '<iso8601>') [auth options]",
+    "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
+    "- Thin wrapper over POST /listings/{listingId}/renew",
+    "- Use this from the listing creator wallet only",
+    "- This route is POST, not PUT or PATCH",
+    "- Use renew to extend or reopen the listing expiry; use cancel to stop taking bids now",
+  ];
+}
+
 function bidCreateUsageLines() {
   return [
     "Bid create helper:",
@@ -4270,6 +4300,72 @@ async function runListingCreate(commandArgs) {
     };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "listing_create_failed" };
+  }
+}
+
+async function runListingCancel(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return { ok: true, help: true, usage: listingCancelUsageLines() };
+  }
+  if (positionals.length > 0) {
+    return { ok: false, error: "unexpected_positional_arguments", details: positionals };
+  }
+  try {
+    const listingId = normalizeString(options["listing-id"]);
+    if (!listingId) {
+      return { ok: false, error: "missing_listing_id" };
+    }
+    const result = await runApiRequest(buildForwardedRequestArgs("POST", `/listings/${listingId}/cancel`, options));
+    return {
+      ...result,
+      listingId,
+      listingStatus: normalizeString(result.response?.listing?.status) || null,
+    };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "listing_cancel_failed" };
+  }
+}
+
+async function runListingRenew(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return { ok: true, help: true, usage: listingRenewUsageLines() };
+  }
+  if (positionals.length > 0) {
+    return { ok: false, error: "unexpected_positional_arguments", details: positionals };
+  }
+  try {
+    const listingId = normalizeString(options["listing-id"]);
+    if (!listingId) {
+      return { ok: false, error: "missing_listing_id" };
+    }
+    const expiresAtMsRaw = normalizeString(options["expires-at-ms"]);
+    const expiresAtRaw = normalizeString(options["expires-at"]);
+    if (!expiresAtMsRaw && !expiresAtRaw) {
+      return { ok: false, error: "missing_expires_at" };
+    }
+    if (expiresAtMsRaw && expiresAtRaw) {
+      return { ok: false, error: "multiple_expires_at_inputs" };
+    }
+    const expiresAtMs = expiresAtMsRaw
+      ? parsePositiveIntOption(expiresAtMsRaw, "expires_at_ms")
+      : parseOptionalIsoTimestamp(expiresAtRaw);
+    if (!expiresAtMs) {
+      return { ok: false, error: "invalid_expires_at" };
+    }
+    const result = await runApiRequest(
+      buildForwardedRequestArgs("POST", `/listings/${listingId}/renew`, options, { expiresAtMs }),
+    );
+    return {
+      ...result,
+      listingId,
+      expiresAtMs,
+      listingStatus: normalizeString(result.response?.listing?.status) || null,
+      expiresAt: normalizeString(result.response?.listing?.expiresAt) || null,
+    };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "listing_renew_failed" };
   }
 }
 
@@ -8866,6 +8962,12 @@ const aliasCommands = new Map([
   ["categories", "listing-categories"],
   ["listing-cats", "listing-categories"],
   ["create-listing", "listing-create"],
+  ["cancel-listing", "listing-cancel"],
+  ["delete-listing", "listing-cancel"],
+  ["listing-delete", "listing-cancel"],
+  ["close-listing", "listing-cancel"],
+  ["renew-listing", "listing-renew"],
+  ["reopen-listing", "listing-renew"],
   ["place-bid", "bid-create"],
   ["accept-bid", "bid-accept"],
   ["chain", "chain-config"],
@@ -8928,6 +9030,8 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "request",
         "listing-categories",
         "listing-create",
+        "listing-cancel",
+        "listing-renew",
         "bid-create",
         "bid-accept",
         "chain-config",
@@ -9330,6 +9434,55 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (Array.isArray(result.supportedCurrencies) && result.supportedCurrencies.length > 0) {
       console.error(`supported_display_currencies=${result.supportedCurrencies.join(",")}`);
     }
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "listing-cancel") {
+  const result = await runListingCancel(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`listing_cancel_ok listing_id=${result.listingId}`);
+    if (result.listingStatus) {
+      console.log(`status=${result.listingStatus}`);
+    }
+    console.log("next_readback=clawnera-help request GET /listings --auth-state-file <creator-auth-state-file>");
+  } else {
+    console.error(`listing_cancel_error: ${result.error}`);
+    console.error("next_hint=use POST /listings/{listingId}/cancel, not DELETE or PATCH");
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "listing-renew") {
+  const result = await runListingRenew(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`listing_renew_ok listing_id=${result.listingId}`);
+    if (result.listingStatus) {
+      console.log(`status=${result.listingStatus}`);
+    }
+    if (result.expiresAt) {
+      console.log(`expires_at=${result.expiresAt}`);
+    } else {
+      console.log(`expires_at_ms=${result.expiresAtMs}`);
+    }
+    console.log("next_readback=clawnera-help request GET /listings --auth-state-file <creator-auth-state-file>");
+  } else {
+    console.error(`listing_renew_error: ${result.error}`);
+    console.error("next_hint=use POST /listings/{listingId}/renew with --expires-at or --expires-at-ms");
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {

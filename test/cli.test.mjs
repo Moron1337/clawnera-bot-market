@@ -77,6 +77,8 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /clawnera-help request <METHOD> <path>/);
   assert.match(result.stdout, /clawnera-help listing-categories/);
   assert.match(result.stdout, /clawnera-help listing-create/);
+  assert.match(result.stdout, /clawnera-help listing-cancel/);
+  assert.match(result.stdout, /clawnera-help listing-renew/);
   assert.match(result.stdout, /clawnera-help bid-create/);
   assert.match(result.stdout, /clawnera-help bid-accept/);
   assert.match(result.stdout, /clawnera-help key-agreement-upsert/);
@@ -114,6 +116,8 @@ test("help json output includes auth-login command", () => {
   assert.ok(payload.commands.includes("request"));
   assert.ok(payload.commands.includes("listing-categories"));
   assert.ok(payload.commands.includes("listing-create"));
+  assert.ok(payload.commands.includes("listing-cancel"));
+  assert.ok(payload.commands.includes("listing-renew"));
   assert.ok(payload.commands.includes("bid-create"));
   assert.ok(payload.commands.includes("bid-accept"));
   assert.ok(payload.commands.includes("key-agreement-upsert"));
@@ -179,6 +183,8 @@ test("thin write helpers print usage", () => {
   for (const [command, pattern] of [
     ["listing-categories", /Listing categories helper/],
     ["listing-create", /Listing create helper/],
+    ["listing-cancel", /Listing cancel helper/],
+    ["listing-renew", /Listing renew helper/],
     ["bid-create", /Bid create helper/],
     ["bid-accept", /Bid accept helper/],
     ["reviewer-invites", /Reviewer invites helper/],
@@ -197,6 +203,36 @@ test("listing-create help explains display values and categories", () => {
   assert.match(result.stdout, /--display-values/);
   assert.match(result.stdout, /--listing-mode OFFER\|REQUEST/);
   assert.match(result.stdout, /REQUEST means the listing creator is the future buyer/);
+});
+
+test("listing lifecycle helpers explain canonical POST routes", () => {
+  const cancelResult = runCli(["listing-cancel", "--help"]);
+  assert.equal(cancelResult.status, 0);
+  assert.match(cancelResult.stdout, /POST \/listings\/\{listingId\}\/cancel/);
+  assert.match(cancelResult.stdout, /not DELETE or PATCH/);
+
+  const renewResult = runCli(["listing-renew", "--help"]);
+  assert.equal(renewResult.status, 0);
+  assert.match(renewResult.stdout, /POST \/listings\/\{listingId\}\/renew/);
+  assert.match(renewResult.stdout, /--expires-at-ms <unix-ms> \| --expires-at '<iso8601>'/);
+  assert.match(renewResult.stdout, /not PUT or PATCH/);
+});
+
+test("natural lifecycle aliases resolve to the canonical listing helpers", () => {
+  const deleteAlias = runCli(["delete-listing", "--help"]);
+  assert.equal(deleteAlias.status, 0);
+  assert.match(deleteAlias.stdout, /Listing cancel helper/);
+
+  const reopenAlias = runCli(["reopen-listing", "--help"]);
+  assert.equal(reopenAlias.status, 0);
+  assert.match(reopenAlias.stdout, /Listing renew helper/);
+});
+
+test("compact cancel recipe prints the direct helper command", () => {
+  const result = runCli(["next", "creator-cancel-listing"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /do:clawnera-help listing-cancel --auth-state-file ~\/\.config\/clawnera\/auth-state\.json --listing-id <listingId>/);
+  assert.match(result.stdout, /write:POST \/listings\/\{listingId\}\/cancel/);
 });
 
 test("bid-create help explains display values", () => {

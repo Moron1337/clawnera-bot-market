@@ -1291,6 +1291,119 @@ test("listing-create rejects invalid category before posting", async () => {
   assert.deepEqual(payload.validCategories, ["dev", "design", "marketing", "ops", "security", "other"]);
 });
 
+test("listing-cancel posts the canonical cancel route", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-cancel-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const mock = await startMockServer({
+    "POST /listings/listing-1/cancel": (request) => ({
+      status: 200,
+      body: {
+        listing: {
+          id: "listing-1",
+          status: "CANCELLED"
+        },
+        seen: request.body
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: "0x1111111111111111111111111111111111111111111111111111111111111111",
+        alias: "creator"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-cancel",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-id",
+      "listing-1",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.listingId, "listing-1");
+    assert.equal(payload.listingStatus, "CANCELLED");
+    assert.equal(payload.response.seen, null);
+    assert.equal(mock.requests[0]?.method, "POST");
+    assert.equal(mock.requests[0]?.url, "/listings/listing-1/cancel");
+  } finally {
+    await mock.close();
+  }
+});
+
+test("listing-renew accepts an ISO timestamp and posts expiresAtMs to the canonical renew route", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-renew-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const renewIso = "2026-04-20T12:00:00Z";
+  const renewMs = Date.parse(renewIso);
+  const mock = await startMockServer({
+    "POST /listings/listing-1/renew": (request) => ({
+      status: 200,
+      body: {
+        listing: {
+          id: "listing-1",
+          status: "OPEN",
+          expiresAt: renewIso
+        },
+        seen: request.body
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: "0x1111111111111111111111111111111111111111111111111111111111111111",
+        alias: "creator"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-renew",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-id",
+      "listing-1",
+      "--expires-at",
+      renewIso,
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.listingId, "listing-1");
+    assert.equal(payload.listingStatus, "OPEN");
+    assert.equal(payload.expiresAt, renewIso);
+    assert.equal(payload.expiresAtMs, renewMs);
+    assert.deepEqual(payload.response.seen, { expiresAtMs: renewMs });
+    assert.equal(mock.requests[0]?.method, "POST");
+    assert.equal(mock.requests[0]?.url, "/listings/listing-1/renew");
+  } finally {
+    await mock.close();
+  }
+});
+
 test("bid-create infers bidder address and posts a canonical body", async () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-bid-create-"));
   const authStateFile = path.join(tempDir, "auth-state.json");

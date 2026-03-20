@@ -38,7 +38,7 @@
 | Route | Capability | API-Rollencheck | Kritische Preconditions / Hinweise |
 | --- | --- | --- | --- |
 | `POST /bids` | `bid.create` | `bidderAddress == auth.actorAddress` | Listing muss `OPEN` sein; Self-Bid verboten; `idempotency-key` Pflicht. |
-| `POST /bids/{id}/accept` | `order.create_from_bid` | `buyerAddress == auth.actorAddress`; `sellerAddress == listing.creatorAddress` | `{id}` ist der kanonische `bidId`; Listing muss `OPEN` sein; `idempotency-key` Pflicht; optional `communicationProposal` nur mit `orderId`. |
+| `POST /bids/{bidId}/accept` | `order.create_from_bid` | `buyerAddress == auth.actorAddress`; `sellerAddress == listing.creatorAddress` | `{bidId}` ist der kanonische `bidId`; Listing muss `OPEN` sein; `idempotency-key` Pflicht; optional `communicationProposal` nur mit `orderId`. |
 | `GET /listings/{listingId}/bids` | - | seller sees all; bidder sees self; outsiders forbidden | Query: `status`, `limit`, `cursor`; Response enthaelt `scope`. |
 | `GET /orders` | - | actor-scoped buyer/seller only | Query: `role`, `status`, `listingId`, `limit`, `cursor`. |
 | `GET /orders/{orderId}` | - | buyer/seller only | Einzel-Read fuer konkrete Order. |

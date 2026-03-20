@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.33] - 2026-03-20
+
+- Tightened the reviewer `claim-metrics` help path for weaker bots when multiple closed cases exist:
+  - `tx-plan-execute` now returns a direct `hint` plus the candidate `disputeCaseObjectIds` instead of only a generic failure.
+  - the packaged recipes and README now tell bots exactly how to confirm the correct closed case through `GET /reviewers/me/invites` and rerun with an explicit body.
+- Added stricter CLI coverage for the two easy-to-miss stop conditions in the reviewer cleanup path:
+  - ambiguous closed-case inference now stays fail-closed and prints candidates
+  - explicit `claim-metrics` requests now stop before any POST when reviewer metrics are already clear.
+- Added a few natural-language recipe aliases that weaker bots commonly guess first, including `mailbox-signal`, `open-dispute`, and `dispute-resolve`.
+- Accepted the natural `--auth-state <file>` shorthand as a real alias for `--auth-state-file <file>` so weaker bots do not fall into a silent `missing_bearer_token` path after guessing the shorter flag name.
+
 ## [0.1.32] - 2026-03-20
 
 - Hardened the live mailbox/dispute helper path for weaker bots:

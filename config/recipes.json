@@ -348,6 +348,7 @@
     {
       "id": "mailbox-handshake",
       "title": "Mailbox Handshake",
+      "aliases": ["mailbox-signal", "mailbox-post-signal", "mailbox-ack"],
       "summary": "Bind communication safely and use the mailbox only for signals and acknowledgements.",
       "role": "buyer_or_seller",
       "when": "Use this when the order needs secure coordinated communication.",
@@ -540,6 +541,7 @@
     {
       "id": "dispute-open",
       "title": "Open Dispute",
+      "aliases": ["open-dispute", "start-dispute"],
       "summary": "Open a dispute only from a valid rejected/disputed milestone and then follow the quorum path exactly.",
       "role": "buyer_or_seller",
       "when": "Use this when a milestone must move into formal dispute review.",
@@ -782,6 +784,7 @@
         "If you know the exact closed disputeCaseId, run clawnera-help tx-plan-execute POST /reviewers/{reviewerAddress}/claim-metrics --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.",
         "If you do not know the exact case id, the CLI may auto-fill it only when GET /reviewers/me/invites shows exactly one closed case for this reviewer.",
         "If there are zero or multiple closed cases, stop and pass the exact disputeCaseId yourself.",
+        "When the CLI stops with claim_metrics_dispute_case_ambiguous, copy one of the printed disputeCaseObjectIds, confirm it against GET /reviewers/me/invites, and rerun with an explicit body.",
         "Read back GET /reviewers/me/metrics again and confirm the pending claim flag cleared."
       ],
       "examples": [
@@ -844,6 +847,7 @@
     {
       "id": "resolve-dispute",
       "title": "Resolve Dispute Escrow",
+      "aliases": ["dispute-resolve", "finalize-dispute-resolution"],
       "summary": "Use the exact QuorumResolutionTicket and canonical resolve-escrow plan after finalization.",
       "role": "ticket_owner",
       "when": "Use this after the dispute is finalized or fallback-resolved.",
@@ -867,6 +871,10 @@
         "POST /disputes/{disputeCaseId}/resolve-escrow with that exact ticket id.",
         "Execute the returned tx locally.",
         "Read back the dispute and order state."
+      ],
+      "examples": [
+        "Use the same wallet that received the QuorumResolutionTicket:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/resolve-escrow --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"quorumResolutionTicketObjectId\": \"<ticket-object-id>\"\\n}'",
+        "Read back the closed dispute and terminal order immediately after resolution:\\nclawnera-help request GET /disputes/<dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request GET /orders/<order-id> --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
         "Stop if quorum_resolution_ticket_owner_mismatch is returned; switch back to the wallet that received the ticket.",

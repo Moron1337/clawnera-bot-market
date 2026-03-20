@@ -1019,6 +1019,10 @@ function runIotaFirstSteps(args) {
 function parseLongOptions(args) {
   const options = {};
   const positionals = [];
+  const optionAliases = new Map([
+    ["auth-state", "auth-state-file"],
+    ["publish-auth-state", "publish-auth-state-file"]
+  ]);
 
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index];
@@ -1033,7 +1037,8 @@ function parseLongOptions(args) {
 
     const trimmed = token.slice(2).trim();
     const separator = trimmed.indexOf("=");
-    const key = (separator >= 0 ? trimmed.slice(0, separator) : trimmed).trim().toLowerCase();
+    const rawKey = (separator >= 0 ? trimmed.slice(0, separator) : trimmed).trim().toLowerCase();
+    const key = optionAliases.get(rawKey) || rawKey;
     if (!key) {
       positionals.push(token);
       continue;
@@ -3208,6 +3213,15 @@ function resolveClaimMetricsDisputeCaseCandidate(invitesBody, reviewerAddress) {
   };
 }
 
+function buildClaimMetricsDisputeCaseHint(rawPath, disputeCaseObjectIds = []) {
+  const normalizedPath = typeof rawPath === "string" && rawPath.trim() ? rawPath.trim() : "/reviewers/<reviewer-address>/claim-metrics";
+  const candidateSuffix =
+    Array.isArray(disputeCaseObjectIds) && disputeCaseObjectIds.length > 0
+      ? ` Candidate disputeCaseObjectIds: ${disputeCaseObjectIds.join(", ")}.`
+      : "";
+  return `Read GET /reviewers/me/invites, choose the correct closed disputeCaseObjectId, then rerun clawnera-help tx-plan-execute POST '${normalizedPath}' --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.${candidateSuffix}`;
+}
+
 function reviewerSelfRouteNeedsHydration(route, currentBody) {
   if (!route) {
     return false;
@@ -3401,6 +3415,7 @@ async function hydrateReviewerSelfTxPlanRequest({ method, rawPath, options, time
               ? "claim_metrics_dispute_case_required"
               : "claim_metrics_dispute_case_ambiguous",
           disputeCaseObjectIds: resolvedClaimMetricsCase.disputeCaseObjectIds,
+          hint: buildClaimMetricsDisputeCaseHint(rawPath, resolvedClaimMetricsCase.disputeCaseObjectIds),
         };
       }
       mergedBody.disputeCaseObjectId = resolvedClaimMetricsCase.disputeCaseObjectId;
@@ -3883,6 +3898,8 @@ async function runTxPlanCommand(commandArgs, mode) {
           error: proactiveHydration.error,
           status: proactiveHydration.status,
           response: proactiveHydration.response,
+          hint: proactiveHydration.hint,
+          disputeCaseObjectIds: proactiveHydration.disputeCaseObjectIds,
         };
       }
       requestOptions = buildJsonBodyOverrideOptions(options, proactiveHydration.mergedBody);
@@ -3913,6 +3930,8 @@ async function runTxPlanCommand(commandArgs, mode) {
         error: retried.error,
         status: retried.status ?? apiCall.result.status,
         response: retried.response ?? apiCall.result.body,
+        hint: retried.hint,
+        disputeCaseObjectIds: retried.disputeCaseObjectIds,
       };
     }
   }

@@ -413,6 +413,24 @@ test("reviewer reveal alias resolves to the reviewer vote recipe", () => {
   assert.ok(payload.recipe.steps.some((step) => /votes\/reveal/.test(step)));
 });
 
+test("mailbox signal alias resolves to the mailbox handshake recipe", () => {
+  const result = runCli(["recipe", "mailbox-signal", "--json"]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.recipe.id, "mailbox-handshake");
+  assert.ok(payload.recipe.routes.some((route) => /mailbox\/post-signal-plan/.test(route)));
+});
+
+test("resolve dispute alias resolves to the canonical resolve recipe", () => {
+  const result = runCli(["recipe", "dispute-resolve", "--json"]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.recipe.id, "resolve-dispute");
+  assert.ok(payload.recipe.examples.some((example) => /quorumResolutionTicketObjectId/.test(example)));
+});
+
 test("seller review recipe warns that seller cannot accept the bid", () => {
   const result = runCli(["recipe", "seller-review-bids"]);
   assert.equal(result.status, 0);
@@ -432,7 +450,15 @@ test("reviewer claim recipe explains explicit case-id versus safe inference", ()
   assert.equal(result.status, 0);
   assert.match(result.stdout, /GET \/reviewers\/me\/metrics/);
   assert.match(result.stdout, /exactly one closed case/);
+  assert.match(result.stdout, /claim_metrics_dispute_case_ambiguous/);
   assert.match(result.stdout, /reviewer_metrics_claim_not_required/);
+});
+
+test("resolve dispute recipe shows the exact ticket body", () => {
+  const result = runCli(["recipe", "resolve-dispute"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /quorumResolutionTicketObjectId/);
+  assert.match(result.stdout, /GET \/disputes\/<dispute-case-id>/);
 });
 
 test("show recipes topic works", () => {

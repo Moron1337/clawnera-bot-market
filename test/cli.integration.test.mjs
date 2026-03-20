@@ -161,6 +161,49 @@ test("request rejects absolute URLs before sending auth headers", async () => {
   assert.equal(payload.error, "absolute_api_url_not_allowed");
 });
 
+test("request accepts --auth-state as a shorthand alias for --auth-state-file", async () => {
+  const jwt = buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600);
+  const mock = await startMockServer({
+    "GET /actors/me/capabilities": (request) => {
+      assert.equal(request.headers.authorization, `Bearer ${jwt}`);
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          actorAddress: `0x${"2".repeat(64)}`
+        }
+      };
+    }
+  });
+
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-cli-auth-state-alias-"));
+  const authStateFile = path.join(tmpDir, "auth-state.json");
+  writeFileSync(
+    authStateFile,
+    JSON.stringify({
+      jwt,
+      refreshToken: "refresh-token",
+      actorAddress: `0x${"2".repeat(64)}`,
+      apiBase: mock.baseUrl
+    }),
+    "utf8"
+  );
+
+  try {
+    const result = await runCli(
+      ["request", "GET", "/actors/me/capabilities", "--auth-state", authStateFile, "--json"],
+      {}
+    );
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.status, 200);
+    assert.equal(payload.authStateFile, authStateFile);
+    assert.equal(payload.response.actorAddress, `0x${"2".repeat(64)}`);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("tx-plan-execute rejects absolute URLs before requesting a plan", async () => {
   const tmpDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-cli-abs-tx-"));
   const authStateFile = path.join(tmpDir, "auth-state.json");
@@ -1103,6 +1146,90 @@ test("tx-plan-execute does not infer claim-metrics from stale reviewer invites",
   }
 });
 
+test("tx-plan-execute surfaces closed dispute case candidates when claim-metrics is ambiguous", async () => {
+  const reviewerAddress = "0x4d77e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
+  let claimCalls = 0;
+  const closedCaseA = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const closedCaseB = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  const mock = await startMockServer({
+    [`POST /reviewers/${reviewerAddress}/claim-metrics`]: () => {
+      claimCalls += 1;
+      return {
+        status: 400,
+        body: {
+          error: "dispute_case_object_id_required"
+        }
+      };
+    },
+    "GET /reviewers/me/metrics": () => ({
+      status: 200,
+      body: {
+        registered: true,
+        reviewerAddress,
+        reviewer: {
+          objectId: "0x1111111111111111111111111111111111111111111111111111111111111111",
+          owner: reviewerAddress,
+          pendingDecisionMetricsClaimRequired: true
+        },
+        runtime: {
+          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
+          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
+        }
+      }
+    }),
+    "GET /reviewers/me/invites": () => ({
+      status: 200,
+      body: {
+        invites: [
+          {
+            reviewerAddress,
+            disputeCaseObjectId: closedCaseA,
+            status: "closed",
+            invitedAtMs: 1710000000000,
+            disputeCase: {
+              closedAtMs: 1710000001000
+            }
+          },
+          {
+            reviewerAddress,
+            disputeCaseObjectId: closedCaseB,
+            status: "closed",
+            invitedAtMs: 1710000002000,
+            disputeCase: {
+              closedAtMs: 1710000003000
+            }
+          }
+        ]
+      }
+    })
+  });
+
+  try {
+    const result = await runCli([
+      "tx-plan-execute",
+      "POST",
+      `/reviewers/${reviewerAddress}/claim-metrics`,
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      buildJwtWithExp(4102444800),
+      "--body",
+      "{}",
+      "--json"
+    ]);
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "claim_metrics_dispute_case_ambiguous");
+    assert.deepEqual(payload.disputeCaseObjectIds, [closedCaseA, closedCaseB]);
+    assert.match(payload.hint, /GET \/reviewers\/me\/invites/);
+    assert.match(payload.hint, new RegExp(closedCaseA));
+    assert.match(payload.hint, new RegExp(closedCaseB));
+    assert.equal(claimCalls, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("tx-plan-execute stops claim-metrics retries when reviewer metrics are already clear", async () => {
   const reviewerAddress = "0x8212e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
   let claimCalls = 0;
@@ -1155,6 +1282,73 @@ test("tx-plan-execute stops claim-metrics retries when reviewer metrics are alre
       buildJwtWithExp(4102444800),
       "--body",
       "{}",
+      "--json"
+    ]);
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "reviewer_metrics_claim_not_required");
+    assert.equal(payload.status, 409);
+    assert.equal(payload.response.error, "reviewer_metrics_claim_not_required");
+    assert.equal(claimCalls, 0);
+    assert.equal(inviteReads, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("tx-plan-execute stops explicit claim-metrics bodies when reviewer metrics are already clear", async () => {
+  const reviewerAddress = "0x4d3bf95fcd3fdbb7d460056d2af7489cbd1fabdd68f0d54b66fc6e7cb0e5d9a1";
+  let claimCalls = 0;
+  let inviteReads = 0;
+  const mock = await startMockServer({
+    [`POST /reviewers/${reviewerAddress}/claim-metrics`]: () => {
+      claimCalls += 1;
+      return {
+        status: 200,
+        body: {
+          status: "tx_plan_unsigned",
+          txBuilder: "disputeQuorum.claimReviewerDecisionMetrics"
+        }
+      };
+    },
+    "GET /reviewers/me/metrics": () => ({
+      status: 200,
+      body: {
+        registered: true,
+        reviewerAddress,
+        reviewer: {
+          objectId: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          owner: reviewerAddress,
+          pendingDecisionMetricsClaimRequired: false
+        },
+        runtime: {
+          reviewerRegistryObjectId: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          disputeQuorumConfigObjectId: "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      }
+    }),
+    "GET /reviewers/me/invites": () => {
+      inviteReads += 1;
+      return {
+        status: 200,
+        body: {
+          invites: []
+        }
+      };
+    }
+  });
+
+  try {
+    const result = await runCli([
+      "tx-plan-execute",
+      "POST",
+      `/reviewers/${reviewerAddress}/claim-metrics`,
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      buildJwtWithExp(4102444800),
+      "--body",
+      '{"disputeCaseObjectId":"0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}',
       "--json"
     ]);
     assert.equal(result.status, 1);

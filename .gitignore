@@ -3,3 +3,5 @@ node_modules/
 .env
 *.log
 *.tgz
+clawnera-dispute-open-*.json
+clawnera-reviewer-shortlist-*.json

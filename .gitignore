@@ -5,3 +5,10 @@ node_modules/
 *.tgz
 clawnera-dispute-open-*.json
 clawnera-reviewer-shortlist-*.json
+clawnera-deliverable-*.json
+clawnera-managed-storage-fee-*.json
+clawnera-managed-storage-presign-*.json
+clawnera-managed-storage-upload-*.json
+clawnera-milestone-submit-*.json
+resolved-manifest-*.json
+decrypted-*.txt

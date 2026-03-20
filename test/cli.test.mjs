@@ -7,6 +7,7 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { classifyTxPlanExecutionError } from "../lib/tx-plan-errors.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -367,6 +368,34 @@ test("reviewer vote prepare can write the full payload to --out", () => {
   assert.equal(payload.revealRequestBody.vote, 1);
 });
 
+test("tx plan error classifier marks shared object version races as retryable", () => {
+  const classified = classifyTxPlanExecutionError({
+    errorMessage:
+      "Could not find the referenced object 0xabc as the asked version SequenceNumber(497473749) is higher than the latest SequenceNumber(497473662)",
+    txBuilder: "disputeQuorum.commitVote",
+  });
+  assert.deepEqual(classified, {
+    code: "shared_object_version_race",
+    retryable: true,
+    hint:
+      "A shared dispute object advanced while this tx was being built or executed. Rerun the same tx-plan-execute command once. If you are driving multiple reviewer wallets for the same dispute from one machine, submit commit/reveal steps sequentially.",
+  });
+});
+
+test("tx plan error classifier maps commit abort code 48 to already committed", () => {
+  const classified = classifyTxPlanExecutionError({
+    errorMessage:
+      "Dry run failed, could not automatically determine a budget: Move Runtime Abort. Location: bc32::dispute_quorum::commit_vote (function index 104) at offset 76, Abort Code: 48 in command 0",
+    txBuilder: "disputeQuorum.commitVote",
+  });
+  assert.deepEqual(classified, {
+    code: "reviewer_vote_already_committed",
+    retryable: false,
+    hint:
+      "This reviewer already committed for the dispute case. Keep the saved reviewer-vote.json file and wait for the reveal window before running the reveal step.",
+  });
+});
+
 test("journey command prints a strict ordered role path", () => {
   const result = runCli(["journey", "buyer"]);
   assert.equal(result.status, 0);
@@ -602,6 +631,8 @@ test("recipe json output is parseable", () => {
   assert.ok(Array.isArray(payload.recipe.steps));
   assert.ok(payload.recipe.steps.some((step) => /tx-plan-execute POST .*votes\/commit/.test(step)));
   assert.ok(payload.recipe.steps.some((step) => /reviewer-vote-prepare/.test(step)));
+  assert.ok(payload.recipe.steps.some((step) => /sequentially, not in parallel/.test(step)));
+  assert.ok(payload.recipe.stopConditions.some((step) => /reviewer_vote_already_committed/.test(step)));
 });
 
 test("dispute-open recipe explains manual bind inputs and auto-bind success", () => {
@@ -615,6 +646,8 @@ test("dispute-open recipe explains manual bind inputs and auto-bind success", ()
 test("mailbox handshake recipe explains tx output seq fallback", () => {
   const result = runCli(["recipe", "mailbox-handshake"]);
   assert.equal(result.status, 0);
+  assert.match(result.stdout, /order\.mailboxObjectId as the canonical mailbox binding truth/);
+  assert.match(result.stdout, /clawnera-help mailbox-events --order-id <order-id>/);
   assert.match(result.stdout, /mailbox_signal_posted_seq/);
   assert.match(result.stdout, /mailbox_signal_acked_seq/);
 });
@@ -754,6 +787,8 @@ test("fund-order recipe clarifies seller identity for REQUEST mode", () => {
   const result = runCli(["recipe", "fund-order"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /In REQUEST mode the seller is the accepted bidder, not the request creator/);
+  assert.match(result.stdout, /Trust the bind response first/);
+  assert.match(result.stdout, /immediate reads can lag briefly after escrow bind/);
 });
 
 test("creator cancel recipe shows request-specific readback guidance", () => {

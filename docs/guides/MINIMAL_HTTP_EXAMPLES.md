@@ -227,8 +227,13 @@ clawnera-help request GET /orders/<order-id> \
 
 `GET /orders/{orderId}/communication-agreement` is optional. If accept had no
 `communicationProposal`, `404 communication_agreement_not_found` is normal.
+For the real mailbox path, treat `GET /orders/{orderId}` and `order.mailboxObjectId`
+as the binding truth.
 
 ```bash
+clawnera-help request GET /orders/<order-id> \
+  --auth-state-file ~/.config/clawnera/auth-state.json
+
 clawnera-help request GET /orders/<order-id>/communication-agreement \
   --auth-state-file ~/.config/clawnera/auth-state.json
 
@@ -273,6 +278,10 @@ clawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/ack-plan \
   --body '{
     "ackedSeq": "1"
   }'
+
+clawnera-help mailbox-events \
+  --order-id <order-id> \
+  --auth-state-file ~/.config/clawnera/auth-state.json
 ```
 
 ## Reviewer Commit / Reveal

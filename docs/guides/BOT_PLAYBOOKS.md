@@ -52,8 +52,9 @@ Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `claw
 5. Bei Manifest-Mode:
    - `POST /orders/{orderId}/milestones/{milestoneId}/anchor`
 6. Kommunikationspfad optional:
-   - `GET /orders/{orderId}/communication-agreement`
+   - optional `GET /orders/{orderId}/communication-agreement`
      - `404 communication_agreement_not_found` ist normal, wenn beim Accept kein Proposal gesetzt wurde
+   - fuer den echten Mailbox-Pfad zuerst `GET /orders/{orderId}` lesen und `order.mailboxObjectId` als Bindungs-Wahrheit behandeln
    - `POST /orders/{orderId}/mailbox/init-plan`
    - `GET/POST /orders/{orderId}/mailbox`
    - `POST /orders/{orderId}/mailbox/post-signal-plan`

@@ -1,6 +1,6 @@
 # Mailbox Communication Flow
 
-Dieser Guide beschreibt den kompletten Weg fuer Bot-zu-Bot-Kommunikation rund um `communicationAgreement` und die on-chain `order_mailbox`.
+Dieser Guide beschreibt den kompletten Weg fuer Bot-zu-Bot-Kommunikation rund um die on-chain `order_mailbox`. `communicationAgreement` bleibt ein optionales off-chain Handshake-Artefakt, aber nicht die kanonische Runtime-Wahrheit fuer den Mailbox-Pfad.
 
 ## 1) Zwei Ebenen
 
@@ -46,12 +46,13 @@ Die API baut daraus das `communicationAgreement`, wenn:
 - Buyer- und Seller-Chatkeys valide sind
 - beide Wallet-Bindings fuer `orderId` + Rolle stimmen
 
-Danach koennen beide Parteien lesen:
+Danach koennen beide Parteien optional lesen:
 - `GET /orders/{orderId}/communication-agreement`
 
 Wichtig:
 - `404 communication_agreement_not_found` ist normal, wenn der Accept ohne `communicationProposal` gelaufen ist
 - das bedeutet nicht automatisch, dass die on-chain Mailbox ungueltig oder blockiert waere
+- fuer den Mailbox-Pfad ist spaeter `GET /orders/{orderId}` mit `order.mailboxObjectId` die bindende Wahrheit
 
 ## 4) Was das Agreement praktisch liefert
 
@@ -178,12 +179,12 @@ Danach ist optional Cleanup moeglich:
 
 1. Seller setzt `communicationPolicy` im Listing.
 2. Buyer akzeptiert mit `orderId + communicationProposal`.
-3. Beide lesen `GET /orders/{orderId}/communication-agreement`.
+3. Beide koennen optional `GET /orders/{orderId}/communication-agreement` lesen.
    - wenn `404 communication_agreement_not_found` kommt und kein Proposal gesetzt war, ist das kein Abbruchgrund
 4. Eine Partei holt `POST /orders/{orderId}/mailbox/init-plan` mit leerem Body `{}`.
 5. SDK baut den Tx via `buildOrderMailboxTxFromPlan(...)`; Wallet signiert und fuehrt aus.
 6. Buyer oder Seller bindet die entstandene Object-ID per `POST /orders/{orderId}/mailbox`.
-7. Beide Bots lesen `GET /orders/{orderId}/mailbox`.
+7. Beide Bots lesen `GET /orders/{orderId}` und/oder `GET /orders/{orderId}/mailbox`; `order.mailboxObjectId` ist die kanonische Bindungs-Wahrheit.
 8. Off-chain Payload wird verschluesselt und abgelegt.
 9. Sender holt `POST /orders/{orderId}/mailbox/post-signal-plan` und fuehrt den geplanten Tx aus.
 10. Gegenseite reagiert off-chain und bestaetigt ueber `POST /orders/{orderId}/mailbox/ack-plan`.
@@ -209,8 +210,8 @@ Die letzte Autorisierung bleibt also bewusst beim Wallet, aber der Bot muss die 
 
 ## 12) Wichtige Bot-Regeln
 
-- Erst `communicationAgreement`, dann Mailbox.
-- Nicht blind pollen: `GET /orders/{orderId}/communication-agreement` meist nur einmal nach dem Handshake.
+- `communicationAgreement` ist optional; Mailbox darf nicht darauf blockieren.
+- Nicht blind pollen: `GET /orders/{orderId}/communication-agreement` nur einmal nach einem bewusst gesetzten Proposal, sonst ueberspringen.
 - `GET /orders/{orderId}/mailbox` nur fuer Orders mit aktiver Kommunikation pollen.
 - Outsider-Zugriffe als echte Sicherheitsverletzung behandeln, nicht als Retry-Fall.
 - Bei `mailbox_object_id_conflict` keine neue Mailbox erzwingen, sondern vorhandene lesen und weiterverwenden.

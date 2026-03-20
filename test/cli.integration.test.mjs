@@ -890,6 +890,169 @@ test("reviewer-shortlist retries once when the server reports checkpoint_digest_
   }
 });
 
+test("reviewer-shortlist replacement continues when dispute pre-read is forbidden and uses the admin shortlist route", async () => {
+  const disputeCaseObjectId = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const mock = await startMockServer({
+    "GET /policy/fees": () => ({
+      status: 200,
+      body: {
+        policy: {
+          chainConfig: {
+            marketplacePackageId: "0x1111111111111111111111111111111111111111111111111111111111111111",
+            escrowFeeConfigObjectId: "0x9999999999999999999999999999999999999999999999999999999999999999",
+            governanceConfigObjectId: "0x8888888888888888888888888888888888888888888888888888888888888888",
+            disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
+          }
+        }
+      }
+    }),
+    "GET /reviewers/me/metrics": () => ({
+      status: 200,
+      body: {
+        registered: true,
+        runtime: {
+          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
+          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
+        }
+      }
+    }),
+    [`GET /disputes/${disputeCaseObjectId}`]: () => ({
+      status: 403,
+      body: {
+        error: "forbidden"
+      }
+    }),
+    "POST /rpc": (request) => {
+      const method = request.body?.method;
+      if (method === "iota_getLatestCheckpointSequenceNumber") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: "51"
+          }
+        };
+      }
+      if (method === "iota_getCheckpoint") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: {
+              digest: "checkpoint-replacement",
+              sequenceNumber: "51",
+              timestampMs: "1773917000000"
+            }
+          }
+        };
+      }
+      if (method === "iota_getObject") {
+        assert.equal(
+          request.body?.params?.[0],
+          "0x3333333333333333333333333333333333333333333333333333333333333333"
+        );
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: {
+              data: {
+                objectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+                previousTransaction: "init-reviewer-registry-1",
+                content: {
+                  fields: {
+                    default_required_reviewer_votes: "3",
+                    min_required_reviewer_votes: "3",
+                    min_dispute_bond_per_side_iota: "500000",
+                    reviewer_min_stake_iota: "500000"
+                  }
+                }
+              }
+            }
+          }
+        };
+      }
+      throw new Error(`unexpected_rpc_method:${String(method)}`);
+    },
+    "POST /admin/reviewer-selection/shortlist": (request) => {
+      assert.equal(request.headers.authorization, "Bearer test-jwt");
+      assert.equal(request.body?.scope, "REPLACEMENT");
+      assert.equal(request.body?.disputeCaseObjectId, disputeCaseObjectId);
+      assert.equal(request.body?.reviewerCount, 3);
+      return {
+        status: 200,
+        body: {
+          selectionComplete: true,
+          directoryScanTruncated: false,
+          receipt: {
+            id: "receipt-replacement-1",
+            shortlistedReviewerAddresses: [
+              "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            ]
+          },
+          publishTarget: {
+            route: `/disputes/${disputeCaseObjectId}/reviewers/replace`,
+            requestPatch: {
+              invitedReviewerAddresses: [
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+              ],
+              reviewerSelectionReceiptId: "receipt-replacement-1"
+            }
+          }
+        }
+      };
+    }
+  });
+
+  try {
+    const result = await runCli([
+      "reviewer-shortlist",
+      "--scope",
+      "REPLACEMENT",
+      "--dispute-case-id",
+      disputeCaseObjectId,
+      "--api-base",
+      mock.baseUrl,
+      "--rpc-url",
+      `${mock.baseUrl}/rpc`,
+      "--jwt",
+      "test-jwt",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.scope, "REPLACEMENT");
+    assert.equal(payload.receiptId, "receipt-replacement-1");
+    assert.ok(Array.isArray(payload.warnings));
+    assert.ok(
+      payload.warnings.some((entry) =>
+        /replacement_dispute_pre_read_failed status=403 error=forbidden/.test(entry)
+      )
+    );
+    assert.match(payload.nextPublishHint, /\/disputes\/0x[a-f0-9]+\/reviewers\/replace/);
+    const publishBody = JSON.parse(readFileSync(payload.publishBodyOut, "utf8"));
+    assert.deepEqual(publishBody, {
+      reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
+      invitedReviewerAddresses: [
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      ],
+      reviewerSelectionReceiptId: "receipt-replacement-1"
+    });
+  } finally {
+    await mock.close();
+  }
+});
+
 test("request refreshes one invalid_token response from saved auth state and retries", async () => {
   let protectedReads = 0;
   const mock = await startMockServer({
@@ -1255,7 +1418,7 @@ test("listing-create converts display values into atomic amounts", async () => {
       "--auth-state-file",
       authStateFile,
       "--title",
-      "One empty txt",
+      "Two empty txt files",
       "--description",
       "Human units test.",
       "--category",
@@ -1265,23 +1428,66 @@ test("listing-create converts display values into atomic amounts", async () => {
       "--display-values",
       "--use-default-expiry",
       "--milestones",
-      "empty txt:1",
+      "file1.txt:1;file2.txt:1",
       "--json"
     ]);
     assert.equal(result.status, 0);
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.ok, true);
-    assert.equal(payload.budgetAmount, "1000000000");
+    assert.equal(payload.budgetAmount, "2000000000");
     assert.equal(payload.expiresAtMs, null);
     assert.equal(payload.expiresAt, null);
     assert.equal(payload.explicitExpiry, false);
     assert.equal(Object.hasOwn(payload.response.seen, "expiresAtMs"), false);
     assert.deepEqual(payload.response.seen.milestones, [
-      { title: "empty txt", amount: "1000000000" }
+      { title: "file1.txt", amount: "1000000000" },
+      { title: "file2.txt", amount: "1000000000" }
     ]);
   } finally {
     await mock.close();
   }
+});
+
+test("listing-create stops early when only one milestone is supplied", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-one-milestone-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: "http://127.0.0.1:9",
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: "0x1111111111111111111111111111111111111111111111111111111111111111",
+        alias: "seller"
+      },
+      null,
+      2
+    )
+  );
+
+  const result = await runCli([
+    "listing-create",
+    "--auth-state-file",
+    authStateFile,
+    "--title",
+    "One empty txt",
+    "--description",
+    "Single milestone should stop locally.",
+    "--category",
+    "other",
+    "--currency",
+    "IOTA",
+    "--display-values",
+    "--use-default-expiry",
+    "--milestones",
+    "empty txt:1",
+    "--json"
+  ]);
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, "listing_milestones_count_out_of_range");
 });
 
 test("listing-create accepts display values with an explicit currency suffix", async () => {
@@ -1502,6 +1708,50 @@ test("listing-cancel posts the canonical cancel route", async () => {
     assert.equal(payload.response.seen, null);
     assert.equal(mock.requests[0]?.method, "POST");
     assert.equal(mock.requests[0]?.url, "/listings/listing-1/cancel");
+  } finally {
+    await mock.close();
+  }
+});
+
+test("listing-cancel prints order-progress guidance when the listing is no longer cancelable", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-cancel-not-cancelable-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const mock = await startMockServer({
+    "POST /listings/listing-1/cancel": () => ({
+      status: 409,
+      body: {
+        error: "listing_not_cancelable"
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: "0x1111111111111111111111111111111111111111111111111111111111111111",
+        alias: "creator"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-cancel",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-id",
+      "listing-1"
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /listing_cancel_error: listing_not_cancelable/);
+    assert.match(result.stderr, /cause=listing_already_progressed_or_closed/);
+    assert.match(result.stderr, /recipe fund-order --compact/);
   } finally {
     await mock.close();
   }
@@ -2434,6 +2684,35 @@ test("request can select a nested body payload from a body file", async () => {
     assert.deepEqual(mock.requests[0].body, {
       commitHashHex: "aa".repeat(32)
     });
+  } finally {
+    await mock.close();
+  }
+});
+
+test("bid-accept prints buyer-side guidance on buyer_mismatch", async () => {
+  const mock = await startMockServer({
+    "POST /bids/bid-1/accept": () => ({
+      status: 403,
+      body: {
+        error: "buyer_mismatch"
+      }
+    })
+  });
+
+  try {
+    const result = await runCli([
+      "bid-accept",
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      "test-jwt",
+      "--bid-id",
+      "bid-1"
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /bid_accept_error: buyer_mismatch/);
+    assert.match(result.stderr, /cause=bid_accept_is_buyer_side/);
+    assert.match(result.stderr, /for OFFER listings, rerun bid-accept from the chosen buyer wallet/);
   } finally {
     await mock.close();
   }

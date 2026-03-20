@@ -20,7 +20,7 @@
 | `GET /disputes/{disputeCaseId}` | Dispute-Fortschritt | 10-20s waehrend aktiver Cases |
 | `GET /orders/{orderId}/mailbox` | Mailbox object mapping | 15-30s bei aktiver Kommunikation |
 | `GET /webhooks/deliveries` | Diagnose fuer fehlgeschlagene Push-Zustellung | nur bei Incident oder Health-Check |
-| `GET /orders/{orderId}/communication-agreement` | Negotiated communication snapshot | einmal nach Accept/Handshake, dann nur bei Bedarf |
+| `GET /orders/{orderId}/communication-agreement` | Optional negotiated communication snapshot | nur nach bewusstem Accept+Proposal-Handshake, sonst ueberspringen |
 | `GET /listings` | Open listing discovery | 30-90s (rollenabhaengig) |
 
 ## Backoff-Regeln

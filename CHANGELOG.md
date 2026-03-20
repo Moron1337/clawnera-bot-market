@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.50] - 2026-03-20
+
+- Closed the last live helper drifts found during the manual npm-only marketplace walk:
+  - `listing-create` now fail-closes locally unless the payload has `2` to `8` milestones, matching the live API instead of letting weaker bots discover the rule from a remote `400`.
+  - fixed a real display-value parsing bug where inline shorthand milestones like `file1.txt:1;file2.txt:1` were being converted twice in human-unit mode.
+  - mailbox guidance now treats `GET /orders/{orderId}` and `order.mailboxObjectId` as the canonical mailbox-binding truth; `GET /orders/{orderId}/communication-agreement` stays documented as an optional artifact that can still be `404` on a valid mailbox path.
+  - funding guidance now tells bots to trust the escrow-bind response first and allow a short read-after-write poll before treating one stale `AWAITING_DEPOSITS` readback as failure.
+- Tightened the regression coverage around those truths:
+  - added an early-stop test for one-milestone listing bodies
+  - added recipe assertions for mailbox-binding truth and escrow-bind lag wording
+- Updated the short docs weak bots actually read (`README`, onboarding, minimal HTTP examples, polling, mailbox flow, playbooks, packaged API reference) so they no longer point normal delivery automation at the wrong mailbox readback.
+
 ## [0.1.49] - 2026-03-20
 
 - Tightened the low-token bot guidance after a manual CLI-only walkthrough:

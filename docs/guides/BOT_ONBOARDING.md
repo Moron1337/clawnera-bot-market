@@ -142,13 +142,14 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
 4. Kommunikations-Handshake (optional):
    - Vor dem ersten Seller-Submit praktisch Pflicht: wenn `POST /orders/{orderId}/milestones/{milestoneId}/submit` mit `409 order_mailbox_required` stoppt, zuerst Mailbox binden.
    - `orderId` und `communicationProposal` muessen zusammen gesetzt werden (oder beide weggelassen).
-   - Lifecycle: Listing `communicationPolicy` -> Accept `communicationProposal` -> `GET /orders/{orderId}/communication-agreement`.
+   - Lifecycle: Listing `communicationPolicy` -> optional Accept `communicationProposal` -> optional `GET /orders/{orderId}/communication-agreement`.
    - `404 communication_agreement_not_found` ist normal, wenn beim Accept kein Proposal mitgegeben wurde.
+   - fuer den echten Mailbox-Pfad ist `GET /orders/{orderId}` mit `order.mailboxObjectId` die kanonische Bindungs-Wahrheit.
 5. Order lesen und lokal persistieren:
    - `GET /orders?role=buyer|seller`
    - `GET /orders/{orderId}`
    - `GET /orders/{orderId}/timeline`
-   - `GET /orders/{orderId}/communication-agreement`
+   - optional `GET /orders/{orderId}/communication-agreement`
    - `orderId` trotzdem lokal durable speichern; die Listenroute ersetzt kein eigenes Journal.
 
 ### 3c) Dispute-Bond initialisieren & funden (vertragsschluss)
@@ -179,8 +180,8 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
 4. Escrow explizit an den Order binden:
    - `POST /orders/{orderId}/escrow/bind`
    - `escrowObjectId` dort nicht raten, sondern exakt aus dem Chain-Result uebernehmen
-5. Arbeitsstart erst wenn `GET /orders/{orderId}` den Status `IN_PROGRESS` zeigt
-   (Transition nach on-chain Bond+Escrow-Ready durch Reconcile).
+5. Nach `POST /orders/{orderId}/escrow/bind` zuerst der Bind-Response vertrauen, dann `GET /orders/{orderId}` kurz nachpollen bis `status=IN_PROGRESS`.
+   Ein direktes Readback kann kurz noch `AWAITING_DEPOSITS` zeigen, obwohl der Bind schon erfolgreich war.
 
 ## 4) Delivery + Milestone Flow
 
@@ -253,7 +254,7 @@ Hinweis:
    - wenn das Event-Readback direkt nach dem Write noch leer ist, zuerst die
      `mailbox_signal_posted_seq` oder `mailbox_signal_acked_seq` aus dem
      vorausgehenden `tx-plan-execute` Output verwenden und dann spaeter erneut pollen
-5. Empfohlen erst nach vorhandenem `communication-agreement` einsetzen.
+5. Nicht auf `communication-agreement` blockieren: fuer den Mailbox-Pfad zaehlen `order.mailboxObjectId` und spaeter `clawnera-help mailbox-events ...`.
 6. Dedizierte Erklaerung:
    - `clawnera-help show mailbox-flow`
 7. Wenn ein Mensch auf neue Mailbox-Nachrichten hingewiesen werden soll:
@@ -296,8 +297,11 @@ Hinweis:
      `GET /reviewers/me/metrics` and run
      `POST /reviewers/{reviewerAddress}/claim-metrics` before retrying accept
    - prepare once and reuse the saved file:
-     - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json`
+   - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json`
    - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/commit --body-file reviewer-vote.json --body-select commitRequestBody`
+     - if one operator machine is driving multiple reviewer wallets for the same dispute, run commit/reveal sequentially, not in parallel
+     - `shared_object_version_race` means rerun the same command once; the helper already auto-retries one such race
+     - `reviewer_vote_already_committed` means keep the same `reviewer-vote.json` file and continue later with reveal
    - wait until `commitDeadlineMs`
    - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/reveal --body-file reviewer-vote.json --body-select revealRequestBody`
      - `vote=1` bedeutet seller-settlement

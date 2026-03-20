@@ -97,6 +97,7 @@ import {
   resolveNotificationEventTypes,
   resolveNotificationPreset
 } from "../lib/notifications.mjs";
+import { classifyTxPlanExecutionError, normalizeTxPlanErrorMessage } from "../lib/tx-plan-errors.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1805,7 +1806,7 @@ function extractResponseTimingHints(rawHeaders) {
   };
 }
 
-function parseListingMilestonesFromShorthand(rawValue, { displayValues = false, currency = "" } = {}) {
+function parseListingMilestonesFromShorthand(rawValue) {
   const normalized = String(rawValue ?? "").trim();
   if (!normalized) {
     return [];
@@ -1821,15 +1822,12 @@ function parseListingMilestonesFromShorthand(rawValue, { displayValues = false, 
       }
       const title = entry.slice(0, separator).trim();
       const rawAmount = entry.slice(separator + 1).trim();
-      const amount = displayValues
-        ? parseDisplayAmountOption(rawAmount, "milestones", currency).toString()
-        : rawAmount;
-      if (!title || !/^[1-9][0-9]*$/.test(amount)) {
+      if (!title || !rawAmount) {
         throw new Error("invalid_milestones");
       }
       return {
         title,
-        amount,
+        amount: rawAmount,
       };
     });
 }
@@ -1861,7 +1859,7 @@ function parseListingMilestonesOptions(options = {}, { displayValues = false, cu
   }
   let milestones;
   if (inlineValue.trim()) {
-    return parseListingMilestonesFromShorthand(inlineValue, { displayValues, currency });
+    milestones = parseListingMilestonesFromShorthand(inlineValue);
   } else if (jsonValue) {
     milestones = JSON.parse(jsonValue);
   } else {
@@ -1869,6 +1867,9 @@ function parseListingMilestonesOptions(options = {}, { displayValues = false, cu
   }
   if (!Array.isArray(milestones) || milestones.length === 0) {
     throw new Error("invalid_milestones");
+  }
+  if (milestones.length < 2 || milestones.length > 8) {
+    throw new Error("listing_milestones_count_out_of_range");
   }
   return milestones.map((entry) => {
     const record = entry && typeof entry === "object" && !Array.isArray(entry) ? entry : null;
@@ -4708,8 +4709,9 @@ function listingCreateUsageLines() {
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
     "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
     `- Valid category slugs: ${LISTING_CATEGORY_SLUGS.join(", ")} (or run: clawnera-help listing-categories)`,
+    "- Required milestone count: 2 to 8 milestones. The live API rejects single-milestone listing bodies.",
     "- Optional: --budget-amount <atomic-int> (defaults to the milestone sum), --creator-address <0x...>, --milestones-json <json>, --milestones-file <file>",
-    "- Optional human mode: add --display-values to interpret milestone and budget numbers in whole-user units for the selected currency (examples: --currency IOTA --display-values --milestones 'empty txt:1' or 'empty txt:1 IOTA')",
+    "- Optional human mode: add --display-values to interpret milestone and budget numbers in whole-user units for the selected currency (examples: --currency IOTA --display-values --milestones 'file1.txt:1;file2.txt:1' or 'file1.txt:1 IOTA;file2.txt:1 IOTA')",
     "- Thin wrapper over POST /listings that infers creatorAddress from the saved auth state when possible",
     "- The helper does not silently guess listing expiry: choose an explicit expiry or pass --use-default-expiry to acknowledge the legacy 30-day runtime default",
     "- OFFER is the default if --listing-mode is omitted",
@@ -4900,9 +4902,11 @@ async function runListingCancel(commandArgs) {
       listingId,
       listingStatus: normalizeString(result.response?.listing?.status) || null,
       listingMode: normalizeString(result.response?.listing?.listingMode) || null,
+      hintLines: buildListingCancelHintLines(result),
     };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "listing_cancel_failed" };
+    const errorCode = error instanceof Error ? error.message : "listing_cancel_failed";
+    return { ok: false, error: errorCode, hintLines: buildListingCancelHintLines({ error: errorCode }) };
   }
 }
 
@@ -4959,9 +4963,26 @@ function buildListingFeedReadbackHint(listingMode, authPlaceholder = "<creator-a
   return `next_readback=re-read the feed matching the original listing mode: GET /listings for OFFER or GET '/listings?listingMode=REQUEST' for REQUEST --auth-state-file ${authPlaceholder}`;
 }
 
+function buildListingCancelHintLines(result = {}) {
+  if (result?.error === "listing_not_cancelable") {
+    return [
+      "cause=listing_already_progressed_or_closed",
+      "next_hint=clawnera-help request GET '/listings?limit=5' --auth-state-file <creator-auth-state-file>",
+      "next_hint=if a bid was already accepted, switch to clawnera-help recipe fund-order --compact instead of retrying cancel",
+    ];
+  }
+  return [];
+}
+
 function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
   const error = typeof result?.error === "string" ? result.error.trim() : "";
   switch (error) {
+    case "listing_milestones_count_out_of_range":
+      return [
+        "cause=listing_requires_two_to_eight_milestones",
+        "next_hint=split the work into at least two milestones before retrying listing-create",
+        "next_hint=example --milestones 'file1.txt:1;file2.txt:1' with --display-values or atomic amounts",
+      ];
     case "consumer_accounts_disabled":
       return [
         `cause=${listingMode === "REQUEST" ? "request_listing_creator_blocked_by_b2b_policy" : "offer_listing_creator_blocked_by_b2b_policy"}`,
@@ -5168,9 +5189,25 @@ async function runBidAccept(commandArgs) {
       ...result,
       bidId,
       orderId: extractCommonCreatedId(result.response, [["orderId"], ["order", "id"], ["id"]]) || null,
+      hintLines: buildBidAcceptHintLines(result),
     };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "bid_accept_failed" };
+    const errorCode = error instanceof Error ? error.message : "bid_accept_failed";
+    return { ok: false, error: errorCode, hintLines: buildBidAcceptHintLines({ error: errorCode }) };
+  }
+}
+
+function buildBidAcceptHintLines(result = {}) {
+  const error = typeof result?.error === "string" ? result.error.trim() : "";
+  switch (error) {
+    case "buyer_mismatch":
+      return [
+        "cause=bid_accept_is_buyer_side",
+        "next_hint=for OFFER listings, rerun bid-accept from the chosen buyer wallet",
+        "next_hint=for REQUEST listings, rerun bid-accept from the request creator / future buyer wallet",
+      ];
+    default:
+      return [];
   }
 }
 
@@ -5481,9 +5518,11 @@ async function runTxPlanCommand(commandArgs, mode) {
 
   const planOut = resolveOptionalPathOption(options["plan-out"]);
   const txBytesOut = resolveOptionalPathOption(options["tx-bytes-out"]);
-  try {
-    const transaction = buildClawdexTxFromPlan(txPlan);
-    const signer = resolveRuntimeSigner(options, apiCall.context);
+  const signer = resolveRuntimeSigner(options, apiCall.context);
+  let autoRetriedExecutionCount = 0;
+  while (true) {
+    try {
+      const transaction = buildClawdexTxFromPlan(txPlan);
     if (planOut) {
       writeOptionalOutputFile(planOut, JSON.stringify(apiCall.result.body, null, 2));
     }
@@ -5505,6 +5544,7 @@ async function runTxPlanCommand(commandArgs, mode) {
         txBuilder: txPlan.txBuilder,
         signerAddress: txPlan.request.sender || null,
         autoHydratedReviewerContext,
+        autoRetriedExecutionCount,
         txBytesOut: txBytesOut || null,
         planOut: planOut || null,
         dryRun: dryRun.result,
@@ -5583,6 +5623,7 @@ async function runTxPlanCommand(commandArgs, mode) {
       txBuilder: txPlan.txBuilder,
       signerAddress: executed.verifyResult?.signerAddress || signer.address || txPlan.request.sender || null,
       autoHydratedReviewerContext,
+      autoRetriedExecutionCount,
       txDigest: resolveTxExecutionDigest(executed),
       txBytesOut: txBytesOut || null,
       planOut: planOut || null,
@@ -5601,12 +5642,26 @@ async function runTxPlanCommand(commandArgs, mode) {
       orderEscrowObjectId:
         extractCreatedObjectIdByTypeFragment(executed, "::order_escrow::OrderEscrow<") || null,
     };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "tx_plan_execute_failed",
-      txBuilder: txPlan.txBuilder,
-    };
+    } catch (error) {
+      const rawError = normalizeTxPlanErrorMessage(error) || "tx_plan_execute_failed";
+      const classified = classifyTxPlanExecutionError({
+        errorMessage: rawError,
+        txBuilder: txPlan.txBuilder,
+      });
+      if (classified?.retryable === true && autoRetriedExecutionCount < 1) {
+        autoRetriedExecutionCount += 1;
+        continue;
+      }
+      return {
+        ok: false,
+        error: classified?.code || rawError,
+        rawError,
+        hint: classified?.hint,
+        retryable: classified?.retryable === true,
+        autoRetriedExecutionCount,
+        txBuilder: txPlan.txBuilder,
+      };
+    }
   }
 }
 
@@ -8146,6 +8201,7 @@ async function runReviewerShortlist(commandArgs) {
           })
         : { chainConfig: null };
     let replacementRequiredReviewerVotes = null;
+    let replacementDisputePreReadWarning = null;
     if (scope === "REPLACEMENT") {
       const disputeCaseObjectId = normalizeIotaAddress(options["dispute-case-id"] || "");
       if (!disputeCaseObjectId) {
@@ -8161,19 +8217,17 @@ async function runReviewerShortlist(commandArgs) {
         timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
       });
       if (!disputeRead.result.ok) {
-        return {
-          ok: false,
-          error: summarizeApiFailure(disputeRead.result),
-          status: disputeRead.result.status,
-          response: disputeRead.result.body,
-        };
-      }
-      const liveDispute = asRecord(disputeRead.result.body?.disputeCase) || {};
-      const requiredReviewerVotesRaw = liveDispute.requiredReviewerVotes;
-      if (typeof requiredReviewerVotesRaw === "string" && /^\d+$/.test(requiredReviewerVotesRaw)) {
-        replacementRequiredReviewerVotes = Number.parseInt(requiredReviewerVotesRaw, 10);
-      } else if (typeof requiredReviewerVotesRaw === "number" && Number.isFinite(requiredReviewerVotesRaw)) {
-        replacementRequiredReviewerVotes = requiredReviewerVotesRaw;
+        replacementDisputePreReadWarning = `replacement_dispute_pre_read_failed status=${disputeRead.result.status} error=${summarizeApiFailure(
+          disputeRead.result
+        )}; continuing without live requiredReviewerVotes auto-detection`;
+      } else {
+        const liveDispute = asRecord(disputeRead.result.body?.disputeCase) || {};
+        const requiredReviewerVotesRaw = liveDispute.requiredReviewerVotes;
+        if (typeof requiredReviewerVotesRaw === "string" && /^\d+$/.test(requiredReviewerVotesRaw)) {
+          replacementRequiredReviewerVotes = Number.parseInt(requiredReviewerVotesRaw, 10);
+        } else if (typeof requiredReviewerVotesRaw === "number" && Number.isFinite(requiredReviewerVotesRaw)) {
+          replacementRequiredReviewerVotes = requiredReviewerVotesRaw;
+        }
       }
     }
     let buyerAddress = normalizeIotaAddress(options["buyer-address"] || "");
@@ -8379,6 +8433,9 @@ async function runReviewerShortlist(commandArgs) {
       warnings.push(
         `context_order_status=${orderStatus}; verify the freshest party timeline before publish if this looks unexpected.`
       );
+    }
+    if (replacementDisputePreReadWarning) {
+      warnings.push(replacementDisputePreReadWarning);
     }
 
     return {
@@ -10146,6 +10203,11 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   } else {
     console.error(`listing_cancel_error: ${result.error}`);
     console.error("next_hint=use POST /listings/{listingId}/cancel, not DELETE or PATCH");
+    if (Array.isArray(result.hintLines)) {
+      for (const line of result.hintLines) {
+        console.error(line);
+      }
+    }
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {
@@ -10222,6 +10284,11 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log("next_readback=clawnera-help request GET /orders/<order-id> --auth-state-file <buyer-auth-state-file>");
   } else {
     console.error(`bid_accept_error: ${result.error}`);
+    if (Array.isArray(result.hintLines) && result.hintLines.length > 0) {
+      for (const line of result.hintLines) {
+        console.error(line);
+      }
+    }
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {
@@ -10292,6 +10359,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   } else if (result.ok) {
     console.log(`tx_plan_execute_ok builder=${result.txBuilder}`);
     console.log(`tx_digest=${result.txDigest || "unknown"}`);
+    if (Number.isInteger(result.autoRetriedExecutionCount) && result.autoRetriedExecutionCount > 0) {
+      console.log(`auto_retry_count=${result.autoRetriedExecutionCount}`);
+    }
     if (result.signerAddress) {
       console.log(`signer_address=${result.signerAddress}`);
     }
@@ -10343,8 +10413,14 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`tx_plan_execute_error: ${result.error}`);
+    if (result.rawError && result.rawError !== result.error) {
+      console.error(`raw_error=${result.rawError}`);
+    }
     if (result.txBuilder) {
       console.error(`tx_builder=${result.txBuilder}`);
+    }
+    if (Number.isInteger(result.autoRetriedExecutionCount) && result.autoRetriedExecutionCount > 0) {
+      console.error(`auto_retry_count=${result.autoRetriedExecutionCount}`);
     }
     if (result.txDigest) {
       console.error(`tx_digest=${result.txDigest}`);
@@ -10354,6 +10430,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
     if (result.bindRoute) {
       console.error(`post_execute_binding_route=${result.bindRoute}`);
+    }
+    if (result.hint) {
+      console.error(`hint=${result.hint}`);
     }
     process.exitCode = 1;
   }

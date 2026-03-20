@@ -230,6 +230,8 @@ Important:
 - package helper:
   - `clawnera-help mailbox-events --order-id <order-id> --auth-state-file <file>`
   - reads the current posted/acked mailbox sequence without manual `/events` filtering
+  - use `GET /orders/{orderId}` and `order.mailboxObjectId` as the canonical mailbox-binding truth
+  - `GET /orders/{orderId}/communication-agreement` stays optional and may still be `404` on a valid mailbox path
 - `POST /orders/{orderId}/mailbox/close-plan`
   - auth required
   - requires already bound open mailbox

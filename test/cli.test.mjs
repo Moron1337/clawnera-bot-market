@@ -195,12 +195,15 @@ test("listing-create help explains display values and categories", () => {
   assert.match(result.stdout, /Valid category slugs: dev, design, marketing, ops, security, other/);
   assert.match(result.stdout, /clawnera-help listing-categories/);
   assert.match(result.stdout, /--display-values/);
+  assert.match(result.stdout, /--listing-mode OFFER\|REQUEST/);
+  assert.match(result.stdout, /REQUEST means the listing creator is the future buyer/);
 });
 
 test("bid-create help explains display values", () => {
   const result = runCli(["bid-create", "--help"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /--display-values/);
+  assert.match(result.stdout, /On REQUEST listings the bidder becomes the future seller/);
 });
 
 test("reviewer shortlist help prints operator and publish role split", () => {
@@ -260,13 +263,15 @@ test("journeys command lists minimal role paths", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Available journeys:/);
   assert.match(result.stdout, /seller: Seller Minimal Path/);
+  assert.match(result.stdout, /request-buyer: Request Buyer Minimal Path/);
+  assert.match(result.stdout, /request-seller: Request Seller Minimal Path/);
   assert.match(result.stdout, /reviewer: Reviewer Minimal Path/);
 });
 
 test("journeys compact output is token-light", () => {
   const result = runCli(["journeys", "--compact"]);
   assert.equal(result.status, 0);
-  assert.equal(result.stdout.trim(), "journeys:seller | buyer | reviewer | operator | all");
+  assert.equal(result.stdout.trim(), "journeys:seller | buyer | request-buyer | request-seller | reviewer | operator | all");
 });
 
 test("reviewer journey includes key agreement and reputation prerequisites", () => {
@@ -352,6 +357,25 @@ test("seller journey shows seller review and buyer accept separation", () => {
   assert.match(result.stdout, /buyer-accept-bid: Buyer Accept Bid And Create Order \[role: buyer] \[handoff] \[wait_for_buyer_accept]/);
 });
 
+test("request journeys separate buyer-created requests from offer flow", () => {
+  const buyerResult = runCli(["journey", "request-buyer", "--compact"]);
+  assert.equal(buyerResult.status, 0);
+  assert.match(buyerResult.stdout, /^journey:request-buyer/m);
+  assert.match(
+    buyerResult.stdout,
+    /steps:setup-quick > buyer-create-request > buyer-review-request-bids > buyer-accept-request-bid > fund-order/
+  );
+  assert.match(buyerResult.stdout, /prereq:key-agreement-upsert/);
+
+  const sellerResult = runCli(["journey", "request-seller", "--compact"]);
+  assert.equal(sellerResult.status, 0);
+  assert.match(sellerResult.stdout, /^journey:request-seller/m);
+  assert.match(
+    sellerResult.stdout,
+    /steps:setup-quick > seller-answer-request > buyer-accept-request-bid\[handoff,wait_for_request_buyer_accept] > fund-order/
+  );
+});
+
 test("reviewer journey includes the post-case claim step", () => {
   const result = runCli(["journey", "reviewer"]);
   assert.equal(result.status, 0);
@@ -365,6 +389,9 @@ test("recipes command lists minimal task recipes", () => {
   assert.match(result.stdout, /Available recipes:/);
   assert.match(result.stdout, /setup-quick: Quick Setup/);
   assert.match(result.stdout, /seller-create-listing: Seller Create Listing/);
+  assert.match(result.stdout, /buyer-create-request: Buyer Create Request Listing/);
+  assert.match(result.stdout, /seller-answer-request: Seller Answer Request Listing/);
+  assert.match(result.stdout, /buyer-accept-request-bid: Buyer Accept Seller Bid On Request/);
   assert.match(result.stdout, /reviewer-vote: Reviewer Commit And Reveal Vote.*reviewer-vote-reveal/);
   assert.match(result.stdout, /reviewer-claim-metrics: Reviewer Claim Metrics/);
   assert.match(result.stdout, /operator-shortlist-replacement: Operator Shortlist Replacement/);
@@ -408,6 +435,15 @@ test("recipe compact output focuses on immediate command, readback, and next", (
   assert.match(result.stdout, /^next:seller-review-bids/m);
   assert.doesNotMatch(result.stdout, /Steps:/);
   assert.doesNotMatch(result.stdout, /Examples:/);
+});
+
+test("request recipe compact output uses explicit request mode", () => {
+  const result = runCli(["recipe", "buyer-create-request", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^recipe:buyer-create-request/m);
+  assert.match(result.stdout, /listing-categories --compact --listing-mode REQUEST/);
+  assert.match(result.stdout, /listing-create .* --listing-mode REQUEST /);
+  assert.match(result.stdout, /^next:buyer-review-request-bids/m);
 });
 
 test("recipe json output is parseable", () => {
@@ -589,6 +625,7 @@ test("show journeys topic works", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /# Role Journeys/);
   assert.match(result.stdout, /clawnera-help journey reviewer/);
+  assert.match(result.stdout, /request-buyer/);
   assert.match(result.stdout, /key-agreement-upsert/);
   assert.match(result.stdout, /reputation-init/);
 });

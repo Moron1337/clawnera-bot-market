@@ -993,6 +993,7 @@ test("listing-create infers creator address and posts a canonical body", async (
       title: "Two tiny IOTA text tasks",
       description: "Manual live flow test listing.",
       category: "ops",
+      listingMode: "OFFER",
       currency: "IOTA",
       budgetAmount: "1000000000",
       milestones: [
@@ -1031,6 +1032,35 @@ test("listing-categories reads canonical category slugs", async () => {
     assert.equal(payload.ok, true);
     assert.deepEqual(payload.validCategories, ["dev", "ops", "other"]);
     assert.equal(payload.items[1].category, "ops");
+  } finally {
+    await mock.close();
+  }
+});
+
+test("listing-categories forwards explicit request mode filters", async () => {
+  const mock = await startMockServer({
+    "GET /listings/categories?listingMode=REQUEST": () => ({
+      status: 200,
+      body: {
+        items: [{ category: "ops", count: 2 }]
+      }
+    })
+  });
+
+  try {
+    const result = await runCli([
+      "listing-categories",
+      "--api-base",
+      mock.baseUrl,
+      "--listing-mode",
+      "REQUEST",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.listingMode, "REQUEST");
+    assert.deepEqual(payload.validCategories, ["ops"]);
   } finally {
     await mock.close();
   }
@@ -1154,6 +1184,65 @@ test("listing-create accepts display values with an explicit currency suffix", a
       { title: "file1.txt", amount: "1000000000" },
       { title: "file2.txt", amount: "1000000000" }
     ]);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("listing-create forwards explicit request listing mode", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-request-mode-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const creatorAddress = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  const mock = await startMockServer({
+    "POST /listings": (request) => ({
+      status: 200,
+      body: {
+        listing: { id: "listing-request-1" },
+        seen: request.body
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: creatorAddress,
+        alias: "buyer"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-create",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-mode",
+      "REQUEST",
+      "--title",
+      "Need two empty txt files",
+      "--description",
+      "Buyer-created request listing.",
+      "--category",
+      "ops",
+      "--currency",
+      "IOTA",
+      "--display-values",
+      "--milestones",
+      "file1.txt:1;file2.txt:1",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.listingMode, "REQUEST");
+    assert.equal(payload.response.seen.listingMode, "REQUEST");
   } finally {
     await mock.close();
   }
@@ -1469,6 +1558,57 @@ test("bid-create accepts display values with an explicit currency suffix", async
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.ok, true);
     assert.equal(payload.response.seen.amount, "1000000000");
+  } finally {
+    await mock.close();
+  }
+});
+
+test("bid-create prints seller-side guidance for request bidder compliance failures", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-bid-create-request-guidance-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const bidderAddress = "0x2222222222222222222222222222222222222222222222222222222222222222";
+  const mock = await startMockServer({
+    "POST /bids": () => ({
+      status: 403,
+      body: {
+        error: "request_bid_requires_trader_account"
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: bidderAddress,
+        alias: "seller"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "bid-create",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-id",
+      "request-listing-1",
+      "--amount",
+      "1",
+      "--currency",
+      "IOTA",
+      "--display-values"
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /bid_create_error: request_bid_requires_trader_account/);
+    assert.match(result.stderr, /cause=request_bidder_becomes_future_seller/);
+    assert.match(result.stderr, /GET \/compliance\/me/);
+    assert.match(result.stderr, /POST \/compliance\/me\/account-type/);
   } finally {
     await mock.close();
   }

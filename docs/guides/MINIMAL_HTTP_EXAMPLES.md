@@ -50,6 +50,29 @@ Store:
 
 - `listingId`
 
+## Create Request Listing
+
+```bash
+clawnera-help listing-categories --compact --listing-mode REQUEST
+
+clawnera-help listing-create \
+  --auth-state-file ~/.config/clawnera/auth-state.json \
+  --listing-mode REQUEST \
+  --title "Need two empty txt files" \
+  --description "Buyer-created wanted listing." \
+  --category ops \
+  --currency IOTA \
+  --display-values \
+  --milestones 'file1.txt:1;file2.txt:1'
+
+clawnera-help request GET '/listings?listingMode=REQUEST&limit=5&q=Need%20two%20empty%20txt%20files' \
+  --auth-state-file ~/.config/clawnera/auth-state.json
+```
+
+Store:
+
+- `listingId`
+
 ## Place Bid
 
 ```bash
@@ -62,6 +85,28 @@ clawnera-help bid-create \
   --message "Live npm-package buyer flow test bid."
 
 clawnera-help request GET /listings/<listing-id>/bids \
+  --auth-state-file ~/.config/clawnera/auth-state.json
+```
+
+Store:
+
+- `bidId`
+
+## Answer Request Listing
+
+```bash
+clawnera-help request GET '/listings?listingMode=REQUEST&limit=5' \
+  --auth-state-file ~/.config/clawnera/auth-state.json
+
+clawnera-help bid-create \
+  --auth-state-file ~/.config/clawnera/auth-state.json \
+  --listing-id <request-listing-id> \
+  --amount 1 \
+  --currency IOTA \
+  --display-values \
+  --message "I will deliver both txt files."
+
+clawnera-help request GET /listings/<request-listing-id>/bids \
   --auth-state-file ~/.config/clawnera/auth-state.json
 ```
 
@@ -82,12 +127,42 @@ Important:
 - seller does **not** call `POST /bids/{bidId}/accept`
 - seller calling accept returns `403 buyer_mismatch`
 
+## Request Buyer Reviews Seller Bids
+
+```bash
+clawnera-help request GET /listings/<request-listing-id>/bids \
+  --auth-state-file ~/.config/clawnera/auth-state.json
+```
+
+Important:
+
+- request buyer / listing creator chooses the winning seller `bidId`
+- the request buyer keeps the accept call
+- the responding seller does **not** call `POST /bids/{bidId}/accept`
+
 ## Buyer Accepts Bid
 
 ```bash
 clawnera-help bid-accept \
   --auth-state-file ~/.config/clawnera/auth-state.json \
   --bid-id <bid-id>
+
+clawnera-help request GET /orders/<order-id> \
+  --auth-state-file ~/.config/clawnera/auth-state.json
+```
+
+Store:
+
+- `orderId`
+- `disputeBondPolicy`
+- `disputeBondState`
+
+## Request Buyer Accepts Seller Bid
+
+```bash
+clawnera-help bid-accept \
+  --auth-state-file ~/.config/clawnera/auth-state.json \
+  --bid-id <seller-bid-id>
 
 clawnera-help request GET /orders/<order-id> \
   --auth-state-file ~/.config/clawnera/auth-state.json

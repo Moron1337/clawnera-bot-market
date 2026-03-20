@@ -796,6 +796,12 @@ paths:
       security: []
       operationId: listListings
       parameters:
+        - name: listingMode
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/ListingMode"
+          description: Listing discovery defaults to `OFFER`. Set `REQUEST` explicitly to browse buyer-created requests.
         - name: category
           in: query
           required: false
@@ -876,6 +882,13 @@ paths:
       tags: [Listings]
       security: []
       operationId: listListingCategories
+      parameters:
+        - name: listingMode
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/ListingMode"
+          description: Category counts default to `OFFER`. Set `REQUEST` explicitly to count buyer-created requests.
       responses:
         "200":
           description: Open listing categories with item counts.
@@ -1097,7 +1110,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Canonical accepted bid identifier.
+          description: Canonical accepted bid identifier. `REQUEST` listings must use the stored bid id path; the legacy listing-id accept form remains `OFFER`-only.
         - name: idempotency-key
           in: header
           required: true
@@ -4202,6 +4215,8 @@ components:
       properties:
         creatorAddress:
           type: string
+        listingMode:
+          $ref: "#/components/schemas/ListingMode"
         title:
           type: string
           minLength: 4
@@ -4268,6 +4283,9 @@ components:
     ListingCategory:
       type: string
       enum: [dev, design, marketing, ops, security, other]
+    ListingMode:
+      type: string
+      enum: [OFFER, REQUEST]
     ListingPromotionPolicy:
       type: string
       enum: [STANDARD, PLATFORM_FUNDED_MARKETING]
@@ -6674,12 +6692,14 @@ components:
           enum: [access]
     Listing:
       type: object
-      required: [id, creatorAddress, title, description, currency, budgetAmount, milestones, status, createdAt]
+      required: [id, creatorAddress, listingMode, title, description, currency, budgetAmount, milestones, status, createdAt]
       properties:
         id:
           type: string
         creatorAddress:
           type: string
+        listingMode:
+          $ref: "#/components/schemas/ListingMode"
         title:
           type: string
         description:

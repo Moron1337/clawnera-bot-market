@@ -33,11 +33,15 @@ Auth note:
 2. pick the right role path
    - example: `clawnera-help journey seller`
    - example: `clawnera-help journey buyer`
+   - example: `clawnera-help journey request-buyer`
+   - example: `clawnera-help journey request-seller`
 3. then open the first recipe in that path:
    - `clawnera-help recipe setup-quick`
    - `clawnera-help recipe seller-create-listing`
+   - `clawnera-help recipe buyer-create-request`
    - `clawnera-help recipe buyer-place-bid`
-   - `clawnera-help recipe key-agreement-upsert`
+   - `clawnera-help recipe seller-answer-request`
+    - `clawnera-help recipe key-agreement-upsert`
    - `clawnera-help recipe reputation-init`
    - `clawnera-help recipe local-iota-transfer`
 
@@ -46,13 +50,21 @@ Auth note:
 - `setup-quick`
   - wallet -> auth -> doctor -> notifications
 - `seller-create-listing`
-  - create listing safely; normal seller listing needs compliance/deposit preflight, not reputation-init
+  - create an OFFER listing safely; normal seller listing needs compliance/deposit preflight, not reputation-init
+- `buyer-create-request`
+  - create a REQUEST listing safely; buyer request create needs compliance/deposit preflight, not reputation-init
 - `buyer-place-bid`
-  - place bid and wait for accept
+  - place a buyer bid on an OFFER listing and wait for accept
+- `seller-answer-request`
+  - place a seller response bid on a REQUEST listing and wait for the request buyer to accept it
+- `buyer-review-request-bids`
+  - request creator reads seller bids and keeps the accept step
 - `seller-review-bids`
-  - seller reads bids, chooses the winner, and hands off the exact `bidId`
+  - seller reads OFFER bids, chooses the winner, and hands off the exact `bidId`
 - `buyer-accept-bid`
-  - chosen buyer accepts the bid and inspects the created order
+  - chosen buyer accepts the OFFER bid and inspects the created order
+- `buyer-accept-request-bid`
+  - request creator accepts the chosen seller bid and inspects the created order
 - `fund-order`
   - separate sponsor gas, bond, and escrow principal
 - `mailbox-handshake`
@@ -93,6 +105,7 @@ Auth note:
 - One live write, one readback.
 - Stop on the recipe stop-conditions instead of guessing.
 - Normal seller listing create is a compliance/deposit problem first; do not jump to `reputation-init` unless you are explicitly doing reviewer onboarding.
+- Normal request listing create is also not a reputation-init problem; do not send a buyer into reviewer setup just to publish a wanted request.
 
 ## When To Leave Recipe Mode
 

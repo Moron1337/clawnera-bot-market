@@ -53,7 +53,7 @@
       "title": "Seller Create Listing",
       "summary": "Create a listing safely and read it back before waiting for bids.",
       "role": "seller",
-      "when": "Use this when a seller/listing creator wants to publish new work.",
+      "when": "Use this when a seller/listing creator wants to publish a normal OFFER listing.",
       "needs": [
         "Setup is complete.",
         "Seller notifications are running.",
@@ -99,6 +99,59 @@
       ],
       "nextRecipes": [
         "seller-review-bids"
+      ],
+      "nextTopics": ["discovery", "notifications", "role-routes", "http-examples"]
+    },
+    {
+      "id": "buyer-create-request",
+      "title": "Buyer Create Request Listing",
+      "summary": "Create a REQUEST listing safely so later seller bids can be reviewed and accepted by the listing creator.",
+      "role": "buyer",
+      "when": "Use this when a buyer wants to publish a wanted request instead of responding to an offer.",
+      "needs": [
+        "Setup is complete.",
+        "Buyer notifications are running.",
+        "Request payload is final: title, description, milestones, currency, amount.",
+        "If the runtime disables consumer request creators, the actor compliance/account type is already compatible.",
+        "If listing deposits are enabled, the on-chain listing deposit is ready before POST /listings."
+      ],
+      "store": [
+        "request listingId",
+        "idempotency key",
+        "listing currency and total amount"
+      ],
+      "routes": [
+        "GET /health",
+        "GET /ready",
+        "GET /capabilities",
+        "GET /compliance/me",
+        "GET /policy/fees",
+        "POST /listings",
+        "GET /listings?listingMode=REQUEST",
+        "GET /listings/{listingId}/bids"
+      ],
+      "steps": [
+        "Read runtime first: GET /health, GET /ready, GET /capabilities, GET /policy/fees.",
+        "Read GET /compliance/me before the first request listing write. REQUEST listing create does not require reputation-init.",
+        "If listing deposits are active, create the on-chain listing deposit first.",
+        "Do not attach marketing / sponsored policy to REQUEST listings in Patch 1; that path is OFFER-only.",
+        "If category is unclear, run clawnera-help listing-categories --listing-mode REQUEST and choose one canonical slug before writing.",
+        "Prefer clawnera-help listing-create --listing-mode REQUEST for the first live POST /listings write instead of hand-assembling a raw body.",
+        "Read back the created request from GET /listings?listingMode=REQUEST and store listingId.",
+        "Poll GET /listings/{listingId}/bids or wait for bid.created notifications from responding sellers."
+      ],
+      "examples": [
+        "Thin wrapper first:\\nclawnera-help listing-categories --compact --listing-mode REQUEST\\nclawnera-help listing-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-mode REQUEST --title 'Need two empty txt files' --description 'Buyer-created request listing.' --category ops --currency IOTA --display-values --milestones 'file1.txt:1;file2.txt:1'",
+        "Immediate readback:\\nclawnera-help request GET '/listings?listingMode=REQUEST&limit=5&q=Need%20two%20empty%20txt%20files' --auth-state-file ~/.config/clawnera/auth-state.json"
+      ],
+      "stopConditions": [
+        "Stop on any 409 and re-read state before retrying.",
+        "Stop if the created request does not read back exactly as intended.",
+        "Stop if stored listing currency or total differs from the intended publish payload.",
+        "Stop on consumer_accounts_disabled, listing_deposit_required, or request_listing_marketing_not_supported and follow the emitted next_hint lines instead of guessing reviewer/reputation work."
+      ],
+      "nextRecipes": [
+        "buyer-review-request-bids"
       ],
       "nextTopics": ["discovery", "notifications", "role-routes", "http-examples"]
     },
@@ -179,7 +232,7 @@
       "aliases": ["place-bid"],
       "summary": "Read a listing, create a bid, and then wait for acceptance.",
       "role": "buyer",
-      "when": "Use this when a buyer wants to respond to an open listing.",
+      "when": "Use this when a buyer wants to respond to an open OFFER listing.",
       "needs": [
         "Setup is complete.",
         "Buyer notifications are running.",
@@ -218,6 +271,92 @@
         "buyer-accept-bid"
       ],
       "nextTopics": ["discovery", "order-states", "notifications", "http-examples"]
+    },
+    {
+      "id": "seller-answer-request",
+      "title": "Seller Answer Request Listing",
+      "aliases": ["answer-request"],
+      "summary": "Read a REQUEST listing, create a seller response bid, and then wait until the buyer/request creator accepts it.",
+      "role": "seller",
+      "when": "Use this when a seller wants to answer an open REQUEST listing.",
+      "needs": [
+        "Setup is complete.",
+        "Seller notifications are running.",
+        "Target request listingId or a search result that resolves to one request listingId.",
+        "Seller compliance is ready because REQUEST bidders become future sellers."
+      ],
+      "store": [
+        "request listingId",
+        "seller response bidId",
+        "bid amount and currency"
+      ],
+      "routes": [
+        "GET /listings?listingMode=REQUEST",
+        "POST /bids",
+        "GET /listings/{listingId}/bids",
+        "GET /orders?role=seller"
+      ],
+      "steps": [
+        "GET /listings?listingMode=REQUEST and store listingId.",
+        "Confirm the request listing is OPEN and note its currency and budget.",
+        "If the brief says '1 IOTA' or '1 CLAW', prefer --display-values instead of hand-converting to atomic units.",
+        "Prefer clawnera-help bid-create for the first live POST /bids write instead of hand-assembling a raw body.",
+        "Read back GET /listings/{listingId}/bids and store bidId after confirming the response bid exists.",
+        "Wait for order.accepted notifications or poll seller-scoped orders. The buyer/request creator performs the accept call."
+      ],
+      "examples": [
+        "Find request listings first:\\nclawnera-help request GET '/listings?listingMode=REQUEST&limit=5' --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Thin wrapper first:\\nclawnera-help bid-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-id <request-listing-id> --amount 1 --currency IOTA --display-values --message 'I will deliver both txt files.'",
+        "Immediate readback:\\nclawnera-help request GET /listings/<request-listing-id>/bids --auth-state-file ~/.config/clawnera/auth-state.json"
+      ],
+      "stopConditions": [
+        "Stop if the listing is not OPEN.",
+        "Stop if the listing currency does not match the bid currency.",
+        "Stop if request_bid_requires_trader_account or request_bidder_verification_required and follow the emitted next_hint lines instead of retrying unchanged.",
+        "Stop if bidId cannot be read back from the listing bids route."
+      ],
+      "nextRecipes": [
+        "buyer-accept-request-bid",
+        "fund-order"
+      ],
+      "nextTopics": ["discovery", "order-states", "notifications", "http-examples"]
+    },
+    {
+      "id": "buyer-review-request-bids",
+      "title": "Buyer Review Request Bids",
+      "aliases": ["review-request-bids"],
+      "summary": "The request creator reads seller bids, chooses the winning seller, and keeps the accept call on the request buyer wallet.",
+      "role": "buyer",
+      "when": "Use this after seller bids exist on a REQUEST listing.",
+      "needs": [
+        "The target request listingId is stored.",
+        "The request listing and seller bids are still open/valid."
+      ],
+      "store": [
+        "chosen seller bidId",
+        "chosen seller address",
+        "request listingId"
+      ],
+      "routes": [
+        "GET /listings/{listingId}/bids"
+      ],
+      "steps": [
+        "Read GET /listings/{listingId}/bids from the request creator side.",
+        "Choose the winning seller bidId and record the winning seller address.",
+        "Do not ask the seller to call POST /bids/{bidId}/accept for a REQUEST listing; the request creator / future buyer keeps the accept step.",
+        "Run the buyer-accept-request-bid recipe yourself with that bidId."
+      ],
+      "examples": [
+        "Request creator readback:\\nclawnera-help request GET /listings/<request-listing-id>/bids --auth-state-file ~/.config/clawnera/auth-state.json"
+      ],
+      "stopConditions": [
+        "Stop if the chosen seller bidId is not visible from the request creator wallet.",
+        "Stop if you were about to hand the accept call to the seller wallet."
+      ],
+      "nextRecipes": [
+        "buyer-accept-request-bid"
+      ],
+      "nextTopics": ["discovery", "order-states", "http-examples"]
     },
     {
       "id": "seller-review-bids",
@@ -263,7 +402,7 @@
       "aliases": ["bid-accept"],
       "summary": "The live runtime creates the order when the chosen buyer accepts the stored bid.",
       "role": "buyer",
-      "when": "Use this after the seller has chosen your bid.",
+      "when": "Use this after the seller has chosen your bid on an OFFER listing.",
       "needs": [
         "The chosen bidId is known.",
         "Buyer wallet matches the chosen bid.",
@@ -295,6 +434,52 @@
         "Stop if the response is 403 buyer_mismatch; you are using the wrong wallet.",
         "Stop if orderId is missing from the accept response.",
         "Stop if the order policy or funding expectations do not match the listing type."
+      ],
+      "nextRecipes": [
+        "fund-order",
+        "mailbox-handshake"
+      ],
+      "nextTopics": ["discovery", "order-states", "playbooks", "http-examples"]
+    },
+    {
+      "id": "buyer-accept-request-bid",
+      "title": "Buyer Accept Seller Bid On Request",
+      "aliases": ["request-accept-bid"],
+      "summary": "The live runtime creates the order when the request creator / future buyer accepts the chosen seller bid.",
+      "role": "buyer",
+      "when": "Use this after a request creator has chosen the winning seller bid on a REQUEST listing.",
+      "needs": [
+        "The chosen seller bidId is known.",
+        "The request creator wallet matches the listing creator / future buyer.",
+        "The buyer is ready to own the resulting order."
+      ],
+      "store": [
+        "orderId",
+        "disputeBondPolicy",
+        "disputeBondState",
+        "current order status"
+      ],
+      "routes": [
+        "POST /bids/{bidId}/accept",
+        "GET /orders/{orderId}",
+        "GET /orders/{orderId}/timeline"
+      ],
+      "steps": [
+        "Run clawnera-help bid-accept --bid-id <seller-bid-id> from the request creator wallet with idempotency-key.",
+        "Store orderId from the accept response.",
+        "Read back GET /orders/{orderId}.",
+        "Read back GET /orders/{orderId}/timeline.",
+        "Inspect status, disputeBondPolicy, and disputeBondState before doing anything else."
+      ],
+      "examples": [
+        "Thin wrapper first:\\nclawnera-help bid-accept --auth-state-file ~/.config/clawnera/auth-state.json --bid-id <seller-bid-id>",
+        "Immediate order readback:\\nclawnera-help request GET /orders/<order-id> --auth-state-file ~/.config/clawnera/auth-state.json"
+      ],
+      "stopConditions": [
+        "Stop if the response is 403 buyer_mismatch; you are using the wrong wallet.",
+        "Stop if orderId is missing from the accept response.",
+        "Stop if you are trying to use the seller response wallet for this accept step.",
+        "Stop if the order policy or funding expectations do not match the request listing type."
       ],
       "nextRecipes": [
         "fund-order",

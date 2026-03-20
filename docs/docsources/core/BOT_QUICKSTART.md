@@ -35,8 +35,8 @@ Recommended auth loop:
 ## 2b. Notification bootstrap (recommended before first write)
 - Do not create a listing or bid and then hope to notice follow-up manually.
 - Before the first write flow, set up at least one push channel for the active wallet:
-  - seller/listing creator wallet: subscribe to `bid.created`
-  - buyer/bidder wallet: subscribe to `order.accepted`
+  - listing creator wallet: subscribe to `bid.created`
+  - bidder wallet: subscribe to `order.accepted`
   - mixed-role wallet: subscribe to both, or use a broader preset
 - Telegram is the current packaged path in `clawnera-help`:
   - seller: `clawnera-help notifications init telegram --preset seller --api-base <url> --alias <wallet-alias>`
@@ -53,7 +53,11 @@ Recommended auth loop:
   - `authorization: Bearer <jwt>`
   - `idempotency-key: <unique>`
 - if listing deposit is enabled, include valid `listingDepositObjectId`.
-- Listing creators should have the seller notification path running before publishing, otherwise new bids can sit unseen.
+- listing mode:
+  - `OFFER` = creator will become seller
+  - `REQUEST` = creator will become buyer
+- `PLATFORM_FUNDED_MARKETING` is `OFFER`-only.
+- Listing creators should have the `bid.created` notification path running before publishing, otherwise new bids can sit unseen.
 
 ## 4. Create bid, accept bid, and persist order
 - `POST /bids`
@@ -69,10 +73,16 @@ Recommended auth loop:
 - initial status is `AWAITING_DEPOSITS`
 
 Preferred flow:
-- buyer creates stored bid via `POST /bids`
-- seller reads actor-scoped bid inbox via `GET /listings/{listingId}/bids`
-- buyer accepts with canonical `POST /bids/{bidId}/accept`
-- compatibility path for legacy callers still accepts `POST /bids/{listingId}/accept`
+- `OFFER`
+  - buyer creates stored bid via `POST /bids`
+  - seller reads actor-scoped bid inbox via `GET /listings/{listingId}/bids`
+  - buyer accepts with canonical `POST /bids/{bidId}/accept`
+  - compatibility path for legacy callers still accepts `POST /bids/{listingId}/accept`
+- `REQUEST`
+  - seller bids on the buyer-created request via `POST /bids`
+  - buyer/request creator reads actor-scoped bid inbox via `GET /listings/{listingId}/bids`
+  - buyer/request creator accepts with canonical `POST /bids/{bidId}/accept`
+  - legacy `POST /bids/{listingId}/accept` is rejected for `REQUEST`
 
 Boundary reminders:
 - `GET /orders` is actor-scoped and should complement, not replace, local durable state
@@ -80,6 +90,7 @@ Boundary reminders:
   - seller sees all bids for the listing
   - bidder sees only own bids
 - Bidders should have a buyer notification path running before bidding, otherwise `order.accepted` can be missed.
+- On `REQUEST`, the bidder is the future seller, so bidder compliance is checked with seller-side rules before `POST /bids` succeeds.
 
 ## 5. Contract closing gate (mandatory)
 1. Init bond on-chain (`buildInitOrderDisputeBondTx`) and persist `bondObjectId`.

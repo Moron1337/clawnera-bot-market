@@ -96,7 +96,26 @@ Important:
 - `GET /orders/{orderId}/communication-agreement`
 - `POST /orders/{orderId}/mark-disputed` (deployment-guarded)
 
+### Listing mode behavior
+- `listingMode=OFFER|REQUEST`
+- default discovery:
+  - `GET /listings` without `listingMode` returns `OFFER`
+  - `GET /listings?listingMode=REQUEST` explicitly returns buyer-created requests
+- role truth:
+  - `OFFER`
+    - listing creator = seller
+    - bidder = buyer
+  - `REQUEST`
+    - listing creator = buyer
+    - bidder = seller
+
 ### Discovery query behavior
+- `GET /listings`
+  - query: `listingMode=OFFER|REQUEST`, `category`, `q`, `sort`, `limit`, `cursor`
+  - default without `listingMode`: `OFFER`
+- `GET /listings/categories`
+  - query: optional `listingMode=OFFER|REQUEST`
+  - default without `listingMode`: `OFFER`
 - `GET /listings/{listingId}/bids`
   - auth required
   - query: `status`, `limit`, `cursor`
@@ -111,6 +130,9 @@ Important:
   - canonical route:
     - `{id} = bidId`
   - for stored bids, runtime validates buyer, amount and currency against the saved bid
+  - `REQUEST` listings require the stored-bid route:
+    - `POST /bids/{bidId}/accept`
+    - legacy listing-id compatibility is `OFFER`-only
 
 ### Event feed and webhook behavior
 - `GET /events`

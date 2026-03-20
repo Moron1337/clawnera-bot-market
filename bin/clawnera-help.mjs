@@ -393,10 +393,16 @@ function compactRecipeCommand(recipe) {
   switch (recipe.id) {
     case "seller-create-listing":
       return `clawnera-help listing-categories --compact && clawnera-help listing-create ${auth} --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --milestones '<title:amount;title:amount>'`;
+    case "buyer-create-request":
+      return `clawnera-help listing-categories --compact --listing-mode REQUEST && clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --milestones '<title:amount;title:amount>'`;
     case "buyer-place-bid":
       return `clawnera-help bid-create ${auth} --listing-id <listingId> --amount <amount> --currency <IOTA|CLAW> --display-values`;
+    case "seller-answer-request":
+      return `clawnera-help bid-create ${auth} --listing-id <requestListingId> --amount <amount> --currency <IOTA|CLAW> --display-values`;
     case "buyer-accept-bid":
       return `clawnera-help bid-accept ${auth} --bid-id <bidId>`;
+    case "buyer-accept-request-bid":
+      return `clawnera-help bid-accept ${auth} --bid-id <sellerBidId>`;
     case "reviewer-handle-invite":
       return `clawnera-help reviewer-invites ${auth} --json`;
     case "reviewer-vote":
@@ -582,6 +588,9 @@ function printJourney(journey, recipes) {
     if (journey.id === "seller" && recipeId === "buyer-accept-bid") {
       annotations.push("wait_for_buyer_accept");
     }
+    if (journey.id === "request-seller" && recipeId === "buyer-accept-request-bid") {
+      annotations.push("wait_for_request_buyer_accept");
+    }
     return {
       label,
       detail: annotations.length > 0 ? ` [${annotations.join("] [")}]` : "",
@@ -613,7 +622,12 @@ function printJourney(journey, recipes) {
       console.log(`- ${recipeId}: ${label}${detail}`);
     }
   }
-  if (journey.id === "seller" || journey.id === "buyer") {
+  if (
+    journey.id === "seller" ||
+    journey.id === "buyer" ||
+    journey.id === "request-buyer" ||
+    journey.id === "request-seller"
+  ) {
     console.log("");
     console.log("Conditional Delivery Prerequisite:");
     console.log("- If mailbox or encrypted delivery is planned, both sides should run clawnera-help recipe key-agreement-upsert before mailbox-handshake or encrypted delivery.");
@@ -652,6 +666,9 @@ function printJourneyCompact(journey, recipes) {
     if (journey.id === "seller" && recipeId === "buyer-accept-bid") {
       annotations.push("wait_for_buyer_accept");
     }
+    if (journey.id === "request-seller" && recipeId === "buyer-accept-request-bid") {
+      annotations.push("wait_for_request_buyer_accept");
+    }
     return annotations.length > 0 ? `${recipeId}[${annotations.join(",")}]` : recipeId;
   };
 
@@ -668,7 +685,12 @@ function printJourneyCompact(journey, recipes) {
   if (Array.isArray(journey.optional) && journey.optional.length > 0) {
     console.log(`later:${journey.optional.join(" | ")}`);
   }
-  if (journey.id === "seller" || journey.id === "buyer") {
+  if (
+    journey.id === "seller" ||
+    journey.id === "buyer" ||
+    journey.id === "request-buyer" ||
+    journey.id === "request-seller"
+  ) {
     console.log("prereq:key-agreement-upsert before mailbox-handshake or encrypted delivery");
   }
   const orderedSteps = Array.isArray(journey.steps) ? journey.steps : [];
@@ -4126,13 +4148,16 @@ async function resolveRuntimeContextForHelper(options = {}) {
 function listingCreateUsageLines() {
   return [
     "Listing create helper:",
-    "- Usage: clawnera-help listing-create --title <text> --description <text> --category <slug> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>' [auth options]",
+    "- Usage: clawnera-help listing-create --title <text> --description <text> --category <slug> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>' [--listing-mode OFFER|REQUEST] [auth options]",
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
     `- Valid category slugs: ${LISTING_CATEGORY_SLUGS.join(", ")} (or run: clawnera-help listing-categories)`,
     "- Optional: --budget-amount <atomic-int> (defaults to the milestone sum), --creator-address <0x...>, --milestones-json <json>, --milestones-file <file>",
     "- Optional human mode: add --display-values to interpret milestone and budget numbers in whole-user units for the selected currency (examples: --currency IOTA --display-values --milestones 'empty txt:1' or 'empty txt:1 IOTA')",
     "- Thin wrapper over POST /listings that infers creatorAddress from the saved auth state when possible",
-    "- Normal listing create does not require reputation-init; the real preflight is seller compliance (TRADER, and sometimes trader verification) plus listing deposit when enabled",
+    "- OFFER is the default if --listing-mode is omitted",
+    "- REQUEST means the listing creator is the future buyer and later accepts the chosen seller bid",
+    "- Normal OFFER listing create does not require reputation-init; the real preflight is seller compliance (TRADER, and sometimes trader verification) plus listing deposit when enabled",
+    "- REQUEST listing create also does not require reputation-init; the real preflight is account/compliance policy plus listing deposit when enabled",
     "- Sponsored / marketing listing is not the default public path; verify allowlist/campaign state first instead of guessing",
   ];
 }
@@ -4145,14 +4170,17 @@ function bidCreateUsageLines() {
     "- Optional: --message <text>, --bidder-address <0x...>",
     "- Optional human mode: add --display-values to interpret --amount in whole-user units for the selected currency (examples: --currency IOTA --display-values --amount 1 or --amount '1 IOTA')",
     "- Thin wrapper over POST /bids that infers bidderAddress from the saved auth state when possible",
+    "- On OFFER listings the bidder becomes the future buyer",
+    "- On REQUEST listings the bidder becomes the future seller and must pass seller-side compliance",
   ];
 }
 
 function listingCategoriesUsageLines() {
   return [
     "Listing categories helper:",
-    "- Usage: clawnera-help listing-categories [--compact] [--json] [auth options]",
+    "- Usage: clawnera-help listing-categories [--listing-mode OFFER|REQUEST] [--compact] [--json] [auth options]",
     "- Reads GET /listings/categories and prints the canonical category slugs plus current counts.",
+    "- OFFER is the default if --listing-mode is omitted.",
     `- Built-in fallback slugs: ${LISTING_CATEGORY_SLUGS.join(", ")}`,
   ];
 }
@@ -4164,6 +4192,8 @@ function bidAcceptUsageLines() {
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
     "- Optional advanced pair: --order-id <order-id> plus --communication-proposal-json <json> or --communication-proposal-file <file>",
     "- Thin wrapper over POST /bids/{bidId}/accept",
+    "- OFFER: the chosen buyer runs this from the bid wallet",
+    "- REQUEST: the listing creator / future buyer runs this from the request wallet",
   ];
 }
 
@@ -4196,9 +4226,14 @@ async function runListingCreate(commandArgs) {
     const rawCategory = normalizeString(options.category);
     const category = normalizeListingCategorySlug(rawCategory);
     const currency = normalizeString(options.currency).toUpperCase();
+    const listingModeRaw = normalizeString(options["listing-mode"]).toUpperCase();
+    const listingMode = !listingModeRaw ? "OFFER" : ["OFFER", "REQUEST"].includes(listingModeRaw) ? listingModeRaw : "";
     const displayValues = isDisplayValueModeEnabled(options);
     if (!title || !description || !rawCategory || !currency) {
       return { ok: false, error: "missing_required_listing_fields" };
+    }
+    if (!listingMode) {
+      return { ok: false, error: "invalid_listing_mode" };
     }
     if (displayValues && !ASSET_DISPLAY_DECIMALS[currency]) {
       return { ok: false, error: "display_values_require_single_currency", supportedCurrencies: Object.keys(ASSET_DISPLAY_DECIMALS) };
@@ -4218,6 +4253,7 @@ async function runListingCreate(commandArgs) {
         title,
         description,
         category,
+        listingMode,
         currency,
         budgetAmount,
         milestones,
@@ -4226,19 +4262,26 @@ async function runListingCreate(commandArgs) {
     return {
       ...result,
       creatorAddress,
+      listingMode,
       listingId: extractCommonCreatedId(result.response, [["listingId"], ["listing", "id"], ["id"]]) || null,
       budgetAmount,
       milestones,
-      hintLines: buildListingCreateHintLines(result),
+      hintLines: buildListingCreateHintLines(result, listingMode),
     };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "listing_create_failed" };
   }
 }
 
-function buildListingCreateHintLines(result = {}) {
+function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
   const error = typeof result?.error === "string" ? result.error.trim() : "";
   switch (error) {
+    case "consumer_accounts_disabled":
+      return [
+        `cause=${listingMode === "REQUEST" ? "request_listing_creator_blocked_by_b2b_policy" : "offer_listing_creator_blocked_by_b2b_policy"}`,
+        "detail=read_current_account_type_and_runtime_compliance_policy_before_retry",
+        `next_hint=clawnera-help request GET /compliance/me --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
+      ];
     case "listing_requires_trader_account":
       return [
         "cause=standard_listing_requires_trader_account",
@@ -4257,8 +4300,14 @@ function buildListingCreateHintLines(result = {}) {
       return [
         "cause=listing_deposit_policy_active",
         "detail=read_policy_then_create_the_listing_deposit_before_retry",
-        "next_hint=clawnera-help request GET /policy/fees --auth-state-file <seller-auth-state-file>",
-        "next_hint=clawnera-help recipe seller-create-listing --compact",
+        `next_hint=clawnera-help request GET /policy/fees --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
+        `next_hint=clawnera-help recipe ${listingMode === "REQUEST" ? "buyer-create-request" : "seller-create-listing"} --compact`,
+      ];
+    case "request_listing_marketing_not_supported":
+      return [
+        "cause=request_listing_marketing_not_supported",
+        "detail=platform-funded-marketing_is_offer_only_in_patch_1",
+        "next_hint=retry_without_marketing_promotion_policy",
       ];
     case "marketing_creator_not_allowed":
     case "marketing_disabled":
@@ -4319,9 +4368,32 @@ async function runBidCreate(commandArgs) {
       listingId,
       amount,
       currency,
+      hintLines: buildBidCreateHintLines(result),
     };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "bid_create_failed" };
+  }
+}
+
+function buildBidCreateHintLines(result = {}) {
+  const error = typeof result?.error === "string" ? result.error.trim() : "";
+  switch (error) {
+    case "request_bid_requires_trader_account":
+      return [
+        "cause=request_bidder_becomes_future_seller",
+        "detail=responding_to_a_request_requires_seller_side_trader_eligibility",
+        "next_hint=clawnera-help request GET /compliance/me --auth-state-file <request-seller-auth-state-file>",
+        "next_hint=clawnera-help request POST /compliance/me/account-type --auth-state-file <request-seller-auth-state-file> --body '{\"accountType\":\"TRADER\"}'",
+      ];
+    case "request_bidder_verification_required":
+      return [
+        "cause=request_bidder_requires_verified_trader_account",
+        "detail=responding_to_a_request_keeps_the_bidder_on_the_future_seller_side",
+        "next_hint=clawnera-help request GET /compliance/me --auth-state-file <request-seller-auth-state-file>",
+        "next_hint=clawnera-help request POST /compliance/me/trader-verification --auth-state-file <request-seller-auth-state-file> --body-file trader-verification.json",
+      ];
+    default:
+      return [];
   }
 }
 
@@ -4333,10 +4405,16 @@ async function runListingCategories(commandArgs) {
   if (positionals.length > 0) {
     return { ok: false, error: "unexpected_positional_arguments", details: positionals };
   }
-  const result = await runApiRequest(buildForwardedRequestArgs("GET", "/listings/categories", options));
+  const listingModeRaw = normalizeString(options["listing-mode"]).toUpperCase();
+  if (listingModeRaw && !["OFFER", "REQUEST"].includes(listingModeRaw)) {
+    return { ok: false, error: "invalid_listing_mode" };
+  }
+  const path = listingModeRaw ? `/listings/categories?listingMode=${encodeURIComponent(listingModeRaw)}` : "/listings/categories";
+  const result = await runApiRequest(buildForwardedRequestArgs("GET", path, options));
   const items = Array.isArray(result.response?.items) ? result.response.items : [];
   return {
     ...result,
+    listingMode: listingModeRaw || "OFFER",
     items,
     validCategories: items.length > 0
       ? items.map((entry) => String(entry.category || "").trim()).filter(Boolean)
@@ -9227,10 +9305,17 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else if (result.ok) {
     console.log(`listing_create_ok listing_id=${result.listingId || "unknown"}`);
+    console.log(`listing_mode=${result.listingMode || "OFFER"}`);
     console.log(`creator_address=${result.creatorAddress}`);
     console.log(`budget_amount=${result.budgetAmount}`);
     console.log(`milestone_count=${Array.isArray(result.milestones) ? result.milestones.length : 0}`);
-    console.log("next_readback=clawnera-help request GET /listings --auth-state-file <seller-auth-state-file>");
+    if (result.listingMode === "REQUEST") {
+      console.log(
+        "next_readback=clawnera-help request GET '/listings?listingMode=REQUEST' --auth-state-file <request-buyer-auth-state-file>"
+      );
+    } else {
+      console.log("next_readback=clawnera-help request GET /listings --auth-state-file <seller-auth-state-file>");
+    }
   } else {
     console.error(`listing_create_error: ${result.error}`);
     if (Array.isArray(result.validCategories) && result.validCategories.length > 0) {
@@ -9269,6 +9354,11 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.error(`bid_create_error: ${result.error}`);
     if (Array.isArray(result.supportedCurrencies) && result.supportedCurrencies.length > 0) {
       console.error(`supported_display_currencies=${result.supportedCurrencies.join(",")}`);
+    }
+    if (Array.isArray(result.hintLines) && result.hintLines.length > 0) {
+      for (const line of result.hintLines) {
+        console.error(line);
+      }
     }
     process.exitCode = 1;
   }

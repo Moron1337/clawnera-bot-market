@@ -1456,6 +1456,11 @@
           "path": [],
           "query": [
             {
+              "name": "listingMode",
+              "in": "query",
+              "required": false
+            },
+            {
               "name": "category",
               "in": "query",
               "required": false
@@ -1532,6 +1537,7 @@
             "milestones"
           ],
           "optionalFields": [
+            "listingMode",
             "description",
             "category",
             "promotionPolicy",
@@ -1542,6 +1548,7 @@
           ],
           "propertyNames": [
             "creatorAddress",
+            "listingMode",
             "title",
             "description",
             "category",
@@ -1564,6 +1571,7 @@
             "requiredFields": [
               "id",
               "creatorAddress",
+              "listingMode",
               "title",
               "description",
               "currency",
@@ -1585,6 +1593,7 @@
             "propertyNames": [
               "id",
               "creatorAddress",
+              "listingMode",
               "title",
               "description",
               "category",
@@ -1667,7 +1676,13 @@
         ],
         "parameters": {
           "path": [],
-          "query": [],
+          "query": [
+            {
+              "name": "listingMode",
+              "in": "query",
+              "required": false
+            }
+          ],
           "header": []
         },
         "requestBody": null,
@@ -1834,6 +1849,7 @@
             "requiredFields": [
               "id",
               "creatorAddress",
+              "listingMode",
               "title",
               "description",
               "currency",
@@ -1855,6 +1871,7 @@
             "propertyNames": [
               "id",
               "creatorAddress",
+              "listingMode",
               "title",
               "description",
               "category",
@@ -1986,6 +2003,7 @@
             "requiredFields": [
               "id",
               "creatorAddress",
+              "listingMode",
               "title",
               "description",
               "currency",
@@ -2007,6 +2025,7 @@
             "propertyNames": [
               "id",
               "creatorAddress",
+              "listingMode",
               "title",
               "description",
               "category",
@@ -7429,13 +7448,12 @@
           "header": []
         },
         "requestBody": {
-          "required": true,
+          "required": false,
           "schemaRef": "#/components/schemas/ReviewerClaimMetricsRequest",
           "schemaName": "ReviewerClaimMetricsRequest",
-          "requiredFields": [
-            "disputeCaseObjectId"
-          ],
+          "requiredFields": [],
           "optionalFields": [
+            "disputeCaseObjectId",
             "reviewerRegistryObjectId",
             "reviewerEntryObjectId",
             "disputeQuorumConfigObjectId"
@@ -13243,6 +13261,11 @@
         "path": [],
         "query": [
           {
+            "name": "listingMode",
+            "in": "query",
+            "required": false
+          },
+          {
             "name": "category",
             "in": "query",
             "required": false
@@ -13318,6 +13341,7 @@
           "milestones"
         ],
         "optionalFields": [
+          "listingMode",
           "description",
           "category",
           "promotionPolicy",
@@ -13328,6 +13352,7 @@
         ],
         "propertyNames": [
           "creatorAddress",
+          "listingMode",
           "title",
           "description",
           "category",
@@ -13350,6 +13375,7 @@
           "requiredFields": [
             "id",
             "creatorAddress",
+            "listingMode",
             "title",
             "description",
             "currency",
@@ -13371,6 +13397,7 @@
           "propertyNames": [
             "id",
             "creatorAddress",
+            "listingMode",
             "title",
             "description",
             "category",
@@ -13450,7 +13477,13 @@
       ],
       "parameters": {
         "path": [],
-        "query": [],
+        "query": [
+          {
+            "name": "listingMode",
+            "in": "query",
+            "required": false
+          }
+        ],
         "header": []
       },
       "requestBody": null,
@@ -13611,6 +13644,7 @@
           "requiredFields": [
             "id",
             "creatorAddress",
+            "listingMode",
             "title",
             "description",
             "currency",
@@ -13632,6 +13666,7 @@
           "propertyNames": [
             "id",
             "creatorAddress",
+            "listingMode",
             "title",
             "description",
             "category",
@@ -13760,6 +13795,7 @@
           "requiredFields": [
             "id",
             "creatorAddress",
+            "listingMode",
             "title",
             "description",
             "currency",
@@ -13781,6 +13817,7 @@
           "propertyNames": [
             "id",
             "creatorAddress",
+            "listingMode",
             "title",
             "description",
             "category",
@@ -19070,13 +19107,12 @@
         "header": []
       },
       "requestBody": {
-        "required": true,
+        "required": false,
         "schemaRef": "#/components/schemas/ReviewerClaimMetricsRequest",
         "schemaName": "ReviewerClaimMetricsRequest",
-        "requiredFields": [
-          "disputeCaseObjectId"
-        ],
+        "requiredFields": [],
         "optionalFields": [
+          "disputeCaseObjectId",
           "reviewerRegistryObjectId",
           "reviewerEntryObjectId",
           "disputeQuorumConfigObjectId"
@@ -23684,6 +23720,7 @@
       "name": "CreateListingRequest",
       "propertyNames": [
         "creatorAddress",
+        "listingMode",
         "title",
         "description",
         "category",
@@ -23704,6 +23741,7 @@
         "milestones"
       ],
       "optionalFields": [
+        "listingMode",
         "description",
         "category",
         "promotionPolicy",
@@ -23734,6 +23772,12 @@
     },
     "ListingCategory": {
       "name": "ListingCategory",
+      "propertyNames": [],
+      "requiredFields": [],
+      "optionalFields": []
+    },
+    "ListingMode": {
+      "name": "ListingMode",
       "propertyNames": [],
       "requiredFields": [],
       "optionalFields": []
@@ -24502,10 +24546,9 @@
         "reviewerEntryObjectId",
         "disputeQuorumConfigObjectId"
       ],
-      "requiredFields": [
-        "disputeCaseObjectId"
-      ],
+      "requiredFields": [],
       "optionalFields": [
+        "disputeCaseObjectId",
         "reviewerRegistryObjectId",
         "reviewerEntryObjectId",
         "disputeQuorumConfigObjectId"
@@ -25624,6 +25667,7 @@
       "propertyNames": [
         "id",
         "creatorAddress",
+        "listingMode",
         "title",
         "description",
         "category",
@@ -25643,6 +25687,7 @@
       "requiredFields": [
         "id",
         "creatorAddress",
+        "listingMode",
         "title",
         "description",
         "currency",

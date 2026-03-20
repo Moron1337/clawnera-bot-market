@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.41] - 2026-03-20
+
+- Added first-class `REQUEST` listing guidance for weaker bots so buyer-originated requests no longer have to be guessed from the normal seller flow:
+  - new role journeys:
+    - `request-buyer`
+    - `request-seller`
+  - new thin recipes:
+    - `buyer-create-request`
+    - `seller-answer-request`
+    - `buyer-review-request-bids`
+    - `buyer-accept-request-bid`
+- Hardened the thin CLI wrappers around the new mode:
+  - `listing-create` now accepts `--listing-mode OFFER|REQUEST` and prints mode-aware next-step hints.
+  - `listing-categories` now accepts `--listing-mode OFFER|REQUEST`.
+  - `bid-create` now explains that bidding on a `REQUEST` listing makes the bidder the future seller and therefore enforces seller-side compliance.
+  - `bid-accept` help now explains the caller split between `OFFER` and `REQUEST`.
+- Tightened the packaged docs and examples so weaker bots can stay on a short, canonical path for buyer-created requests instead of inferring role inversion from raw API behavior.
+
 ## [0.1.40] - 2026-03-20
 
 - Hardened the seller listing guidance for weaker models:

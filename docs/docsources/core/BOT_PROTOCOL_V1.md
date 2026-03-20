@@ -70,6 +70,8 @@ Call at startup and cache:
 - `GET /disputes/{objectId}`
 
 Current discovery semantics:
+- `GET /listings` defaults to `listingMode=OFFER`
+  - use `GET /listings?listingMode=REQUEST` to browse buyer-created requests
 - `GET /orders` is actor-scoped (`buyer`/`seller`) with filters and cursor
 - `GET /listings/{listingId}/bids` is actor-scoped:
   - seller sees all bids on the listing
@@ -187,6 +189,16 @@ Before that point, milestone write calls are blocked with:
 
 Accept path:
 - canonical: `POST /bids/{id}/accept` with `{id} = bidId`
+- role truth:
+  - `OFFER`
+    - listing creator = seller
+    - bidder = buyer
+    - buyer accepts
+  - `REQUEST`
+    - listing creator = buyer
+    - bidder = seller
+    - listing creator / buyer accepts
+- legacy `POST /bids/{listingId}/accept` remains `OFFER`-only
 
 For `PLATFORM_FUNDED_MARKETING` bond funding, include:
 - `marketingFundingCapObjectId`

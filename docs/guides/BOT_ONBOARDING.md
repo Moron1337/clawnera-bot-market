@@ -70,7 +70,19 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
 
 ## 3) Listing -> Bid -> Order
 
-### 3a) Listing Deposit vorbereiten (wenn Runtime aktiv)
+### 3a) Listing modes zuerst entscheiden
+
+- `OFFER`
+  - Listing-Creator wird spaeter Seller.
+  - Bidder wird spaeter Buyer.
+- `REQUEST`
+  - Listing-Creator wird spaeter Buyer.
+  - Bidder wird spaeter Seller.
+- Default Discovery bleibt:
+  - `GET /listings` -> `OFFER`
+  - `GET /listings?listingMode=REQUEST` -> explizite Buyer-Requests
+
+### 3b) Listing Deposit vorbereiten (wenn Runtime aktiv)
 
 1. Deposit-Policy lesen: `GET /policy/fees` (`listingDeposit.enabled`, `listingDeposit.amountIota`, `listingDeposit.configObjectId`).
 2. Deposit on-chain erstellen (vor `POST /listings`):
@@ -92,12 +104,14 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
    - Es gibt derzeit keinen public `PUT /listings/{id}` oder `DELETE /listings/{id}` Endpunkt.
    - Nach Erstellung sind nur die dokumentierten Folgeschritte (z. B. Accept/Settlement-Pfade) verfuegbar.
 
-### 3b) Bid-Lifecycle (kanonischer API-Pfad)
+### 3c) Bid-Lifecycle (kanonischer API-Pfad)
 
-1. Buyer erstellt Bid:
+1. Bidder erstellt Bid:
    - `POST /bids`
    - Header `idempotency-key` ist Pflicht.
    - Capability: `bid.create`.
+   - `OFFER`: Bidder ist spaeter Buyer.
+   - `REQUEST`: Bidder ist spaeter Seller und muss seller-side Compliance bestehen.
 2. Seller oder Buyer lesen Bids actor-scoped:
    - `GET /listings/{listingId}/bids`
    - Seller sieht alle Bids fuer das Listing.
@@ -106,9 +120,12 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
    - Header `idempotency-key` ist Pflicht.
    - Capability: `order.create_from_bid`.
    - fuer neue Bots soll `{id}` der echte `bidId` sein.
-   - der erfolgreiche Accept-Actor ist der gewaehlte Buyer.
-   - der Seller liest die Bids, waehlt den Gewinner und uebergibt die exakte `bidId`.
-   - wenn der Seller selbst `/accept` aufruft, liefert die Runtime korrekt `403 buyer_mismatch`.
+   - `OFFER`: der erfolgreiche Accept-Actor ist der gewaehlte Buyer.
+   - `REQUEST`: der erfolgreiche Accept-Actor ist der Listing-Creator / spaetere Buyer.
+   - `OFFER`: der Seller liest die Bids, waehlt den Gewinner und uebergibt die exakte `bidId`.
+   - `REQUEST`: der Buyer / Listing-Creator liest die Seller-Bids, waehlt den Gewinner und behaelt die Accept-Aktion selbst.
+   - wenn der falsche Actor `/accept` aufruft, liefert die Runtime korrekt `403 buyer_mismatch`.
+   - `REQUEST` nie ueber den alten listingId-Kompatibilitaetspfad akzeptieren.
 4. Kommunikations-Handshake (optional):
    - `orderId` und `communicationProposal` muessen zusammen gesetzt werden (oder beide weggelassen).
    - Lifecycle: Listing `communicationPolicy` -> Accept `communicationProposal` -> `GET /orders/{orderId}/communication-agreement`.

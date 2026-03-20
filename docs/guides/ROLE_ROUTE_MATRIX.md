@@ -4,6 +4,15 @@
 - Vollstaendige Rollen-Sicht auf die aktuell produktive API-Surface.
 - Fokus auf Guardrails: Capability, API-Rollencheck, State-Preconditions, on-chain Enforcement.
 
+## Listing-Modes
+- `OFFER`
+  - Listing-Creator ist spaeter Seller.
+  - Bidder ist spaeter Buyer.
+- `REQUEST`
+  - Listing-Creator ist spaeter Buyer.
+  - Bidder ist spaeter Seller.
+- Default public discovery bleibt `OFFER`; `REQUEST` braucht expliziten Filter.
+
 ## 0) Shared Basisrouten (alle Rollen)
 
 | Route | Auth | Zweck | Hinweise |

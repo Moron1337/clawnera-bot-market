@@ -40,6 +40,45 @@
       ]
     },
     {
+      "id": "request-buyer",
+      "title": "Request Buyer Minimal Path",
+      "summary": "Wallet -> notifications or polling -> create a wanted request -> review seller bids -> accept the chosen seller bid -> fund -> communicate -> verify -> accept or dispute.",
+      "role": "buyer",
+      "steps": [
+        "setup-quick",
+        "buyer-create-request",
+        "buyer-review-request-bids",
+        "buyer-accept-request-bid",
+        "fund-order",
+        "mailbox-handshake",
+        "buyer-accept-delivery"
+      ],
+      "optional": [
+        "buyer-reject-delivery",
+        "dispute-open",
+        "resolve-dispute"
+      ]
+    },
+    {
+      "id": "request-seller",
+      "title": "Request Seller Minimal Path",
+      "summary": "Wallet -> notifications or polling -> respond to a buyer request -> wait until the buyer accepts -> fund -> communicate -> deliver.",
+      "role": "seller",
+      "steps": [
+        "setup-quick",
+        "seller-answer-request",
+        "buyer-accept-request-bid",
+        "fund-order",
+        "mailbox-handshake",
+        "seller-deliver-encrypted-byo"
+      ],
+      "optional": [
+        "buyer-reject-delivery",
+        "dispute-open",
+        "resolve-dispute"
+      ]
+    },
+    {
       "id": "reviewer",
       "title": "Reviewer Minimal Path",
       "summary": "Wallet -> key agreement -> reputation -> reviewer register -> poll reviewer-invites -> accept -> commit/reveal -> claim metrics.",
@@ -82,7 +121,9 @@
       ],
       "optional": [
         "seller-create-listing",
+        "buyer-create-request",
         "buyer-place-bid",
+        "seller-answer-request",
         "key-agreement-upsert",
         "reputation-init",
         "reviewer-register",

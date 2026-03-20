@@ -28,7 +28,7 @@ Important:
   - `POST /sponsor/execute`
 - Discovery surface:
   - `POST /bids` is public for authenticated marketplace actors
-  - `GET /listings/{listingId}/bids` is actor-scoped (seller sees all, bidder sees self)
+  - `GET /listings/{listingId}/bids` is actor-scoped (listing creator sees all, bidder sees self)
   - `GET /orders` is actor-scoped order discovery with role/status/listing filters
   - `GET /events` is the canonical cursor-based event feed
   - `GET /webhooks/subscriptions`, `POST /webhooks/subscriptions`, `GET /webhooks/deliveries` cover actor-owned webhook management
@@ -113,6 +113,9 @@ Important:
   - `REQUEST`
     - listing creator = buyer
     - bidder = seller
+- `PLATFORM_FUNDED_MARKETING` is `OFFER`-only today
+  - `REQUEST` listing create and REQUEST bid-accept reject it with `409 request_listing_marketing_not_supported`
+  - REQUEST bidders are future sellers and must satisfy seller-side compliance before `POST /bids`
 
 ### Discovery query behavior
 - `GET /listings`

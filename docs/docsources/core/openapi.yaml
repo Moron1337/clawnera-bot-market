@@ -847,6 +847,7 @@ paths:
     post:
       tags: [Listings]
       operationId: createListing
+      description: Create a public OFFER or REQUEST listing. `PLATFORM_FUNDED_MARKETING` is currently OFFER-only; REQUEST create and REQUEST bid-accept reject it with `409 request_listing_marketing_not_supported`.
       parameters:
         - name: idempotency-key
           in: header
@@ -4294,6 +4295,7 @@ components:
     ListingPromotionPolicy:
       type: string
       enum: [STANDARD, PLATFORM_FUNDED_MARKETING]
+      description: `PLATFORM_FUNDED_MARKETING` is currently OFFER-only in the public runtime. REQUEST listing create and REQUEST bid-accept reject it with `409 request_listing_marketing_not_supported`.
     ListingSort:
       type: string
       enum: [newest, highest_payout, expires_soon]

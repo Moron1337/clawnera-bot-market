@@ -1567,6 +1567,104 @@ test("listing-renew accepts an ISO timestamp and posts expiresAtMs to the canoni
   }
 });
 
+test("listing-cancel prints request feed readback for request listings", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-cancel-request-readback-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const mock = await startMockServer({
+    "POST /listings/listing-1/cancel": () => ({
+      status: 200,
+      body: {
+        listing: {
+          id: "listing-1",
+          status: "CANCELLED",
+          listingMode: "REQUEST"
+        }
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: "0x1111111111111111111111111111111111111111111111111111111111111111",
+        alias: "creator"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-cancel",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-id",
+      "listing-1"
+    ]);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /listing_cancel_ok listing_id=listing-1/);
+    assert.match(result.stdout, /GET '\/listings\?listingMode=REQUEST'/);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("listing-renew prints request feed readback for request listings", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-renew-request-readback-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const renewIso = "2026-04-20T12:00:00Z";
+  const mock = await startMockServer({
+    "POST /listings/listing-1/renew": () => ({
+      status: 200,
+      body: {
+        listing: {
+          id: "listing-1",
+          status: "OPEN",
+          listingMode: "REQUEST",
+          expiresAt: renewIso
+        }
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: "0x1111111111111111111111111111111111111111111111111111111111111111",
+        alias: "creator"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-renew",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-id",
+      "listing-1",
+      "--expires-at",
+      renewIso
+    ]);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /listing_renew_ok listing_id=listing-1/);
+    assert.match(result.stdout, /GET '\/listings\?listingMode=REQUEST'/);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("bid-create infers bidder address and posts a canonical body", async () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-bid-create-"));
   const authStateFile = path.join(tempDir, "auth-state.json");
@@ -1734,6 +1832,118 @@ test("request listing-create prints request-buyer compliance guidance for trader
     assert.match(result.stderr, /listing_create_error: listing_requires_trader_account/);
     assert.match(result.stderr, /request-buyer-auth-state-file/);
     assert.doesNotMatch(result.stderr, /seller-auth-state-file/);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("request listing-create prints request-buyer verification guidance for trader-verification failures", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-request-listing-create-verification-guidance-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const creatorAddress = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  const mock = await startMockServer({
+    "POST /listings": () => ({
+      status: 403,
+      body: {
+        error: "trader_verification_required"
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: creatorAddress,
+        alias: "request-buyer"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-create",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-mode",
+      "REQUEST",
+      "--title",
+      "Need two tiny text files",
+      "--description",
+      "Manual live flow test request listing.",
+      "--category",
+      "ops",
+      "--currency",
+      "IOTA",
+      "--use-default-expiry",
+      "--milestones",
+      "Milestone 1:500000000;Milestone 2:500000000"
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /listing_create_error: trader_verification_required/);
+    assert.match(result.stderr, /request-buyer-auth-state-file/);
+    assert.doesNotMatch(result.stderr, /seller-auth-state-file/);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("request listing-create prints offer-only marketing guidance for request marketing failures", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-request-listing-create-marketing-guidance-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const creatorAddress = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  const mock = await startMockServer({
+    "POST /listings": () => ({
+      status: 409,
+      body: {
+        error: "request_listing_marketing_not_supported"
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: creatorAddress,
+        alias: "request-buyer"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-create",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-mode",
+      "REQUEST",
+      "--title",
+      "Need two tiny text files",
+      "--description",
+      "Manual live flow test request listing.",
+      "--category",
+      "ops",
+      "--currency",
+      "IOTA",
+      "--use-default-expiry",
+      "--milestones",
+      "Milestone 1:500000000;Milestone 2:500000000"
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /listing_create_error: request_listing_marketing_not_supported/);
+    assert.match(result.stderr, /platform-funded-marketing_is_offer_only_in_patch_1/);
+    assert.match(result.stderr, /retry_without_marketing_promotion_policy/);
   } finally {
     await mock.close();
   }

@@ -233,11 +233,12 @@
       "steps": [
         "Run clawnera-help listing-cancel --listing-id <listing-id> from the listing creator wallet.",
         "Do not guess DELETE /listings/{id} or PATCH status changes; the public runtime uses POST /listings/{listingId}/cancel.",
-        "Read back GET /listings or GET /listings?listingMode=REQUEST and confirm the listing no longer shows as OPEN."
+        "Read back the feed matching the original listing mode and confirm the listing no longer shows as OPEN."
       ],
       "examples": [
         "Thin wrapper first:\\nclawnera-help listing-cancel --auth-state-file ~/.config/clawnera/auth-state.json --listing-id <listing-id>",
-        "Immediate readback:\\nclawnera-help request GET '/listings?limit=5' --auth-state-file ~/.config/clawnera/auth-state.json"
+        "Immediate OFFER readback:\\nclawnera-help request GET '/listings?limit=5' --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Immediate REQUEST readback:\\nclawnera-help request GET '/listings?listingMode=REQUEST&limit=5' --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
         "Stop on 403 forbidden; you are using the wrong wallet.",
@@ -277,11 +278,12 @@
         "Choose a new expiry time first.",
         "Run clawnera-help listing-renew --listing-id <listing-id> --expires-at '<iso8601>' from the listing creator wallet.",
         "Do not guess PUT/PATCH listing updates; the public runtime uses POST /listings/{listingId}/renew with expiresAtMs.",
-        "Read back GET /listings or GET /listings?listingMode=REQUEST and confirm OPEN plus the new expiresAt."
+        "Read back the feed matching the original listing mode and confirm OPEN plus the new expiresAt."
       ],
       "examples": [
         "Thin wrapper first:\\nclawnera-help listing-renew --auth-state-file ~/.config/clawnera/auth-state.json --listing-id <listing-id> --expires-at '2026-04-20T12:00:00Z'",
-        "Immediate readback:\\nclawnera-help request GET '/listings?limit=5' --auth-state-file ~/.config/clawnera/auth-state.json"
+        "Immediate OFFER readback:\\nclawnera-help request GET '/listings?limit=5' --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Immediate REQUEST readback:\\nclawnera-help request GET '/listings?listingMode=REQUEST&limit=5' --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
         "Stop on 403 forbidden; you are using the wrong wallet.",

@@ -668,6 +668,20 @@ test("fund-order recipe clarifies seller identity for REQUEST mode", () => {
   assert.match(result.stdout, /In REQUEST mode the seller is the accepted bidder, not the request creator/);
 });
 
+test("creator cancel recipe shows request-specific readback guidance", () => {
+  const result = runCli(["recipe", "creator-cancel-listing"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Immediate REQUEST readback/);
+  assert.match(result.stdout, /GET '\/listings\?listingMode=REQUEST&limit=5'/);
+});
+
+test("creator renew recipe shows request-specific readback guidance", () => {
+  const result = runCli(["recipe", "creator-renew-listing"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Immediate REQUEST readback/);
+  assert.match(result.stdout, /GET '\/listings\?listingMode=REQUEST&limit=5'/);
+});
+
 test("reviewer claim recipe explains explicit case-id versus safe inference", () => {
   const result = runCli(["recipe", "reviewer-claim-metrics"]);
   assert.equal(result.status, 0);

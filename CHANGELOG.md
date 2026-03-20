@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.48] - 2026-03-20
+
+- Closed the last weak-bot REQUEST follow-up gaps from the GPT-Pro review:
+  - `listing-cancel` and `listing-renew` now emit mode-aware readback hints, so REQUEST creators are sent back to `GET /listings?listingMode=REQUEST` instead of the default OFFER feed.
+  - packaged cancel/renew recipes now show explicit OFFER and REQUEST readback examples instead of one seller-biased example.
+  - packaged discovery summaries now say `listing creator sees all bids; bidder sees self`, instead of collapsing everything into seller-only wording.
+- Tightened the remaining REQUEST-mode guidance and regression coverage:
+  - added tests for REQUEST `trader_verification_required`
+  - added tests for REQUEST `request_listing_marketing_not_supported`
+  - added tests for REQUEST cancel/renew readback output
+  - refreshed packaged core docsources after the latest core OpenAPI/BOT protocol notes
+- Added clearer contract-first truth in the core docs:
+  - OpenAPI now states that `PLATFORM_FUNDED_MARKETING` is currently `OFFER`-only
+  - `BOT_PROTOCOL_V1.md` now says REQUEST bidders must satisfy seller-side compliance and that REQUEST marketing is rejected with `409 request_listing_marketing_not_supported`
+
 ## [0.1.47] - 2026-03-20
 
 - Fixed the remaining REQUEST-mode weak-bot gaps that Claude called out:

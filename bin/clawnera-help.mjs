@@ -4775,6 +4775,7 @@ async function runListingCancel(commandArgs) {
       ...result,
       listingId,
       listingStatus: normalizeString(result.response?.listing?.status) || null,
+      listingMode: normalizeString(result.response?.listing?.listingMode) || null,
     };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "listing_cancel_failed" };
@@ -4816,11 +4817,22 @@ async function runListingRenew(commandArgs) {
       listingId,
       expiresAtMs,
       listingStatus: normalizeString(result.response?.listing?.status) || null,
+      listingMode: normalizeString(result.response?.listing?.listingMode) || null,
       expiresAt: normalizeString(result.response?.listing?.expiresAt) || null,
     };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "listing_renew_failed" };
   }
+}
+
+function buildListingFeedReadbackHint(listingMode, authPlaceholder = "<creator-auth-state-file>") {
+  if (listingMode === "REQUEST") {
+    return `next_readback=clawnera-help request GET '/listings?listingMode=REQUEST' --auth-state-file ${authPlaceholder}`;
+  }
+  if (listingMode === "OFFER") {
+    return `next_readback=clawnera-help request GET /listings --auth-state-file ${authPlaceholder}`;
+  }
+  return `next_readback=re-read the feed matching the original listing mode: GET /listings for OFFER or GET '/listings?listingMode=REQUEST' for REQUEST --auth-state-file ${authPlaceholder}`;
 }
 
 function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
@@ -9986,7 +9998,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.listingStatus) {
       console.log(`status=${result.listingStatus}`);
     }
-    console.log("next_readback=clawnera-help request GET /listings --auth-state-file <creator-auth-state-file>");
+    console.log(buildListingFeedReadbackHint(result.listingMode, "<creator-auth-state-file>"));
   } else {
     console.error(`listing_cancel_error: ${result.error}`);
     console.error("next_hint=use POST /listings/{listingId}/cancel, not DELETE or PATCH");
@@ -10013,7 +10025,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     } else {
       console.log(`expires_at_ms=${result.expiresAtMs}`);
     }
-    console.log("next_readback=clawnera-help request GET /listings --auth-state-file <creator-auth-state-file>");
+    console.log(buildListingFeedReadbackHint(result.listingMode, "<creator-auth-state-file>"));
   } else {
     console.error(`listing_renew_error: ${result.error}`);
     console.error("next_hint=use POST /listings/{listingId}/renew with --expires-at or --expires-at-ms");

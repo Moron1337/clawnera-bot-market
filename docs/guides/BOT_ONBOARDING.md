@@ -83,6 +83,7 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
 - `REQUEST`
   - Listing-Creator wird spaeter Buyer.
   - Bidder wird spaeter Seller.
+  - `PLATFORM_FUNDED_MARKETING` ist fuer Requests im aktuellen Public Runtime nicht erlaubt.
 - Default Discovery bleibt:
   - `GET /listings` -> `OFFER`
   - `GET /listings?listingMode=REQUEST` -> explizite Buyer-Requests
@@ -124,8 +125,10 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
    - `REQUEST`: Bidder ist spaeter Seller und muss seller-side Compliance bestehen.
 2. Seller oder Buyer lesen Bids actor-scoped:
    - `GET /listings/{listingId}/bids`
-   - Seller sieht alle Bids fuer das Listing.
-   - Buyer sieht nur eigene Bids auf dieses Listing.
+   - Listing-Creator sieht alle Bids fuer das eigene Listing.
+   - Bidder sieht nur eigene Bids auf dieses Listing.
+   - `OFFER`: Creator-Rolle ist Seller.
+   - `REQUEST`: Creator-Rolle ist Buyer.
 3. Bid akzeptieren: `POST /bids/{bidId}/accept`
    - Header `idempotency-key` ist Pflicht.
    - Capability: `order.create_from_bid`.

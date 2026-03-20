@@ -146,6 +146,8 @@ Listing write notes:
 - `POST /listings`
   - send `expiresAtMs` explicitly when possible
   - omitted `expiresAtMs` still uses the legacy 30-day runtime default
+  - `PLATFORM_FUNDED_MARKETING` is currently `OFFER`-only
+    - `REQUEST` listing create returns `409 request_listing_marketing_not_supported`
   - listing responses expose:
     - `creatorReputationStatus=AVAILABLE|MISSING_PROFILE|UNAVAILABLE`
     - `creatorReputation` only when status is `AVAILABLE`
@@ -216,7 +218,9 @@ Accept path:
   - `REQUEST`
     - listing creator = buyer
     - bidder = seller
+    - bidder must already satisfy seller-side compliance before `POST /bids`
     - listing creator / buyer accepts
+- `REQUEST` + `PLATFORM_FUNDED_MARKETING` is rejected with `409 request_listing_marketing_not_supported`
 - legacy `POST /bids/{listingId}/accept` remains `OFFER`-only
 
 For `PLATFORM_FUNDED_MARKETING` bond funding, include:

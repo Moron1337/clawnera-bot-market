@@ -107,6 +107,13 @@ const ASSET_DISPLAY_DECIMALS = Object.freeze({
   IOTA: 9,
   CLAW: 6,
 });
+const ASSET_UNIT_HINTS = Object.freeze(
+  Object.entries(ASSET_DISPLAY_DECIMALS).map(([currency, decimals]) => ({
+    currency,
+    decimals,
+    atomicPerDisplayUnit: (10n ** BigInt(decimals)).toString(),
+  }))
+);
 const DEFAULT_LISTING_EXPIRY_DAYS = 30;
 const MAX_LISTING_EXPIRY_DAYS = 30;
 const LISTING_CATEGORY_SLUGS = Object.freeze([
@@ -309,6 +316,7 @@ function printUsage() {
   console.log("  clawnera-help wallet-list [options]       List local wallet aliases and addresses");
   console.log("  clawnera-help auth-login [options]        Create JWT + refresh token from local IOTA keystore");
   console.log("  clawnera-help ensure-auth [options]       Reuse or create a saved auth-state from the local wallet");
+  console.log("  clawnera-help units [options]             Show IOTA/CLAW decimals and atomic-unit examples");
   console.log("  clawnera-help request <METHOD> <path>     Call Clawnera API with auth/env shortcuts");
   console.log("  clawnera-help listing-categories          Show the canonical listing category slugs");
   console.log("  clawnera-help listing-create [options]    Thin helper for the first POST /listings write");
@@ -353,6 +361,7 @@ function printUsage() {
   console.log("  clawnera-help version                     Print CLI package version");
   console.log("  clawnera-help <command> --json            Emit machine-readable JSON");
   console.log("  clawnera-help journey|recipe --compact    Emit the low-token bot view");
+  console.log("  Atomic amounts: IOTA uses 9 decimals, CLAW uses 6. Run `clawnera-help units` if unsure.");
 }
 
 function printTopics(topics) {
@@ -1530,6 +1539,108 @@ function parseDisplayAmountOption(rawValue, fieldName, currency) {
     throw new Error(`invalid_${fieldName}`);
   }
   return atomic;
+}
+
+function resolveAssetUnitHint(currency) {
+  const normalized = normalizeString(currency).toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+  return ASSET_UNIT_HINTS.find((entry) => entry.currency === normalized) || null;
+}
+
+function formatAtomicAmountAsDisplay(atomicValue, currency) {
+  const hint = resolveAssetUnitHint(currency);
+  if (!hint) {
+    return String(atomicValue);
+  }
+  const atomic = BigInt(atomicValue);
+  const atomicPerDisplayUnit = BigInt(hint.atomicPerDisplayUnit);
+  const whole = atomic / atomicPerDisplayUnit;
+  const fraction = atomic % atomicPerDisplayUnit;
+  if (fraction === 0n) {
+    return whole.toString();
+  }
+  const fractionText = fraction
+    .toString()
+    .padStart(hint.decimals, "0")
+    .replace(/0+$/, "");
+  return `${whole.toString()}.${fractionText}`;
+}
+
+function buildCurrencyUnitLines(currency) {
+  const hint = resolveAssetUnitHint(currency);
+  if (!hint) {
+    return [];
+  }
+  return [
+    `- ${hint.currency} uses ${hint.decimals} decimals`,
+    `- 1 ${hint.currency} = ${hint.atomicPerDisplayUnit} atomic`,
+  ];
+}
+
+function buildAtomicAmountWarnings(entries = [], currency, displayValues = false) {
+  if (displayValues) {
+    return [];
+  }
+  const hint = resolveAssetUnitHint(currency);
+  if (!hint) {
+    return [];
+  }
+  const atomicPerDisplayUnit = BigInt(hint.atomicPerDisplayUnit);
+  const suspicious = [];
+  for (const entry of entries) {
+    const field = normalizeString(entry?.field);
+    const atomicRaw = normalizeString(entry?.atomicAmount);
+    if (!field || !atomicRaw || !/^[1-9][0-9]*$/.test(atomicRaw)) {
+      continue;
+    }
+    const atomicAmount = BigInt(atomicRaw);
+    if (atomicAmount >= atomicPerDisplayUnit) {
+      continue;
+    }
+    suspicious.push({
+      field,
+      atomicAmount: atomicRaw,
+      displayAmount: formatAtomicAmountAsDisplay(atomicAmount, hint.currency),
+    });
+  }
+  if (suspicious.length === 0) {
+    return [];
+  }
+  return [
+    {
+      code: "atomic_amounts_less_than_one_display_unit",
+      currency: hint.currency,
+      decimals: hint.decimals,
+      atomicPerDisplayUnit: hint.atomicPerDisplayUnit,
+      fields: suspicious.map((entry) => entry.field),
+      examples: suspicious.slice(0, 3),
+      nextHint: "if you meant whole-user units, retry with --display-values",
+    },
+  ];
+}
+
+function printUnitWarnings(warnings = [], { stream = "stdout" } = {}) {
+  const writer = stream === "stderr" ? console.error : console.log;
+  for (const warning of warnings) {
+    if (!warning || warning.code !== "atomic_amounts_less_than_one_display_unit") {
+      continue;
+    }
+    writer(`warning=${warning.code}`);
+    writer(`warning_currency=${warning.currency}`);
+    writer(`warning_fields=${Array.isArray(warning.fields) ? warning.fields.join(",") : ""}`);
+    writer(`unit_hint=${warning.currency} uses ${warning.decimals} decimals`);
+    writer(`unit_hint=1 ${warning.currency} = ${warning.atomicPerDisplayUnit} atomic`);
+    if (Array.isArray(warning.examples) && warning.examples.length > 0) {
+      writer(
+        `warning_examples=${warning.examples.map((entry) => `${entry.field}:${entry.atomicAmount}->${entry.displayAmount}`).join(",")}`
+      );
+    }
+    if (warning.nextHint) {
+      writer(`next_hint=${warning.nextHint}`);
+    }
+  }
 }
 
 function parseOptionalIsoTimestamp(rawValue) {
@@ -4712,6 +4823,10 @@ function listingCreateUsageLines() {
     "- Required milestone count: 2 to 8 milestones. The live API rejects single-milestone listing bodies.",
     "- Optional: --budget-amount <atomic-int> (defaults to the milestone sum), --creator-address <0x...>, --milestones-json <json>, --milestones-file <file>",
     "- Optional human mode: add --display-values to interpret milestone and budget numbers in whole-user units for the selected currency (examples: --currency IOTA --display-values --milestones 'file1.txt:1;file2.txt:1' or 'file1.txt:1 IOTA;file2.txt:1 IOTA')",
+    ...buildCurrencyUnitLines("IOTA"),
+    ...buildCurrencyUnitLines("CLAW"),
+    "- Without --display-values, milestone and budget numbers must already be atomic integers",
+    "- If you are unsure, run: clawnera-help units",
     "- Thin wrapper over POST /listings that infers creatorAddress from the saved auth state when possible",
     "- The helper does not silently guess listing expiry: choose an explicit expiry or pass --use-default-expiry to acknowledge the legacy 30-day runtime default",
     "- OFFER is the default if --listing-mode is omitted",
@@ -4756,6 +4871,10 @@ function bidCreateUsageLines() {
     "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
     "- Optional: --message <text>, --bidder-address <0x...>",
     "- Optional human mode: add --display-values to interpret --amount in whole-user units for the selected currency (examples: --currency IOTA --display-values --amount 1 or --amount '1 IOTA')",
+    ...buildCurrencyUnitLines("IOTA"),
+    ...buildCurrencyUnitLines("CLAW"),
+    "- Without --display-values, --amount must already be an atomic integer",
+    "- If you are unsure, run: clawnera-help units",
     "- Thin wrapper over POST /bids that infers bidderAddress from the saved auth state when possible",
     "- On OFFER listings the bidder becomes the future buyer",
     "- On REQUEST listings the bidder becomes the future seller and must pass seller-side compliance",
@@ -4769,6 +4888,16 @@ function listingCategoriesUsageLines() {
     "- Reads GET /listings/categories and prints the canonical category slugs plus current counts.",
     "- OFFER is the default if --listing-mode is omitted.",
     `- Built-in fallback slugs: ${LISTING_CATEGORY_SLUGS.join(", ")}`,
+  ];
+}
+
+function unitsUsageLines() {
+  return [
+    "Units helper:",
+    "- Usage: clawnera-help units [--currency <IOTA|CLAW>] [--compact] [--json]",
+    "- Prints the canonical display decimals and atomic-unit examples for supported marketplace currencies.",
+    "- Use this before listing-create or bid-create if you are not sure whether numbers must be atomic or display values.",
+    "- Without --display-values, write helpers expect atomic integers.",
   ];
 }
 
@@ -4837,6 +4966,17 @@ async function runListingCreate(commandArgs) {
           ? parseDisplayAmountOption(options["budget-amount"], "budget_amount", currency)
           : parsePositiveBigIntOption(options["budget-amount"], "budget_amount")).toString()
       : sumMilestoneAmounts(milestones).toString();
+    const warnings = buildAtomicAmountWarnings(
+      [
+        { field: "budgetAmount", atomicAmount: budgetAmount },
+        ...milestones.map((milestone, index) => ({
+          field: `milestones[${index}].amount`,
+          atomicAmount: milestone.amount,
+        })),
+      ],
+      currency,
+      displayValues
+    );
     const createBody = {
       creatorAddress,
       title,
@@ -4861,6 +5001,7 @@ async function runListingCreate(commandArgs) {
       listingMode,
       listingId: extractCommonCreatedId(result.response, [["listingId"], ["item", "id"], ["listing", "id"], ["id"]]) || null,
       budgetAmount,
+      warnings,
       expiresAtMs: expiry.expiresAtMs,
       expiresAt: responseExpiresAt,
       explicitExpiry: expiry.explicit,
@@ -5085,6 +5226,11 @@ async function runBidCreate(commandArgs) {
     const amount = (displayValues
       ? parseDisplayAmountOption(options.amount, "amount", currency)
       : parsePositiveBigIntOption(options.amount, "amount")).toString();
+    const warnings = buildAtomicAmountWarnings(
+      [{ field: "amount", atomicAmount: amount }],
+      currency,
+      displayValues
+    );
     const body = {
       listingId,
       bidderAddress,
@@ -5100,6 +5246,7 @@ async function runBidCreate(commandArgs) {
       listingId,
       amount,
       currency,
+      warnings,
       hintLines: buildBidCreateHintLines(result),
     };
   } catch (error) {
@@ -5127,6 +5274,38 @@ function buildBidCreateHintLines(result = {}) {
     default:
       return [];
   }
+}
+
+async function runUnits(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return { ok: true, help: true, usage: unitsUsageLines() };
+  }
+  if (positionals.length > 0) {
+    return { ok: false, error: "unexpected_positional_arguments", details: positionals };
+  }
+  const requestedCurrency = normalizeString(options.currency).toUpperCase();
+  if (requestedCurrency && !resolveAssetUnitHint(requestedCurrency)) {
+    return { ok: false, error: "invalid_currency", supportedCurrencies: ASSET_UNIT_HINTS.map((entry) => entry.currency) };
+  }
+  const items = ASSET_UNIT_HINTS
+    .filter((entry) => !requestedCurrency || entry.currency === requestedCurrency)
+    .map((entry) => ({
+      currency: entry.currency,
+      decimals: entry.decimals,
+      atomicPerDisplayUnit: entry.atomicPerDisplayUnit,
+      displayExamples: {
+        one: `1 ${entry.currency}`,
+        oneAtomic: entry.atomicPerDisplayUnit,
+        half: `0.5 ${entry.currency}`,
+        halfAtomic: (BigInt(entry.atomicPerDisplayUnit) / 2n).toString(),
+      },
+    }));
+  return {
+    ok: true,
+    items,
+    hint: "use --display-values when you want to pass whole-user units like '1 IOTA'",
+  };
 }
 
 async function runListingCategories(commandArgs) {
@@ -9637,6 +9816,9 @@ const aliasCommands = new Map([
   ["ensure-login", "ensure-auth"],
   ["auth-ensure", "ensure-auth"],
   ["self-auth", "ensure-auth"],
+  ["decimals", "units"],
+  ["amount-units", "units"],
+  ["amount-examples", "units"],
   ["wallets", "wallet-list"],
   ["wallet-ls", "wallet-list"],
   ["categories", "listing-categories"],
@@ -9708,6 +9890,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "wallet-list",
         "auth-login",
         "ensure-auth",
+        "units",
         "request",
         "listing-categories",
         "listing-create",
@@ -10096,6 +10279,36 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   if (!result.ok && !result.help) {
     process.exitCode = 1;
   }
+} else if (effectiveCommand === "units") {
+  const result = await runUnits(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    if (flags.compact) {
+      console.log(result.items.map((entry) => `${entry.currency}:${entry.decimals}:${entry.atomicPerDisplayUnit}`).join(" "));
+    } else {
+      console.log("units_ok");
+      for (const entry of result.items) {
+        console.log(`${entry.currency}: decimals=${entry.decimals} atomic_per_display_unit=${entry.atomicPerDisplayUnit}`);
+        console.log(`- 1 ${entry.currency} = ${entry.atomicPerDisplayUnit} atomic`);
+        console.log(`- 0.5 ${entry.currency} = ${entry.displayExamples.halfAtomic} atomic`);
+      }
+      console.log(`next_hint=${result.hint}`);
+    }
+  } else {
+    console.error(`units_error: ${result.error}`);
+    if (Array.isArray(result.supportedCurrencies) && result.supportedCurrencies.length > 0) {
+      console.error(`supported_currencies=${result.supportedCurrencies.join(",")}`);
+    }
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
 } else if (effectiveCommand === "request") {
   const result = await runApiRequest(commandArgs);
   if (flags.json) {
@@ -10151,6 +10364,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`listing_mode=${result.listingMode || "OFFER"}`);
     console.log(`creator_address=${result.creatorAddress}`);
     console.log(`budget_amount=${result.budgetAmount}`);
+    if (Array.isArray(result.warnings) && result.warnings.length > 0) {
+      printUnitWarnings(result.warnings);
+    }
     if (result.expiresAt) {
       console.log(`expires_at=${result.expiresAt}`);
     } else if (result.expiresAtMs) {
@@ -10254,6 +10470,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`bidder_address=${result.bidderAddress}`);
     console.log(`amount=${result.amount}`);
     console.log(`currency=${result.currency}`);
+    if (Array.isArray(result.warnings) && result.warnings.length > 0) {
+      printUnitWarnings(result.warnings);
+    }
     console.log("next_readback=clawnera-help request GET /listings/<listing-id>/bids --auth-state-file <buyer-auth-state-file>");
   } else {
     console.error(`bid_create_error: ${result.error}`);

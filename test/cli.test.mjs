@@ -77,6 +77,7 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /clawnera-help wallet-init/);
   assert.match(result.stdout, /clawnera-help wallet-list/);
   assert.match(result.stdout, /clawnera-help ensure-auth/);
+  assert.match(result.stdout, /clawnera-help units/);
   assert.match(result.stdout, /clawnera-help request <METHOD> <path>/);
   assert.match(result.stdout, /clawnera-help listing-categories/);
   assert.match(result.stdout, /clawnera-help listing-create/);
@@ -117,6 +118,7 @@ test("help json output includes auth-login command", () => {
   assert.ok(payload.commands.includes("wallet-init"));
   assert.ok(payload.commands.includes("wallet-list"));
   assert.ok(payload.commands.includes("ensure-auth"));
+  assert.ok(payload.commands.includes("units"));
   assert.ok(payload.commands.includes("request"));
   assert.ok(payload.commands.includes("listing-categories"));
   assert.ok(payload.commands.includes("listing-create"));
@@ -144,6 +146,22 @@ test("wallet list help prints usage", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Wallet list helper/);
   assert.match(result.stdout, /Lists local keystore aliases and addresses/);
+});
+
+test("units command prints canonical display decimals", () => {
+  const result = runCli(["units"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /units_ok/);
+  assert.match(result.stdout, /IOTA: decimals=9 atomic_per_display_unit=1000000000/);
+  assert.match(result.stdout, /CLAW: decimals=6 atomic_per_display_unit=1000000/);
+  assert.match(result.stdout, /use --display-values/);
+});
+
+test("units help explains atomic versus display amounts", () => {
+  const result = runCli(["units", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Units helper/);
+  assert.match(result.stdout, /Without --display-values, write helpers expect atomic integers/);
 });
 
 test("request help prints usage", () => {
@@ -205,6 +223,10 @@ test("listing-create help explains display values and categories", () => {
   assert.match(result.stdout, /Valid category slugs: dev, design, marketing, ops, security, other/);
   assert.match(result.stdout, /clawnera-help listing-categories/);
   assert.match(result.stdout, /--display-values/);
+  assert.match(result.stdout, /IOTA uses 9 decimals/);
+  assert.match(result.stdout, /CLAW uses 6 decimals/);
+  assert.match(result.stdout, /Without --display-values, milestone and budget numbers must already be atomic integers/);
+  assert.match(result.stdout, /clawnera-help units/);
   assert.match(result.stdout, /--listing-mode OFFER\|REQUEST/);
   assert.match(result.stdout, /REQUEST means the listing creator is the future buyer/);
   assert.match(result.stdout, /--expires-in-days <1-30>/);
@@ -245,6 +267,10 @@ test("bid-create help explains display values", () => {
   const result = runCli(["bid-create", "--help"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /--display-values/);
+  assert.match(result.stdout, /IOTA uses 9 decimals/);
+  assert.match(result.stdout, /CLAW uses 6 decimals/);
+  assert.match(result.stdout, /Without --display-values, --amount must already be an atomic integer/);
+  assert.match(result.stdout, /clawnera-help units/);
   assert.match(result.stdout, /On REQUEST listings the bidder becomes the future seller/);
 });
 

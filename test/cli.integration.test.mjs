@@ -1556,6 +1556,70 @@ test("listing-create accepts display values with an explicit currency suffix", a
   }
 });
 
+test("listing-create warns when atomic milestone amounts are smaller than one display unit", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-atomic-warning-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const creatorAddress = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  const mock = await startMockServer({
+    "POST /listings": (request) => ({
+      status: 200,
+      body: {
+        listing: {
+          id: "listing-atomic-warning-1"
+        },
+        seen: request.body
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: creatorAddress,
+        alias: "seller"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-create",
+      "--auth-state-file",
+      authStateFile,
+      "--title",
+      "Atomic units warning listing",
+      "--description",
+      "This intentionally uses atomic amounts without display-values.",
+      "--category",
+      "other",
+      "--currency",
+      "IOTA",
+      "--use-default-expiry",
+      "--milestones",
+      "file1.txt:1;file2.txt:1",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.response.seen.budgetAmount, "2");
+    assert.ok(Array.isArray(payload.warnings));
+    assert.equal(payload.warnings[0].code, "atomic_amounts_less_than_one_display_unit");
+    assert.equal(payload.warnings[0].currency, "IOTA");
+    assert.match(payload.warnings[0].fields.join(","), /budgetAmount/);
+    assert.match(payload.warnings[0].fields.join(","), /milestones\[0\]\.amount/);
+    assert.match(payload.warnings[0].nextHint, /--display-values/);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("listing-create forwards explicit request listing mode", async () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-request-mode-"));
   const authStateFile = path.join(tempDir, "auth-state.json");
@@ -2504,6 +2568,61 @@ test("bid-create accepts display values with an explicit currency suffix", async
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.ok, true);
     assert.equal(payload.response.seen.amount, "1000000000");
+  } finally {
+    await mock.close();
+  }
+});
+
+test("bid-create warns when atomic amount is smaller than one display unit", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-bid-create-atomic-warning-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const bidderAddress = "0x2222222222222222222222222222222222222222222222222222222222222222";
+  const mock = await startMockServer({
+    "POST /bids": (request) => ({
+      status: 200,
+      body: {
+        bidId: "bid-atomic-warning-1",
+        seen: request.body
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: bidderAddress,
+        alias: "buyer"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "bid-create",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-id",
+      "listing-1",
+      "--amount",
+      "1",
+      "--currency",
+      "IOTA",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.ok(Array.isArray(payload.warnings));
+    assert.equal(payload.warnings[0].code, "atomic_amounts_less_than_one_display_unit");
+    assert.deepEqual(payload.warnings[0].fields, ["amount"]);
+    assert.equal(payload.warnings[0].atomicPerDisplayUnit, "1000000000");
+    assert.match(payload.warnings[0].nextHint, /--display-values/);
   } finally {
     await mock.close();
   }

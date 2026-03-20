@@ -151,6 +151,10 @@ Notes:
   - `clawnera-help listing-renew --listing-id <listing-id> --expires-at '<iso8601>'`
   - do not guess `DELETE /listings/{id}` or PATCH-style listing status updates
 - `clawnera-help listing-create --display-values` and `clawnera-help bid-create --display-values` let weaker bots use whole user units like `1 IOTA` instead of hand-converting to atomic amounts
+- `clawnera-help units` is the shortest truth for decimals:
+  - `IOTA` uses `9`
+  - `CLAW` uses `6`
+  - without `--display-values`, write helpers expect atomic integers
 - `clawnera-help listing-create` is fail-closed on milestone count:
   - live listings need `2` to `8` milestones
   - a single milestone now stops locally before the POST

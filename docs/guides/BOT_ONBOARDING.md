@@ -98,6 +98,11 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
    - Header `idempotency-key` ist Pflicht.
    - Capability: `listing.create`.
    - `expiresAtMs` bewusst setzen. Im npm-Helper deshalb `--expires-in-days`, `--expires-at`, `--expires-at-ms` oder bewusst `--use-default-expiry` waehlen statt still den 30-Tage-Default zu erben.
+   - Amount-Truth fuer Bots:
+     - `IOTA` nutzt `9` Dezimalstellen
+     - `CLAW` nutzt `6`
+     - `clawnera-help units` zeigt die kanonischen Beispiele
+     - ohne `--display-values` erwartet `listing-create` atomische Integer
    - Compliance-Preconditions: Actor muss als `TRADER` gefuehrt sein;
      je nach Deployment kann zusaetzlich Trader-Verification Pflicht sein.
    - Ein normales Seller-Listing braucht dafuer kein Reputation-Profil. Wenn `POST /listings` scheitert, zuerst `GET /compliance/me` und die Deposit-Policy pruefen statt `reputation-init` zu raten.

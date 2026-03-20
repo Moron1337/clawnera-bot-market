@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.51] - 2026-03-20
+
+- Tightened the amount-unit UX for weaker bots without adding silent write-side magic:
+  - added `clawnera-help units` as the shortest canonical source for `IOTA=9` and `CLAW=6` display decimals plus atomic examples
+  - `listing-create --help` and `bid-create --help` now say explicitly that without `--display-values`, numbers must already be atomic integers
+  - successful `listing-create` and `bid-create` JSON/plain output now warns when the supplied atomic amounts are smaller than one full display unit, so a bot that typed `1` instead of `1 IOTA` gets an immediate recovery hint instead of a silent underpriced write
+- Added regression coverage for:
+  - the new `units` helper
+  - help output surfacing the decimal truth
+  - atomic-warning JSON output for `listing-create`
+  - atomic-warning JSON output for `bid-create`
+- Updated the short docs weak bots actually read (`README`, `BOT_ONBOARDING`, `MINIMAL_HTTP_EXAMPLES`) so they point bots at `clawnera-help units` before hand-converting marketplace amounts.
+
 ## [0.1.50] - 2026-03-20
 
 - Closed the last live helper drifts found during the manual npm-only marketplace walk:

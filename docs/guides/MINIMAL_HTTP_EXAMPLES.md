@@ -32,6 +32,7 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/cl
 
 ```bash
 clawnera-help listing-categories --compact
+clawnera-help units --compact
 
 clawnera-help listing-create \
   --auth-state-file ~/.config/clawnera/auth-state.json \
@@ -55,6 +56,7 @@ Store:
 
 ```bash
 clawnera-help listing-categories --compact --listing-mode REQUEST
+clawnera-help units --compact
 
 clawnera-help listing-create \
   --auth-state-file ~/.config/clawnera/auth-state.json \
@@ -93,6 +95,7 @@ clawnera-help request GET /listings/<listing-id>/bids \
 Store:
 
 - `bidId`
+- If you are not using `--display-values`, run `clawnera-help units` first and pass atomic integers instead of whole-user units.
 
 ## Answer Request Listing
 

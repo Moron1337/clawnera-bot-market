@@ -102,6 +102,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
 const DEFAULT_CLAWNERA_API_BASE = "https://api.clawnera.com";
+const ASSET_DISPLAY_DECIMALS = Object.freeze({
+  IOTA: 9,
+  CLAW: 6,
+});
+const LISTING_CATEGORY_SLUGS = Object.freeze([
+  "dev",
+  "design",
+  "marketing",
+  "ops",
+  "security",
+  "other",
+]);
+const LISTING_CATEGORY_SET = new Set(LISTING_CATEGORY_SLUGS);
 const packageJsonFile = path.join(repoRoot, "package.json");
 const topicsFile = path.join(repoRoot, "config", "topics.json");
 const recipesFile = path.join(repoRoot, "config", "recipes.json");
@@ -290,6 +303,7 @@ function printUsage() {
   console.log("  clawnera-help wallet-list [options]       List local wallet aliases and addresses");
   console.log("  clawnera-help auth-login [options]        Create JWT + refresh token from local IOTA keystore");
   console.log("  clawnera-help request <METHOD> <path>     Call Clawnera API with auth/env shortcuts");
+  console.log("  clawnera-help listing-categories          Show the canonical listing category slugs");
   console.log("  clawnera-help listing-create [options]    Thin helper for the first POST /listings write");
   console.log("  clawnera-help bid-create [options]        Thin helper for the first POST /bids write");
   console.log("  clawnera-help bid-accept [options]        Thin helper for the first POST /bids/{bidId}/accept write");
@@ -1320,6 +1334,41 @@ function parsePositiveBigIntOption(rawValue, fieldName) {
   return parsed;
 }
 
+function isDisplayValueModeEnabled(options = {}) {
+  return parseBooleanOption(options["display-values"], false);
+}
+
+function normalizeListingCategorySlug(rawValue) {
+  const normalized = normalizeString(rawValue).toLowerCase();
+  if (!normalized || !LISTING_CATEGORY_SET.has(normalized)) {
+    return "";
+  }
+  return normalized;
+}
+
+function parseDisplayAmountOption(rawValue, fieldName, currency) {
+  const normalized = String(rawValue ?? "").trim();
+  const decimals = ASSET_DISPLAY_DECIMALS[currency];
+  if (!normalized || !decimals) {
+    throw new Error(`invalid_${fieldName}`);
+  }
+  const match = normalized.match(/^([0-9]+)(?:\.([0-9]+))?$/);
+  if (!match) {
+    throw new Error(`invalid_${fieldName}`);
+  }
+  const whole = BigInt(match[1]);
+  const fraction = match[2] ?? "";
+  if (fraction.length > decimals) {
+    throw new Error(`invalid_${fieldName}`);
+  }
+  const paddedFraction = `${fraction}${"0".repeat(decimals - fraction.length)}`;
+  const atomic = whole * (10n ** BigInt(decimals)) + BigInt(paddedFraction || "0");
+  if (atomic <= 0n) {
+    throw new Error(`invalid_${fieldName}`);
+  }
+  return atomic;
+}
+
 function parseOptionalIsoTimestamp(rawValue) {
   const normalized = typeof rawValue === "string" ? rawValue.trim() : "";
   if (!normalized) {
@@ -1521,7 +1570,7 @@ function extractResponseTimingHints(rawHeaders) {
   };
 }
 
-function parseListingMilestonesFromShorthand(rawValue) {
+function parseListingMilestonesFromShorthand(rawValue, { displayValues = false, currency = "" } = {}) {
   const normalized = String(rawValue ?? "").trim();
   if (!normalized) {
     return [];
@@ -1536,7 +1585,10 @@ function parseListingMilestonesFromShorthand(rawValue) {
         throw new Error("invalid_milestones");
       }
       const title = entry.slice(0, separator).trim();
-      const amount = entry.slice(separator + 1).trim();
+      const rawAmount = entry.slice(separator + 1).trim();
+      const amount = displayValues
+        ? parseDisplayAmountOption(rawAmount, "milestones", currency).toString()
+        : rawAmount;
       if (!title || !/^[1-9][0-9]*$/.test(amount)) {
         throw new Error("invalid_milestones");
       }
@@ -1547,7 +1599,24 @@ function parseListingMilestonesFromShorthand(rawValue) {
     });
 }
 
-function parseListingMilestonesOptions(options = {}) {
+function normalizeMilestoneAmountRecord(record, { displayValues = false, currency = "" } = {}) {
+  const title = typeof record?.title === "string" ? record.title.trim() : "";
+  const rawAmount =
+    typeof record?.amount === "string"
+      ? record.amount.trim()
+      : typeof record?.amount === "number" && Number.isFinite(record.amount)
+        ? String(record.amount)
+        : "";
+  const amount = displayValues
+    ? parseDisplayAmountOption(rawAmount, "milestones", currency).toString()
+    : rawAmount;
+  if (!title || !/^[1-9][0-9]*$/.test(amount)) {
+    throw new Error("invalid_milestones");
+  }
+  return { title, amount };
+}
+
+function parseListingMilestonesOptions(options = {}, { displayValues = false, currency = "" } = {}) {
   const inlineValue = typeof options.milestones === "string" ? options.milestones : "";
   const jsonValue = typeof options["milestones-json"] === "string" ? options["milestones-json"].trim() : "";
   const fileValue = resolveOptionalPathOption(options["milestones-file"]);
@@ -1557,7 +1626,7 @@ function parseListingMilestonesOptions(options = {}) {
   }
   let milestones;
   if (inlineValue.trim()) {
-    milestones = parseListingMilestonesFromShorthand(inlineValue);
+    return parseListingMilestonesFromShorthand(inlineValue, { displayValues, currency });
   } else if (jsonValue) {
     milestones = JSON.parse(jsonValue);
   } else {
@@ -1568,12 +1637,7 @@ function parseListingMilestonesOptions(options = {}) {
   }
   return milestones.map((entry) => {
     const record = entry && typeof entry === "object" && !Array.isArray(entry) ? entry : null;
-    const title = typeof record?.title === "string" ? record.title.trim() : "";
-    const amount = typeof record?.amount === "string" ? record.amount.trim() : "";
-    if (!title || !/^[1-9][0-9]*$/.test(amount)) {
-      throw new Error("invalid_milestones");
-    }
-    return { title, amount };
+    return normalizeMilestoneAmountRecord(record, { displayValues, currency });
   });
 }
 
@@ -4062,7 +4126,9 @@ function listingCreateUsageLines() {
     "Listing create helper:",
     "- Usage: clawnera-help listing-create --title <text> --description <text> --category <slug> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>' [auth options]",
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
-    "- Optional: --budget-amount <int> (defaults to the milestone sum), --creator-address <0x...>, --milestones-json <json>, --milestones-file <file>",
+    `- Valid category slugs: ${LISTING_CATEGORY_SLUGS.join(", ")} (or run: clawnera-help listing-categories)`,
+    "- Optional: --budget-amount <atomic-int> (defaults to the milestone sum), --creator-address <0x...>, --milestones-json <json>, --milestones-file <file>",
+    "- Optional human mode: add --display-values to interpret milestone and budget numbers in whole-user units for the selected currency (example: --currency IOTA --display-values --milestones 'empty txt:1')",
     "- Thin wrapper over POST /listings that infers creatorAddress from the saved auth state when possible",
   ];
 }
@@ -4073,7 +4139,17 @@ function bidCreateUsageLines() {
     "- Usage: clawnera-help bid-create --listing-id <listing-id> --amount <int> --currency <IOTA|CLAW> [auth options]",
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
     "- Optional: --message <text>, --bidder-address <0x...>",
+    "- Optional human mode: add --display-values to interpret --amount in whole-user units for the selected currency (example: --currency IOTA --display-values --amount 1)",
     "- Thin wrapper over POST /bids that infers bidderAddress from the saved auth state when possible",
+  ];
+}
+
+function listingCategoriesUsageLines() {
+  return [
+    "Listing categories helper:",
+    "- Usage: clawnera-help listing-categories [--compact] [--json] [auth options]",
+    "- Reads GET /listings/categories and prints the canonical category slugs plus current counts.",
+    `- Built-in fallback slugs: ${LISTING_CATEGORY_SLUGS.join(", ")}`,
   ];
 }
 
@@ -4113,14 +4189,24 @@ async function runListingCreate(commandArgs) {
     }
     const title = normalizeString(options.title);
     const description = normalizeString(options.description);
-    const category = normalizeString(options.category);
+    const rawCategory = normalizeString(options.category);
+    const category = normalizeListingCategorySlug(rawCategory);
     const currency = normalizeString(options.currency).toUpperCase();
-    if (!title || !description || !category || !currency) {
+    const displayValues = isDisplayValueModeEnabled(options);
+    if (!title || !description || !rawCategory || !currency) {
       return { ok: false, error: "missing_required_listing_fields" };
     }
-    const milestones = parseListingMilestonesOptions(options);
+    if (displayValues && !ASSET_DISPLAY_DECIMALS[currency]) {
+      return { ok: false, error: "display_values_require_single_currency", supportedCurrencies: Object.keys(ASSET_DISPLAY_DECIMALS) };
+    }
+    if (!category) {
+      return { ok: false, error: "invalid_listing_category", validCategories: LISTING_CATEGORY_SLUGS };
+    }
+    const milestones = parseListingMilestonesOptions(options, { displayValues, currency });
     const budgetAmount = options["budget-amount"] !== undefined
-      ? parsePositiveBigIntOption(options["budget-amount"], "budget_amount").toString()
+      ? (displayValues
+          ? parseDisplayAmountOption(options["budget-amount"], "budget_amount", currency)
+          : parsePositiveBigIntOption(options["budget-amount"], "budget_amount")).toString()
       : sumMilestoneAmounts(milestones).toString();
     const result = await runApiRequest(
       buildForwardedRequestArgs("POST", "/listings", options, {
@@ -4160,12 +4246,18 @@ async function runBidCreate(commandArgs) {
     if (!bidderAddress) {
       return { ok: false, error: "missing_bidder_address" };
     }
-    const listingId = normalizeString(options["listing-id"]);
-    const amount = parsePositiveBigIntOption(options.amount, "amount").toString();
     const currency = normalizeString(options.currency).toUpperCase();
+    const displayValues = isDisplayValueModeEnabled(options);
+    const listingId = normalizeString(options["listing-id"]);
     if (!listingId || !currency) {
       return { ok: false, error: "missing_required_bid_fields" };
     }
+    if (displayValues && !ASSET_DISPLAY_DECIMALS[currency]) {
+      return { ok: false, error: "display_values_require_single_currency", supportedCurrencies: Object.keys(ASSET_DISPLAY_DECIMALS) };
+    }
+    const amount = (displayValues
+      ? parseDisplayAmountOption(options.amount, "amount", currency)
+      : parsePositiveBigIntOption(options.amount, "amount")).toString();
     const body = {
       listingId,
       bidderAddress,
@@ -4185,6 +4277,25 @@ async function runBidCreate(commandArgs) {
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "bid_create_failed" };
   }
+}
+
+async function runListingCategories(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return { ok: true, help: true, usage: listingCategoriesUsageLines() };
+  }
+  if (positionals.length > 0) {
+    return { ok: false, error: "unexpected_positional_arguments", details: positionals };
+  }
+  const result = await runApiRequest(buildForwardedRequestArgs("GET", "/listings/categories", options));
+  const items = Array.isArray(result.response?.items) ? result.response.items : [];
+  return {
+    ...result,
+    items,
+    validCategories: items.length > 0
+      ? items.map((entry) => String(entry.category || "").trim()).filter(Boolean)
+      : LISTING_CATEGORY_SLUGS,
+  };
 }
 
 async function runBidAccept(commandArgs) {
@@ -8628,6 +8739,8 @@ const aliasCommands = new Map([
   ["jwt-login", "auth-login"],
   ["wallets", "wallet-list"],
   ["wallet-ls", "wallet-list"],
+  ["categories", "listing-categories"],
+  ["listing-cats", "listing-categories"],
   ["create-listing", "listing-create"],
   ["place-bid", "bid-create"],
   ["accept-bid", "bid-accept"],
@@ -8689,6 +8802,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "wallet-list",
         "auth-login",
         "request",
+        "listing-categories",
         "listing-create",
         "bid-create",
         "bid-accept",
@@ -9032,6 +9146,31 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   if (!result.ok && !result.help) {
     process.exitCode = 1;
   }
+} else if (effectiveCommand === "listing-categories") {
+  const result = await runListingCategories(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    const items = Array.isArray(result.items) ? result.items : [];
+    if (flags.compact) {
+      console.log(items.map((entry) => `${entry.category}:${entry.count}`).join(" "));
+    } else {
+      console.log("listing_categories_ok");
+      for (const entry of items) {
+        console.log(`- ${entry.category}: ${entry.count}`);
+      }
+    }
+  } else {
+    console.error(`listing_categories_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
 } else if (effectiveCommand === "listing-create") {
   const result = await runListingCreate(commandArgs);
   if (flags.json) {
@@ -9048,6 +9187,13 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log("next_readback=clawnera-help request GET /listings --auth-state-file <seller-auth-state-file>");
   } else {
     console.error(`listing_create_error: ${result.error}`);
+    if (Array.isArray(result.validCategories) && result.validCategories.length > 0) {
+      console.error(`valid_categories=${result.validCategories.join(",")}`);
+      console.error("next_hint=clawnera-help listing-categories --compact");
+    }
+    if (Array.isArray(result.supportedCurrencies) && result.supportedCurrencies.length > 0) {
+      console.error(`supported_display_currencies=${result.supportedCurrencies.join(",")}`);
+    }
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {
@@ -9070,6 +9216,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log("next_readback=clawnera-help request GET /listings/<listing-id>/bids --auth-state-file <buyer-auth-state-file>");
   } else {
     console.error(`bid_create_error: ${result.error}`);
+    if (Array.isArray(result.supportedCurrencies) && result.supportedCurrencies.length > 0) {
+      console.error(`supported_display_currencies=${result.supportedCurrencies.join(",")}`);
+    }
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {

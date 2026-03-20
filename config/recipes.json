@@ -77,12 +77,13 @@
       "steps": [
         "Read runtime first: GET /health, GET /ready, GET /capabilities, GET /policy/fees, and GET /policy/storage if delivery mode matters.",
         "If listing deposits are active, create the on-chain listing deposit first.",
+        "If category is unclear, run clawnera-help listing-categories and choose one canonical slug before writing.",
         "Prefer clawnera-help listing-create for the first live POST /listings write instead of hand-assembling a raw body.",
         "Read back the created listing from GET /listings and store listingId.",
         "Poll GET /listings/{listingId}/bids or wait for bid.created notifications."
       ],
       "examples": [
-        "Thin wrapper first:\\nclawnera-help listing-create --auth-state-file ~/.config/clawnera/auth-state.json --title 'Two tiny IOTA text tasks' --description 'Manual live flow test listing.' --category ops --currency IOTA --milestones 'Milestone 1:500000000;Milestone 2:500000000'",
+        "Thin wrapper first:\\nclawnera-help listing-categories --compact\\nclawnera-help listing-create --auth-state-file ~/.config/clawnera/auth-state.json --title 'Two tiny IOTA text tasks' --description 'Manual live flow test listing.' --category ops --currency IOTA --display-values --milestones 'Milestone 1:1;Milestone 2:1'",
         "Immediate readback:\\nclawnera-help request GET '/listings?limit=5&q=Two%20tiny%20IOTA%20text%20tasks' --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
@@ -192,12 +193,13 @@
       "steps": [
         "GET /listings and store listingId.",
         "Confirm the listing is OPEN and note its currency and budget.",
+        "If the brief says '1 IOTA' or '1 CLAW', prefer --display-values instead of hand-converting to atomic units.",
         "Prefer clawnera-help bid-create for the first live POST /bids write instead of hand-assembling a raw body.",
         "Read back GET /listings/{listingId}/bids and store bidId after confirming the bid exists.",
         "Wait for order.accepted notifications or poll buyer-scoped bids/orders."
       ],
       "examples": [
-        "Thin wrapper first:\\nclawnera-help bid-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-id <listing-id> --amount 1000000000 --currency IOTA --message 'Live npm-package buyer flow test bid.'",
+        "Thin wrapper first:\\nclawnera-help bid-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-id <listing-id> --amount 1 --currency IOTA --display-values --message 'Live npm-package buyer flow test bid.'",
         "Immediate readback:\\nclawnera-help request GET /listings/<listing-id>/bids --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [

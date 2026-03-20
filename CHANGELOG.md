@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.37] - 2026-03-20
+
+- Hardened the first marketplace write path for weaker bots instead of expecting raw API knowledge:
+  - added `clawnera-help listing-categories` as the shortest truthful source for canonical listing category slugs
+  - `listing-create` now rejects invalid category guesses such as `docs` locally and returns the valid slugs before any POST
+- Added an explicit human-unit mode for the two easiest-to-confuse wrappers:
+  - `clawnera-help listing-create --display-values`
+  - `clawnera-help bid-create --display-values`
+  - with that flag, `1` means `1 IOTA` or `1 CLAW` for the selected currency instead of forcing bots to hand-convert to atomic units
+- Tightened the minimal docs and recipes around the real low-token path:
+  - listing flows now tell bots to run `listing-categories` first when category is unclear
+  - listing and bid examples now default to `--display-values` so weaker bots can stay in user-facing units
+
 ## [0.1.36] - 2026-03-20
 
 - Added a low-token bot mode for the two most important navigation surfaces:

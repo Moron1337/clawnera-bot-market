@@ -31,13 +31,16 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/cl
 ## Create Listing
 
 ```bash
+clawnera-help listing-categories --compact
+
 clawnera-help listing-create \
   --auth-state-file ~/.config/clawnera/auth-state.json \
   --title "Two tiny IOTA text tasks" \
   --description "Manual live flow test listing." \
   --category ops \
   --currency IOTA \
-  --milestones 'Milestone 1:500000000;Milestone 2:500000000'
+  --display-values \
+  --milestones 'Milestone 1:1;Milestone 2:1'
 
 clawnera-help request GET '/listings?limit=5&q=Two%20tiny%20IOTA%20text%20tasks' \
   --auth-state-file ~/.config/clawnera/auth-state.json
@@ -53,8 +56,9 @@ Store:
 clawnera-help bid-create \
   --auth-state-file ~/.config/clawnera/auth-state.json \
   --listing-id <listing-id> \
-  --amount 1000000000 \
+  --amount 1 \
   --currency IOTA \
+  --display-values \
   --message "Live npm-package buyer flow test bid."
 
 clawnera-help request GET /listings/<listing-id>/bids \

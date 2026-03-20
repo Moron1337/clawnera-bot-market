@@ -75,6 +75,7 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /clawnera-help wallet-init/);
   assert.match(result.stdout, /clawnera-help wallet-list/);
   assert.match(result.stdout, /clawnera-help request <METHOD> <path>/);
+  assert.match(result.stdout, /clawnera-help listing-categories/);
   assert.match(result.stdout, /clawnera-help listing-create/);
   assert.match(result.stdout, /clawnera-help bid-create/);
   assert.match(result.stdout, /clawnera-help bid-accept/);
@@ -111,6 +112,7 @@ test("help json output includes auth-login command", () => {
   assert.ok(payload.commands.includes("wallet-init"));
   assert.ok(payload.commands.includes("wallet-list"));
   assert.ok(payload.commands.includes("request"));
+  assert.ok(payload.commands.includes("listing-categories"));
   assert.ok(payload.commands.includes("listing-create"));
   assert.ok(payload.commands.includes("bid-create"));
   assert.ok(payload.commands.includes("bid-accept"));
@@ -175,6 +177,7 @@ test("reviewer vote prepare help prints usage", () => {
 
 test("thin write helpers print usage", () => {
   for (const [command, pattern] of [
+    ["listing-categories", /Listing categories helper/],
     ["listing-create", /Listing create helper/],
     ["bid-create", /Bid create helper/],
     ["bid-accept", /Bid accept helper/],
@@ -184,6 +187,20 @@ test("thin write helpers print usage", () => {
     assert.equal(result.status, 0);
     assert.match(result.stdout, pattern);
   }
+});
+
+test("listing-create help explains display values and categories", () => {
+  const result = runCli(["listing-create", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Valid category slugs: dev, design, marketing, ops, security, other/);
+  assert.match(result.stdout, /clawnera-help listing-categories/);
+  assert.match(result.stdout, /--display-values/);
+});
+
+test("bid-create help explains display values", () => {
+  const result = runCli(["bid-create", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /--display-values/);
 });
 
 test("reviewer shortlist help prints operator and publish role split", () => {

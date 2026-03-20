@@ -6,6 +6,10 @@ copy-paste examples.
 Rule:
 
 - prefer `clawnera-help request ... --auth-state-file ~/.config/clawnera/auth-state.json`
+- for the first common live writes, prefer the thinner wrappers first:
+  - `clawnera-help listing-create`
+  - `clawnera-help bid-create`
+  - `clawnera-help bid-accept`
 - do one write
 - read back the resulting object immediately
 
@@ -27,20 +31,13 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/cl
 ## Create Listing
 
 ```bash
-clawnera-help request POST /listings \
+clawnera-help listing-create \
   --auth-state-file ~/.config/clawnera/auth-state.json \
-  --body '{
-    "creatorAddress": "<seller-address>",
-    "title": "Two tiny IOTA text tasks",
-    "description": "Manual live flow test listing.",
-    "category": "ops",
-    "currency": "IOTA",
-    "budgetAmount": "1000000000",
-    "milestones": [
-      { "title": "Milestone 1", "amount": "500000000" },
-      { "title": "Milestone 2", "amount": "500000000" }
-    ]
-  }'
+  --title "Two tiny IOTA text tasks" \
+  --description "Manual live flow test listing." \
+  --category ops \
+  --currency IOTA \
+  --milestones 'Milestone 1:500000000;Milestone 2:500000000'
 
 clawnera-help request GET '/listings?limit=5&q=Two%20tiny%20IOTA%20text%20tasks' \
   --auth-state-file ~/.config/clawnera/auth-state.json
@@ -53,15 +50,12 @@ Store:
 ## Place Bid
 
 ```bash
-clawnera-help request POST /bids \
+clawnera-help bid-create \
   --auth-state-file ~/.config/clawnera/auth-state.json \
-  --body '{
-    "listingId": "<listing-id>",
-    "bidderAddress": "<buyer-address>",
-    "amount": "1000000000",
-    "currency": "IOTA",
-    "message": "Live npm-package buyer flow test bid."
-  }'
+  --listing-id <listing-id> \
+  --amount 1000000000 \
+  --currency IOTA \
+  --message "Live npm-package buyer flow test bid."
 
 clawnera-help request GET /listings/<listing-id>/bids \
   --auth-state-file ~/.config/clawnera/auth-state.json
@@ -87,9 +81,9 @@ Important:
 ## Buyer Accepts Bid
 
 ```bash
-clawnera-help request POST /bids/<bid-id>/accept \
+clawnera-help bid-accept \
   --auth-state-file ~/.config/clawnera/auth-state.json \
-  --body '{}'
+  --bid-id <bid-id>
 
 clawnera-help request GET /orders/<order-id> \
   --auth-state-file ~/.config/clawnera/auth-state.json
@@ -207,8 +201,7 @@ clawnera-help reviewer-vote-prepare \
   --case-id <dispute-case-id> \
   --vote seller \
   --auth-state-file ~/.config/clawnera/auth-state.json \
-  --json \
-  > reviewer-vote.json
+  --out reviewer-vote.json
 
 clawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/commit \
   --auth-state-file ~/.config/clawnera/auth-state.json \

@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.35] - 2026-03-20
+
+- Added thin first-write wrappers for the most common bot actions so weaker bots can stay on the canonical Clawnera surface without hand-assembling their first request bodies:
+  - `clawnera-help listing-create`
+  - `clawnera-help bid-create`
+  - `clawnera-help bid-accept`
+  - `clawnera-help reviewer-invites`
+- Hardened the shared request path for automation:
+  - `request --json` now exposes normalized response headers plus convenience timing hints such as `recommendedPollIntervalMs` and `retryAfterMs`.
+  - reviewer invite polling now surfaces inbox counts and polling guidance directly from the helper output instead of forcing bots to parse raw headers themselves.
+- Tightened the reviewer vote helper for safer default operation:
+  - the canonical machine-readable path is now `--out reviewer-vote.json`, with `--json > reviewer-vote.json` documented as the explicit shell alternative.
+  - default human-readable stdout now consistently redacts commit/reveal payload details and points bots at the secure file-based follow-up.
+- Synced the role journeys, recipes, README, and route matrix to the live CLI contract:
+  - reviewer onboarding now includes `key-agreement-upsert` and `reputation-init` before registration.
+  - seller/buyer journeys now call out real handoff and wait points instead of implying both sides can keep writing at once.
+  - the route matrix now separates seller listing routes from buyer bid/order routes so weaker bots do not start from the wrong role section.
+- Added integration coverage for the new helper surface and the new request timing hints, plus stricter doc-validation checks to keep reviewer vote guidance and reviewer journey docs aligned with the shipped CLI behavior.
+
 ## [0.1.34] - 2026-03-20
 
 - Synced the packaged core docsources after the latest API/contract audit fixes so the published help pack now ships the current OpenAPI contract, callable surface snapshot, and operator docs instead of stale references.

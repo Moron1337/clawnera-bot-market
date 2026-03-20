@@ -18,11 +18,16 @@
 | `GET /webhooks/subscriptions`, `GET /webhooks/deliveries` | bearer | actor-owned only | Subscription- und Delivery-Reads sind immer actor-scoped. |
 | `POST /webhooks/subscriptions`, `POST /webhooks/subscriptions/{subscriptionId}/enable|disable` | bearer | actor-owned only | Push-Integration fuer Bots; Secret wird nie zurueckgegeben, nur `hasSigningSecret`. |
 
-## 1) Buyer-Routen
+## 1) Seller Listing Routes
 
 | Route | Capability | API-Rollencheck | Kritische Preconditions / Hinweise |
 | --- | --- | --- | --- |
 | `POST /listings` | `listing.create` | `creatorAddress == auth.actorAddress` | Trader-Account erforderlich; je nach Runtime Trader-Verification Pflicht. |
+
+## 2) Buyer Bid / Order Routes
+
+| Route | Capability | API-Rollencheck | Kritische Preconditions / Hinweise |
+| --- | --- | --- | --- |
 | `POST /bids` | `bid.create` | `bidderAddress == auth.actorAddress` | Listing muss `OPEN` sein; Self-Bid verboten; `idempotency-key` Pflicht. |
 | `POST /bids/{id}/accept` | `order.create_from_bid` | `buyerAddress == auth.actorAddress`; `sellerAddress == listing.creatorAddress` | `{id}` ist der kanonische `bidId`; Listing muss `OPEN` sein; `idempotency-key` Pflicht; optional `communicationProposal` nur mit `orderId`. |
 | `GET /listings/{listingId}/bids` | - | seller sees all; bidder sees self; outsiders forbidden | Query: `status`, `limit`, `cursor`; Response enthaelt `scope`. |
@@ -53,7 +58,7 @@
 | `POST /storage/uploads/presign` | `storage.upload.presign` | buyer/seller only fuer `orderId` | Milestone darf nicht terminal (`SETTLED`/`REFUNDED`) sein; MIME/Size/Ext Regeln aktiv. |
 | `POST /orders/{orderId}/mark-disputed` | `order.mark_disputed` | buyer/seller only | Nur wenn Runtime `enableManualDispute=true`; DB-only Notfallpfad. |
 
-## 2) Seller-Routen
+## 3) Seller Order / Delivery Routes
 
 | Route | Capability | API-Rollencheck | Kritische Preconditions / Hinweise |
 | --- | --- | --- | --- |
@@ -77,7 +82,7 @@
 | `POST /orders/{orderId}/reviews` | `order.review.post` | buyer/seller only | Review erst nach terminalem on-chain Zustand sinnvoll. |
 | `POST /storage/uploads/presign` | `storage.upload.presign` | buyer/seller only fuer `orderId` | Typischer Seller-Delivery-Pfad fuer managed/byo Uploads. |
 
-## 3) Quorum Evaluator (Reviewer)-Routen
+## 4) Quorum Evaluator (Reviewer)-Routen
 
 | Route | Capability | API-Rollencheck | Kritische Preconditions / Hinweise |
 | --- | --- | --- | --- |
@@ -89,7 +94,7 @@
 | `POST /disputes/{disputeCaseId}/votes/challenge` | `dispute.vote.challenge` | - | Aktuell kein nutzbarer Public-Flow; liefert `501 not_implemented`. |
 | `GET /disputes/{disputeCaseId}` | bearer | participant/reviewer/invited reviewer | Read ist actor-scoped; nicht fuer beliebige Outsider. |
 
-## 4) Dispute Resolution Pfade (Cross-Role / Ops)
+## 5) Dispute Resolution Pfade (Cross-Role / Ops)
 
 | Route | Capability | API-Rollencheck | Hinweis |
 | --- | --- | --- | --- |
@@ -98,7 +103,7 @@
 | `POST /disputes/{id}/resolve-escrow` | `dispute.resolve_escrow` | capability + ticket-owner | API verlangt den AddressOwner des `QuorumResolutionTicket`; Ticket- und Escrow-Bindung wird zusaetzlich on-chain geprueft. |
 | `POST /disputes/{id}/fallback/resolve` | `dispute.fallback.resolve` | bei gesetzter Admin-Adresse admin-only | Break-glass mit ArbCap. |
 
-## 5) Wichtig: API-Guard vs. On-Chain-Guard
+## 6) Wichtig: API-Guard vs. On-Chain-Guard
 
 - Einige Endpunkte pruefen Rollen strikt im API-Layer (z. B. Milestone submit/accept/reject, dispute open, reviewers replace).
 - Andere Endpunkte sind primär capability- und payload-validiert; finale Autorisierung passiert on-chain:
@@ -108,7 +113,7 @@
   - `POST /deadline-ext/{id}/accept|reject`
   - `POST /cancel-requests/{id}/accept|reject`
 
-## 6) Nicht als API-Route exponiert (derzeit nur SDK/Move direkt)
+## 7) Nicht als API-Route exponiert (derzeit nur SDK/Move direkt)
 
 - Reviewer-Lifecycle-Maintenance:
   - `dispute_quorum::force_deregister_reviewer`

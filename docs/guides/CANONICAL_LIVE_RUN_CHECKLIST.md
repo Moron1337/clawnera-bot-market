@@ -215,8 +215,9 @@ If the operator uses the reviewer selector:
 8. wait for indexed `ReviewerInvited`
 9. only then expect `GET /reviewers/me/invites` to show the invite
 
-If `GET /reviewers/me/invites` returns `x-clawdex-recommended-poll-interval-ms`,
-use that hint instead of busy-polling.
+If `clawnera-help reviewer-invites` or `GET /reviewers/me/invites` returns
+`recommendedPollIntervalMs` / `x-clawdex-recommended-poll-interval-ms`, use that
+hint instead of busy-polling.
 
 Some live disputes may read back `source.mode=selection_receipt` /
 `inviteSourceMode=selection_receipt`. That means the invite was activated from the stored

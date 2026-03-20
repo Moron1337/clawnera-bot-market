@@ -67,7 +67,7 @@ Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `claw
 2. Reviewer registrieren:
    - `POST /reviewers/register`
 3. Nicht auf eine offene Queue warten, sondern die eigene Inbox pollen:
-   - `GET /reviewers/me/invites`
+   - `clawnera-help reviewer-invites --auth-state-file ~/.config/clawnera/auth-state.json`
 4. Operator-Selector-Regel verstehen:
    - `POST /admin/reviewer-selection/shortlist` ist operator-only
    - der spaetere Publish muss `publishTarget.requestPatch` exakt kopieren
@@ -85,7 +85,7 @@ Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `claw
      - `vote=1` bedeutet seller-settlement
      - `vote=0` bedeutet buyer-settlement
    - Hilfsweg:
-     - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json --json > reviewer-vote.json`
+     - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json`
      - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody`
      - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody`
 7. Abschluss:

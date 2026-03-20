@@ -73,9 +73,13 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /clawnera-help wallet-init/);
   assert.match(result.stdout, /clawnera-help wallet-list/);
   assert.match(result.stdout, /clawnera-help request <METHOD> <path>/);
+  assert.match(result.stdout, /clawnera-help listing-create/);
+  assert.match(result.stdout, /clawnera-help bid-create/);
+  assert.match(result.stdout, /clawnera-help bid-accept/);
   assert.match(result.stdout, /clawnera-help key-agreement-upsert/);
   assert.match(result.stdout, /clawnera-help reputation-init/);
   assert.match(result.stdout, /clawnera-help reviewer-register/);
+  assert.match(result.stdout, /clawnera-help reviewer-invites/);
   assert.match(result.stdout, /clawnera-help deliverable-encrypt/);
   assert.match(result.stdout, /clawnera-help mailbox-events/);
   assert.match(result.stdout, /clawnera-help milestone-submit-byo/);
@@ -105,9 +109,13 @@ test("help json output includes auth-login command", () => {
   assert.ok(payload.commands.includes("wallet-init"));
   assert.ok(payload.commands.includes("wallet-list"));
   assert.ok(payload.commands.includes("request"));
+  assert.ok(payload.commands.includes("listing-create"));
+  assert.ok(payload.commands.includes("bid-create"));
+  assert.ok(payload.commands.includes("bid-accept"));
   assert.ok(payload.commands.includes("key-agreement-upsert"));
   assert.ok(payload.commands.includes("reputation-init"));
   assert.ok(payload.commands.includes("reviewer-register"));
+  assert.ok(payload.commands.includes("reviewer-invites"));
   assert.ok(payload.commands.includes("deliverable-encrypt"));
   assert.ok(payload.commands.includes("mailbox-events"));
   assert.ok(payload.commands.includes("milestone-submit-byo"));
@@ -159,7 +167,21 @@ test("reviewer vote prepare help prints usage", () => {
   const result = runCli(["reviewer-vote-prepare", "--help"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Reviewer vote prepare helper/);
+  assert.match(result.stdout, /--out reviewer-vote\.json/);
   assert.match(result.stdout, /vote=1 means seller settlement/);
+});
+
+test("thin write helpers print usage", () => {
+  for (const [command, pattern] of [
+    ["listing-create", /Listing create helper/],
+    ["bid-create", /Bid create helper/],
+    ["bid-accept", /Bid accept helper/],
+    ["reviewer-invites", /Reviewer invites helper/],
+  ]) {
+    const result = runCli([command, "--help"]);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, pattern);
+  }
 });
 
 test("reviewer shortlist help prints operator and publish role split", () => {
@@ -248,6 +270,30 @@ test("reviewer vote prepare default output redacts nonce and reveal body", () =>
   assert.doesNotMatch(result.stdout, /commit_hash_hex=/);
   assert.match(result.stdout, /commit_payload_redacted=/);
   assert.match(result.stdout, /reveal_body_redacted=/);
+  assert.match(result.stdout, /next_secure_file=rerun with --out reviewer-vote\.json/);
+});
+
+test("reviewer vote prepare can write the full payload to --out", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-vote-out-"));
+  const outFile = path.join(tempDir, "reviewer-vote.json");
+  const result = runCli([
+    "reviewer-vote-prepare",
+    "--case-id",
+    `0x${"1".repeat(64)}`,
+    "--address",
+    `0x${"2".repeat(64)}`,
+    "--vote",
+    "seller",
+    "--out",
+    outFile
+  ]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /vote_file=/);
+  const payload = JSON.parse(readFileSync(outFile, "utf8"));
+  assert.equal(payload.ok, true);
+  assert.equal(payload.vote, 1);
+  assert.match(payload.commitHashHex, /^[a-f0-9]{64}$/);
+  assert.equal(payload.revealRequestBody.vote, 1);
 });
 
 test("journey command prints a strict ordered role path", () => {
@@ -255,8 +301,10 @@ test("journey command prints a strict ordered role path", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /# Buyer Minimal Path/);
   assert.match(result.stdout, /Do In This Order:/);
-  assert.match(result.stdout, /buyer-place-bid: Buyer Place Bid/);
-  assert.match(result.stdout, /buyer-accept-bid: Buyer Accept Bid/);
+  assert.match(result.stdout, /buyer-place-bid: Buyer Place Bid \[role: buyer]/);
+  assert.match(result.stdout, /buyer-accept-bid: Buyer Accept Bid And Create Order \[role: buyer] \[wait_for_seller_choice]/);
+  assert.match(result.stdout, /Conditional Delivery Prerequisite:/);
+  assert.match(result.stdout, /key-agreement-upsert/);
   assert.match(result.stdout, /If setup is not complete: clawnera-help recipe setup-quick/);
   assert.match(result.stdout, /If setup is already complete: clawnera-help recipe buyer-place-bid/);
 });
@@ -264,8 +312,8 @@ test("journey command prints a strict ordered role path", () => {
 test("seller journey shows seller review and buyer accept separation", () => {
   const result = runCli(["journey", "seller"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /seller-review-bids: Seller Review Bids/);
-  assert.match(result.stdout, /buyer-accept-bid: Buyer Accept Bid/);
+  assert.match(result.stdout, /seller-review-bids: Seller Review Bids And Hand Off Accept \[role: seller]/);
+  assert.match(result.stdout, /buyer-accept-bid: Buyer Accept Bid And Create Order \[role: buyer] \[handoff] \[wait_for_buyer_accept]/);
 });
 
 test("reviewer journey includes the post-case claim step", () => {
@@ -293,7 +341,7 @@ test("recipe command prints a concise task runbook", () => {
   assert.match(result.stdout, /Need:/);
   assert.match(result.stdout, /Store:/);
   assert.match(result.stdout, /Routes:/);
-  assert.match(result.stdout, /POST \/listings with idempotency-key/);
+  assert.match(result.stdout, /Prefer clawnera-help listing-create/);
   assert.match(result.stdout, /Stop Conditions:/);
   assert.match(result.stdout, /Next Recipes:/);
   assert.match(result.stdout, /clawnera-help show discovery/);
@@ -476,6 +524,8 @@ test("show journeys topic works", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /# Role Journeys/);
   assert.match(result.stdout, /clawnera-help journey reviewer/);
+  assert.match(result.stdout, /key-agreement-upsert/);
+  assert.match(result.stdout, /reputation-init/);
 });
 
 test("show canonical-flow topic works", () => {
@@ -499,10 +549,29 @@ test("show http-examples topic works", () => {
   const result = runCli(["show", "http-examples"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /# Minimal HTTP Examples/);
+  assert.match(result.stdout, /clawnera-help listing-create/);
+  assert.match(result.stdout, /clawnera-help bid-create/);
   assert.match(result.stdout, /order-init-bond/);
-  assert.match(result.stdout, /POST \/bids\/<bid-id>\/accept/);
+  assert.match(result.stdout, /clawnera-help bid-accept/);
   assert.match(result.stdout, /reviewer-vote-prepare/);
   assert.match(result.stdout, /seller calling accept returns `403 buyer_mismatch`/);
+});
+
+test("curated docs do not contain stale reviewer vote redirection examples", () => {
+  const files = [
+    "README.md",
+    "docs/guides/BOT_ONBOARDING.md",
+    "docs/guides/BOT_PLAYBOOKS.md",
+    "docs/guides/MINIMAL_HTTP_EXAMPLES.md",
+    "docs/guides/REVIEWER_SELECTOR_FLOW.md",
+  ];
+  for (const relativePath of files) {
+    const text = readFileSync(path.join(repoRoot, relativePath), "utf8");
+    const matches = text.matchAll(/reviewer-vote-prepare[\s\S]{0,240}> *reviewer-vote\.json/g);
+    for (const match of matches) {
+      assert.match(match[0], /--json/, `${relativePath} contains a stale reviewer-vote redirect example without --json`);
+    }
+  }
 });
 
 test("show reviewer-selector topic works", () => {

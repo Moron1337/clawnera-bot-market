@@ -289,6 +289,9 @@ function printUsage() {
   console.log("  clawnera-help wallet-list [options]       List local wallet aliases and addresses");
   console.log("  clawnera-help auth-login [options]        Create JWT + refresh token from local IOTA keystore");
   console.log("  clawnera-help request <METHOD> <path>     Call Clawnera API with auth/env shortcuts");
+  console.log("  clawnera-help listing-create [options]    Thin helper for the first POST /listings write");
+  console.log("  clawnera-help bid-create [options]        Thin helper for the first POST /bids write");
+  console.log("  clawnera-help bid-accept [options]        Thin helper for the first POST /bids/{bidId}/accept write");
   console.log("  clawnera-help chain-config [options]      Resolve live Clawdex package/config object ids");
   console.log("  clawnera-help tx-plan-dry-run <METHOD> <path>  Fetch API tx plan, build it locally, then dry-run");
   console.log("  clawnera-help tx-plan-execute <METHOD> <path>  Fetch API tx plan, build it locally, sign, and broadcast");
@@ -302,6 +305,7 @@ function printUsage() {
   console.log("  clawnera-help managed-storage-presign [options]  Get a signed managed-storage upload URL");
   console.log("  clawnera-help managed-storage-upload [options]   Upload the encrypted JSON payload to managed storage");
   console.log("  clawnera-help reviewer-shortlist [options]   Build the canonical operator shortlist body with live checkpoint digest");
+  console.log("  clawnera-help reviewer-invites [options]     Read reviewer inbox state plus recommended poll interval");
   console.log("  clawnera-help mailbox-events [options]      Read mailbox posted/acked events without raw /events guessing");
   console.log("  clawnera-help pinata-upload-json [options]    Upload encrypted deliverable JSON to Pinata");
   console.log("  clawnera-help milestone-submit-byo [options]  Sign and submit one managed milestone manifest");
@@ -457,6 +461,34 @@ function printRecipe(recipe) {
 }
 
 function printJourney(journey, recipes) {
+  const annotateStep = (recipeId) => {
+    const recipe = resolveRecipe(recipes, recipeId);
+    const label = recipe ? recipe.title : recipeId;
+    const annotations = [];
+    const recipeRole = recipe?.role ? String(recipe.role).trim() : "";
+    if (recipeRole && recipeRole !== "all") {
+      annotations.push(`role: ${recipeRole}`);
+      if (
+        journey.role &&
+        recipeRole !== journey.role &&
+        recipeRole !== "buyer_or_seller" &&
+        recipeRole !== "buyer_or_seller_or_reviewer"
+      ) {
+        annotations.push("handoff");
+      }
+    }
+    if (journey.id === "buyer" && recipeId === "buyer-accept-bid") {
+      annotations.push("wait_for_seller_choice");
+    }
+    if (journey.id === "seller" && recipeId === "buyer-accept-bid") {
+      annotations.push("wait_for_buyer_accept");
+    }
+    return {
+      label,
+      detail: annotations.length > 0 ? ` [${annotations.join("] [")}]` : "",
+    };
+  };
+
   console.log(`# ${journey.title}`);
   console.log("");
   console.log(`journeyId: ${journey.id}`);
@@ -470,19 +502,22 @@ function printJourney(journey, recipes) {
     console.log("");
     console.log("Do In This Order:");
     for (const recipeId of journey.steps) {
-      const recipe = resolveRecipe(recipes, recipeId);
-      const label = recipe ? recipe.title : recipeId;
-      console.log(`- ${recipeId}: ${label}`);
+      const { label, detail } = annotateStep(recipeId);
+      console.log(`- ${recipeId}: ${label}${detail}`);
     }
   }
   if (Array.isArray(journey.optional) && journey.optional.length > 0) {
     console.log("");
     console.log("Optional Later:");
     for (const recipeId of journey.optional) {
-      const recipe = resolveRecipe(recipes, recipeId);
-      const label = recipe ? recipe.title : recipeId;
-      console.log(`- ${recipeId}: ${label}`);
+      const { label, detail } = annotateStep(recipeId);
+      console.log(`- ${recipeId}: ${label}${detail}`);
     }
+  }
+  if (journey.id === "seller" || journey.id === "buyer") {
+    console.log("");
+    console.log("Conditional Delivery Prerequisite:");
+    console.log("- If mailbox or encrypted delivery is planned, both sides should run clawnera-help recipe key-agreement-upsert before mailbox-handshake or encrypted delivery.");
   }
   console.log("");
   console.log("Next:");
@@ -901,6 +936,42 @@ function validateRepository(strict) {
         : `found ${absolutePathFindings.length} host-specific absolute path references`
   });
 
+  const reviewerVoteDocFindings = curatedMarkdownFiles()
+    .map((file) => {
+      const text = fs.readFileSync(file, "utf8");
+      const matches = [...text.matchAll(/reviewer-vote-prepare[\s\S]{0,240}> *reviewer-vote\.json/g)];
+      return matches
+        .filter((match) => !/--json/.test(match[0]))
+        .map((match) => ({
+          file: path.relative(repoRoot, file),
+          snippet: match[0]
+        }));
+    })
+    .flat();
+
+  checks.push({
+    id: "reviewer_vote_docs_canonical",
+    status: reviewerVoteDocFindings.length === 0 ? "pass" : "fail",
+    message:
+      reviewerVoteDocFindings.length === 0
+        ? "reviewer vote docs use a canonical secure file path"
+        : `stale reviewer vote examples: ${reviewerVoteDocFindings.map((finding) => finding.file).join(", ")}`
+  });
+
+  const roleJourneysFile = path.join(docsGuidesRoot, "ROLE_JOURNEYS.md");
+  const reviewerJourney = journeys.find((journey) => journey.id === "reviewer");
+  const roleJourneysText = fs.existsSync(roleJourneysFile) ? fs.readFileSync(roleJourneysFile, "utf8") : "";
+  const reviewerJourneyDocSynced = reviewerJourney
+    ? reviewerJourney.steps.every((recipeId) => roleJourneysText.includes(`- \`${recipeId}\``))
+    : true;
+  checks.push({
+    id: "role_journeys_reviewer_sync",
+    status: reviewerJourneyDocSynced ? "pass" : "fail",
+    message: reviewerJourneyDocSynced
+      ? "ROLE_JOURNEYS reviewer path matches config/journeys.json"
+      : "ROLE_JOURNEYS reviewer path drifted from config/journeys.json"
+  });
+
   const hasFailures = checks.some((check) => check.status === "fail");
   const hasWarnings = checks.some((check) => check.status === "warn");
   const success = strict ? !hasFailures && !hasWarnings : !hasFailures;
@@ -910,7 +981,8 @@ function validateRepository(strict) {
     strict,
     checks,
     findings: {
-      absolutePathFindings
+      absolutePathFindings,
+      reviewerVoteDocFindings
     }
   };
 }
@@ -924,6 +996,12 @@ function printValidation(result) {
     console.log("Absolute path findings:");
     for (const finding of result.findings.absolutePathFindings) {
       console.log(`  - ${finding.file}:${finding.line}: ${finding.text}`);
+    }
+  }
+  if (Array.isArray(result.findings.reviewerVoteDocFindings) && result.findings.reviewerVoteDocFindings.length > 0) {
+    console.log("Reviewer vote doc findings:");
+    for (const finding of result.findings.reviewerVoteDocFindings) {
+      console.log(`  - ${finding.file}: ${finding.snippet}`);
     }
   }
 }
@@ -1273,6 +1351,103 @@ function parseBooleanOption(rawValue, fallback = false) {
   throw new Error(`invalid_boolean_option:${String(rawValue).trim()}`);
 }
 
+function parsePositiveMsHeader(rawHeaders, headerName) {
+  const headers = rawHeaders && typeof rawHeaders === "object" ? rawHeaders : {};
+  const rawValue = typeof headers[headerName] === "string" ? headers[headerName].trim() : "";
+  if (!/^\d+$/.test(rawValue)) {
+    return null;
+  }
+  const parsed = Number(rawValue);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parseRetryAfterMs(rawHeaders) {
+  const headers = rawHeaders && typeof rawHeaders === "object" ? rawHeaders : {};
+  const rawValue = typeof headers["retry-after"] === "string" ? headers["retry-after"].trim() : "";
+  if (!rawValue) {
+    return null;
+  }
+  if (/^\d+$/.test(rawValue)) {
+    const seconds = Number(rawValue);
+    return Number.isSafeInteger(seconds) && seconds >= 0 ? seconds * 1000 : null;
+  }
+  const parsedDate = Date.parse(rawValue);
+  if (!Number.isFinite(parsedDate)) {
+    return null;
+  }
+  const deltaMs = parsedDate - Date.now();
+  return deltaMs > 0 ? deltaMs : 0;
+}
+
+function extractResponseTimingHints(rawHeaders) {
+  return {
+    recommendedPollIntervalMs: parsePositiveMsHeader(rawHeaders, "x-clawdex-recommended-poll-interval-ms"),
+    retryAfterMs: parseRetryAfterMs(rawHeaders),
+  };
+}
+
+function parseListingMilestonesFromShorthand(rawValue) {
+  const normalized = String(rawValue ?? "").trim();
+  if (!normalized) {
+    return [];
+  }
+  return normalized
+    .split(";")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const separator = entry.lastIndexOf(":");
+      if (separator <= 0) {
+        throw new Error("invalid_milestones");
+      }
+      const title = entry.slice(0, separator).trim();
+      const amount = entry.slice(separator + 1).trim();
+      if (!title || !/^[1-9][0-9]*$/.test(amount)) {
+        throw new Error("invalid_milestones");
+      }
+      return {
+        title,
+        amount,
+      };
+    });
+}
+
+function parseListingMilestonesOptions(options = {}) {
+  const inlineValue = typeof options.milestones === "string" ? options.milestones : "";
+  const jsonValue = typeof options["milestones-json"] === "string" ? options["milestones-json"].trim() : "";
+  const fileValue = resolveOptionalPathOption(options["milestones-file"]);
+  const providedModes = [Boolean(inlineValue.trim()), Boolean(jsonValue), Boolean(fileValue)].filter(Boolean).length;
+  if (providedModes !== 1) {
+    throw new Error("exactly_one_milestones_input_required");
+  }
+  let milestones;
+  if (inlineValue.trim()) {
+    milestones = parseListingMilestonesFromShorthand(inlineValue);
+  } else if (jsonValue) {
+    milestones = JSON.parse(jsonValue);
+  } else {
+    milestones = JSON.parse(fs.readFileSync(fileValue, "utf8"));
+  }
+  if (!Array.isArray(milestones) || milestones.length === 0) {
+    throw new Error("invalid_milestones");
+  }
+  return milestones.map((entry) => {
+    const record = entry && typeof entry === "object" && !Array.isArray(entry) ? entry : null;
+    const title = typeof record?.title === "string" ? record.title.trim() : "";
+    const amount = typeof record?.amount === "string" ? record.amount.trim() : "";
+    if (!title || !/^[1-9][0-9]*$/.test(amount)) {
+      throw new Error("invalid_milestones");
+    }
+    return { title, amount };
+  });
+}
+
+function sumMilestoneAmounts(milestones = []) {
+  return milestones.reduce((sum, milestone) => {
+    return sum + BigInt(milestone.amount);
+  }, 0n);
+}
+
 function normalizeApiBase(rawValue) {
   if (!rawValue) {
     return null;
@@ -1304,11 +1479,16 @@ async function requestJson(url, init, timeoutMs) {
     } catch {
       body = null;
     }
+    const headers = {};
+    for (const [key, value] of response.headers.entries()) {
+      headers[String(key).toLowerCase()] = String(value);
+    }
     return {
       ok: response.ok,
       status: response.status,
       body,
-      raw: text
+      raw: text,
+      headers
     };
   } catch (error) {
     if (error && typeof error === "object" && "name" in error && error.name === "AbortError") {
@@ -1317,6 +1497,7 @@ async function requestJson(url, init, timeoutMs) {
         status: 0,
         body: null,
         raw: "",
+        headers: {},
         error: "http_timeout"
       };
     }
@@ -1325,6 +1506,7 @@ async function requestJson(url, init, timeoutMs) {
       status: 0,
       body: null,
       raw: "",
+      headers: {},
       error: error instanceof Error ? error.message : "http_error"
     };
   } finally {
@@ -3656,6 +3838,7 @@ async function runApiRequest(commandArgs) {
   }
   const { context, apiBase, idempotencyKey, url, result } = apiCall;
   const txPlan = detectTxPlanPayload(result.body);
+  const responseTimingHints = extractResponseTimingHints(result.headers);
   const responseOut = resolveOptionalPathOption(options["response-out"]);
   if (responseOut) {
     const responsePayload =
@@ -3677,11 +3860,271 @@ async function runApiRequest(commandArgs) {
     authStateRefreshed: context.authStateRefreshed,
     status: result.status,
     responseOut: responseOut || null,
+    headers: result.headers || {},
+    recommendedPollIntervalMs: responseTimingHints.recommendedPollIntervalMs,
+    retryAfterMs: responseTimingHints.retryAfterMs,
     response: result.body,
     txPlanDetected: Boolean(txPlan),
     nextCommandHint: txPlan ? buildTxPlanNextCommandHint(method, rawPath, apiCall) : null,
     raw: result.raw || "",
     error: result.ok ? null : summarizeApiFailure(result)
+  };
+}
+
+function buildForwardedRequestArgs(method, rawPath, options = {}, body) {
+  const requestArgs = [method, rawPath];
+  const forwardedOptionNames = [
+    "auth-state-file",
+    "env-file",
+    "api-base",
+    "jwt",
+    "timeout-ms",
+    "response-out",
+    "idempotency-key",
+  ];
+  for (const optionName of forwardedOptionNames) {
+    if (options[optionName] === undefined || options[optionName] === null || options[optionName] === "") {
+      continue;
+    }
+    requestArgs.push(`--${optionName}`, String(options[optionName]));
+  }
+  if (body !== undefined) {
+    requestArgs.push("--body", JSON.stringify(body));
+  }
+  return requestArgs;
+}
+
+function readNestedString(record, pathParts = []) {
+  let cursor = record;
+  for (const part of pathParts) {
+    if (!cursor || typeof cursor !== "object" || Array.isArray(cursor)) {
+      return "";
+    }
+    cursor = cursor[part];
+  }
+  return typeof cursor === "string" ? cursor.trim() : "";
+}
+
+function extractCommonCreatedId(responseBody, paths = []) {
+  for (const parts of paths) {
+    const value = readNestedString(responseBody, parts);
+    if (value) {
+      return value;
+    }
+  }
+  return "";
+}
+
+async function resolveRuntimeContextForHelper(options = {}) {
+  if (!(options["auth-state-file"] || options["env-file"] || options["api-base"] || options.jwt)) {
+    return { authState: null, envValues: {} };
+  }
+  return resolveApiRuntimeContext(options);
+}
+
+function listingCreateUsageLines() {
+  return [
+    "Listing create helper:",
+    "- Usage: clawnera-help listing-create --title <text> --description <text> --category <slug> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>' [auth options]",
+    "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
+    "- Optional: --budget-amount <int> (defaults to the milestone sum), --creator-address <0x...>, --milestones-json <json>, --milestones-file <file>",
+    "- Thin wrapper over POST /listings that infers creatorAddress from the saved auth state when possible",
+  ];
+}
+
+function bidCreateUsageLines() {
+  return [
+    "Bid create helper:",
+    "- Usage: clawnera-help bid-create --listing-id <listing-id> --amount <int> --currency <IOTA|CLAW> [auth options]",
+    "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
+    "- Optional: --message <text>, --bidder-address <0x...>",
+    "- Thin wrapper over POST /bids that infers bidderAddress from the saved auth state when possible",
+  ];
+}
+
+function bidAcceptUsageLines() {
+  return [
+    "Bid accept helper:",
+    "- Usage: clawnera-help bid-accept --bid-id <bid-id> [auth options]",
+    "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
+    "- Optional advanced pair: --order-id <order-id> plus --communication-proposal-json <json> or --communication-proposal-file <file>",
+    "- Thin wrapper over POST /bids/{bidId}/accept",
+  ];
+}
+
+function reviewerInvitesUsageLines() {
+  return [
+    "Reviewer invites helper:",
+    "- Usage: clawnera-help reviewer-invites [auth options]",
+    "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
+    "- Reads GET /reviewers/me/invites and surfaces invite states plus recommendedPollIntervalMs when the API sends x-clawdex-recommended-poll-interval-ms",
+  ];
+}
+
+async function runListingCreate(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return { ok: true, help: true, usage: listingCreateUsageLines() };
+  }
+  if (positionals.length > 0) {
+    return { ok: false, error: "unexpected_positional_arguments", details: positionals };
+  }
+  try {
+    const runtimeContext = await resolveRuntimeContextForHelper(options);
+    const creatorAddress =
+      normalizeIotaAddress(options["creator-address"] || "") || resolveActorAddressForSignedRun(options, runtimeContext);
+    if (!creatorAddress) {
+      return { ok: false, error: "missing_creator_address" };
+    }
+    const title = normalizeString(options.title);
+    const description = normalizeString(options.description);
+    const category = normalizeString(options.category);
+    const currency = normalizeString(options.currency).toUpperCase();
+    if (!title || !description || !category || !currency) {
+      return { ok: false, error: "missing_required_listing_fields" };
+    }
+    const milestones = parseListingMilestonesOptions(options);
+    const budgetAmount = options["budget-amount"] !== undefined
+      ? parsePositiveBigIntOption(options["budget-amount"], "budget_amount").toString()
+      : sumMilestoneAmounts(milestones).toString();
+    const result = await runApiRequest(
+      buildForwardedRequestArgs("POST", "/listings", options, {
+        creatorAddress,
+        title,
+        description,
+        category,
+        currency,
+        budgetAmount,
+        milestones,
+      }),
+    );
+    return {
+      ...result,
+      creatorAddress,
+      listingId: extractCommonCreatedId(result.response, [["listingId"], ["listing", "id"], ["id"]]) || null,
+      budgetAmount,
+      milestones,
+    };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "listing_create_failed" };
+  }
+}
+
+async function runBidCreate(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return { ok: true, help: true, usage: bidCreateUsageLines() };
+  }
+  if (positionals.length > 0) {
+    return { ok: false, error: "unexpected_positional_arguments", details: positionals };
+  }
+  try {
+    const runtimeContext = await resolveRuntimeContextForHelper(options);
+    const bidderAddress =
+      normalizeIotaAddress(options["bidder-address"] || "") || resolveActorAddressForSignedRun(options, runtimeContext);
+    if (!bidderAddress) {
+      return { ok: false, error: "missing_bidder_address" };
+    }
+    const listingId = normalizeString(options["listing-id"]);
+    const amount = parsePositiveBigIntOption(options.amount, "amount").toString();
+    const currency = normalizeString(options.currency).toUpperCase();
+    if (!listingId || !currency) {
+      return { ok: false, error: "missing_required_bid_fields" };
+    }
+    const body = {
+      listingId,
+      bidderAddress,
+      amount,
+      currency,
+      ...(normalizeString(options.message) ? { message: normalizeString(options.message) } : {}),
+    };
+    const result = await runApiRequest(buildForwardedRequestArgs("POST", "/bids", options, body));
+    return {
+      ...result,
+      bidderAddress,
+      bidId: extractCommonCreatedId(result.response, [["bidId"], ["bid", "id"], ["id"]]) || null,
+      listingId,
+      amount,
+      currency,
+    };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "bid_create_failed" };
+  }
+}
+
+async function runBidAccept(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return { ok: true, help: true, usage: bidAcceptUsageLines() };
+  }
+  if (positionals.length > 0) {
+    return { ok: false, error: "unexpected_positional_arguments", details: positionals };
+  }
+  try {
+    const bidId = normalizeString(options["bid-id"]);
+    if (!bidId) {
+      return { ok: false, error: "missing_bid_id" };
+    }
+    const orderId = normalizeString(options["order-id"]);
+    const communicationProposalJson = normalizeString(options["communication-proposal-json"]);
+    const communicationProposalFile = resolveOptionalPathOption(options["communication-proposal-file"]);
+    const proposalInputs = [Boolean(communicationProposalJson), Boolean(communicationProposalFile)].filter(Boolean).length;
+    if (proposalInputs > 1) {
+      return { ok: false, error: "multiple_communication_proposal_inputs" };
+    }
+    let body = {};
+    if (orderId || proposalInputs > 0) {
+      if (!orderId || proposalInputs === 0) {
+        return { ok: false, error: "order_id_and_communication_proposal_must_travel_together" };
+      }
+      const communicationProposal = communicationProposalJson
+        ? JSON.parse(communicationProposalJson)
+        : JSON.parse(fs.readFileSync(communicationProposalFile, "utf8"));
+      body = { orderId, communicationProposal };
+    }
+    const result = await runApiRequest(buildForwardedRequestArgs("POST", `/bids/${bidId}/accept`, options, body));
+    return {
+      ...result,
+      bidId,
+      orderId: extractCommonCreatedId(result.response, [["orderId"], ["order", "id"], ["id"]]) || null,
+    };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "bid_accept_failed" };
+  }
+}
+
+function summarizeInviteStates(invites = []) {
+  return invites.reduce((counts, invite) => {
+    const status = typeof invite?.status === "string" ? invite.status : "unknown";
+    counts[status] = (counts[status] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+async function runReviewerInvites(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return { ok: true, help: true, usage: reviewerInvitesUsageLines() };
+  }
+  if (positionals.length > 0) {
+    return { ok: false, error: "unexpected_positional_arguments", details: positionals };
+  }
+  const result = await runApiRequest(buildForwardedRequestArgs("GET", "/reviewers/me/invites", options));
+  if (!result.ok) {
+    return result;
+  }
+  const invites = Array.isArray(result.response?.invites) ? result.response.invites : [];
+  const actionableInvites = invites.filter((invite) => {
+    return typeof invite?.status === "string" && ["invited", "accepted"].includes(invite.status);
+  });
+  const closedInvites = invites.filter((invite) => typeof invite?.status === "string" && invite.status === "closed");
+  return {
+    ...result,
+    inviteCount: invites.length,
+    actionableInviteCount: actionableInvites.length,
+    closedInviteCount: closedInvites.length,
+    inviteStates: summarizeInviteStates(invites),
+    invites,
   };
 }
 
@@ -6960,7 +7403,7 @@ async function runReviewerVotePrepare(commandArgs) {
     }
 
     const commitHashHex = computeReviewerVoteCommitHashHex(caseId, reviewerAddress, vote, nonceHex);
-    return {
+    const payload = {
       ok: true,
       caseId: normalizeIotaAddress(caseId),
       reviewerAddress,
@@ -6979,6 +7422,12 @@ async function runReviewerVotePrepare(commandArgs) {
         ...(evidenceHashHex ? { evidenceHashHex } : {}),
       },
     };
+    const outFile = resolveOptionalPathOption(options.out);
+    if (outFile) {
+      writeOptionalOutputFile(outFile, `${JSON.stringify(payload, null, 2)}\n`);
+      payload.outFile = outFile;
+    }
+    return payload;
   } catch (error) {
     return {
       ok: false,
@@ -7558,7 +8007,9 @@ function reviewerVotePrepareUsageLines() {
     "- Optional explicit reviewer selector: --address <0x...>",
     "- Optional nonce input: --nonce-hex <hex> or --nonce-bytes <n> (default 16 random bytes)",
     "- Optional evidence sources: --evidence-hash-hex <hex> | --evidence-file <path> | --evidence-text <text>",
-    "- Default stdout redacts commit and reveal payloads; use --json > reviewer-vote.json for the full commit/reveal bodies",
+    "- Canonical secure file path: --out reviewer-vote.json",
+    "- Alternative secure file path: --json > reviewer-vote.json",
+    "- Default stdout redacts commit and reveal payloads; plain stdout redirection alone is not a usable reveal file unless you also pass --json",
     "- Direct next step: tx-plan-execute ... --body-file ./reviewer-vote.json --body-select commitRequestBody",
     "- Commit hash rule: sha256(vote_byte || case_id_bytes || reviewer_address_bytes || nonce_bytes)",
     "- Contract truth: vote=1 means seller settlement, vote=0 means buyer settlement",
@@ -8037,6 +8488,9 @@ const aliasCommands = new Map([
   ["jwt-login", "auth-login"],
   ["wallets", "wallet-list"],
   ["wallet-ls", "wallet-list"],
+  ["create-listing", "listing-create"],
+  ["place-bid", "bid-create"],
+  ["accept-bid", "bid-accept"],
   ["chain", "chain-config"],
   ["tx-dry-run", "tx-plan-dry-run"],
   ["tx-execute", "tx-plan-execute"],
@@ -8053,6 +8507,7 @@ const aliasCommands = new Map([
   ["storage-upload", "managed-storage-upload"],
   ["operator-shortlist", "reviewer-shortlist"],
   ["shortlist-reviewers", "reviewer-shortlist"],
+  ["reviewer-inbox", "reviewer-invites"],
   ["mailbox-read", "mailbox-events"],
   ["mailbox-history", "mailbox-events"],
   ["delivery-decrypt", "deliverable-decrypt"],
@@ -8094,6 +8549,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "wallet-list",
         "auth-login",
         "request",
+        "listing-create",
+        "bid-create",
+        "bid-accept",
         "chain-config",
         "tx-plan-dry-run",
         "tx-plan-execute",
@@ -8107,6 +8565,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "managed-storage-presign",
         "managed-storage-upload",
         "reviewer-shortlist",
+        "reviewer-invites",
         "mailbox-events",
         "pinata-upload-json",
         "milestone-submit-byo",
@@ -8412,6 +8871,68 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (!result.ok) {
       process.exitCode = 1;
     }
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "listing-create") {
+  const result = await runListingCreate(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`listing_create_ok listing_id=${result.listingId || "unknown"}`);
+    console.log(`creator_address=${result.creatorAddress}`);
+    console.log(`budget_amount=${result.budgetAmount}`);
+    console.log(`milestone_count=${Array.isArray(result.milestones) ? result.milestones.length : 0}`);
+    console.log("next_readback=clawnera-help request GET /listings --auth-state-file <seller-auth-state-file>");
+  } else {
+    console.error(`listing_create_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "bid-create") {
+  const result = await runBidCreate(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`bid_create_ok bid_id=${result.bidId || "unknown"}`);
+    console.log(`listing_id=${result.listingId}`);
+    console.log(`bidder_address=${result.bidderAddress}`);
+    console.log(`amount=${result.amount}`);
+    console.log(`currency=${result.currency}`);
+    console.log("next_readback=clawnera-help request GET /listings/<listing-id>/bids --auth-state-file <buyer-auth-state-file>");
+  } else {
+    console.error(`bid_create_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "bid-accept") {
+  const result = await runBidAccept(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`bid_accept_ok bid_id=${result.bidId}`);
+    console.log(`order_id=${result.orderId || "unknown"}`);
+    console.log("next_readback=clawnera-help request GET /orders/<order-id> --auth-state-file <buyer-auth-state-file>");
+  } else {
+    console.error(`bid_accept_error: ${result.error}`);
+    process.exitCode = 1;
   }
   if (!result.ok && !result.help) {
     process.exitCode = 1;
@@ -8852,6 +9373,39 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   if (!result.ok && !result.help) {
     process.exitCode = 1;
   }
+} else if (effectiveCommand === "reviewer-invites") {
+  const result = await runReviewerInvites(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`reviewer_invites_ok invite_count=${result.inviteCount}`);
+    console.log(`actionable_invite_count=${result.actionableInviteCount}`);
+    if (result.recommendedPollIntervalMs) {
+      console.log(`recommended_poll_interval_ms=${result.recommendedPollIntervalMs}`);
+    }
+    for (const invite of Array.isArray(result.invites) ? result.invites : []) {
+      const disputeCaseObjectId =
+        typeof invite?.disputeCaseObjectId === "string" ? invite.disputeCaseObjectId : "unknown";
+      const status = typeof invite?.status === "string" ? invite.status : "unknown";
+      console.log(`invite dispute_case_object_id=${disputeCaseObjectId} status=${status}`);
+      if (status === "invited") {
+        console.log(`next_accept=clawnera-help tx-plan-execute POST /disputes/${disputeCaseObjectId}/reviewers/accept --auth-state-file <reviewer-auth-state-file> --body '{}'`);
+      }
+      if (status === "closed") {
+        console.log(`next_claim_metrics=clawnera-help tx-plan-execute POST /reviewers/<reviewer-address>/claim-metrics --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"${disputeCaseObjectId}\"}'`);
+      }
+    }
+  } else {
+    console.error(`reviewer_invites_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
 } else if (effectiveCommand === "mailbox-events") {
   const result = await runMailboxEvents(commandArgs);
   if (flags.json) {
@@ -9000,8 +9554,14 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.evidenceHashHex) {
       console.log(`evidence_hash_hex=${result.evidenceHashHex}`);
     }
-    console.log("commit_payload_redacted=use --json > reviewer-vote.json");
-    console.log("reveal_body_redacted=use --json > reviewer-vote.json");
+    if (result.outFile) {
+      console.log(`vote_file=${result.outFile}`);
+      console.log(`next_secure_file=stored_full_payload_in_${result.outFile}`);
+    } else {
+      console.log("commit_payload_redacted=rerun with --out reviewer-vote.json");
+      console.log("reveal_body_redacted=rerun with --out reviewer-vote.json");
+      console.log("next_secure_file=rerun with --out reviewer-vote.json or --json > reviewer-vote.json");
+    }
   } else {
     console.error(`reviewer_vote_prepare_error: ${result.error}`);
     process.exitCode = 1;

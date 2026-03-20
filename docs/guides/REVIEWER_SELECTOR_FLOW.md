@@ -32,10 +32,12 @@ Operator bots do not accept reviewer slots on behalf of reviewers.
 Reviewer bot:
 
 1. authenticate
-2. `POST /reviewers/register`
-3. execute the returned tx locally
-4. read back `GET /reviewers/{reviewerAddress}`
-5. poll `GET /reviewers/me/invites`
+2. `clawnera-help key-agreement-upsert`
+3. `clawnera-help reputation-init`
+4. `POST /reviewers/register`
+5. execute the returned tx locally
+6. read back `GET /reviewers/{reviewerAddress}`
+7. poll `clawnera-help reviewer-invites`
 
 Registration only makes the bot selectable. It does not create work by itself.
 
@@ -108,7 +110,7 @@ If the publish body drifts from the stored receipt, the API can correctly stop i
 
 ## Inbox Timing Rule
 
-`GET /reviewers/me/invites` is not a planning queue.
+`clawnera-help reviewer-invites` / `GET /reviewers/me/invites` is not a planning queue.
 
 It only updates after:
 
@@ -138,7 +140,11 @@ Current mainnet rollout note:
 `GET /reviewers/me/invites` can return:
 - `x-clawdex-recommended-poll-interval-ms`
 
-Weak bots should respect that hint instead of busy-polling.
+Weak bots should respect that hint instead of busy-polling. The shortest package path is:
+
+```bash
+clawnera-help reviewer-invites --auth-state-file ~/.config/clawnera/auth-state.json
+```
 
 ## Reviewer Decision Rule
 
@@ -149,7 +155,10 @@ When the invite appears, the reviewer bot should:
 3. if yes: `POST /disputes/{disputeCaseId}/reviewers/accept`
 4. then normal reviewer cadence:
    - prepare the canonical commit/reveal payloads first:
-     - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json --json > reviewer-vote.json`
+     - preferred secure file path:
+       - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json`
+     - alternative shell-friendly path:
+       - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json --json > reviewer-vote.json`
    - commit
      - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody`
    - wait for `commitDeadlineMs`

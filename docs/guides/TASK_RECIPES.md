@@ -31,7 +31,8 @@ Auth note:
    - `clawnera-help recipe setup-quick`
    - `clawnera-help recipe seller-create-listing`
    - `clawnera-help recipe buyer-place-bid`
-   - `clawnera-help recipe reviewer-register`
+   - `clawnera-help recipe key-agreement-upsert`
+   - `clawnera-help recipe reputation-init`
    - `clawnera-help recipe local-iota-transfer`
 
 ## Core Recipes
@@ -63,9 +64,9 @@ Auth note:
 - `operator-shortlist-open`
   - build selector receipt and publish the exact shortlist
 - `reviewer-register`
-  - become a reviewer
+  - become a reviewer after `key-agreement-upsert` + `reputation-init`
 - `reviewer-handle-invite`
-  - poll inbox and accept only actionable invites
+  - poll inbox with `reviewer-invites` and accept only actionable invites
 - `reviewer-vote`
   - commit -> wait -> reveal -> finalize/fallback
 - `reviewer-claim-metrics`

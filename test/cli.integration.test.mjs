@@ -850,6 +850,254 @@ test("request can persist the response body to a file", async () => {
   }
 });
 
+test("request surfaces response headers and recommended poll interval hints", async () => {
+  const mock = await startMockServer({
+    "GET /reviewers/me/invites": () => ({
+      status: 200,
+      headers: {
+        "x-clawdex-recommended-poll-interval-ms": "30000",
+        "retry-after": "5"
+      },
+      body: {
+        invites: []
+      }
+    })
+  });
+
+  try {
+    const result = await runCli([
+      "request",
+      "GET",
+      "/reviewers/me/invites",
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      "test-jwt",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.headers["x-clawdex-recommended-poll-interval-ms"], "30000");
+    assert.equal(payload.recommendedPollIntervalMs, 30000);
+    assert.equal(payload.retryAfterMs, 5000);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("reviewer-invites helper surfaces invite counts and poll interval", async () => {
+  const reviewerAddress = "0x8212e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
+  const mock = await startMockServer({
+    "GET /reviewers/me/invites": () => ({
+      status: 200,
+      headers: {
+        "x-clawdex-recommended-poll-interval-ms": "45000"
+      },
+      body: {
+        invites: [
+          {
+            reviewerAddress,
+            disputeCaseObjectId: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            status: "invited"
+          },
+          {
+            reviewerAddress,
+            disputeCaseObjectId: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            status: "closed"
+          }
+        ]
+      }
+    })
+  });
+
+  try {
+    const result = await runCli([
+      "reviewer-invites",
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      "test-jwt",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.inviteCount, 2);
+    assert.equal(payload.actionableInviteCount, 1);
+    assert.equal(payload.closedInviteCount, 1);
+    assert.equal(payload.recommendedPollIntervalMs, 45000);
+    assert.equal(payload.inviteStates.invited, 1);
+    assert.equal(payload.inviteStates.closed, 1);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("listing-create infers creator address and posts a canonical body", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const creatorAddress = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  const mock = await startMockServer({
+    "POST /listings": (request) => ({
+      status: 200,
+      body: {
+        listing: {
+          id: "listing-1"
+        },
+        seen: request.body
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: creatorAddress,
+        alias: "seller"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-create",
+      "--auth-state-file",
+      authStateFile,
+      "--title",
+      "Two tiny IOTA text tasks",
+      "--description",
+      "Manual live flow test listing.",
+      "--category",
+      "ops",
+      "--currency",
+      "IOTA",
+      "--milestones",
+      "Milestone 1:500000000;Milestone 2:500000000",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.listingId, "listing-1");
+    assert.equal(payload.creatorAddress, creatorAddress);
+    assert.equal(payload.budgetAmount, "1000000000");
+    assert.deepEqual(payload.response.seen, {
+      creatorAddress,
+      title: "Two tiny IOTA text tasks",
+      description: "Manual live flow test listing.",
+      category: "ops",
+      currency: "IOTA",
+      budgetAmount: "1000000000",
+      milestones: [
+        { title: "Milestone 1", amount: "500000000" },
+        { title: "Milestone 2", amount: "500000000" }
+      ]
+    });
+  } finally {
+    await mock.close();
+  }
+});
+
+test("bid-create infers bidder address and posts a canonical body", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-bid-create-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const bidderAddress = "0x2222222222222222222222222222222222222222222222222222222222222222";
+  const mock = await startMockServer({
+    "POST /bids": (request) => ({
+      status: 200,
+      body: {
+        bidId: "bid-1",
+        seen: request.body
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: bidderAddress,
+        alias: "buyer"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "bid-create",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-id",
+      "listing-1",
+      "--amount",
+      "1000000000",
+      "--currency",
+      "IOTA",
+      "--message",
+      "Hello from the wrapper",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.bidId, "bid-1");
+    assert.equal(payload.bidderAddress, bidderAddress);
+    assert.deepEqual(payload.response.seen, {
+      listingId: "listing-1",
+      bidderAddress,
+      amount: "1000000000",
+      currency: "IOTA",
+      message: "Hello from the wrapper"
+    });
+  } finally {
+    await mock.close();
+  }
+});
+
+test("bid-accept posts the minimal accept body and extracts order id", async () => {
+  const mock = await startMockServer({
+    "POST /bids/bid-1/accept": (request) => ({
+      status: 200,
+      body: {
+        orderId: "order-1",
+        seen: request.body
+      }
+    })
+  });
+
+  try {
+    const result = await runCli([
+      "bid-accept",
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      "test-jwt",
+      "--bid-id",
+      "bid-1",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.orderId, "order-1");
+    assert.deepEqual(payload.response.seen, {});
+  } finally {
+    await mock.close();
+  }
+});
+
 test("request can select a nested body payload from a body file", async () => {
   const mock = await startMockServer({
     "POST /echo": (request) => ({

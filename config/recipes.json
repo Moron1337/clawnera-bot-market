@@ -42,7 +42,8 @@
       "nextRecipes": [
         "seller-create-listing",
         "buyer-place-bid",
-        "reviewer-register",
+        "key-agreement-upsert",
+        "reputation-init",
         "local-iota-transfer"
       ],
       "nextTopics": ["canonical-flow", "notifications", "auth-runtime"]
@@ -76,12 +77,12 @@
       "steps": [
         "Read runtime first: GET /health, GET /ready, GET /capabilities, GET /policy/fees, and GET /policy/storage if delivery mode matters.",
         "If listing deposits are active, create the on-chain listing deposit first.",
-        "POST /listings with idempotency-key.",
+        "Prefer clawnera-help listing-create for the first live POST /listings write instead of hand-assembling a raw body.",
         "Read back the created listing from GET /listings and store listingId.",
         "Poll GET /listings/{listingId}/bids or wait for bid.created notifications."
       ],
       "examples": [
-        "Minimal request with the package helper:\\nclawnera-help request POST /listings --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"creatorAddress\": \"<seller-address>\",\\n  \"title\": \"Two tiny IOTA text tasks\",\\n  \"description\": \"Manual live flow test listing.\",\\n  \"category\": \"ops\",\\n  \"currency\": \"IOTA\",\\n  \"budgetAmount\": \"1000000000\",\\n  \"milestones\": [\\n    { \"title\": \"Milestone 1\", \"amount\": \"500000000\" },\\n    { \"title\": \"Milestone 2\", \"amount\": \"500000000\" }\\n  ]\\n}'",
+        "Thin wrapper first:\\nclawnera-help listing-create --auth-state-file ~/.config/clawnera/auth-state.json --title 'Two tiny IOTA text tasks' --description 'Manual live flow test listing.' --category ops --currency IOTA --milestones 'Milestone 1:500000000;Milestone 2:500000000'",
         "Immediate readback:\\nclawnera-help request GET '/listings?limit=5&q=Two%20tiny%20IOTA%20text%20tasks' --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
@@ -191,12 +192,12 @@
       "steps": [
         "GET /listings and store listingId.",
         "Confirm the listing is OPEN and note its currency and budget.",
-        "POST /bids with idempotency-key using listingId, bidderAddress, amount, and currency.",
+        "Prefer clawnera-help bid-create for the first live POST /bids write instead of hand-assembling a raw body.",
         "Read back GET /listings/{listingId}/bids and store bidId after confirming the bid exists.",
         "Wait for order.accepted notifications or poll buyer-scoped bids/orders."
       ],
       "examples": [
-        "Minimal request with the package helper:\\nclawnera-help request POST /bids --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"listingId\": \"<listing-id>\",\\n  \"bidderAddress\": \"<buyer-address>\",\\n  \"amount\": \"1000000000\",\\n  \"currency\": \"IOTA\",\\n  \"message\": \"Live npm-package buyer flow test bid.\"\\n}'",
+        "Thin wrapper first:\\nclawnera-help bid-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-id <listing-id> --amount 1000000000 --currency IOTA --message 'Live npm-package buyer flow test bid.'",
         "Immediate readback:\\nclawnera-help request GET /listings/<listing-id>/bids --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
@@ -272,14 +273,14 @@
         "GET /orders/{orderId}/timeline"
       ],
       "steps": [
-        "POST /bids/{bidId}/accept from the chosen buyer wallet with idempotency-key.",
+        "Run clawnera-help bid-accept --bid-id <bid-id> from the chosen buyer wallet with idempotency-key.",
         "Store orderId from the accept response.",
         "Read back GET /orders/{orderId}.",
         "Read back GET /orders/{orderId}/timeline.",
         "Inspect status, disputeBondPolicy, and disputeBondState before doing anything else."
       ],
       "examples": [
-        "Minimal request with the package helper:\\nclawnera-help request POST /bids/<bid-id>/accept --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'",
+        "Thin wrapper first:\\nclawnera-help bid-accept --auth-state-file ~/.config/clawnera/auth-state.json --bid-id <bid-id>",
         "Immediate order readback:\\nclawnera-help request GET /orders/<order-id> --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
@@ -679,7 +680,7 @@
       "when": "Use this when a reviewer bot polls its own inbox.",
       "needs": [
         "The reviewer is registered.",
-        "An invite is visible in GET /reviewers/me/invites."
+        "An invite is visible in clawnera-help reviewer-invites or GET /reviewers/me/invites."
       ],
       "store": [
         "disputeCaseId",
@@ -691,13 +692,14 @@
         "POST /disputes/{disputeCaseId}/reviewers/accept"
       ],
       "steps": [
-        "Poll GET /reviewers/me/invites and respect x-clawdex-recommended-poll-interval-ms.",
+        "Poll clawnera-help reviewer-invites and respect recommendedPollIntervalMs.",
         "If you are unsure whether this reviewer is still cleanly eligible, read GET /reviewers/me/metrics first and stop when pendingDecisionMetricsClaimRequired=true.",
         "If status is invited, read GET /disputes/{disputeCaseId}.",
         "Run clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/reviewers/accept --auth-state-file <reviewer-auth-state-file> --body '{}' only if the case is still actionable.",
         "Read back the dispute case again after accept."
       ],
       "examples": [
+        "Inbox read first:\\nclawnera-help reviewer-invites --auth-state-file ~/.config/clawnera/auth-state.json",
         "Canonical accept:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/reviewers/accept --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'"
       ],
       "stopConditions": [
@@ -732,7 +734,7 @@
         "POST /disputes/{disputeCaseId}/finalize"
       ],
       "steps": [
-        "Run clawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote <seller|buyer|0|1> [auth options] --json > reviewer-vote.json and persist that file securely.",
+        "Run clawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote <seller|buyer|0|1> [auth options] --out reviewer-vote.json and persist that file securely.",
         "Run clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/commit --body-file reviewer-vote.json --body-select commitRequestBody.",
         "Wait until commitDeadlineMs.",
         "Run clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/reveal --body-file reviewer-vote.json --body-select revealRequestBody.",
@@ -742,7 +744,7 @@
         "Store the closed disputeCaseId and move immediately to reviewer-claim-metrics."
       ],
       "examples": [
-        "Prepare the canonical commit/reveal bodies first:\\nclawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote seller --auth-state-file ~/.config/clawnera/auth-state.json --json > reviewer-vote.json",
+        "Prepare the canonical commit/reveal bodies first:\\nclawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote seller --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json",
         "Commit the prepared hash:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody",
         "Reveal with the exact prepared vote + nonce:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody",
         "Finalize after the challenge window with no manual object-id body:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/finalize --auth-state-file ~/.config/clawnera/auth-state.json"

@@ -1683,6 +1683,62 @@ test("listing-create prints compliance guidance for trader-account failures", as
   }
 });
 
+test("request listing-create prints request-buyer compliance guidance for trader-account failures", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-request-listing-create-trader-guidance-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const creatorAddress = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  const mock = await startMockServer({
+    "POST /listings": () => ({
+      status: 403,
+      body: {
+        error: "listing_requires_trader_account"
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: creatorAddress,
+        alias: "request-buyer"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-create",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-mode",
+      "REQUEST",
+      "--title",
+      "Need two tiny text files",
+      "--description",
+      "Manual live flow test request listing.",
+      "--category",
+      "ops",
+      "--currency",
+      "IOTA",
+      "--use-default-expiry",
+      "--milestones",
+      "Milestone 1:500000000;Milestone 2:500000000"
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /listing_create_error: listing_requires_trader_account/);
+    assert.match(result.stderr, /request-buyer-auth-state-file/);
+    assert.doesNotMatch(result.stderr, /seller-auth-state-file/);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("listing-create prints marketing guidance for sponsored-listing failures", async () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-marketing-guidance-"));
   const authStateFile = path.join(tempDir, "auth-state.json");
@@ -2070,6 +2126,45 @@ test("bid-accept posts the minimal accept body and extracts order id", async () 
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.ok, true);
     assert.equal(payload.orderId, "order-1");
+    assert.deepEqual(payload.response.seen, {});
+  } finally {
+    await mock.close();
+  }
+});
+
+test("bid-accept works unchanged for REQUEST-mode buyer acceptance and preserves returned order parties", async () => {
+  const mock = await startMockServer({
+    "POST /bids/request-bid-1/accept": (request) => ({
+      status: 200,
+      body: {
+        orderId: "order-request-1",
+        order: {
+          id: "order-request-1",
+          buyerAddress: "0xrequestbuyer",
+          sellerAddress: "0xacceptedbidder"
+        },
+        seen: request.body
+      }
+    })
+  });
+
+  try {
+    const result = await runCli([
+      "bid-accept",
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      "test-jwt",
+      "--bid-id",
+      "request-bid-1",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.orderId, "order-request-1");
+    assert.equal(payload.response.order.buyerAddress, "0xrequestbuyer");
+    assert.equal(payload.response.order.sellerAddress, "0xacceptedbidder");
     assert.deepEqual(payload.response.seen, {});
   } finally {
     await mock.close();

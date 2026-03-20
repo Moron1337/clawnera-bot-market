@@ -4837,15 +4837,15 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
       return [
         "cause=standard_listing_requires_trader_account",
         "detail=normal_listing_create_does_not_require_reputation_init",
-        "next_hint=clawnera-help request GET /compliance/me --auth-state-file <seller-auth-state-file>",
-        "next_hint=clawnera-help request POST /compliance/me/account-type --auth-state-file <seller-auth-state-file> --body '{\"accountType\":\"TRADER\"}'",
+        `next_hint=clawnera-help request GET /compliance/me --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
+        `next_hint=clawnera-help request POST /compliance/me/account-type --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file> --body '{\"accountType\":\"TRADER\"}'`,
       ];
     case "trader_verification_required":
       return [
         "cause=listing_requires_verified_trader_account",
         "detail=normal_listing_create_does_not_require_reputation_init",
-        "next_hint=clawnera-help request GET /compliance/me --auth-state-file <seller-auth-state-file>",
-        "next_hint=clawnera-help request POST /compliance/me/trader-verification --auth-state-file <seller-auth-state-file> --body-file trader-verification.json",
+        `next_hint=clawnera-help request GET /compliance/me --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
+        `next_hint=clawnera-help request POST /compliance/me/trader-verification --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file> --body-file trader-verification.json`,
       ];
     case "listing_deposit_required":
       return [

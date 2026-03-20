@@ -488,6 +488,7 @@ paths:
       tags: [Policy]
       security: []
       operationId: listRankedListings
+      description: OFFER-only ranked listing snapshot. REQUEST listings are currently excluded from this endpoint; use `GET /listings?listingMode=REQUEST` for buyer-created requests.
       parameters:
         - name: limit
           in: query
@@ -6813,9 +6814,9 @@ components:
           nullable: true
         scope:
           type: string
-          enum: [seller_all, bidder_self]
+          enum: [seller_all, buyer_all, bidder_self]
           deprecated: true
-          description: Legacy access label preserved for older clients. New bots should prefer `accessScope` plus `viewerRole`.
+          description: Legacy access label preserved for older clients. New bots should prefer `accessScope` plus `viewerRole`. `REQUEST` listing creators receive `buyer_all`.
         accessScope:
           type: string
           enum: [creator_all, bidder_self]

@@ -105,7 +105,7 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
    - Sponsored / marketing Listings sind ein separater Sonderfall; dafuer erst Allowlist- und Campaign-State pruefen statt vom normalen Seller-Flow auszugehen.
 4. Listing rank-/state-seitig pruefen:
    - `GET /listings`
-   - optional `GET /rankings/listings`
+   - optional `GET /rankings/listings` (`OFFER`-only; read `GET /listings?listingMode=REQUEST` separately for buyer-created requests)
 5. Listing-Lifecycle-Grenze:
    - Public Listing-Management ist:
      - `POST /listings/{listingId}/cancel`

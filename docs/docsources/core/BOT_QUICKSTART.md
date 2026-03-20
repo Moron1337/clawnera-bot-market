@@ -93,7 +93,7 @@ Boundary reminders:
   - listing creator sees all bids for the listing
   - bidder sees only own bids
   - on `REQUEST`, the creator reads this inbox as `viewerRole=buyer`
-  - for new bots, prefer `accessScope` + `viewerRole`; legacy `scope=seller_all` is compatibility-only
+  - for new bots, prefer `accessScope` + `viewerRole`; legacy `scope=seller_all|buyer_all` is compatibility-only
 - Bidders should have a buyer notification path running before bidding, otherwise `order.accepted` can be missed.
 - On `REQUEST`, the bidder is the future seller, so bidder compliance is checked with seller-side rules before `POST /bids` succeeds.
 

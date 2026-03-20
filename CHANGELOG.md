@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.47] - 2026-03-20
+
+- Fixed the remaining REQUEST-mode weak-bot gaps that Claude called out:
+  - `listing-create` trader-account and trader-verification hints now point REQUEST creators at `<request-buyer-auth-state-file>` instead of the seller wallet.
+  - `fund-order` now states explicitly that in `REQUEST` mode the seller is the accepted bidder, not the request creator.
+  - added explicit recipe/test coverage that the request buyer keeps the `/bids/{bidId}/accept` step.
+- Refreshed the packaged discovery docs onto the latest API truth:
+  - legacy bid-feed `scope` now documents `buyer_all` for REQUEST creators
+  - packaged API guidance now states that `/rankings/listings` is currently `OFFER`-only and that bots must query `GET /listings?listingMode=REQUEST` separately for buyer-created requests.
+
 ## [0.1.46] - 2026-03-20
 
 - Corrected the weak-bot expiry helper semantics so `--use-default-expiry` now really leaves `expiresAtMs` unset and lets the API apply the legacy 30-day default instead of reimplementing it client-side.

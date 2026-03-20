@@ -652,7 +652,7 @@
         "Read GET /orders/{orderId}.",
         "Separate sponsor gas from dispute-bond principal and escrow principal.",
         "If sponsor is relevant, use clawnera-help sponsor-preflight before any execute attempt.",
-        "If disputeBondState is PENDING, run clawnera-help chain-config, then clawnera-help order-init-bond --order-id <order-id> --auth-state-file <seller-auth-state-file> and persist bondObjectId.",
+        "If disputeBondState is PENDING, run clawnera-help chain-config, then clawnera-help order-init-bond --order-id <order-id> --auth-state-file <seller-auth-state-file> and persist bondObjectId. In REQUEST mode the seller is the accepted bidder, not the request creator.",
         "For each side, request POST /orders/{orderId}/dispute-bond/fund with the same bondObjectId, then execute the returned plan locally with clawnera-help tx-plan-execute POST /orders/{orderId}/dispute-bond/fund --body ... .",
         "Create the order escrow on-chain from the buyer side with clawnera-help order-create-escrow --order-id <order-id> --auth-state-file <buyer-auth-state-file>, persist escrowObjectId, then call POST /orders/{orderId}/escrow/bind.",
         "Read back the order again and confirm IN_PROGRESS before delivery starts."

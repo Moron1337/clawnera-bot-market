@@ -648,11 +648,24 @@ test("seller review recipe warns that seller cannot accept the bid", () => {
   assert.match(result.stdout, /Tell the chosen buyer to run the buyer-accept-bid recipe/);
 });
 
+test("request buyer review recipe warns that seller must not accept the request bid", () => {
+  const result = runCli(["recipe", "buyer-review-request-bids"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Do not ask the seller to call POST \/bids\/\{bidId\}\/accept/);
+  assert.match(result.stdout, /Stop if you were about to hand the accept call to the seller wallet/);
+});
+
 test("buyer accept recipe uses exact bid accept route", () => {
   const result = runCli(["recipe", "buyer-accept-bid"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /POST \/bids\/\{bidId\}\/accept/);
   assert.match(result.stdout, /403 buyer_mismatch/);
+});
+
+test("fund-order recipe clarifies seller identity for REQUEST mode", () => {
+  const result = runCli(["recipe", "fund-order"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /In REQUEST mode the seller is the accepted bidder, not the request creator/);
 });
 
 test("reviewer claim recipe explains explicit case-id versus safe inference", () => {

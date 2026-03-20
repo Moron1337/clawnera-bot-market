@@ -99,6 +99,7 @@
   - `nextCursor`
   - legacy `scope`:
     - `seller_all`
+    - `buyer_all`
     - `bidder_self`
   - truthful `accessScope`:
     - `creator_all`
@@ -107,6 +108,10 @@
     - `seller`
     - `buyer`
     - `bidder`
+
+### Rankings
+- `GET /rankings/listings` zeigt aktuell nur `OFFER`-Listings.
+- `REQUEST`-Listings muessen separat ueber `GET /listings?listingMode=REQUEST` gelesen werden.
 
 ### 4) Bid akzeptieren
 - Kanonischer Pfad:

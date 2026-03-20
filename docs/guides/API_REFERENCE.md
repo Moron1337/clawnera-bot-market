@@ -118,6 +118,7 @@ Important:
 - `GET /listings`
   - query: `listingMode=OFFER|REQUEST`, `category`, `q`, `sort`, `limit`, `cursor`
   - default without `listingMode`: `OFFER`
+  - no combined `OFFER + REQUEST` listing view exists in one call today
 - `GET /listings/categories`
   - query: optional `listingMode=OFFER|REQUEST`
   - default without `listingMode`: `OFFER`
@@ -127,14 +128,18 @@ Important:
   - response includes:
     - legacy `scope`:
       - `seller_all`
+      - `buyer_all`
       - `bidder_self`
     - truthful `accessScope`:
       - `creator_all`
       - `bidder_self`
     - truthful `viewerRole`:
-    - `seller`
-    - `buyer`
-    - `bidder`
+      - `seller`
+      - `buyer`
+      - `bidder`
+- `GET /rankings/listings`
+  - `OFFER`-only today
+  - `REQUEST` listings are not included
 - `POST /listings/{listingId}/cancel`
   - auth required
   - creator-only

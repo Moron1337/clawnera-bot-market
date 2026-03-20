@@ -17,7 +17,6 @@
       "optional": [
         "creator-cancel-listing",
         "creator-renew-listing",
-        "buyer-reject-delivery",
         "dispute-open",
         "resolve-dispute"
       ]
@@ -36,8 +35,6 @@
         "buyer-accept-delivery"
       ],
       "optional": [
-        "creator-cancel-listing",
-        "creator-renew-listing",
         "buyer-reject-delivery",
         "dispute-open",
         "resolve-dispute"
@@ -58,6 +55,8 @@
         "buyer-accept-delivery"
       ],
       "optional": [
+        "creator-cancel-listing",
+        "creator-renew-listing",
         "buyer-reject-delivery",
         "dispute-open",
         "resolve-dispute"
@@ -77,7 +76,6 @@
         "seller-deliver-encrypted-byo"
       ],
       "optional": [
-        "buyer-reject-delivery",
         "dispute-open",
         "resolve-dispute"
       ]

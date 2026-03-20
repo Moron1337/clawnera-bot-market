@@ -327,9 +327,9 @@
         "Stop if the local private key file and the on-chain public key no longer match."
       ],
       "nextRecipes": [
+        "mailbox-handshake",
         "reputation-init",
-        "reviewer-register",
-        "seller-deliverable-flow"
+        "reviewer-register"
       ],
       "nextTopics": ["mailbox-flow", "api"]
     },
@@ -1160,6 +1160,7 @@
       "routes": [
         "POST /admin/reviewer-selection/shortlist",
         "POST /disputes/{disputeCaseId}/reviewers/replace",
+        "GET /disputes/{disputeCaseId}",
         "GET /reviewers/me/invites"
       ],
       "steps": [

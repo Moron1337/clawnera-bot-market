@@ -20,8 +20,10 @@ Use recipes when the bot already knows its role and just needs the next safe act
 
 Use `next` or `recipe --compact` when the bot only needs:
 - one immediate command
+- one canonical primary write
 - one immediate readback
 - the next recipe id
+- if the bot only knows a role path, `clawnera-help next <journey-id>` now prints the first safe recipe hints instead of failing with a raw unknown-recipe error
 
 Auth note:
 - `--auth-state-file <file>` stays the canonical flag in docs.

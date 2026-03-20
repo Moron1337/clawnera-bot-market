@@ -71,6 +71,7 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /clawnera-help recipes/);
   assert.match(result.stdout, /clawnera-help recipe <id>/);
   assert.match(result.stdout, /clawnera-help next seller-create-listing/);
+  assert.match(result.stdout, /clawnera-help next seller\s+Show the first safe recipe hints from a role journey/);
   assert.match(result.stdout, /journey\|recipe --compact/);
   assert.match(result.stdout, /clawnera-help wallet-init/);
   assert.match(result.stdout, /clawnera-help wallet-list/);
@@ -384,6 +385,7 @@ test("journey compact output keeps only ids, handoffs, and next hints", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^journey:seller/m);
   assert.match(result.stdout, /steps:setup-quick > seller-create-listing > seller-review-bids > buyer-accept-bid\[handoff,wait_for_buyer_accept]/);
+  assert.match(result.stdout, /later:creator-cancel-listing \| creator-renew-listing \| dispute-open \| resolve-dispute/);
   assert.match(result.stdout, /next_if_not_setup:setup-quick/);
   assert.match(result.stdout, /next_if_setup:seller-create-listing/);
   assert.doesNotMatch(result.stdout, /Do In This Order:/);
@@ -407,6 +409,10 @@ test("request journeys separate buyer-created requests from offer flow", () => {
   );
   assert.match(
     buyerResult.stdout,
+    /later:creator-cancel-listing \| creator-renew-listing \| buyer-reject-delivery \| dispute-open \| resolve-dispute/
+  );
+  assert.match(
+    buyerResult.stdout,
     /prereq:mailbox-handshake before first seller submit; key-agreement-upsert before encrypted delivery or reviewer onboarding/
   );
 
@@ -417,6 +423,24 @@ test("request journeys separate buyer-created requests from offer flow", () => {
     sellerResult.stdout,
     /steps:setup-quick > seller-answer-request > buyer-accept-request-bid\[handoff,wait_for_request_buyer_accept] > fund-order/
   );
+  assert.match(sellerResult.stdout, /later:dispute-open \| resolve-dispute/);
+});
+
+test("buyer compact journey does not suggest listing-creator maintenance actions", () => {
+  const result = runCli(["journey", "buyer", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.doesNotMatch(result.stdout, /creator-cancel-listing/);
+  assert.doesNotMatch(result.stdout, /creator-renew-listing/);
+  assert.match(result.stdout, /later:buyer-reject-delivery \| dispute-open \| resolve-dispute/);
+});
+
+test("next on a journey id returns setup and post-setup hints instead of unknown recipe", () => {
+  const result = runCli(["next", "seller"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^journey_next:seller/m);
+  assert.match(result.stdout, /^next_if_not_setup:setup-quick/m);
+  assert.match(result.stdout, /^next_if_setup:seller-create-listing/m);
+  assert.match(result.stdout, /hint:clawnera-help journey seller --compact/);
 });
 
 test("reviewer journey includes the post-case claim step", () => {
@@ -496,6 +520,8 @@ test("setup-quick compact output uses ensure-auth", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^recipe:setup-quick/m);
   assert.match(result.stdout, /do:clawnera-help wallet-list && clawnera-help ensure-auth --api-base https:\/\/api\.clawnera\.com --alias <wallet-alias>/);
+  assert.doesNotMatch(result.stdout, /^write:GET /m);
+  assert.match(result.stdout, /^read:GET \/actors\/me\/capabilities \| GET \/ready/m);
 });
 
 test("ensure-auth recipe compact output uses the self-auth helper", () => {
@@ -503,6 +529,68 @@ test("ensure-auth recipe compact output uses the self-auth helper", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^recipe:ensure-auth/m);
   assert.match(result.stdout, /do:clawnera-help ensure-auth --api-base https:\/\/api\.clawnera\.com --alias <wallet-alias>/);
+});
+
+test("key agreement compact output points only to real next recipes", () => {
+  const result = runCli(["recipe", "key-agreement-upsert", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^do:clawnera-help key-agreement-upsert --auth-state-file ~\/\.config\/clawnera\/auth-state\.json/m);
+  assert.match(result.stdout, /^next:mailbox-handshake \| reputation-init \| reviewer-register/m);
+  assert.doesNotMatch(result.stdout, /seller-deliverable-flow/);
+});
+
+test("seller review compact output stays read-only and marks the buyer handoff", () => {
+  const result = runCli(["recipe", "seller-review-bids", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.doesNotMatch(result.stdout, /^write:GET /m);
+  assert.match(result.stdout, /^read:GET \/listings\/\{listingId\}\/bids/m);
+  assert.match(result.stdout, /^next:buyer-accept-bid\[handoff] \| fund-order\[after_buyer_accept]/m);
+});
+
+test("seller delivery compact output highlights delivery writes instead of key setup", () => {
+  const result = runCli(["recipe", "seller-deliver-encrypted-byo", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^do:clawnera-help deliverable-encrypt --order-id <orderId> --milestone-id <milestoneId> --plaintext-file \.\/deliverable\.bin /m);
+  assert.match(
+    result.stdout,
+    /^write:POST \/storage\/uploads\/presign \| POST \/orders\/\{orderId\}\/milestones\/\{milestoneId\}\/submit \| POST \/orders\/\{orderId\}\/milestones\/\{milestoneId\}\/anchor/m
+  );
+  assert.match(
+    result.stdout,
+    /^read:GET \/orders\/\{orderId\}\/milestones\/\{milestoneId\}\/anchor \| GET \/events\?scope=all&type=mailbox\.signal_posted/m
+  );
+  assert.doesNotMatch(result.stdout, /^write:PUT \/users\/me\/key-agreement/m);
+});
+
+test("creator cancel compact output uses mode-aware feed wording", () => {
+  const result = runCli(["recipe", "creator-cancel-listing", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^read:GET \/listings for OFFER \| GET \/listings\?listingMode=REQUEST for REQUEST/m);
+});
+
+test("dispute-open compact output highlights the canonical dispute-open route", () => {
+  const result = runCli(["recipe", "dispute-open", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.match(
+    result.stdout,
+    /^do:clawnera-help tx-plan-execute POST \/orders\/<orderId>\/milestones\/<milestoneId>\/disputes\/open --auth-state-file ~\/\.config\/clawnera\/auth-state\.json --body-file \.\/clawnera-dispute-open-<orderId>-<milestoneId>\.json/m
+  );
+  assert.match(result.stdout, /^write:POST \/orders\/\{orderId\}\/milestones\/\{milestoneId\}\/disputes\/open/m);
+  assert.doesNotMatch(result.stdout, /^write:POST \/admin\/reviewer-selection\/shortlist/m);
+});
+
+test("replacement compact output highlights live case readback and replace publish route", () => {
+  const result = runCli(["recipe", "operator-shortlist-replacement", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.match(
+    result.stdout,
+    /^do:clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <disputeCaseId> --auth-state-file ~\/\.config\/clawnera\/auth-state\.json/m
+  );
+  assert.match(
+    result.stdout,
+    /^write:POST \/admin\/reviewer-selection\/shortlist \| POST \/disputes\/\{disputeCaseId\}\/reviewers\/replace/m
+  );
+  assert.match(result.stdout, /^read:GET \/disputes\/\{disputeCaseId\}/m);
 });
 
 test("recipe json output is parseable", () => {

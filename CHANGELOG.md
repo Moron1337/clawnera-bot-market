@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.49] - 2026-03-20
+
+- Tightened the low-token bot guidance after a manual CLI-only walkthrough:
+  - `clawnera-help next <journey-id>` now returns the first safe setup/post-setup recipe hints instead of failing with a raw `unknown_recipe`.
+  - compact recipes no longer print misleading `write:GET ...` lines for read-only steps such as bid review.
+  - compact recipes now emit safer canonical primary write/read hints for multi-step flows like delivery, dispute-open, replacement rounds, and mailbox/funding handshakes.
+  - compact recipes now expose more immediate `do:` commands, so weaker bots can start critical flows without opening the long recipe view first.
+  - compact cancel/renew readbacks now say exactly how to re-read `OFFER` vs `REQUEST` feeds.
+  - seller-side compact next hints now mark buyer handoffs and acceptance-dependent follow-ups more clearly.
+  - `validate --strict` now fails if a recipe points at a non-existent `nextRecipes` target.
+- Cleaned the role journeys so weak bots do not see the wrong later-actions:
+  - normal buyers no longer see listing-creator maintenance actions in their compact journey
+  - request buyers do see request creator maintenance actions
+  - request sellers no longer see buyer-only delivery rejection actions
+- Updated the short docs to mention the new journey-aware `next` fallback and the clearer compact guidance.
+
 ## [0.1.48] - 2026-03-20
 
 - Closed the last weak-bot REQUEST follow-up gaps from the GPT-Pro review:

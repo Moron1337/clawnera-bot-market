@@ -286,6 +286,7 @@ function printUsage() {
   console.log("  clawnera-help journey seller --compact    Show only the seller step ids + next handoff");
   console.log("  clawnera-help recipe setup-quick          Do setup before any live write");
   console.log("  clawnera-help next seller-create-listing  Show only the immediate next write/read/store hints");
+  console.log("  clawnera-help next seller                 Show the first safe recipe hints from a role journey");
   console.log("");
   console.log("Usage:");
   console.log("  clawnera-help                             Show usage + topics");
@@ -295,6 +296,7 @@ function printUsage() {
   console.log("  clawnera-help recipes                     List all minimal task recipes");
   console.log("  clawnera-help show <topic>                Show one topic document");
   console.log("  clawnera-help recipe <id>                 Show one minimal task recipe");
+  console.log("  clawnera-help next <recipe|journey-id>    Show the compact next action for a recipe or role path");
   console.log("  clawnera-help search <keyword>            Search keyword in curated docs");
   console.log("  clawnera-help search <keyword> --all      Include docsources in search");
   console.log("  clawnera-help doctor                      Check local toolchain");
@@ -385,7 +387,7 @@ function joinCompactList(values, limit = values.length) {
 }
 
 function selectPrimaryWriteRoute(routes) {
-  return routes.find((route) => /^(POST|PUT|PATCH)\s/.test(route)) || routes[0] || "";
+  return routes.find((route) => /^(POST|PUT|PATCH)\s/.test(route)) || "";
 }
 
 function selectReadRoutes(routes) {
@@ -401,6 +403,10 @@ function compactRecipeCommand(recipe) {
       return "clawnera-help wallet-list && clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias> && clawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json";
     case "ensure-auth":
       return "clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias>";
+    case "key-agreement-upsert":
+      return `clawnera-help key-agreement-upsert ${auth}`;
+    case "reputation-init":
+      return `clawnera-help reputation-init ${auth}`;
     case "seller-create-listing":
       return `clawnera-help listing-categories --compact && clawnera-help listing-create ${auth} --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>'`;
     case "buyer-create-request":
@@ -417,14 +423,88 @@ function compactRecipeCommand(recipe) {
       return `clawnera-help bid-accept ${auth} --bid-id <bidId>`;
     case "buyer-accept-request-bid":
       return `clawnera-help bid-accept ${auth} --bid-id <sellerBidId>`;
+    case "fund-order":
+      return `clawnera-help request GET /orders/<orderId> ${auth}`;
+    case "mailbox-handshake":
+      return `clawnera-help request POST /orders/<orderId>/mailbox/init-plan ${auth} --body '{}'`;
+    case "seller-deliver-encrypted-byo":
+      return `clawnera-help deliverable-encrypt --order-id <orderId> --milestone-id <milestoneId> --plaintext-file ./deliverable.bin ${auth}`;
+    case "buyer-accept-delivery":
+      return `clawnera-help request GET /orders/<orderId>/milestones/<milestoneId>/artifact-manifest/content ${auth} --response-out ./resolved-manifest.json`;
+    case "buyer-reject-delivery":
+      return `clawnera-help milestone-reject --order-id <orderId> --milestone-id <milestoneId> --reason-text '<reason>' ${auth}`;
+    case "dispute-open":
+      return `clawnera-help tx-plan-execute POST /orders/<orderId>/milestones/<milestoneId>/disputes/open ${auth} --body-file ./clawnera-dispute-open-<orderId>-<milestoneId>.json`;
+    case "operator-shortlist-open":
+      return `clawnera-help reviewer-shortlist --order-id <orderId> --milestone-id <milestoneId> --order-context-file ./order-context.json ${auth}`;
+    case "reviewer-register":
+      return `clawnera-help reviewer-register ${auth}`;
     case "reviewer-handle-invite":
       return `clawnera-help reviewer-invites ${auth} --json`;
     case "reviewer-vote":
       return "clawnera-help reviewer-vote-prepare --case-id <disputeCaseId> --address <reviewerAddress> --vote seller|buyer --out reviewer-vote.json";
     case "reviewer-claim-metrics":
       return `clawnera-help tx-plan-execute POST /reviewers/<reviewerAddress>/claim-metrics ${auth} --body-file claim-metrics.json`;
+    case "operator-shortlist-replacement":
+      return `clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <disputeCaseId> ${auth}`;
+    case "resolve-dispute":
+      return `clawnera-help tx-plan-execute POST /disputes/<disputeCaseId>/resolve-escrow ${auth}`;
+    case "local-iota-transfer":
+      return "clawnera-help iota-prepare-transfer --to <address> --amount <amount>";
     default:
       return "";
+  }
+}
+
+function compactRecipeReadText(recipe) {
+  switch (recipe.id) {
+    case "setup-quick":
+      return "GET /actors/me/capabilities | GET /ready";
+    case "creator-cancel-listing":
+    case "creator-renew-listing":
+      return "GET /listings for OFFER | GET /listings?listingMode=REQUEST for REQUEST";
+    case "seller-deliver-encrypted-byo":
+      return "GET /orders/{orderId}/milestones/{milestoneId}/anchor | GET /events?scope=all&type=mailbox.signal_posted";
+    case "operator-shortlist-replacement":
+      return "GET /disputes/{disputeCaseId}";
+    default: {
+      const routes = Array.isArray(recipe.routes) ? recipe.routes : [];
+      const readRoutes = selectReadRoutes(routes);
+      return readRoutes.length > 0 ? readRoutes.join(" | ") : "";
+    }
+  }
+}
+
+function compactRecipeWriteText(recipe) {
+  switch (recipe.id) {
+    case "fund-order":
+      return "POST /orders/{orderId}/dispute-bond/fund | POST /orders/{orderId}/escrow/bind";
+    case "mailbox-handshake":
+      return "POST /orders/{orderId}/mailbox/init-plan | POST /orders/{orderId}/mailbox | POST /orders/{orderId}/mailbox/post-signal-plan";
+    case "seller-deliver-encrypted-byo":
+      return "POST /storage/uploads/presign | POST /orders/{orderId}/milestones/{milestoneId}/submit | POST /orders/{orderId}/milestones/{milestoneId}/anchor";
+    case "dispute-open":
+      return "POST /orders/{orderId}/milestones/{milestoneId}/disputes/open";
+    case "reviewer-vote":
+      return "POST /disputes/{disputeCaseId}/votes/commit | POST /disputes/{disputeCaseId}/votes/reveal | POST /disputes/{disputeCaseId}/finalize";
+    case "operator-shortlist-replacement":
+      return "POST /admin/reviewer-selection/shortlist | POST /disputes/{disputeCaseId}/reviewers/replace";
+    default: {
+      const routes = Array.isArray(recipe.routes) ? recipe.routes : [];
+      return selectPrimaryWriteRoute(routes);
+    }
+  }
+}
+
+function compactRecipeNextText(recipe) {
+  const nextRecipes = Array.isArray(recipe.nextRecipes) ? recipe.nextRecipes : [];
+  switch (recipe.id) {
+    case "seller-review-bids":
+      return "buyer-accept-bid[handoff] | fund-order[after_buyer_accept]";
+    case "seller-answer-request":
+      return "buyer-accept-request-bid[handoff] | fund-order[after_request_buyer_accept]";
+    default:
+      return nextRecipes.join(" | ");
   }
 }
 
@@ -466,6 +546,25 @@ function resolveJourney(journeys, key) {
     return null;
   }
   return journeys.find((journey) => String(journey.id || "").trim().toLowerCase() === normalized) || null;
+}
+
+function isRecipeRoleCompatibleWithJourney(journey, recipeRole) {
+  if (!journey?.role || !recipeRole) {
+    return true;
+  }
+  if (
+    recipeRole === journey.role ||
+    recipeRole === "all" ||
+    recipeRole === "buyer_or_seller" ||
+    recipeRole === "buyer_or_seller_or_reviewer" ||
+    recipeRole === "ticket_owner"
+  ) {
+    return true;
+  }
+  if (recipeRole === "listing_creator") {
+    return journey.id === "seller" || journey.id === "request-buyer";
+  }
+  return false;
 }
 
 function printRecipe(recipe) {
@@ -547,9 +646,8 @@ function printRecipe(recipe) {
 }
 
 function printRecipeCompact(recipe) {
-  const routes = Array.isArray(recipe.routes) ? recipe.routes : [];
-  const writeRoute = selectPrimaryWriteRoute(routes);
-  const readRoutes = selectReadRoutes(routes);
+  const writeRoute = compactRecipeWriteText(recipe);
+  const readText = compactRecipeReadText(recipe);
   const command = compactRecipeCommand(recipe);
 
   console.log(`recipe:${recipe.id}`);
@@ -565,8 +663,8 @@ function printRecipeCompact(recipe) {
   if (writeRoute) {
     console.log(`write:${writeRoute}`);
   }
-  if (readRoutes.length > 0) {
-    console.log(`read:${readRoutes.join(" | ")}`);
+  if (readText) {
+    console.log(`read:${readText}`);
   }
   if (Array.isArray(recipe.store) && recipe.store.length > 0) {
     console.log(`store:${joinCompactList(recipe.store, 4)}`);
@@ -575,7 +673,7 @@ function printRecipeCompact(recipe) {
     console.log(`stop:${joinCompactList(recipe.stopConditions, 2)}`);
   }
   if (Array.isArray(recipe.nextRecipes) && recipe.nextRecipes.length > 0) {
-    console.log(`next:${recipe.nextRecipes.join(" | ")}`);
+    console.log(`next:${compactRecipeNextText(recipe)}`);
   }
 }
 
@@ -587,12 +685,7 @@ function printJourney(journey, recipes) {
     const recipeRole = recipe?.role ? String(recipe.role).trim() : "";
     if (recipeRole && recipeRole !== "all") {
       annotations.push(`role: ${recipeRole}`);
-      if (
-        journey.role &&
-        recipeRole !== journey.role &&
-        recipeRole !== "buyer_or_seller" &&
-        recipeRole !== "buyer_or_seller_or_reviewer"
-      ) {
+      if (!isRecipeRoleCompatibleWithJourney(journey, recipeRole)) {
         annotations.push("handoff");
       }
     }
@@ -664,14 +757,7 @@ function printJourneyCompact(journey, recipes) {
     const recipe = resolveRecipe(recipes, recipeId);
     const annotations = [];
     const recipeRole = recipe?.role ? String(recipe.role).trim() : "";
-    if (
-      journey.role &&
-      recipeRole &&
-      recipeRole !== journey.role &&
-      recipeRole !== "buyer_or_seller" &&
-      recipeRole !== "buyer_or_seller_or_reviewer" &&
-      recipeRole !== "all"
-    ) {
+    if (recipeRole && !isRecipeRoleCompatibleWithJourney(journey, recipeRole)) {
       annotations.push("handoff");
     }
     if (journey.id === "buyer" && recipeId === "buyer-accept-bid") {
@@ -697,7 +783,7 @@ function printJourneyCompact(journey, recipes) {
     console.log(`steps:${journey.steps.map((recipeId) => annotateStep(recipeId)).join(" > ")}`);
   }
   if (Array.isArray(journey.optional) && journey.optional.length > 0) {
-    console.log(`later:${journey.optional.join(" | ")}`);
+    console.log(`later:${journey.optional.map((recipeId) => annotateStep(recipeId)).join(" | ")}`);
   }
   if (
     journey.id === "seller" ||
@@ -715,6 +801,24 @@ function printJourneyCompact(journey, recipes) {
   if (afterSetup) {
     console.log(`next_if_setup:${afterSetup}`);
   }
+}
+
+function printJourneyNextCompact(journey) {
+  const orderedSteps = Array.isArray(journey.steps) ? journey.steps : [];
+  const firstStep = orderedSteps[0] || "";
+  const afterSetup = firstStep === "setup-quick" ? orderedSteps[1] : firstStep;
+
+  console.log(`journey_next:${journey.id}`);
+  if (journey.role) {
+    console.log(`role:${journey.role}`);
+  }
+  if (firstStep) {
+    console.log(`next_if_not_setup:${firstStep}`);
+  }
+  if (afterSetup) {
+    console.log(`next_if_setup:${afterSetup}`);
+  }
+  console.log(`hint:clawnera-help journey ${journey.id} --compact`);
 }
 
 function resolveTopic(topics, key) {
@@ -925,6 +1029,7 @@ function validateRepository(strict) {
   const duplicateRecipeIds = [];
   const invalidRecipes = [];
   const recipesWithMissingTopics = [];
+  const recipesWithMissingNextRecipes = [];
   const journeyIds = new Set();
   const duplicateJourneyIds = [];
   const invalidJourneys = [];
@@ -989,6 +1094,14 @@ function validateRepository(strict) {
         topics: missingTopics
       });
     }
+    const nextRecipes = Array.isArray(recipe.nextRecipes) ? recipe.nextRecipes : [];
+    const missingNextRecipes = nextRecipes.filter((recipeId) => !recipes.some((entry) => entry.id === recipeId));
+    if (missingNextRecipes.length > 0) {
+      recipesWithMissingNextRecipes.push({
+        recipeId: id,
+        recipes: missingNextRecipes
+      });
+    }
   }
 
   checks.push({
@@ -1017,6 +1130,17 @@ function validateRepository(strict) {
         ? "all recipe nextTopics resolve to real topics"
         : `recipes reference missing topics: ${recipesWithMissingTopics
             .map((entry) => `${entry.recipeId} -> ${entry.topics.join(", ")}`)
+            .join("; ")}`
+  });
+
+  checks.push({
+    id: "recipe_next_recipes_exist",
+    status: recipesWithMissingNextRecipes.length === 0 ? "pass" : "fail",
+    message:
+      recipesWithMissingNextRecipes.length === 0
+        ? "all recipe nextRecipes resolve to real recipes"
+        : `recipes reference missing nextRecipes: ${recipesWithMissingNextRecipes
+            .map((entry) => `${entry.recipeId} -> ${entry.recipes.join(", ")}`)
             .join("; ")}`
   });
 
@@ -9657,9 +9781,24 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   }
 } else if (effectiveCommand === "recipe") {
   const recipe = resolveRecipe(recipes, commandArgs[0]);
+  const journey = parsedCommand === "next" ? resolveJourney(journeys, commandArgs[0]) : null;
   const compactRecipeMode = flags.compact || parsedCommand === "next";
   if (flags.json) {
-    if (!recipe) {
+    if (!recipe && journey) {
+      const orderedSteps = Array.isArray(journey.steps) ? journey.steps : [];
+      const firstStep = orderedSteps[0] || null;
+      const afterSetup = firstStep === "setup-quick" ? orderedSteps[1] || null : firstStep;
+      printJson({
+        ok: true,
+        journeyNext: {
+          journeyId: journey.id,
+          role: journey.role || null,
+          nextIfNotSetup: firstStep,
+          nextIfSetup: afterSetup,
+          hint: `clawnera-help journey ${journey.id} --compact`
+        }
+      });
+    } else if (!recipe) {
       printJson({ ok: false, error: `unknown_recipe: ${String(commandArgs[0] || "")}` });
       process.exitCode = 1;
     } else {
@@ -9668,8 +9807,13 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         recipe
       });
     }
+  } else if (!recipe && journey) {
+    printJourneyNextCompact(journey);
   } else if (!recipe) {
     console.error(`unknown_recipe: ${String(commandArgs[0] || "")}`);
+    if (parsedCommand === "next") {
+      console.error("next_hint=use clawnera-help next <recipe-id> or clawnera-help journey <role> --compact");
+    }
     process.exitCode = 1;
   } else {
     if (compactRecipeMode) {

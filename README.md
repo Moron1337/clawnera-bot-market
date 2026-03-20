@@ -19,6 +19,10 @@ npm install -g clawnera-bot-market
 clawnera-help journeys
 clawnera-help journey seller --compact
 clawnera-help next setup-quick
+# or, if the bot only knows the role path:
+clawnera-help next seller
+# compact recipes also print one immediate command plus the canonical primary write/read hints:
+clawnera-help recipe dispute-open --compact
 ```
 
 Request / wanted mode has its own compact role paths:

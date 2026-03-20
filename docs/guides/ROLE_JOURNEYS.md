@@ -35,6 +35,7 @@ If token budget is tight:
 
 1. `clawnera-help journey <role> --compact`
 2. `clawnera-help next <recipe-id>`
+3. if the bot only has a journey id, `clawnera-help next <journey-id>` prints the first safe setup/post-setup recipe hints
 
 ## Current Journeys
 

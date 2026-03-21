@@ -95,12 +95,16 @@ Auth note:
 - `dispute-open`
   - open dispute correctly from a rejected/disputed milestone
   - common aliases: `open-dispute`, `start-dispute`
+- `dispute-evidence-linked-deliverable`
+  - buyer/seller publish reviewer-readable deliverable evidence from the already uploaded payload
 - `operator-shortlist-open`
   - build selector receipt and publish the exact shortlist
 - `reviewer-register`
   - become a reviewer after `key-agreement-upsert` + `reputation-init`
 - `reviewer-handle-invite`
   - poll inbox with `reviewer-invites` and accept only actionable invites
+- `reviewer-inspect-evidence`
+  - list dispute-scoped evidence, fetch one readable item, then decrypt locally before voting
 - `reviewer-vote`
   - commit -> wait -> reveal -> finalize/fallback
 - `reviewer-claim-metrics`

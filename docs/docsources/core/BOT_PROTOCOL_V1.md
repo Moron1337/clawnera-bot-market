@@ -162,6 +162,12 @@ Reviewer selection boundary:
 - public reviewer lifecycle and directory reads are live
 - public dispute participation is invite-gated
 - invited reviewers may inspect `GET /disputes/{objectId}` before deciding whether to accept
+- invited reviewers may inspect `GET /disputes/{objectId}/evidence` summaries before deciding whether to accept
+- assigned reviewers read seller/buyer deliverable evidence via
+  `GET /disputes/{objectId}/evidence/{evidenceId}/content`
+- the dispute evidence content response is actor-scoped; reviewers only receive their own wrap, not buyer/seller or peer reviewer wraps
+- do not send reviewers to `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*`;
+  those routes stay buyer/seller-only
 - reviewers may poll `GET /reviewers/me/invites` for their own active/stale invite history
 - some live cases may read back `source.mode=selection_receipt` /
   `inviteSourceMode=selection_receipt`; that means the active invite binding came from the stored

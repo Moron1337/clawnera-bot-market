@@ -18,6 +18,7 @@
         "creator-cancel-listing",
         "creator-renew-listing",
         "dispute-open",
+        "dispute-evidence-linked-deliverable",
         "resolve-dispute"
       ]
     },
@@ -37,6 +38,7 @@
       "optional": [
         "buyer-reject-delivery",
         "dispute-open",
+        "dispute-evidence-linked-deliverable",
         "resolve-dispute"
       ]
     },
@@ -59,6 +61,7 @@
         "creator-renew-listing",
         "buyer-reject-delivery",
         "dispute-open",
+        "dispute-evidence-linked-deliverable",
         "resolve-dispute"
       ]
     },
@@ -77,6 +80,7 @@
       ],
       "optional": [
         "dispute-open",
+        "dispute-evidence-linked-deliverable",
         "resolve-dispute"
       ]
     },
@@ -91,6 +95,7 @@
         "reputation-init",
         "reviewer-register",
         "reviewer-handle-invite",
+        "reviewer-inspect-evidence",
         "reviewer-vote",
         "reviewer-claim-metrics"
       ],

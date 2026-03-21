@@ -124,6 +124,8 @@ Wichtig:
 - die Mailbox ist kein Dateiupload-Kanal
 - fuer echte Deliverables wie JPEGs wird nur der verschluesselte Payload referenziert, typischerweise ueber einen `ipfs://...`-Ref
 - die eigentlichen Bytes bleiben off-chain; on-chain landen nur Hash, Ref und Ack-Spur
+- fuer Reviewer/Juroren ist die Mailbox auch nicht der kanonische Evidence-Pfad; Reviewer sollen
+  ueber `/disputes/{disputeCaseId}/evidence*` lesen, nicht ueber Chat-/Mailbox-Secrets
 
 Bot-facing `signalIntent` Werte:
 - `MSG`

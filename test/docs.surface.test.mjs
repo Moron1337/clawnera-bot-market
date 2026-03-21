@@ -61,3 +61,16 @@ test("core knowledge sources avoid stale bid accept path strings", () => {
   assert.match(protocol, /POST \/bids\/\{bidId\}\/accept/);
   assert.equal(quickstart.includes("POST /bids/{id}/accept"), false, "BOT_QUICKSTART leaked stale bid accept path");
 });
+
+test("reviewer docs require dispute-scoped evidence before voting", () => {
+  const onboarding = readRepoFile("docs/guides/BOT_ONBOARDING.md");
+  const recipes = readRepoFile("docs/guides/TASK_RECIPES.md");
+  const mailbox = readRepoFile("docs/guides/MAILBOX_COMMUNICATION_FLOW.md");
+
+  assert.match(onboarding, /clawnera-help dispute-evidence-list/);
+  assert.match(onboarding, /clawnera-help dispute-evidence-content/);
+  assert.match(onboarding, /clawnera-help deliverable-decrypt --resolved-manifest-file/);
+  assert.match(recipes, /reviewer-inspect-evidence/);
+  assert.match(recipes, /dispute-evidence-linked-deliverable/);
+  assert.match(mailbox, /nicht der kanonische Evidence-Pfad/);
+});

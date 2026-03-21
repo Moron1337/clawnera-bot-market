@@ -50,6 +50,7 @@ import {
   generateKeyAgreementKeypair,
   loadKeyAgreementRecord,
   prepareMilestoneManifestForSigning,
+  rewrapManagedDeliverableForRecipients,
   saveKeyAgreementRecord,
   sha256Hex,
   writeManagedDeliverablePayload,
@@ -346,6 +347,9 @@ function printUsage() {
   console.log("  clawnera-help reputation-init [options]   Create the actor reputation profile on-chain locally");
   console.log("  clawnera-help reviewer-register [options]  Register the actor as a reviewer with auto-filled live config");
   console.log("  clawnera-help deliverable-encrypt [options]  Encrypt one seller deliverable for seller + buyer locally");
+  console.log("  clawnera-help dispute-evidence-publish [options]  Publish reviewer-readable linked deliverable evidence");
+  console.log("  clawnera-help dispute-evidence-list [options]  Read dispute-scoped evidence summaries");
+  console.log("  clawnera-help dispute-evidence-content [options]  Fetch actor-scoped dispute evidence content");
   console.log("  clawnera-help managed-storage-fee-pay [options]  Pay the managed storage fee on-chain locally");
   console.log("  clawnera-help managed-storage-presign [options]  Get a signed managed-storage upload URL");
   console.log("  clawnera-help managed-storage-upload [options]   Upload the encrypted JSON payload to managed storage");
@@ -458,12 +462,16 @@ function compactRecipeCommand(recipe) {
       return `clawnera-help milestone-reject --order-id <orderId> --milestone-id <milestoneId> --reason-text '<reason>' ${auth}`;
     case "dispute-open":
       return `clawnera-help tx-plan-execute POST /orders/<orderId>/milestones/<milestoneId>/disputes/open ${auth} --body-file ./clawnera-dispute-open-<orderId>-<milestoneId>.json`;
+    case "dispute-evidence-linked-deliverable":
+      return `clawnera-help dispute-evidence-publish --case-id <disputeCaseId> ${auth}`;
     case "operator-shortlist-open":
       return `clawnera-help reviewer-shortlist --order-id <orderId> --milestone-id <milestoneId> --order-context-file ./order-context.json ${auth}`;
     case "reviewer-register":
       return `clawnera-help reviewer-register ${auth}`;
     case "reviewer-handle-invite":
       return `clawnera-help reviewer-invites ${auth} --json`;
+    case "reviewer-inspect-evidence":
+      return `clawnera-help dispute-evidence-list --case-id <disputeCaseId> ${auth}`;
     case "reviewer-vote":
       return "clawnera-help reviewer-vote-prepare --case-id <disputeCaseId> --address <reviewerAddress> --vote seller|buyer --out reviewer-vote.json";
     case "reviewer-claim-metrics":
@@ -488,6 +496,8 @@ function compactRecipeReadText(recipe) {
       return "GET /listings for OFFER | GET /listings?listingMode=REQUEST for REQUEST";
     case "seller-deliver-encrypted-byo":
       return "GET /orders/{orderId}/milestones/{milestoneId}/anchor | GET /events?scope=all&type=mailbox.signal_posted";
+    case "reviewer-inspect-evidence":
+      return "GET /disputes/{disputeCaseId}/evidence | GET /disputes/{disputeCaseId}/evidence/{evidenceId}/content";
     case "operator-shortlist-replacement":
       return "GET /disputes/{disputeCaseId}";
     default: {
@@ -508,6 +518,8 @@ function compactRecipeWriteText(recipe) {
       return "POST /storage/uploads/presign | POST /orders/{orderId}/milestones/{milestoneId}/submit | POST /orders/{orderId}/milestones/{milestoneId}/anchor";
     case "dispute-open":
       return "POST /orders/{orderId}/milestones/{milestoneId}/disputes/open";
+    case "dispute-evidence-linked-deliverable":
+      return "POST /disputes/{disputeCaseId}/evidence";
     case "reviewer-vote":
       return "POST /disputes/{disputeCaseId}/votes/commit | POST /disputes/{disputeCaseId}/votes/reveal | POST /disputes/{disputeCaseId}/finalize";
     case "operator-shortlist-replacement":
@@ -5581,6 +5593,93 @@ function ensureOrderPayload(responseBody) {
   return order;
 }
 
+function ensureDisputeCasePayload(responseBody) {
+  const disputeCase = responseBody?.disputeCase;
+  if (!disputeCase || typeof disputeCase !== "object" || Array.isArray(disputeCase)) {
+    throw new Error("dispute_case_payload_invalid");
+  }
+  return disputeCase;
+}
+
+async function resolveReviewerEvidenceKeyAgreement(options, reviewerAddress, timeoutMs, maxKeyVersion = 8) {
+  const reviewerCall = await callApiRoute({
+    method: "GET",
+    rawPath: `/reviewers/${reviewerAddress}`,
+    options,
+    timeoutMs,
+  });
+  if (!reviewerCall.result.ok) {
+    return {
+      ok: false,
+      error: summarizeApiFailure(reviewerCall.result),
+      status: reviewerCall.result.status,
+      response: reviewerCall.result.body,
+    };
+  }
+  const reviewer = reviewerCall.result.body?.reviewer;
+  const expectedTransportPubkeyHex =
+    typeof reviewer?.transportPubkeyHex === "string" ? reviewer.transportPubkeyHex.trim().toLowerCase() : "";
+  if (!expectedTransportPubkeyHex) {
+    return {
+      ok: false,
+      error: "reviewer_transport_pubkey_missing",
+      reviewer,
+    };
+  }
+
+  let matchedKeyAgreement = null;
+  for (let keyVersion = 1; keyVersion <= maxKeyVersion; keyVersion += 1) {
+    const keyAgreementCall = await callApiRoute({
+      method: "GET",
+      rawPath: `/users/${reviewerAddress}/key-agreement?keyVersion=${keyVersion}`,
+      options,
+      timeoutMs,
+    });
+    if (!keyAgreementCall.result.ok) {
+      if (keyAgreementCall.result.status === 404) {
+        continue;
+      }
+      return {
+        ok: false,
+        error: summarizeApiFailure(keyAgreementCall.result),
+        status: keyAgreementCall.result.status,
+        response: keyAgreementCall.result.body,
+      };
+    }
+    const keyAgreement = keyAgreementCall.result.body?.keyAgreement;
+    const publicKeyMultibase =
+      typeof keyAgreement?.publicKeyMultibase === "string" ? keyAgreement.publicKeyMultibase.trim() : "";
+    if (!publicKeyMultibase) {
+      continue;
+    }
+    const publicKeyHex = keyAgreementPublicKeyHex(publicKeyMultibase).toLowerCase();
+    if (publicKeyHex === expectedTransportPubkeyHex) {
+      matchedKeyAgreement = {
+        reviewerAddress,
+        keyVersion,
+        publicKeyMultibase,
+      };
+    }
+  }
+
+  if (!matchedKeyAgreement) {
+    return {
+      ok: false,
+      error: "reviewer_key_agreement_not_found_for_transport_pubkey",
+      reviewerAddress,
+      expectedTransportPubkeyHex,
+      maxKeyVersion,
+    };
+  }
+
+  return {
+    ok: true,
+    reviewerAddress,
+    expectedTransportPubkeyHex,
+    keyAgreement: matchedKeyAgreement,
+  };
+}
+
 async function fetchReviewerRuntimeHints(contextOptions = {}, timeoutMs = 20_000) {
   const helperOptions = { ...contextOptions };
   delete helperOptions.body;
@@ -7112,6 +7211,409 @@ async function runDeliverableEncrypt(commandArgs) {
   }
 }
 
+async function runDisputeEvidencePublish(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: disputeEvidencePublishUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  const disputeCaseId =
+    typeof options["case-id"] === "string" && options["case-id"].trim()
+      ? normalizeIotaAddress(String(options["case-id"]).trim())
+      : "";
+  const kind =
+    typeof options.kind === "string" && options.kind.trim()
+      ? String(options.kind).trim().toLowerCase()
+      : "linked-deliverable";
+  if (!disputeCaseId) {
+    return {
+      ok: false,
+      error: "missing_dispute_case_id",
+    };
+  }
+  if (kind !== "linked-deliverable" && kind !== "linked_deliverable") {
+    return {
+      ok: false,
+      error: "unsupported_dispute_evidence_kind",
+      supportedKinds: ["linked-deliverable"],
+    };
+  }
+
+  try {
+    const runtimeContext = await resolveApiRuntimeContext(options);
+    const actorAddress = resolveActorAddressForSignedRun(options, runtimeContext);
+    if (!actorAddress) {
+      return {
+        ok: false,
+        error: "missing_actor_address",
+      };
+    }
+    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+    const disputeCall = await callApiRoute({
+      method: "GET",
+      rawPath: `/disputes/${disputeCaseId}`,
+      options,
+      timeoutMs,
+    });
+    if (!disputeCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(disputeCall.result),
+        status: disputeCall.result.status,
+        response: disputeCall.result.body,
+      };
+    }
+    const disputeCase = ensureDisputeCasePayload(disputeCall.result.body);
+    const buyerAddress = normalizeIotaAddress(disputeCase.buyer || "");
+    const sellerAddress = normalizeIotaAddress(disputeCase.seller || "");
+    if (actorAddress !== buyerAddress && actorAddress !== sellerAddress) {
+      return {
+        ok: false,
+        error: "actor_not_dispute_party",
+        actorAddress,
+      };
+    }
+    const orderId = typeof disputeCase.orderId === "string" ? disputeCase.orderId.trim() : "";
+    const milestoneId = typeof disputeCase.milestoneId === "string" ? disputeCase.milestoneId.trim() : "";
+    if (!orderId || !milestoneId) {
+      return {
+        ok: false,
+        error: "dispute_order_or_milestone_missing",
+      };
+    }
+    const assignmentRound =
+      Number.isSafeInteger(Number(disputeCase.assignmentRound)) && Number(disputeCase.assignmentRound) >= 0
+        ? Number(disputeCase.assignmentRound)
+        : 0;
+    const assignedReviewers = Array.isArray(disputeCase.assignedReviewers)
+      ? disputeCase.assignedReviewers
+          .map((value) => normalizeIotaAddress(value || ""))
+          .filter(Boolean)
+      : [];
+    if (assignedReviewers.length === 0) {
+      return {
+        ok: false,
+        error: "dispute_assigned_reviewers_missing",
+      };
+    }
+
+    const artifactContentCall = await callApiRoute({
+      method: "GET",
+      rawPath: `/orders/${orderId}/milestones/${milestoneId}/artifact-manifest/content`,
+      options,
+      timeoutMs,
+    });
+    if (!artifactContentCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(artifactContentCall.result),
+        status: artifactContentCall.result.status,
+        response: artifactContentCall.result.body,
+      };
+    }
+    const artifactManifest = artifactContentCall.result.body?.artifactManifest;
+    const resolvedPayload = artifactContentCall.result.body?.resolvedManifest?.payload;
+    if (!artifactManifest || typeof artifactManifest !== "object" || Array.isArray(artifactManifest) || !resolvedPayload) {
+      return {
+        ok: false,
+        error: "artifact_manifest_payload_missing",
+        response: artifactContentCall.result.body,
+      };
+    }
+    const payload = normalizeManagedDeliverablePayload(resolvedPayload);
+    const actorWrap = Array.isArray(payload.encrypted?.cekWraps)
+      ? payload.encrypted.cekWraps.find((entry) => normalizeIotaAddress(entry.recipientAddress || "") === actorAddress)
+      : null;
+    if (!actorWrap) {
+      return {
+        ok: false,
+        error: "actor_wrap_not_found",
+        actorAddress,
+      };
+    }
+    const keyFile = resolveKeyAgreementRecordPathOption(
+      actorAddress,
+      actorWrap.keyVersion,
+      options["key-file"],
+      runtimeContext.authStateFile,
+    );
+    const keyRecord = await loadKeyAgreementRecord(keyFile, {
+      expectedAddress: actorAddress,
+      expectedKeyVersion: actorWrap.keyVersion,
+      fallbackExpiresAtMs: Date.now() + 86_400_000
+    });
+
+    const maxReviewerKeyVersion = parsePositiveIntOption(
+      options["max-reviewer-key-version"],
+      "max_reviewer_key_version",
+      8,
+    );
+    const reviewerKeyAgreements = [];
+    for (const reviewerAddress of assignedReviewers) {
+      const keyAgreement = await resolveReviewerEvidenceKeyAgreement(
+        options,
+        reviewerAddress,
+        timeoutMs,
+        maxReviewerKeyVersion,
+      );
+      if (!keyAgreement.ok) {
+        return keyAgreement;
+      }
+      reviewerKeyAgreements.push(keyAgreement.keyAgreement);
+    }
+
+    const rewrapped = await rewrapManagedDeliverableForRecipients({
+      payload,
+      actorAddress,
+      recipientPrivateKeyMultibase: keyRecord.privateKeyMultibase,
+      newRecipients: reviewerKeyAgreements.map((entry) => ({
+        recipientAddress: entry.reviewerAddress,
+        keyVersion: entry.keyVersion,
+        recipientPublicKeyMultibase: entry.publicKeyMultibase,
+      })),
+    });
+    const requestBody = {
+      kind: "linked_deliverable",
+      assignmentRound,
+      manifestCid: String(artifactManifest.manifestCid || ""),
+      manifestSha256: String(artifactManifest.manifestSha256 || ""),
+      reviewerGrants: rewrapped.cekWraps.map((wrap) => ({
+        reviewerAddress: wrap.recipientAddress,
+        keyVersion: wrap.keyVersion,
+        wrappedCek: wrap.wrappedCek,
+        hpkeEnc: wrap.hpkeEnc,
+      })),
+    };
+    if (!requestBody.manifestCid || !requestBody.manifestSha256) {
+      return {
+        ok: false,
+        error: "artifact_manifest_metadata_missing",
+        response: artifactContentCall.result.body,
+      };
+    }
+    const bodyOut =
+      resolveOptionalPathOption(options["body-out"]) ||
+      path.resolve(process.cwd(), `clawnera-dispute-evidence-${orderId}-${milestoneId}.json`);
+    writeOptionalOutputFile(bodyOut, `${JSON.stringify(requestBody, null, 2)}\n`);
+
+    if (parseBooleanOption(options["no-post"], false)) {
+      return {
+        ok: true,
+        mode: "build_only",
+        disputeCaseId,
+        orderId,
+        milestoneId,
+        actorAddress,
+        assignmentRound,
+        assignedReviewers,
+        bodyOut,
+        requestBody,
+        nextPublishHint:
+          `clawnera-help dispute-evidence-publish --case-id ${shellQuote(disputeCaseId)} ` +
+          `--auth-state-file ${shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json")}`,
+      };
+    }
+
+    const publishCall = await callApiRoute({
+      method: "POST",
+      rawPath: `/disputes/${disputeCaseId}/evidence`,
+      options: {
+        ...options,
+        body: JSON.stringify(requestBody),
+      },
+      timeoutMs,
+    });
+    if (!publishCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(publishCall.result),
+        status: publishCall.result.status,
+        response: publishCall.result.body,
+        bodyOut,
+        requestBody,
+      };
+    }
+    const responseOut = resolveOptionalPathOption(options["response-out"]);
+    if (responseOut) {
+      writeOptionalOutputFile(responseOut, `${JSON.stringify(publishCall.result.body, null, 2)}\n`);
+    }
+    return {
+      ok: true,
+      mode: "post",
+      disputeCaseId,
+      orderId,
+      milestoneId,
+      actorAddress,
+      assignmentRound,
+      assignedReviewers,
+      bodyOut,
+      responseOut: responseOut || null,
+      requestBody,
+      response: publishCall.result.body,
+      evidenceItem: publishCall.result.body?.evidenceItem || null,
+      nextListHint:
+        `clawnera-help dispute-evidence-list --case-id ${shellQuote(disputeCaseId)} ` +
+        `--auth-state-file ${shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json")}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "dispute_evidence_publish_failed",
+    };
+  }
+}
+
+async function runDisputeEvidenceList(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: disputeEvidenceListUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+  const disputeCaseId =
+    typeof options["case-id"] === "string" && options["case-id"].trim()
+      ? normalizeIotaAddress(String(options["case-id"]).trim())
+      : "";
+  if (!disputeCaseId) {
+    return {
+      ok: false,
+      error: "missing_dispute_case_id",
+    };
+  }
+
+  try {
+    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+    const evidenceCall = await callApiRoute({
+      method: "GET",
+      rawPath: `/disputes/${disputeCaseId}/evidence`,
+      options,
+      timeoutMs,
+    });
+    if (!evidenceCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(evidenceCall.result),
+        status: evidenceCall.result.status,
+        response: evidenceCall.result.body,
+      };
+    }
+    const evidence = Array.isArray(evidenceCall.result.body?.evidence) ? evidenceCall.result.body.evidence : [];
+    const evidenceOut = resolveOptionalPathOption(options["evidence-out"]) || resolveOptionalPathOption(options["response-out"]);
+    if (evidenceOut) {
+      writeOptionalOutputFile(evidenceOut, `${JSON.stringify(evidenceCall.result.body, null, 2)}\n`);
+    }
+    const readable = evidence.find((item) => item?.actorCanReadContent && typeof item?.evidenceId === "string");
+    return {
+      ok: true,
+      disputeCaseId,
+      viewerRole: evidenceCall.result.body?.viewerRole || null,
+      assignmentRound: evidenceCall.result.body?.assignmentRound ?? null,
+      evidenceCount: evidence.length,
+      evidenceOut: evidenceOut || null,
+      evidence,
+      nextContentHint: readable
+        ? `clawnera-help dispute-evidence-content --case-id ${shellQuote(disputeCaseId)} --evidence-id ${shellQuote(readable.evidenceId)} --auth-state-file <file>`
+        : null,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "dispute_evidence_list_failed",
+    };
+  }
+}
+
+async function runDisputeEvidenceContent(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: disputeEvidenceContentUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+  const disputeCaseId =
+    typeof options["case-id"] === "string" && options["case-id"].trim()
+      ? normalizeIotaAddress(String(options["case-id"]).trim())
+      : "";
+  const evidenceId = typeof options["evidence-id"] === "string" ? options["evidence-id"].trim() : "";
+  if (!disputeCaseId || !evidenceId) {
+    return {
+      ok: false,
+      error: "missing_dispute_case_id_or_evidence_id",
+    };
+  }
+
+  try {
+    const runtimeContext =
+      options["auth-state-file"] || options["env-file"] || options["api-base"] || options.jwt
+        ? await resolveApiRuntimeContext(options)
+        : { authState: null, envValues: {} };
+    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+    const contentCall = await callApiRoute({
+      method: "GET",
+      rawPath: `/disputes/${disputeCaseId}/evidence/${evidenceId}/content`,
+      options,
+      timeoutMs,
+    });
+    if (!contentCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(contentCall.result),
+        status: contentCall.result.status,
+        response: contentCall.result.body,
+      };
+    }
+    const contentOut =
+      resolveOptionalPathOption(options["content-out"]) ||
+      resolveOptionalPathOption(options["response-out"]) ||
+      path.resolve(process.cwd(), `clawnera-dispute-evidence-content-${evidenceId}.json`);
+    writeOptionalOutputFile(contentOut, `${JSON.stringify(contentCall.result.body, null, 2)}\n`);
+    return {
+      ok: true,
+      disputeCaseId,
+      evidenceId,
+      contentOut,
+      response: contentCall.result.body,
+      nextDecryptHint:
+        `clawnera-help deliverable-decrypt --resolved-manifest-file ${shellQuote(contentOut)} ` +
+        `--auth-state-file ${shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json")}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "dispute_evidence_content_failed",
+    };
+  }
+}
+
 async function runManagedStorageFeePay(commandArgs) {
   const { options, positionals } = parseLongOptions(commandArgs);
   if (options.help || options.h) {
@@ -8057,7 +8559,21 @@ async function runDeliverableDecrypt(commandArgs) {
       ? normalizeManagedDeliverablePayload(raw?.resolvedManifest?.payload)
       : normalizeManagedDeliverablePayload(raw);
     const recipients = Array.isArray(payload?.encrypted?.cekWraps) ? payload.encrypted.cekWraps : [];
-    const wrap = recipients.find((entry) => normalizeIotaAddress(entry.recipientAddress || "") === actorAddress);
+    const actorGrantCandidate =
+      raw?.actorGrant && typeof raw.actorGrant === "object" && !Array.isArray(raw.actorGrant) ? raw.actorGrant : null;
+    const wrap =
+      recipients.find((entry) => normalizeIotaAddress(entry.recipientAddress || "") === actorAddress) ||
+      (actorGrantCandidate &&
+      normalizeIotaAddress(actorGrantCandidate.recipientAddress || "") === actorAddress &&
+      typeof actorGrantCandidate.keyVersion === "number" &&
+      typeof actorGrantCandidate.wrappedCek === "string"
+        ? {
+            recipientAddress: actorGrantCandidate.recipientAddress,
+            keyVersion: actorGrantCandidate.keyVersion,
+            wrappedCek: actorGrantCandidate.wrappedCek,
+            hpkeEnc: actorGrantCandidate.hpkeEnc,
+          }
+        : null);
     if (!wrap) {
       return {
         ok: false,
@@ -9339,6 +9855,35 @@ function deliverableEncryptUsageLines() {
   ];
 }
 
+function disputeEvidencePublishUsageLines() {
+  return [
+    "Dispute evidence publish helper:",
+    "- Usage: clawnera-help dispute-evidence-publish --case-id <0x...> --auth-state-file <file>",
+    "- Current phase-1 scope is linked deliverable evidence only; the helper rewraps the already uploaded encrypted milestone payload for the currently assigned reviewers",
+    "- Reads GET /disputes/{disputeCaseId}, GET /orders/{orderId}/milestones/{milestoneId}/artifact-manifest/content, reviewer transport metadata, and matching reviewer key-agreement records",
+    "- Optional: --no-post to only build the request body, --body-out <file>, --key-file <local-key-agreement.json>, --max-reviewer-key-version <n>",
+    "- The normal two-party artifact routes stay buyer/seller-only; reviewers must use the dispute-scoped evidence routes afterwards"
+  ];
+}
+
+function disputeEvidenceListUsageLines() {
+  return [
+    "Dispute evidence list helper:",
+    "- Usage: clawnera-help dispute-evidence-list --case-id <0x...> --auth-state-file <file>",
+    "- Reads GET /disputes/{disputeCaseId}/evidence and prints summary metadata plus whether the current actor can read content",
+    "- Optional: --evidence-out <file> to persist the exact list response locally"
+  ];
+}
+
+function disputeEvidenceContentUsageLines() {
+  return [
+    "Dispute evidence content helper:",
+    "- Usage: clawnera-help dispute-evidence-content --case-id <0x...> --evidence-id <uuid> --auth-state-file <file>",
+    "- Reads the actor-scoped dispute evidence content route and saves the exact response for local decrypt",
+    "- Optional: --content-out <file>; the saved file can be passed directly to clawnera-help deliverable-decrypt --resolved-manifest-file"
+  ];
+}
+
 function managedStorageFeePayUsageLines() {
   return [
     "Managed storage fee helper:",
@@ -9444,6 +9989,7 @@ function deliverableDecryptUsageLines() {
     "Deliverable decrypt helper:",
     "- Usage: clawnera-help deliverable-decrypt --resolved-manifest-file <file> --auth-state-file <file>",
     "- Alternative input: --payload-file <managed-payload.json>",
+    "- The resolved-manifest input may come from either /orders/.../artifact-manifest/content or /disputes/{disputeCaseId}/evidence/{evidenceId}/content",
     "- Optional key selection: --recipient-address <0x...> --key-file <file>",
     "- Optional output: --plaintext-out <file>",
     "- Decrypts locally from the actor key-agreement private key; the worker never sees plaintext"
@@ -9972,6 +10518,11 @@ const aliasCommands = new Map([
   ["rep-init", "reputation-init"],
   ["reviewer-onboard", "reviewer-register"],
   ["delivery-encrypt", "deliverable-encrypt"],
+  ["dispute-evidence", "dispute-evidence-list"],
+  ["reviewer-evidence", "dispute-evidence-list"],
+  ["reviewer-inspect-evidence", "dispute-evidence-list"],
+  ["reviewer-evidence-content", "dispute-evidence-content"],
+  ["publish-dispute-evidence", "dispute-evidence-publish"],
   ["storage-fee-pay", "managed-storage-fee-pay"],
   ["storage-presign", "managed-storage-presign"],
   ["storage-upload", "managed-storage-upload"],
@@ -10036,6 +10587,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "reputation-init",
         "reviewer-register",
         "deliverable-encrypt",
+        "dispute-evidence-publish",
+        "dispute-evidence-list",
+        "dispute-evidence-content",
         "managed-storage-fee-pay",
         "managed-storage-presign",
         "managed-storage-upload",
@@ -10966,6 +11520,89 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`next_submit=${result.nextSubmitHint}`);
   } else {
     console.error(`deliverable_encrypt_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "dispute-evidence-publish") {
+  const result = await runDisputeEvidencePublish(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`dispute_evidence_publish_ok case_id=${result.disputeCaseId}`);
+    console.log(`mode=${result.mode}`);
+    console.log(`assignment_round=${result.assignmentRound}`);
+    console.log(`assigned_reviewer_count=${Array.isArray(result.assignedReviewers) ? result.assignedReviewers.length : 0}`);
+    if (result.bodyOut) {
+      console.log(`body_out=${result.bodyOut}`);
+    }
+    if (result.evidenceItem?.evidenceId) {
+      console.log(`evidence_id=${result.evidenceItem.evidenceId}`);
+    }
+    if (result.responseOut) {
+      console.log(`response_out=${result.responseOut}`);
+    }
+    if (result.nextListHint) {
+      console.log(`next_list=${result.nextListHint}`);
+    }
+    if (result.nextPublishHint) {
+      console.log(`next_publish=${result.nextPublishHint}`);
+    }
+  } else {
+    console.error(`dispute_evidence_publish_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "dispute-evidence-list") {
+  const result = await runDisputeEvidenceList(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`dispute_evidence_list_ok case_id=${result.disputeCaseId}`);
+    console.log(`viewer_role=${result.viewerRole || "unknown"}`);
+    console.log(`assignment_round=${result.assignmentRound ?? "unknown"}`);
+    console.log(`evidence_count=${result.evidenceCount}`);
+    if (result.evidenceOut) {
+      console.log(`evidence_out=${result.evidenceOut}`);
+    }
+    if (result.nextContentHint) {
+      console.log(`next_content=${result.nextContentHint}`);
+    }
+  } else {
+    console.error(`dispute_evidence_list_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "dispute-evidence-content") {
+  const result = await runDisputeEvidenceContent(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`dispute_evidence_content_ok case_id=${result.disputeCaseId}`);
+    console.log(`evidence_id=${result.evidenceId}`);
+    console.log(`content_out=${result.contentOut}`);
+    if (result.nextDecryptHint) {
+      console.log(`next_decrypt=${result.nextDecryptHint}`);
+    }
+  } else {
+    console.error(`dispute_evidence_content_error: ${result.error}`);
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {

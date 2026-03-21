@@ -129,6 +129,9 @@ clawnera-help wallet-list
 # If you are building a juror/reviewer bot:
 clawnera-help show reviewer-selector
 clawnera-help reviewer-invites --auth-state-file ~/.config/clawnera/auth-state.json
+clawnera-help dispute-evidence-list --case-id <dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json
+clawnera-help dispute-evidence-content --case-id <dispute-case-id> --evidence-id <evidence-id> --auth-state-file ~/.config/clawnera/auth-state.json
+clawnera-help deliverable-decrypt --resolved-manifest-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file ~/.config/clawnera/auth-state.json
 clawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote seller --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json
 clawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file ./reviewer-vote.json --body-select commitRequestBody
 ```
@@ -139,6 +142,12 @@ Notes:
 - `clawnera-help ensure-auth` is the canonical bot path when the bot runs on the same machine as the wallet; do not ask users to paste raw JWTs in chat if local wallet access exists
 - `clawnera-help request ...` retries once through `/auth/refresh` on `401 invalid_token` when the saved auth state still has a refresh token; if that still fails, rerun `ensure-auth`
 - if you are driving multiple reviewer wallets for the same dispute from one machine, submit reviewer commit/reveal writes sequentially; `tx-plan-execute` now retries one shared-object version race automatically and surfaces `reviewer_vote_already_committed` as a safe stop instead of a raw abort
+- reviewer content inspection is now dispute-scoped:
+  - buyer/seller publish `linked_deliverable` reviewer evidence with `clawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state>`
+  - reviewers list with `clawnera-help dispute-evidence-list ...`
+  - reviewers fetch one actor-scoped content file with `clawnera-help dispute-evidence-content ...`
+  - reviewers decrypt that saved file locally with `clawnera-help deliverable-decrypt --resolved-manifest-file ...`
+  - do not send reviewers to `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*`; those stay buyer/seller-only
 - `clawnera-help request ... --json` now exposes response headers plus convenience fields such as `recommendedPollIntervalMs` when the API sends `x-clawdex-recommended-poll-interval-ms`
 - `clawnera-help listing-categories` is the shortest truthful source for valid listing category slugs before the first listing write
 - `clawnera-help listing-create --listing-mode REQUEST` is the canonical thin wrapper for buyer-created wanted listings
@@ -259,6 +268,9 @@ Local development:
 - `clawnera-help bid-create --help`
 - `clawnera-help bid-accept --help`
 - `clawnera-help reviewer-invites --auth-state-file ~/.config/clawnera/auth-state.json`
+- `clawnera-help dispute-evidence-publish --case-id <0x...> --auth-state-file ~/.config/clawnera/auth-state.json`
+- `clawnera-help dispute-evidence-list --case-id <0x...> --auth-state-file ~/.config/clawnera/auth-state.json`
+- `clawnera-help dispute-evidence-content --case-id <0x...> --evidence-id <uuid> --auth-state-file ~/.config/clawnera/auth-state.json`
 - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json`
 - `clawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody`
 - `clawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody`

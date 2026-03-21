@@ -7,6 +7,12 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import {
+  buildManagedDeliverablePayload,
+  createEncryptedDeliverable,
+  generateKeyAgreementKeypair,
+  saveKeyAgreementRecord
+} from "../lib/e2ee-local.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -202,6 +208,359 @@ test("request accepts --auth-state as a shorthand alias for --auth-state-file", 
   } finally {
     await mock.close();
   }
+});
+
+test("dispute-evidence-publish rewraps the current deliverable for assigned reviewers", async () => {
+  const sellerAddress = `0x${"3".repeat(64)}`;
+  const buyerAddress = `0x${"4".repeat(64)}`;
+  const reviewerAddress = `0x${"5".repeat(64)}`;
+  const caseId = `0x${"6".repeat(64)}`;
+  const orderId = "order-dispute-evidence";
+  const milestoneId = "milestone-a";
+  const sellerKeys = generateKeyAgreementKeypair("u");
+  const buyerKeys = generateKeyAgreementKeypair("u");
+  const reviewerKeys = generateKeyAgreementKeypair("u");
+  const encrypted = await createEncryptedDeliverable({
+    plaintext: Buffer.from("reviewer evidence payload", "utf8"),
+    recipients: [
+      {
+        recipientAddress: sellerAddress,
+        keyVersion: 7,
+        recipientPublicKeyMultibase: sellerKeys.publicKeyMultibase
+      },
+      {
+        recipientAddress: buyerAddress,
+        keyVersion: 3,
+        recipientPublicKeyMultibase: buyerKeys.publicKeyMultibase
+      }
+    ]
+  });
+  const deliverablePayload = buildManagedDeliverablePayload({
+    orderId,
+    milestoneId,
+    plaintextLabel: "deliverable.bin",
+    encrypted
+  });
+
+  const mock = await startMockServer({
+    [`GET /disputes/${caseId}`]: () => ({
+      status: 200,
+      body: {
+        disputeCase: {
+          objectId: caseId,
+          orderId,
+          milestoneId,
+          buyer: buyerAddress,
+          seller: sellerAddress,
+          assignedReviewers: [reviewerAddress],
+          assignmentRound: 0
+        }
+      }
+    }),
+    [`GET /orders/${orderId}/milestones/${milestoneId}/artifact-manifest/content`]: () => ({
+      status: 200,
+      body: {
+        artifactManifest: {
+          manifestCid: "ipfs://bafyreviewerevidence",
+          manifestSha256: "a".repeat(64)
+        },
+        resolvedManifest: {
+          payload: deliverablePayload
+        }
+      }
+    }),
+    [`GET /reviewers/${reviewerAddress}`]: () => ({
+      status: 200,
+      body: {
+        reviewer: {
+          ownerAddress: reviewerAddress,
+          transportPubkeyHex: Buffer.from(reviewerKeys.publicKeyMultibase.slice(1), "base64url").toString("hex")
+        }
+      }
+    }),
+    [`GET /users/${reviewerAddress}/key-agreement?keyVersion=1`]: () => ({
+      status: 200,
+      body: {
+        keyAgreement: {
+          address: reviewerAddress,
+          keyVersion: 1,
+          publicKeyMultibase: reviewerKeys.publicKeyMultibase
+        }
+      }
+    }),
+    [`POST /disputes/${caseId}/evidence`]: (request) => {
+      assert.equal(request.body?.kind, "linked_deliverable");
+      assert.equal(request.body?.assignmentRound, 0);
+      assert.equal(request.body?.manifestCid, "ipfs://bafyreviewerevidence");
+      assert.equal(request.body?.reviewerGrants?.length, 1);
+      assert.equal(request.body?.reviewerGrants?.[0]?.reviewerAddress, reviewerAddress);
+      assert.equal(typeof request.body?.reviewerGrants?.[0]?.wrappedCek, "string");
+      assert.equal(typeof request.body?.reviewerGrants?.[0]?.hpkeEnc, "string");
+      return {
+        status: 200,
+        body: {
+          evidenceItem: {
+            evidenceId: "2df79fb6-9a7d-4e1b-9f1d-08cfdb70e4b2"
+          }
+        }
+      };
+    }
+  });
+
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-dispute-evidence-publish-"));
+  const authStateFile = path.join(tempHome, ".config", "clawnera", "auth-state.json");
+  const sellerKeyFile = path.join(tempHome, "seller-key-agreement.json");
+  mkdirSync(path.dirname(authStateFile), { recursive: true });
+  writeFileSync(
+    authStateFile,
+    JSON.stringify({
+      jwt: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+      refreshToken: "refresh-token",
+      actorAddress: sellerAddress,
+      apiBase: mock.baseUrl
+    }),
+    "utf8"
+  );
+  await saveKeyAgreementRecord({
+    address: sellerAddress,
+    keyVersion: 7,
+    publicKeyMultibase: sellerKeys.publicKeyMultibase,
+    privateKeyMultibase: sellerKeys.privateKeyMultibase,
+    expiresAtMs: Date.now() + 86_400_000,
+    filePath: sellerKeyFile
+  });
+
+  try {
+    const result = await runCli(
+      [
+        "dispute-evidence-publish",
+        "--case-id",
+        caseId,
+        "--auth-state-file",
+        authStateFile,
+        "--key-file",
+        sellerKeyFile,
+        "--json"
+      ],
+      { HOME: tempHome }
+    );
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.evidenceItem.evidenceId, "2df79fb6-9a7d-4e1b-9f1d-08cfdb70e4b2");
+    assert.equal(payload.assignedReviewers[0], reviewerAddress);
+    assert.equal(payload.requestBody.reviewerGrants.length, 1);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("dispute-evidence list and content helpers save actor-scoped reviewer files", async () => {
+  const reviewerAddress = `0x${"7".repeat(64)}`;
+  const caseId = `0x${"8".repeat(64)}`;
+  const evidenceId = "1780a7c9-76a2-46bf-8a5a-f12f6a86f1ef";
+  const mock = await startMockServer({
+    [`GET /disputes/${caseId}/evidence`]: () => ({
+      status: 200,
+      body: {
+        viewerRole: "ASSIGNED_REVIEWER",
+        assignmentRound: 2,
+        evidence: [
+          {
+            evidenceId,
+            kind: "linked_deliverable",
+            actorCanReadContent: true
+          }
+        ]
+      }
+    }),
+    [`GET /disputes/${caseId}/evidence/${evidenceId}/content`]: () => ({
+      status: 200,
+      body: {
+        evidenceItem: {
+          evidenceId
+        },
+        actorGrant: {
+          recipientAddress: reviewerAddress,
+          recipientRole: "REVIEWER",
+          keyVersion: 1,
+          wrappedCek: "wrapped",
+          hpkeEnc: "v1.cHVibGljLXB1Yi1wdWItcHViLXB1Yi1wdWItcHViLXB1Yi0xMjM0NQ.cHVibGljLW5vbmNlLXB1YmxpYy1ub25jZS0xMjM0NQ"
+        },
+        resolvedManifest: {
+          payload: {
+            protocol: "clawdex.managed-deliverable.v1",
+            orderId: "o1",
+            milestoneId: "m1",
+            metadata: { plaintextLabel: "deliverable.bin" },
+            encrypted: {
+              blob: {
+                nonceB64u: "bm9uY2U",
+                ciphertextB64u: "Y2lwaGVydGV4dA",
+                plaintextByteLength: 1,
+                ciphertextByteLength: 17,
+                ciphertextSha256: "a".repeat(64)
+              },
+              cekWraps: [
+                {
+                  recipientAddress: reviewerAddress,
+                  keyVersion: 1,
+                  wrappedCek: "wrapped",
+                  hpkeEnc: "v1.cHVibGljLXB1Yi1wdWItcHViLXB1Yi1wdWItcHViLXB1Yi0xMjM0NQ.cHVibGljLW5vbmNlLXB1YmxpYy1ub25jZS0xMjM0NQ"
+                }
+              ]
+            }
+          }
+        }
+      }
+    })
+  });
+
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-dispute-evidence-list-"));
+  const authStateFile = path.join(tempHome, ".config", "clawnera", "auth-state.json");
+  mkdirSync(path.dirname(authStateFile), { recursive: true });
+  writeFileSync(
+    authStateFile,
+    JSON.stringify({
+      jwt: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+      refreshToken: "refresh-token",
+      actorAddress: reviewerAddress,
+      apiBase: mock.baseUrl
+    }),
+    "utf8"
+  );
+
+  try {
+    const listResult = await runCli(
+      ["dispute-evidence-list", "--case-id", caseId, "--auth-state-file", authStateFile, "--json"],
+      { HOME: tempHome }
+    );
+    assert.equal(listResult.status, 0);
+    const listPayload = JSON.parse(listResult.stdout);
+    assert.equal(listPayload.evidenceCount, 1);
+    assert.match(listPayload.nextContentHint, /dispute-evidence-content/);
+
+    const contentOut = path.join(tempHome, "evidence-content.json");
+    const contentResult = await runCli(
+      [
+        "dispute-evidence-content",
+        "--case-id",
+        caseId,
+        "--evidence-id",
+        evidenceId,
+        "--auth-state-file",
+        authStateFile,
+        "--content-out",
+        contentOut,
+        "--json"
+      ],
+      { HOME: tempHome }
+    );
+    assert.equal(contentResult.status, 0);
+    const contentPayload = JSON.parse(contentResult.stdout);
+    assert.equal(contentPayload.contentOut, contentOut);
+    assert.match(contentPayload.nextDecryptHint, /deliverable-decrypt/);
+    assert.equal(existsSync(contentOut), true);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("deliverable-decrypt can use actorGrant from a dispute evidence content file", async () => {
+  const reviewerAddress = `0x${"9".repeat(64)}`;
+  const reviewerKeys = generateKeyAgreementKeypair("u");
+  const sellerKeys = generateKeyAgreementKeypair("u");
+  const encrypted = await createEncryptedDeliverable({
+    plaintext: Buffer.from("reviewer proof", "utf8"),
+    recipients: [
+      {
+        recipientAddress: reviewerAddress,
+        keyVersion: 1,
+        recipientPublicKeyMultibase: reviewerKeys.publicKeyMultibase
+      },
+      {
+        recipientAddress: `0x${"a".repeat(64)}`,
+        keyVersion: 2,
+        recipientPublicKeyMultibase: sellerKeys.publicKeyMultibase
+      }
+    ]
+  });
+  const reviewerWrap = encrypted.cekWraps.find((entry) => entry.recipientAddress === reviewerAddress);
+  assert.ok(reviewerWrap);
+
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-dispute-evidence-decrypt-"));
+  const authStateFile = path.join(tempHome, ".config", "clawnera", "auth-state.json");
+  const reviewerKeyFile = path.join(tempHome, "reviewer-key-agreement.json");
+  const inputFile = path.join(tempHome, "dispute-evidence-content.json");
+  mkdirSync(path.dirname(authStateFile), { recursive: true });
+  writeFileSync(
+    authStateFile,
+    JSON.stringify({
+      jwt: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+      refreshToken: "refresh-token",
+      actorAddress: reviewerAddress,
+      apiBase: "https://api.clawnera.com"
+    }),
+    "utf8"
+  );
+  await saveKeyAgreementRecord({
+    address: reviewerAddress,
+    keyVersion: 1,
+    publicKeyMultibase: reviewerKeys.publicKeyMultibase,
+    privateKeyMultibase: reviewerKeys.privateKeyMultibase,
+    expiresAtMs: Date.now() + 86_400_000,
+    filePath: reviewerKeyFile
+  });
+  writeFileSync(
+    inputFile,
+    JSON.stringify(
+      {
+        actorGrant: reviewerWrap,
+        resolvedManifest: {
+          payload: {
+            protocol: "clawdex.managed-deliverable.v1",
+            orderId: "order-reviewer",
+            milestoneId: "milestone-reviewer",
+            metadata: {
+              plaintextLabel: "deliverable.bin"
+            },
+            encrypted: {
+              blob: encrypted.blob,
+              cekWraps: [
+                {
+                  recipientAddress: `0x${"a".repeat(64)}`,
+                  keyVersion: 2,
+                  wrappedCek: encrypted.cekWraps.find((entry) => entry.recipientAddress === `0x${"a".repeat(64)}`)?.wrappedCek,
+                  hpkeEnc: encrypted.cekWraps.find((entry) => entry.recipientAddress === `0x${"a".repeat(64)}`)?.hpkeEnc
+                }
+              ]
+            }
+          }
+        }
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
+
+  const result = await runCli(
+    [
+      "deliverable-decrypt",
+      "--resolved-manifest-file",
+      inputFile,
+      "--auth-state-file",
+      authStateFile,
+      "--key-file",
+      reviewerKeyFile,
+      "--json"
+    ],
+    { HOME: tempHome }
+  );
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(readFileSync(payload.plaintextOut, "utf8"), "reviewer proof");
 });
 
 test("ensure-auth reuses an existing valid auth-state file", async () => {

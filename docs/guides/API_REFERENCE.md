@@ -258,6 +258,18 @@ Important:
   - `invitedReviewerAddresses[]` sind Pflicht
   - wenn ein Operator schon eine Selector-Receipt ausgegeben hat, genau diese `reviewerSelectionReceiptId` mitgeben
 - `GET /disputes/{disputeCaseId}`
+- `GET /disputes/{disputeCaseId}/evidence`
+  - dispute-scoped reviewer evidence summaries
+  - invited reviewers may inspect summaries before accept
+- `POST /disputes/{disputeCaseId}/evidence`
+  - buyer/seller-only publish route for current phase-1 `linked_deliverable` evidence
+  - package helper:
+    - `clawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file <file>`
+- `GET /disputes/{disputeCaseId}/evidence/{evidenceId}/content`
+  - actor-scoped reviewer/party content route
+  - package helper:
+    - `clawnera-help dispute-evidence-content --case-id <dispute-case-id> --evidence-id <uuid> --auth-state-file <file>`
+    - `clawnera-help deliverable-decrypt --resolved-manifest-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file <file>`
 - `POST /disputes/{disputeCaseId}/reviewers/accept`
 - `POST /disputes/{disputeCaseId}/votes/commit`
 - `POST /disputes/{disputeCaseId}/votes/reveal`
@@ -265,6 +277,7 @@ Important:
     until the commit window has elapsed
   - `vote=1` resolves to seller settlement; `vote=0` resolves to buyer settlement
   - optional `evidenceHashHex` is a hex-encoded SHA-256 audit hash
+  - `evidenceHashHex` is still audit-only; reviewer content itself must flow through the dispute evidence routes above
 - `POST /disputes/{disputeCaseId}/votes/challenge`
   - currently not a usable public bot path
   - expect `501 not_implemented`

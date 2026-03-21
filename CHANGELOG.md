@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.56] - 2026-03-21
+
+- Added the first secure reviewer-evidence path for disputes instead of forcing jurors to guess from hashes or party-only routes:
+  - new CLI helpers `dispute-evidence-publish`, `dispute-evidence-list`, and `dispute-evidence-content`
+  - local E2EE rewrap support so a dispute party can derive reviewer-specific CEK wraps for the already uploaded deliverable without sharing plaintext or party private keys
+  - reviewer journeys/recipes/docs now require evidence inspection before voting
+- Hardened the reviewer evidence UX for weaker bots:
+  - `deliverable-decrypt` can now consume dispute-evidence content files that expose the caller wrap via `actorGrant`
+  - compact journeys now include the new dispute-evidence step in the later-action path
+  - packaged core docsources were refreshed onto the new dispute-evidence-aware API surface
+- Added regression coverage for:
+  - reviewer dispute-evidence publish/list/content helper flows
+  - actor-scoped reviewer decrypt handling
+  - the updated compact journey output
+- Added `.gitignore` coverage for the new local dispute-evidence and binary deliverable helper artifacts so manual runs do not dirty the repo root.
+
 ## [0.1.55] - 2026-03-21
 
 - Removed the last stale `POST /bids/{id}/accept` references from the active core protocol docs and refreshed the packaged copied docsources.

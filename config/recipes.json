@@ -915,11 +915,57 @@
       ],
       "nextRecipes": [
         "operator-shortlist-open",
+        "dispute-evidence-linked-deliverable",
         "reviewer-handle-invite",
+        "reviewer-inspect-evidence",
         "reviewer-vote",
         "resolve-dispute"
       ],
       "nextTopics": ["reviewer-selector", "order-states", "role-routes"]
+    },
+    {
+      "id": "dispute-evidence-linked-deliverable",
+      "title": "Publish Reviewer Deliverable Evidence",
+      "aliases": ["dispute-evidence", "reviewer-evidence-publish"],
+      "summary": "Rewrap the already uploaded encrypted deliverable for the currently assigned reviewers without opening the normal buyer/seller artifact route.",
+      "role": "buyer_or_seller",
+      "when": "Use this after a dispute is open and the actual seller deliverable needs reviewer inspection.",
+      "needs": [
+        "The dispute case already exists and has at least one assigned reviewer in the current round.",
+        "The milestone deliverable was already submitted and still resolves through the normal artifact-manifest/content route for the buyer or seller."
+      ],
+      "store": [
+        "evidenceId",
+        "saved dispute-evidence body file"
+      ],
+      "routes": [
+        "GET /disputes/{disputeCaseId}",
+        "GET /orders/{orderId}/milestones/{milestoneId}/artifact-manifest/content",
+        "GET /reviewers/{reviewerAddress}",
+        "GET /users/{reviewerAddress}/key-agreement?keyVersion={n}",
+        "POST /disputes/{disputeCaseId}/evidence"
+      ],
+      "steps": [
+        "Read the dispute case and confirm the current assignmentRound plus the assigned reviewer set.",
+        "Read the existing buyer/seller artifact-manifest/content as one dispute party. Do not try to send reviewers to the normal order artifact route.",
+        "Run clawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state-file>.",
+        "Store the printed body_out file and the returned evidenceId.",
+        "Tell reviewers to use the dispute-scoped evidence list/content routes, then decrypt locally before voting."
+      ],
+      "examples": [
+        "Canonical publish:\\nclawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Build-only dry step for inspection:\\nclawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json --no-post"
+      ],
+      "stopConditions": [
+        "Stop on dispute_assigned_reviewers_missing. Invite/assignment must exist before reviewer evidence can be published.",
+        "Stop if the helper cannot resolve a current reviewer key-agreement record that matches the reviewer transport key.",
+        "Stop on artifact_manifest_payload_missing or actor_wrap_not_found; do not hand-edit reviewer grants."
+      ],
+      "nextRecipes": [
+        "reviewer-inspect-evidence",
+        "reviewer-vote"
+      ],
+      "nextTopics": ["reviewer-selector", "role-routes", "http-examples"]
     },
     {
       "id": "operator-shortlist-open",
@@ -1046,9 +1092,51 @@
         "Do not retry superseded, stale, expired, closed, or unavailable invites as if they were active work."
       ],
       "nextRecipes": [
-        "reviewer-vote"
+        "reviewer-inspect-evidence"
       ],
       "nextTopics": ["reviewer-selector", "order-states"]
+    },
+    {
+      "id": "reviewer-inspect-evidence",
+      "title": "Reviewer Inspect Dispute Evidence",
+      "aliases": ["reviewer-evidence", "reviewer-read-evidence"],
+      "summary": "Read dispute-scoped evidence summaries first, then fetch and decrypt content only when the current reviewer round allows it.",
+      "role": "reviewer",
+      "when": "Use this after invite accept and before preparing the commit/reveal vote.",
+      "needs": [
+        "The reviewer already accepted the invite or is checking whether a summary is visible before accept.",
+        "A buyer or seller already published dispute evidence for the current round if actual content inspection is needed."
+      ],
+      "store": [
+        "evidenceId",
+        "saved dispute evidence content file",
+        "local plaintext verification result"
+      ],
+      "routes": [
+        "GET /disputes/{disputeCaseId}",
+        "GET /disputes/{disputeCaseId}/evidence",
+        "GET /disputes/{disputeCaseId}/evidence/{evidenceId}/content"
+      ],
+      "steps": [
+        "Read GET /disputes/{disputeCaseId}/evidence first. Invited-only reviewers may see summaries before accept, but they must not expect content yet.",
+        "If actorCanReadContent=true for the current evidence item, run clawnera-help dispute-evidence-content --case-id <dispute-case-id> --evidence-id <evidence-id> --auth-state-file <reviewer-auth-state-file>.",
+        "Decrypt locally from the saved response file with clawnera-help deliverable-decrypt --resolved-manifest-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file <reviewer-auth-state-file>.",
+        "Verify the actual deliverable or complaint material before preparing the vote."
+      ],
+      "examples": [
+        "List evidence first:\\nclawnera-help dispute-evidence-list --case-id <dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Fetch one readable evidence item and save it:\\nclawnera-help dispute-evidence-content --case-id <dispute-case-id> --evidence-id <evidence-id> --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Decrypt locally:\\nclawnera-help deliverable-decrypt --resolved-manifest-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file ~/.config/clawnera/auth-state.json"
+      ],
+      "stopConditions": [
+        "Stop on dispute_evidence_forbidden; invited-only reviewers are summary-only until they are actually assigned.",
+        "Stop if actorCanReadContent=false for the current round and do not guess the normal order artifact path.",
+        "Stop if the saved evidence file does not decrypt with the reviewer local key-agreement record."
+      ],
+      "nextRecipes": [
+        "reviewer-vote"
+      ],
+      "nextTopics": ["reviewer-selector", "api", "http-examples"]
     },
     {
       "id": "reviewer-vote",
@@ -1059,6 +1147,7 @@
       "when": "Use this after a reviewer was assigned to a case.",
       "needs": [
         "The reviewer was accepted into the case.",
+        "The reviewer already inspected the dispute-scoped evidence needed for the decision.",
         "The dispute case readback shows the current deadlines."
       ],
       "store": [
@@ -1072,6 +1161,7 @@
         "POST /disputes/{disputeCaseId}/finalize"
       ],
       "steps": [
+        "If you have not inspected the dispute-scoped evidence yet, stop and run reviewer-inspect-evidence first.",
         "Run clawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote <seller|buyer|0|1> [auth options] --out reviewer-vote.json and persist that file securely.",
         "Run clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/commit --body-file reviewer-vote.json --body-select commitRequestBody.",
         "If you are operating multiple reviewer wallets for the same dispute from one machine, submit the commit and reveal writes sequentially, not in parallel, to avoid shared-object version races.",

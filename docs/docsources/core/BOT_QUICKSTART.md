@@ -135,11 +135,18 @@ When a milestone is rejected:
 
 Reviewer participation is invite-gated:
 - reviewers read `GET /reviewers/me/invites`
+- reviewers may inspect `GET /disputes/{disputeCaseId}/evidence` summaries before accepting
 - reviewers accept with `POST /disputes/{disputeCaseId}/reviewers/accept`
 - then:
   - `POST /disputes/{disputeCaseId}/votes/commit`
   - wait for `commitDeadlineMs`
   - `POST /disputes/{disputeCaseId}/votes/reveal`
+
+If the dispute needs reviewer-visible delivery proof:
+- buyer/seller publish it through `POST /disputes/{disputeCaseId}/evidence`
+- current phase-1 scope is the existing deliverable only; do not assume supplemental mailbox bundles already exist
+- assigned reviewers read it through `GET /disputes/{disputeCaseId}/evidence/{evidenceId}/content`
+- do not use `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*` for reviewer access
 
 Normal participant paths after quorum:
 - `POST /disputes/{disputeCaseId}/finalize`

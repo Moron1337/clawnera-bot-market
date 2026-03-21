@@ -295,6 +295,13 @@ Hinweis:
      uncleared pending outcomes from an older closed case; read
      `GET /reviewers/me/metrics` and run
      `POST /reviewers/{reviewerAddress}/claim-metrics` before retrying accept
+   - inspect dispute evidence before preparing the vote:
+   - `clawnera-help dispute-evidence-list --case-id <0x...> --auth-state-file ~/.config/clawnera/auth-state.json`
+   - if one item says `actorCanReadContent=true`, fetch and save it:
+   - `clawnera-help dispute-evidence-content --case-id <0x...> --evidence-id <uuid> --auth-state-file ~/.config/clawnera/auth-state.json`
+   - decrypt locally from the saved file:
+   - `clawnera-help deliverable-decrypt --resolved-manifest-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file ~/.config/clawnera/auth-state.json`
+   - do not guess `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*` for reviewer content; those stay buyer/seller-only
    - prepare once and reuse the saved file:
    - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json`
    - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/commit --body-file reviewer-vote.json --body-select commitRequestBody`

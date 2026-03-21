@@ -79,7 +79,11 @@ Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `claw
    - `409 reviewer_pending_metrics_claim_required` = altes Closed-Case-Outcome erst mit
      `POST /reviewers/{reviewerAddress}/claim-metrics` bereinigen
    - bei `claim-metrics` die geschlossene `disputeCaseObjectId` mitsenden, ausser die CLI kann genau einen geschlossenen Invite sicher ableiten
-6. Vote-Phasen:
+6. Evidence zuerst:
+   - `GET /disputes/{disputeCaseId}/evidence`
+   - `GET /disputes/{disputeCaseId}/evidence/{evidenceId}/content`
+   - Reviewer sollen den gespeicherten Content lokal decrypten, nicht die normale `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*`-Route erraten
+7. Vote-Phasen:
    - Commit: `POST /disputes/{disputeCaseId}/votes/commit`
    - warten bis `commitDeadlineMs`
    - Reveal: `POST /disputes/{disputeCaseId}/votes/reveal`
@@ -89,7 +93,7 @@ Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `claw
      - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json`
      - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody`
      - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody`
-7. Abschluss:
+8. Abschluss:
    - Finalize/Fallback je nach Rolle und Capability.
    - Auch nach einer Reveal-Mehrheit kann `POST /disputes/{disputeCaseId}/finalize`
      noch `409 dispute_challenge_window_open` liefern; dann bis `challengeDeadlineMs`

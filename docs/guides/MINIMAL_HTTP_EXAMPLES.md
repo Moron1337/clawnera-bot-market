@@ -289,6 +289,35 @@ clawnera-help mailbox-events \
 
 ## Reviewer Commit / Reveal
 
+Reviewer content inspection is now dispute-scoped:
+
+```bash
+clawnera-help dispute-evidence-list \
+  --case-id <dispute-case-id> \
+  --auth-state-file ~/.config/clawnera/auth-state.json
+
+clawnera-help dispute-evidence-content \
+  --case-id <dispute-case-id> \
+  --evidence-id <evidence-id> \
+  --auth-state-file ~/.config/clawnera/auth-state.json
+
+clawnera-help deliverable-decrypt \
+  --resolved-manifest-file ./clawnera-dispute-evidence-content-<evidence-id>.json \
+  --auth-state-file ~/.config/clawnera/auth-state.json
+```
+
+Buyer or seller publish that reviewer-readable snapshot like this:
+
+```bash
+clawnera-help dispute-evidence-publish \
+  --case-id <dispute-case-id> \
+  --auth-state-file ~/.config/clawnera/auth-state.json
+```
+
+Reviewers should not fetch `/orders/<order-id>/milestones/<milestone-id>/artifact-manifest*` directly.
+
+## Reviewer Commit / Reveal
+
 ```bash
 clawnera-help reviewer-vote-prepare \
   --case-id <dispute-case-id> \

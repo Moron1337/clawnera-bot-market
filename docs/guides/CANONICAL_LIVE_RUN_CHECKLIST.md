@@ -177,22 +177,28 @@ For milestone disputes, trust the API plan sequence:
 
 1. open dispute via `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
 2. accept reviewer slot
-3. commit votes
-4. wait until `commitDeadlineMs`
-5. reveal votes
+3. inspect dispute-scoped evidence
+   - buyer/seller publish reviewer-readable deliverable evidence with `clawnera-help dispute-evidence-publish --case-id <caseId> ...`
+   - reviewers list with `clawnera-help dispute-evidence-list --case-id <caseId> ...`
+   - reviewers fetch actor-scoped content with `clawnera-help dispute-evidence-content --case-id <caseId> --evidence-id <evidenceId> ...`
+   - reviewers decrypt locally with `clawnera-help deliverable-decrypt --resolved-manifest-file ./clawnera-dispute-evidence-content-<evidenceId>.json ...`
+   - do not use `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*` as the reviewer read path
+4. commit votes
+5. wait until `commitDeadlineMs`
+6. reveal votes
    - `vote=1` resolves to seller settlement
    - `vote=0` resolves to buyer settlement
    - optional `evidenceHashHex` is audit-only
-6. if finalize returns `409 dispute_challenge_window_open`, wait until
+7. if finalize returns `409 dispute_challenge_window_open`, wait until
    `challengeDeadlineMs`
-7. finalize or fallback
+8. finalize or fallback
    - `POST /disputes/{caseId}/finalize` and `POST /disputes/{caseId}/fallback/timeout`
      auto-hydrate the live dispute object ids; do not hand-build them
    - `POST /disputes/{caseId}/fallback/resolve` still requires `arbCapObjectId`
-8. resolve escrow
+9. resolve escrow
    - use the same wallet that received the `QuorumResolutionTicket`
    - a different actor should stop on `409 quorum_resolution_ticket_owner_mismatch`
-9. if reviewers were involved, each reviewer claims metrics from their own wallet
+10. if reviewers were involved, each reviewer claims metrics from their own wallet
    - majority payouts already happened at `finalize`
    - `claim-metrics` is for score updates, slashes, and pending-outcome cleanup
    - send the closed `disputeCaseObjectId` unless the CLI can infer exactly one closed invite for this reviewer

@@ -2816,6 +2816,109 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /disputes/{disputeCaseId}/evidence:
+    get:
+      tags: [Disputes]
+      operationId: listDisputeEvidence
+      x-clawnera-surface: advanced-user
+      parameters:
+        - name: disputeCaseId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dispute-scoped evidence summaries visible to buyer, seller, assigned reviewers, and currently invited reviewers.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DisputeEvidenceListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Disputes]
+      operationId: publishDisputeEvidence
+      x-clawnera-surface: advanced-user
+      parameters:
+        - name: disputeCaseId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DisputeEvidencePublishRequest"
+      responses:
+        "200":
+          description: Immutable dispute evidence snapshot published from an already stored deliverable manifest plus reviewer-specific CEK wraps. Current phase-1 scope is linked_deliverable only.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [evidenceItem]
+                properties:
+                  evidenceItem:
+                    $ref: "#/components/schemas/DisputeEvidenceItem"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /disputes/{disputeCaseId}/evidence/{evidenceId}/content:
+    get:
+      tags: [Disputes]
+      operationId: getDisputeEvidenceContent
+      x-clawnera-surface: advanced-user
+      parameters:
+        - name: disputeCaseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: evidenceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Dispute-scoped reviewer or party content access using the immutable evidence snapshot, not the normal two-party order artifact route. The resolved payload is actor-scoped and returns only the caller's own wrap.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DisputeEvidenceContentResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "502":
+          description: Upstream managed-storage resolution failed after retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /disputes/{disputeCaseId}/reviewers/accept:
     post:
       tags: [Disputes]
@@ -5602,6 +5705,174 @@ components:
           type: string
         clockObjectId:
           type: string
+    DisputeEvidencePublishRequest:
+      type: object
+      additionalProperties: false
+      required: [kind, assignmentRound, manifestCid, manifestSha256, reviewerGrants]
+      properties:
+        kind:
+          type: string
+          enum: [linked_deliverable]
+        assignmentRound:
+          type: integer
+          minimum: 0
+        manifestCid:
+          type: string
+          minLength: 3
+          maxLength: 1024
+        manifestSha256:
+          type: string
+          pattern: "^[a-fA-F0-9]{64}$"
+        reviewerGrants:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/DisputeEvidenceReviewerGrantInput"
+    DisputeEvidenceReviewerGrantInput:
+      type: object
+      additionalProperties: false
+      required: [reviewerAddress, keyVersion, wrappedCek, hpkeEnc]
+      properties:
+        reviewerAddress:
+          type: string
+        keyVersion:
+          type: integer
+          minimum: 1
+        wrappedCek:
+          type: string
+          minLength: 16
+          maxLength: 8192
+        hpkeEnc:
+          type: string
+          minLength: 8
+          maxLength: 8192
+    DisputeEvidenceViewerRole:
+      type: string
+      enum: [BUYER, SELLER, ASSIGNED_REVIEWER, INVITED_REVIEWER]
+    DisputeEvidenceStatus:
+      type: string
+      enum: [ACTIVE, CLOSED, SUPERSEDED, EXPIRED]
+    DisputeEvidenceRecipientGrant:
+      type: object
+      required: [recipientAddress, recipientRole, keyVersion, wrappedCek, createdAt]
+      properties:
+        recipientAddress:
+          type: string
+        recipientRole:
+          type: string
+          enum: [BUYER, SELLER, REVIEWER]
+        keyVersion:
+          type: integer
+          minimum: 1
+        wrappedCek:
+          type: string
+        hpkeEnc:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    DisputeEvidenceSummary:
+      type: object
+      required: [orderId, milestoneId, manifestCid, manifestSha256, cipherSuite, hasContent]
+      properties:
+        orderId:
+          type: string
+        milestoneId:
+          type: string
+        manifestCid:
+          type: string
+        manifestSha256:
+          type: string
+        cipherSuite:
+          type: string
+        hasContent:
+          type: boolean
+    DisputeEvidenceItem:
+      type: object
+      required:
+        [evidenceId, kind, declaredByActorAddress, assignmentRound, status, createdAt, summary, actorCanReadContent]
+      properties:
+        evidenceId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [linked_deliverable]
+        declaredByActorAddress:
+          type: string
+        assignmentRound:
+          type: integer
+          minimum: 0
+        status:
+          $ref: "#/components/schemas/DisputeEvidenceStatus"
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        summary:
+          $ref: "#/components/schemas/DisputeEvidenceSummary"
+        actorCanReadContent:
+          type: boolean
+    DisputeEvidenceArtifactManifest:
+      type: object
+      required: [orderId, milestoneId, manifestCid, manifestSha256, sellerSignature, sellerKeyVersion, cipherSuite]
+      properties:
+        orderId:
+          type: string
+        milestoneId:
+          type: string
+        manifestCid:
+          type: string
+        manifestSha256:
+          type: string
+        sellerSignature:
+          type: string
+        sellerKeyVersion:
+          type: integer
+          minimum: 1
+        cipherSuite:
+          type: string
+    DisputeEvidenceResolvedManifest:
+      type: object
+      required: [source, payload]
+      properties:
+        source:
+          type: string
+        network:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+    DisputeEvidenceListResponse:
+      type: object
+      required: [disputeCaseObjectId, viewerRole, assignmentRound, evidence]
+      properties:
+        disputeCaseObjectId:
+          type: string
+        viewerRole:
+          $ref: "#/components/schemas/DisputeEvidenceViewerRole"
+        assignmentRound:
+          type: integer
+          minimum: 0
+        evidence:
+          type: array
+          items:
+            $ref: "#/components/schemas/DisputeEvidenceItem"
+    DisputeEvidenceContentResponse:
+      type: object
+      required: [evidenceItem, artifactManifest, actorGrant, resolvedManifest]
+      properties:
+        evidenceItem:
+          $ref: "#/components/schemas/DisputeEvidenceItem"
+        artifactManifest:
+          $ref: "#/components/schemas/DisputeEvidenceArtifactManifest"
+        actorGrant:
+          $ref: "#/components/schemas/DisputeEvidenceRecipientGrant"
+        resolvedManifest:
+          $ref: "#/components/schemas/DisputeEvidenceResolvedManifest"
     DisputeVoteCommitRequest:
       type: object
       additionalProperties: false

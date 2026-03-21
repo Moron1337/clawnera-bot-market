@@ -81,6 +81,7 @@ If token budget is tight:
   - `reputation-init`
   - `reviewer-register`
   - `reviewer-handle-invite`
+  - `reviewer-inspect-evidence`
   - `reviewer-vote`
   - `reviewer-claim-metrics`
 - `operator`
@@ -94,6 +95,7 @@ If token budget is tight:
 - Full topics explain edge cases.
 - For buyer/seller delivery flows, bind the mailbox before the first seller milestone submit.
 - For request-buyer/request-seller delivery flows, bind the mailbox before the first seller milestone submit.
+- Reviewer flows inspect dispute-scoped evidence before commit/reveal; do not send reviewers to the normal order artifact route.
 - Run `key-agreement-upsert` only before encrypted delivery or reviewer onboarding, not as a universal listing prerequisite.
 - For the seller listing step, check compliance/deposit state first; normal listing create does not require `reputation-init`.
 - For the buyer request-listing step, check compliance/deposit state first; request listing create also does not require `reputation-init`.

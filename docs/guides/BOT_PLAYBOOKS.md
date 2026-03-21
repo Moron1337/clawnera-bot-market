@@ -82,7 +82,7 @@ Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `claw
 6. Evidence zuerst:
    - `GET /disputes/{disputeCaseId}/evidence`
    - `GET /disputes/{disputeCaseId}/evidence/{evidenceId}/content`
-   - Reviewer sollen den gespeicherten Content lokal decrypten, nicht die normale `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*`-Route erraten
+   - Reviewer sollen den gespeicherten Content lokal mit `clawnera-help dispute-evidence-decrypt --content-file ...` decrypten, nicht die normale `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*`-Route erraten
 7. Vote-Phasen:
    - Commit: `POST /disputes/{disputeCaseId}/votes/commit`
    - warten bis `commitDeadlineMs`

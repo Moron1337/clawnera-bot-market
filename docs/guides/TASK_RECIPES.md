@@ -97,6 +97,8 @@ Auth note:
   - common aliases: `open-dispute`, `start-dispute`
 - `dispute-evidence-linked-deliverable`
   - buyer/seller publish reviewer-readable deliverable evidence from the already uploaded payload
+- `dispute-evidence-supplemental-bundle`
+  - buyer/seller build and publish complaint, rebuttal, mailbox, checkpoint, or supporting dispute bundles for the active reviewer round
 - `operator-shortlist-open`
   - build selector receipt and publish the exact shortlist
 - `reviewer-register`
@@ -104,7 +106,7 @@ Auth note:
 - `reviewer-handle-invite`
   - poll inbox with `reviewer-invites` and accept only actionable invites
 - `reviewer-inspect-evidence`
-  - list dispute-scoped evidence, fetch one readable item, then decrypt locally before voting
+  - list dispute-scoped evidence, fetch one readable item, then decrypt locally with `dispute-evidence-decrypt` before voting
 - `reviewer-vote`
   - commit -> wait -> reveal -> finalize/fallback
 - `reviewer-claim-metrics`

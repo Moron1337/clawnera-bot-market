@@ -262,14 +262,15 @@ Important:
   - dispute-scoped reviewer evidence summaries
   - invited reviewers may inspect summaries before accept
 - `POST /disputes/{disputeCaseId}/evidence`
-  - buyer/seller-only publish route for current phase-1 `linked_deliverable` evidence
+  - buyer/seller-only publish route for `linked_deliverable` and `supplemental_bundle` evidence
   - package helper:
     - `clawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file <file>`
+    - for complaint/rebuttal/mailbox/checkpoint/supporting bundles: `clawnera-help dispute-evidence-bundle-build --case-id <dispute-case-id> --evidence-class <class> --bundle-plaintext-file <file> --auth-state-file <file>`
 - `GET /disputes/{disputeCaseId}/evidence/{evidenceId}/content`
   - actor-scoped reviewer/party content route
   - package helper:
     - `clawnera-help dispute-evidence-content --case-id <dispute-case-id> --evidence-id <uuid> --auth-state-file <file>`
-    - `clawnera-help deliverable-decrypt --resolved-manifest-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file <file>`
+    - `clawnera-help dispute-evidence-decrypt --content-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file <file>`
 - `POST /disputes/{disputeCaseId}/reviewers/accept`
 - `POST /disputes/{disputeCaseId}/votes/commit`
 - `POST /disputes/{disputeCaseId}/votes/reveal`

@@ -126,6 +126,9 @@ Wichtig:
 - die eigentlichen Bytes bleiben off-chain; on-chain landen nur Hash, Ref und Ack-Spur
 - fuer Reviewer/Juroren ist die Mailbox auch nicht der kanonische Evidence-Pfad; Reviewer sollen
   ueber `/disputes/{disputeCaseId}/evidence*` lesen, nicht ueber Chat-/Mailbox-Secrets
+- wenn Buyer oder Seller Mailbox-/Koordinationsmaterial im Dispute offenlegen muessen, sollen sie
+  daraus lokal ein `supplemental_bundle` bauen und dieses dispute-scoped publizieren, statt Reviewer
+  an die normale Mailbox oder an Party-Chat-Secrets zu haengen
 
 Bot-facing `signalIntent` Werte:
 - `MSG`

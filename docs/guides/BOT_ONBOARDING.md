@@ -300,7 +300,7 @@ Hinweis:
    - if one item says `actorCanReadContent=true`, fetch and save it:
    - `clawnera-help dispute-evidence-content --case-id <0x...> --evidence-id <uuid> --auth-state-file ~/.config/clawnera/auth-state.json`
    - decrypt locally from the saved file:
-   - `clawnera-help deliverable-decrypt --resolved-manifest-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file ~/.config/clawnera/auth-state.json`
+   - `clawnera-help dispute-evidence-decrypt --content-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file ~/.config/clawnera/auth-state.json`
    - do not guess `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*` for reviewer content; those stay buyer/seller-only
    - prepare once and reuse the saved file:
    - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json`

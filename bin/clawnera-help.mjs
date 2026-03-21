@@ -41,11 +41,16 @@ import {
   assertIpfsManifestCid,
   assertLowerHex64,
   buildKeyAgreementBindingMessage,
+  buildDisputeSupplementalBundlePayload,
   buildManagedDeliverablePayload,
   buildSignedMilestoneSubmitPayload,
   createEncryptedDeliverable,
+  decryptDisputeSupplementalBundleForRecipient,
   decryptDeliverableForRecipient,
+  DISPUTE_SUPPLEMENTAL_BUNDLE_PROTOCOL,
+  deriveDisputeSupplementalSummary,
   normalizeManagedDeliverablePayload,
+  normalizeDisputeSupplementalBundlePayload,
   defaultKeyAgreementRecordPath,
   generateKeyAgreementKeypair,
   loadKeyAgreementRecord,
@@ -129,6 +134,14 @@ const LISTING_CATEGORY_SET = new Set(LISTING_CATEGORY_SLUGS);
 const LISTING_PROMOTION_POLICIES = Object.freeze([
   "STANDARD",
   "PLATFORM_FUNDED_MARKETING",
+]);
+const SUPPLEMENTAL_EVIDENCE_CLASSES = Object.freeze([
+  "BUYER_COMPLAINT",
+  "SELLER_REBUTTAL",
+  "MAILBOX_COORDINATION",
+  "CHECKPOINT_HANDOVER",
+  "MISCONDUCT_REPORT",
+  "SUPPORTING_EXHIBIT",
 ]);
 const FORWARDED_REQUEST_OPTION_NAMES = Object.freeze([
   "auth-state-file",
@@ -347,9 +360,11 @@ function printUsage() {
   console.log("  clawnera-help reputation-init [options]   Create the actor reputation profile on-chain locally");
   console.log("  clawnera-help reviewer-register [options]  Register the actor as a reviewer with auto-filled live config");
   console.log("  clawnera-help deliverable-encrypt [options]  Encrypt one seller deliverable for seller + buyer locally");
+  console.log("  clawnera-help dispute-evidence-bundle-build [options]  Build encrypted supplemental dispute evidence locally");
   console.log("  clawnera-help dispute-evidence-publish [options]  Publish reviewer-readable linked deliverable evidence");
   console.log("  clawnera-help dispute-evidence-list [options]  Read dispute-scoped evidence summaries");
   console.log("  clawnera-help dispute-evidence-content [options]  Fetch actor-scoped dispute evidence content");
+  console.log("  clawnera-help dispute-evidence-decrypt [options]  Decrypt saved dispute evidence locally");
   console.log("  clawnera-help managed-storage-fee-pay [options]  Pay the managed storage fee on-chain locally");
   console.log("  clawnera-help managed-storage-presign [options]  Get a signed managed-storage upload URL");
   console.log("  clawnera-help managed-storage-upload [options]   Upload the encrypted JSON payload to managed storage");
@@ -5601,6 +5616,52 @@ function ensureDisputeCasePayload(responseBody) {
   return disputeCase;
 }
 
+async function resolveLatestUserKeyAgreement(options, address, timeoutMs, maxKeyVersion = 8) {
+  let matched = null;
+  for (let keyVersion = 1; keyVersion <= maxKeyVersion; keyVersion += 1) {
+    const keyAgreementCall = await callApiRoute({
+      method: "GET",
+      rawPath: `/users/${address}/key-agreement?keyVersion=${keyVersion}`,
+      options,
+      timeoutMs,
+    });
+    if (!keyAgreementCall.result.ok) {
+      if (keyAgreementCall.result.status === 404) {
+        continue;
+      }
+      return {
+        ok: false,
+        error: summarizeApiFailure(keyAgreementCall.result),
+        status: keyAgreementCall.result.status,
+        response: keyAgreementCall.result.body,
+      };
+    }
+    const keyAgreement = keyAgreementCall.result.body?.keyAgreement;
+    const publicKeyMultibase =
+      typeof keyAgreement?.publicKeyMultibase === "string" ? keyAgreement.publicKeyMultibase.trim() : "";
+    if (!publicKeyMultibase) {
+      continue;
+    }
+    matched = {
+      address,
+      keyVersion,
+      publicKeyMultibase,
+    };
+  }
+  if (!matched) {
+    return {
+      ok: false,
+      error: "key_agreement_not_found",
+      address,
+      maxKeyVersion,
+    };
+  }
+  return {
+    ok: true,
+    keyAgreement: matched,
+  };
+}
+
 async function resolveReviewerEvidenceKeyAgreement(options, reviewerAddress, timeoutMs, maxKeyVersion = 8) {
   const reviewerCall = await callApiRoute({
     method: "GET",
@@ -7242,11 +7303,16 @@ async function runDisputeEvidencePublish(commandArgs) {
       error: "missing_dispute_case_id",
     };
   }
-  if (kind !== "linked-deliverable" && kind !== "linked_deliverable") {
+  if (
+    kind !== "linked-deliverable" &&
+    kind !== "linked_deliverable" &&
+    kind !== "supplemental-bundle" &&
+    kind !== "supplemental_bundle"
+  ) {
     return {
       ok: false,
       error: "unsupported_dispute_evidence_kind",
-      supportedKinds: ["linked-deliverable"],
+      supportedKinds: ["linked-deliverable", "supplemental-bundle"],
     };
   }
 
@@ -7308,103 +7374,161 @@ async function runDisputeEvidencePublish(commandArgs) {
       };
     }
 
-    const artifactContentCall = await callApiRoute({
-      method: "GET",
-      rawPath: `/orders/${orderId}/milestones/${milestoneId}/artifact-manifest/content`,
-      options,
-      timeoutMs,
-    });
-    if (!artifactContentCall.result.ok) {
-      return {
-        ok: false,
-        error: summarizeApiFailure(artifactContentCall.result),
-        status: artifactContentCall.result.status,
-        response: artifactContentCall.result.body,
-      };
-    }
-    const artifactManifest = artifactContentCall.result.body?.artifactManifest;
-    const resolvedPayload = artifactContentCall.result.body?.resolvedManifest?.payload;
-    if (!artifactManifest || typeof artifactManifest !== "object" || Array.isArray(artifactManifest) || !resolvedPayload) {
-      return {
-        ok: false,
-        error: "artifact_manifest_payload_missing",
-        response: artifactContentCall.result.body,
-      };
-    }
-    const payload = normalizeManagedDeliverablePayload(resolvedPayload);
-    const actorWrap = Array.isArray(payload.encrypted?.cekWraps)
-      ? payload.encrypted.cekWraps.find((entry) => normalizeIotaAddress(entry.recipientAddress || "") === actorAddress)
-      : null;
-    if (!actorWrap) {
-      return {
-        ok: false,
-        error: "actor_wrap_not_found",
-        actorAddress,
-      };
-    }
-    const keyFile = resolveKeyAgreementRecordPathOption(
-      actorAddress,
-      actorWrap.keyVersion,
-      options["key-file"],
-      runtimeContext.authStateFile,
-    );
-    const keyRecord = await loadKeyAgreementRecord(keyFile, {
-      expectedAddress: actorAddress,
-      expectedKeyVersion: actorWrap.keyVersion,
-      fallbackExpiresAtMs: Date.now() + 86_400_000
-    });
-
-    const maxReviewerKeyVersion = parsePositiveIntOption(
-      options["max-reviewer-key-version"],
-      "max_reviewer_key_version",
-      8,
-    );
-    const reviewerKeyAgreements = [];
-    for (const reviewerAddress of assignedReviewers) {
-      const keyAgreement = await resolveReviewerEvidenceKeyAgreement(
-        options,
-        reviewerAddress,
-        timeoutMs,
-        maxReviewerKeyVersion,
-      );
-      if (!keyAgreement.ok) {
-        return keyAgreement;
+    let requestBody;
+    if (kind === "supplemental-bundle" || kind === "supplemental_bundle") {
+      const bundleBuildFile =
+        typeof options["bundle-build-file"] === "string" && options["bundle-build-file"].trim()
+          ? path.resolve(String(options["bundle-build-file"]).trim())
+          : "";
+      if (!bundleBuildFile || !fs.existsSync(bundleBuildFile)) {
+        return {
+          ok: false,
+          error: "missing_bundle_build_file",
+          bundleBuildFile,
+        };
       }
-      reviewerKeyAgreements.push(keyAgreement.keyAgreement);
-    }
-
-    const rewrapped = await rewrapManagedDeliverableForRecipients({
-      payload,
-      actorAddress,
-      recipientPrivateKeyMultibase: keyRecord.privateKeyMultibase,
-      newRecipients: reviewerKeyAgreements.map((entry) => ({
-        recipientAddress: entry.reviewerAddress,
-        keyVersion: entry.keyVersion,
-        recipientPublicKeyMultibase: entry.publicKeyMultibase,
-      })),
-    });
-    const requestBody = {
-      kind: "linked_deliverable",
-      assignmentRound,
-      manifestCid: String(artifactManifest.manifestCid || ""),
-      manifestSha256: String(artifactManifest.manifestSha256 || ""),
-      reviewerGrants: rewrapped.cekWraps.map((wrap) => ({
-        reviewerAddress: wrap.recipientAddress,
-        keyVersion: wrap.keyVersion,
-        wrappedCek: wrap.wrappedCek,
-        hpkeEnc: wrap.hpkeEnc,
-      })),
-    };
-    if (!requestBody.manifestCid || !requestBody.manifestSha256) {
-      return {
-        ok: false,
-        error: "artifact_manifest_metadata_missing",
-        response: artifactContentCall.result.body,
+      const manifestCid = typeof options["manifest-cid"] === "string" ? assertIpfsManifestCid(options["manifest-cid"]) : "";
+      if (!manifestCid) {
+        return {
+          ok: false,
+          error: "missing_manifest_cid",
+        };
+      }
+      const build = readJsonFileSync(bundleBuildFile, "invalid_bundle_build_file");
+      const buildRecipientGrants = Array.isArray(build?.recipientGrants) ? build.recipientGrants : [];
+      requestBody = {
+        kind: "supplemental_bundle",
+        assignmentRound,
+        evidenceClass: build?.evidenceClass,
+        manifestCid,
+        manifestSha256: build?.manifestSha256,
+        cipherSuite: build?.cipherSuite,
+        contentProtocol: build?.contentProtocol || DISPUTE_SUPPLEMENTAL_BUNDLE_PROTOCOL,
+        recipientGrants: buildRecipientGrants.map((grant) => ({
+          recipientAddress: grant.recipientAddress,
+          keyVersion: grant.keyVersion,
+          wrappedCek: grant.wrappedCek,
+          hpkeEnc: grant.hpkeEnc,
+        })),
+        summary: build?.summary,
+        ...(typeof build?.replyToEvidenceId === "string" && build.replyToEvidenceId.trim()
+          ? { replyToEvidenceId: build.replyToEvidenceId.trim() }
+          : {}),
       };
+    } else {
+      const artifactContentCall = await callApiRoute({
+        method: "GET",
+        rawPath: `/orders/${orderId}/milestones/${milestoneId}/artifact-manifest/content`,
+        options,
+        timeoutMs,
+      });
+      if (!artifactContentCall.result.ok) {
+        return {
+          ok: false,
+          error: summarizeApiFailure(artifactContentCall.result),
+          status: artifactContentCall.result.status,
+          response: artifactContentCall.result.body,
+        };
+      }
+      const artifactManifest = artifactContentCall.result.body?.artifactManifest;
+      const resolvedPayload = artifactContentCall.result.body?.resolvedManifest?.payload;
+      if (!artifactManifest || typeof artifactManifest !== "object" || Array.isArray(artifactManifest) || !resolvedPayload) {
+        return {
+          ok: false,
+          error: "artifact_manifest_payload_missing",
+          response: artifactContentCall.result.body,
+        };
+      }
+      const payload = normalizeManagedDeliverablePayload(resolvedPayload);
+      const actorWrap = Array.isArray(payload.encrypted?.cekWraps)
+        ? payload.encrypted.cekWraps.find((entry) => normalizeIotaAddress(entry.recipientAddress || "") === actorAddress)
+        : null;
+      if (!actorWrap) {
+        return {
+          ok: false,
+          error: "actor_wrap_not_found",
+          actorAddress,
+        };
+      }
+      const keyFile = resolveKeyAgreementRecordPathOption(
+        actorAddress,
+        actorWrap.keyVersion,
+        options["key-file"],
+        runtimeContext.authStateFile,
+      );
+      const keyRecord = await loadKeyAgreementRecord(keyFile, {
+        expectedAddress: actorAddress,
+        expectedKeyVersion: actorWrap.keyVersion,
+        fallbackExpiresAtMs: Date.now() + 86_400_000
+      });
+
+      const maxReviewerKeyVersion = parsePositiveIntOption(
+        options["max-reviewer-key-version"],
+        "max_reviewer_key_version",
+        8,
+      );
+      const reviewerKeyAgreements = [];
+      for (const reviewerAddress of assignedReviewers) {
+        const keyAgreement = await resolveReviewerEvidenceKeyAgreement(
+          options,
+          reviewerAddress,
+          timeoutMs,
+          maxReviewerKeyVersion,
+        );
+        if (!keyAgreement.ok) {
+          return keyAgreement;
+        }
+        reviewerKeyAgreements.push(keyAgreement.keyAgreement);
+      }
+
+      const rewrapped = await rewrapManagedDeliverableForRecipients({
+        payload,
+        actorAddress,
+        recipientPrivateKeyMultibase: keyRecord.privateKeyMultibase,
+        newRecipients: reviewerKeyAgreements.map((entry) => ({
+          recipientAddress: entry.reviewerAddress,
+          keyVersion: entry.keyVersion,
+          recipientPublicKeyMultibase: entry.publicKeyMultibase,
+        })),
+      });
+      requestBody = {
+        kind: "linked_deliverable",
+        assignmentRound,
+        manifestCid: String(artifactManifest.manifestCid || ""),
+        manifestSha256: String(artifactManifest.manifestSha256 || ""),
+        reviewerGrants: rewrapped.cekWraps.map((wrap) => ({
+          reviewerAddress: wrap.recipientAddress,
+          keyVersion: wrap.keyVersion,
+          wrappedCek: wrap.wrappedCek,
+          hpkeEnc: wrap.hpkeEnc,
+        })),
+      };
+      if (!requestBody.manifestCid || !requestBody.manifestSha256) {
+        return {
+          ok: false,
+          error: "artifact_manifest_metadata_missing",
+          response: artifactContentCall.result.body,
+        };
+      }
     }
     const bodyOut =
       resolveOptionalPathOption(options["body-out"]) ||
       path.resolve(process.cwd(), `clawnera-dispute-evidence-${orderId}-${milestoneId}.json`);
+    if (
+      requestBody.kind === "supplemental_bundle" &&
+      (!requestBody.manifestCid ||
+        !requestBody.manifestSha256 ||
+        !requestBody.cipherSuite ||
+        !Array.isArray(requestBody.recipientGrants) ||
+        requestBody.recipientGrants.length < 3 ||
+        !requestBody.summary)
+    ) {
+      return {
+        ok: false,
+        error: "bundle_build_metadata_missing",
+        requestBody,
+      };
+    }
     writeOptionalOutputFile(bodyOut, `${JSON.stringify(requestBody, null, 2)}\n`);
 
     if (parseBooleanOption(options["no-post"], false)) {
@@ -7420,7 +7544,7 @@ async function runDisputeEvidencePublish(commandArgs) {
         bodyOut,
         requestBody,
         nextPublishHint:
-          `clawnera-help dispute-evidence-publish --case-id ${shellQuote(disputeCaseId)} ` +
+          `clawnera-help dispute-evidence-publish ${requestBody.kind === "supplemental_bundle" ? "--kind supplemental-bundle " : ""}--case-id ${shellQuote(disputeCaseId)} ` +
           `--auth-state-file ${shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json")}`,
       };
     }
@@ -7470,6 +7594,217 @@ async function runDisputeEvidencePublish(commandArgs) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "dispute_evidence_publish_failed",
+    };
+  }
+}
+
+async function runDisputeEvidenceBundleBuild(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: disputeEvidenceBundleBuildUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  const disputeCaseId =
+    typeof options["case-id"] === "string" && options["case-id"].trim()
+      ? normalizeIotaAddress(String(options["case-id"]).trim())
+      : "";
+  const evidenceClassRaw = typeof options["evidence-class"] === "string" ? String(options["evidence-class"]).trim().toUpperCase() : "";
+  const evidenceClass = SUPPLEMENTAL_EVIDENCE_CLASSES.includes(evidenceClassRaw) ? evidenceClassRaw : "";
+  const bundlePlaintextFile =
+    typeof options["bundle-plaintext-file"] === "string" && options["bundle-plaintext-file"].trim()
+      ? path.resolve(String(options["bundle-plaintext-file"]).trim())
+      : "";
+  if (!disputeCaseId || !evidenceClass || !bundlePlaintextFile) {
+    return {
+      ok: false,
+      error: "missing_case_id_evidence_class_or_bundle_plaintext_file",
+    };
+  }
+  if (!fs.existsSync(bundlePlaintextFile)) {
+    return {
+      ok: false,
+      error: "missing_bundle_plaintext_file",
+      bundlePlaintextFile,
+    };
+  }
+
+  try {
+    const runtimeContext = await resolveApiRuntimeContext(options);
+    const actorAddress = resolveActorAddressForSignedRun(options, runtimeContext);
+    if (!actorAddress) {
+      return {
+        ok: false,
+        error: "missing_actor_address",
+      };
+    }
+    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+    const disputeCall = await callApiRoute({
+      method: "GET",
+      rawPath: `/disputes/${disputeCaseId}`,
+      options,
+      timeoutMs,
+    });
+    if (!disputeCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(disputeCall.result),
+        status: disputeCall.result.status,
+        response: disputeCall.result.body,
+      };
+    }
+    const disputeCase = ensureDisputeCasePayload(disputeCall.result.body);
+    const buyerAddress = normalizeIotaAddress(disputeCase.buyer || "");
+    const sellerAddress = normalizeIotaAddress(disputeCase.seller || "");
+    if (actorAddress !== buyerAddress && actorAddress !== sellerAddress) {
+      return {
+        ok: false,
+        error: "actor_not_dispute_party",
+        actorAddress,
+      };
+    }
+    const orderId = typeof disputeCase.orderId === "string" ? disputeCase.orderId.trim() : "";
+    const milestoneId = typeof disputeCase.milestoneId === "string" ? disputeCase.milestoneId.trim() : "";
+    if (!orderId || !milestoneId) {
+      return {
+        ok: false,
+        error: "dispute_order_or_milestone_missing",
+      };
+    }
+    const assignmentRound =
+      Number.isSafeInteger(Number(disputeCase.assignmentRound)) && Number(disputeCase.assignmentRound) >= 0
+        ? Number(disputeCase.assignmentRound)
+        : 0;
+    const assignedReviewers = Array.isArray(disputeCase.assignedReviewers)
+      ? disputeCase.assignedReviewers.map((value) => normalizeIotaAddress(value || "")).filter(Boolean)
+      : [];
+    if (assignedReviewers.length === 0) {
+      return {
+        ok: false,
+        error: "dispute_assigned_reviewers_missing",
+      };
+    }
+    const maxRecipientKeyVersion = parsePositiveIntOption(
+      options["max-recipient-key-version"],
+      "max_recipient_key_version",
+      8,
+    );
+    const buyerKeyAgreement = await resolveLatestUserKeyAgreement(options, buyerAddress, timeoutMs, maxRecipientKeyVersion);
+    if (!buyerKeyAgreement.ok) {
+      return buyerKeyAgreement;
+    }
+    const sellerKeyAgreement = await resolveLatestUserKeyAgreement(options, sellerAddress, timeoutMs, maxRecipientKeyVersion);
+    if (!sellerKeyAgreement.ok) {
+      return sellerKeyAgreement;
+    }
+    const reviewerKeyAgreements = [];
+    for (const reviewerAddress of assignedReviewers) {
+      const keyAgreement = await resolveReviewerEvidenceKeyAgreement(options, reviewerAddress, timeoutMs, maxRecipientKeyVersion);
+      if (!keyAgreement.ok) {
+        return keyAgreement;
+      }
+      reviewerKeyAgreements.push(keyAgreement.keyAgreement);
+    }
+    const plaintextBundle = readJsonFileSync(bundlePlaintextFile, "invalid_bundle_plaintext_file");
+    const replyToEvidenceId =
+      typeof options["reply-to-evidence-id"] === "string" && options["reply-to-evidence-id"].trim()
+        ? options["reply-to-evidence-id"].trim()
+        : undefined;
+    const built = await buildDisputeSupplementalBundlePayload({
+      disputeCaseObjectId: disputeCaseId,
+      orderId,
+      milestoneId,
+      assignmentRound,
+      evidenceClass,
+      declaredByActorAddress: actorAddress,
+      plaintextBundle,
+      replyToEvidenceId,
+      recipients: [
+        {
+          recipientAddress: buyerAddress,
+          keyVersion: buyerKeyAgreement.keyAgreement.keyVersion,
+          recipientPublicKeyMultibase: buyerKeyAgreement.keyAgreement.publicKeyMultibase,
+        },
+        {
+          recipientAddress: sellerAddress,
+          keyVersion: sellerKeyAgreement.keyAgreement.keyVersion,
+          recipientPublicKeyMultibase: sellerKeyAgreement.keyAgreement.publicKeyMultibase,
+        },
+        ...reviewerKeyAgreements.map((entry) => ({
+          recipientAddress: entry.reviewerAddress,
+          keyVersion: entry.keyVersion,
+          recipientPublicKeyMultibase: entry.publicKeyMultibase,
+        })),
+      ],
+    });
+    const manifestSha256 = sha256Hex(built.canonicalPayloadJson);
+    const payloadOut =
+      resolveOptionalPathOption(options["payload-out"]) ||
+      path.resolve(process.cwd(), `clawnera-dispute-supplemental-payload-${orderId}-${milestoneId}.json`);
+    const buildOut =
+      resolveOptionalPathOption(options["build-out"]) ||
+      path.resolve(process.cwd(), `clawnera-dispute-supplemental-build-${orderId}-${milestoneId}.json`);
+    writeOptionalOutputFile(payloadOut, `${JSON.stringify(built.payload, null, 2)}\n`);
+    const buildArtifact = {
+      kind: "supplemental_bundle",
+      disputeCaseId,
+      orderId,
+      milestoneId,
+      assignmentRound,
+      actorAddress,
+      evidenceClass,
+      manifestSha256,
+      cipherSuite: built.cipherSuite,
+      contentProtocol: DISPUTE_SUPPLEMENTAL_BUNDLE_PROTOCOL,
+      recipientGrants: built.payload.encrypted.cekWraps.map((wrap) => ({
+        recipientAddress: wrap.recipientAddress,
+        keyVersion: wrap.keyVersion,
+        wrappedCek: wrap.wrappedCek,
+        hpkeEnc: wrap.hpkeEnc,
+      })),
+      summary: built.summary,
+      ...(replyToEvidenceId ? { replyToEvidenceId } : {}),
+      payloadFile: payloadOut,
+    };
+    writeOptionalOutputFile(buildOut, `${JSON.stringify(buildArtifact, null, 2)}\n`);
+    const authStateHint = shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json");
+    return {
+      ok: true,
+      disputeCaseId,
+      orderId,
+      milestoneId,
+      actorAddress,
+      assignmentRound,
+      evidenceClass,
+      assignedReviewers,
+      manifestSha256,
+      cipherSuite: built.cipherSuite,
+      payloadOut,
+      buildOut,
+      summary: built.summary,
+      nextUploadHint:
+        `clawnera-help managed-storage-upload --file ${shellQuote(payloadOut)} --presign-file <presign-file.json>`,
+      nextPresignHint:
+        `clawnera-help managed-storage-presign --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} ` +
+        `--file ${shellQuote(payloadOut)} --payment-proof-file <payment-proof.json> --auth-state-file ${authStateHint}`,
+      nextPublishHint:
+        `clawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id ${shellQuote(disputeCaseId)} ` +
+        `--bundle-build-file ${shellQuote(buildOut)} --manifest-cid 'ipfs://<cid>' --auth-state-file ${authStateHint}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "dispute_evidence_bundle_build_failed",
     };
   }
 }
@@ -7603,13 +7938,161 @@ async function runDisputeEvidenceContent(commandArgs) {
       contentOut,
       response: contentCall.result.body,
       nextDecryptHint:
-        `clawnera-help deliverable-decrypt --resolved-manifest-file ${shellQuote(contentOut)} ` +
+        `clawnera-help dispute-evidence-decrypt --content-file ${shellQuote(contentOut)} ` +
         `--auth-state-file ${shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json")}`,
     };
   } catch (error) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "dispute_evidence_content_failed",
+    };
+  }
+}
+
+async function runDisputeEvidenceDecrypt(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: disputeEvidenceDecryptUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+  const contentFile =
+    typeof options["content-file"] === "string" && options["content-file"].trim()
+      ? path.resolve(String(options["content-file"]).trim())
+      : typeof options["resolved-manifest-file"] === "string" && options["resolved-manifest-file"].trim()
+        ? path.resolve(String(options["resolved-manifest-file"]).trim())
+        : "";
+  if (!contentFile) {
+    return {
+      ok: false,
+      error: "missing_content_file",
+    };
+  }
+  if (!fs.existsSync(contentFile)) {
+    return {
+      ok: false,
+      error: "missing_content_file",
+      contentFile,
+    };
+  }
+
+  try {
+    const runtimeContext =
+      options["auth-state-file"] || options["env-file"] || options["api-base"] || options.jwt
+        ? await resolveApiRuntimeContext(options)
+        : { authState: null, envValues: {} };
+    const actorAddress =
+      normalizeIotaAddress(options["recipient-address"] || "") ||
+      resolveActorAddressForSignedRun(options, runtimeContext);
+    if (!actorAddress) {
+      return {
+        ok: false,
+        error: "missing_recipient_address",
+      };
+    }
+    const raw = readJsonFileSync(contentFile, "invalid_dispute_evidence_content_file");
+    const payload = raw?.resolvedManifest?.payload;
+    const protocol = typeof payload?.protocol === "string" ? payload.protocol : "";
+    if (protocol !== DISPUTE_SUPPLEMENTAL_BUNDLE_PROTOCOL) {
+      return await runDeliverableDecrypt([
+        "--resolved-manifest-file",
+        contentFile,
+        ...(typeof options["recipient-address"] === "string" && options["recipient-address"].trim()
+          ? ["--recipient-address", String(options["recipient-address"]).trim()]
+          : []),
+        ...(typeof options["key-file"] === "string" && options["key-file"].trim()
+          ? ["--key-file", String(options["key-file"]).trim()]
+          : []),
+        ...(typeof options["plaintext-out"] === "string" && options["plaintext-out"].trim()
+          ? ["--plaintext-out", String(options["plaintext-out"]).trim()]
+          : []),
+        ...(typeof options["auth-state-file"] === "string" && options["auth-state-file"].trim()
+          ? ["--auth-state-file", String(options["auth-state-file"]).trim()]
+          : []),
+        ...(typeof options["env-file"] === "string" && options["env-file"].trim()
+          ? ["--env-file", String(options["env-file"]).trim()]
+          : []),
+        ...(typeof options["api-base"] === "string" && options["api-base"].trim()
+          ? ["--api-base", String(options["api-base"]).trim()]
+          : []),
+        ...(typeof options.jwt === "string" && options.jwt.trim()
+          ? ["--jwt", String(options.jwt).trim()]
+          : []),
+      ]);
+    }
+    const normalizedPayload = normalizeDisputeSupplementalBundlePayload(payload);
+    const recipients = Array.isArray(normalizedPayload.encrypted?.cekWraps) ? normalizedPayload.encrypted.cekWraps : [];
+    const actorGrantCandidate =
+      raw?.actorGrant && typeof raw.actorGrant === "object" && !Array.isArray(raw.actorGrant) ? raw.actorGrant : null;
+    const wrap =
+      recipients.find((entry) => normalizeIotaAddress(entry.recipientAddress || "") === actorAddress) ||
+      (actorGrantCandidate &&
+      normalizeIotaAddress(actorGrantCandidate.recipientAddress || "") === actorAddress &&
+      typeof actorGrantCandidate.keyVersion === "number" &&
+      typeof actorGrantCandidate.wrappedCek === "string"
+        ? {
+            recipientAddress: actorGrantCandidate.recipientAddress,
+            keyVersion: actorGrantCandidate.keyVersion,
+            wrappedCek: actorGrantCandidate.wrappedCek,
+            hpkeEnc: actorGrantCandidate.hpkeEnc,
+          }
+        : null);
+    if (!wrap) {
+      return {
+        ok: false,
+        error: "recipient_wrap_not_found",
+      };
+    }
+    const keyFile = resolveKeyAgreementRecordPathOption(
+      actorAddress,
+      wrap.keyVersion,
+      options["key-file"],
+      runtimeContext.authStateFile,
+    );
+    const keyRecord = await loadKeyAgreementRecord(keyFile, {
+      expectedAddress: actorAddress,
+      expectedKeyVersion: wrap.keyVersion,
+      fallbackExpiresAtMs: Date.now() + 86_400_000
+    });
+    const decrypted = await decryptDisputeSupplementalBundleForRecipient({
+      payload: normalizedPayload,
+      wrap,
+      recipientPrivateKeyMultibase: keyRecord.privateKeyMultibase,
+    });
+    const evidenceId =
+      typeof raw?.evidenceItem?.evidenceId === "string" && raw.evidenceItem.evidenceId.trim()
+        ? raw.evidenceItem.evidenceId.trim()
+        : `${normalizedPayload.orderId}-${normalizedPayload.milestoneId}`;
+    const plaintextOut =
+      resolveOptionalPathOption(options["plaintext-out"]) ||
+      path.resolve(process.cwd(), `clawnera-dispute-evidence-${evidenceId}.decrypted.json`);
+    writeOptionalOutputFile(plaintextOut, `${JSON.stringify(decrypted.plaintextJson, null, 2)}\n`);
+    return {
+      ok: true,
+      kind: "supplemental_bundle",
+      disputeCaseId: normalizedPayload.disputeCaseObjectId,
+      orderId: normalizedPayload.orderId,
+      milestoneId: normalizedPayload.milestoneId,
+      evidenceClass: normalizedPayload.evidenceClass,
+      recipientAddress: actorAddress,
+      plaintextOut,
+      plaintextBytes: decrypted.plaintext.length,
+      plaintextSha256: decrypted.plaintextSha256,
+      summary: deriveDisputeSupplementalSummary(decrypted.plaintextJson),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "dispute_evidence_decrypt_failed",
     };
   }
 }
@@ -9859,10 +10342,22 @@ function disputeEvidencePublishUsageLines() {
   return [
     "Dispute evidence publish helper:",
     "- Usage: clawnera-help dispute-evidence-publish --case-id <0x...> --auth-state-file <file>",
-    "- Current phase-1 scope is linked deliverable evidence only; the helper rewraps the already uploaded encrypted milestone payload for the currently assigned reviewers",
+    "- Linked deliverable mode: rewrap the already uploaded encrypted milestone payload for the currently assigned reviewers",
+    "- Supplemental bundle mode: pass --kind supplemental-bundle --bundle-build-file <file> --manifest-cid ipfs://<cid>",
     "- Reads GET /disputes/{disputeCaseId}, GET /orders/{orderId}/milestones/{milestoneId}/artifact-manifest/content, reviewer transport metadata, and matching reviewer key-agreement records",
     "- Optional: --no-post to only build the request body, --body-out <file>, --key-file <local-key-agreement.json>, --max-reviewer-key-version <n>",
     "- The normal two-party artifact routes stay buyer/seller-only; reviewers must use the dispute-scoped evidence routes afterwards"
+  ];
+}
+
+function disputeEvidenceBundleBuildUsageLines() {
+  return [
+    "Dispute evidence bundle build helper:",
+    "- Usage: clawnera-help dispute-evidence-bundle-build --case-id <0x...> --evidence-class <class> --bundle-plaintext-file <file> --auth-state-file <file>",
+    "- Builds one encrypted supplemental dispute evidence payload for buyer + seller + currently assigned reviewers",
+    "- Writes the managed-storage payload JSON plus one build metadata file used later by dispute-evidence-publish --kind supplemental-bundle",
+    "- Optional: --reply-to-evidence-id <uuid> --payload-out <file> --build-out <file> --max-recipient-key-version <n>",
+    "- Canonical evidence classes: BUYER_COMPLAINT, SELLER_REBUTTAL, MAILBOX_COORDINATION, CHECKPOINT_HANDOVER, MISCONDUCT_REPORT, SUPPORTING_EXHIBIT"
   ];
 }
 
@@ -9880,7 +10375,17 @@ function disputeEvidenceContentUsageLines() {
     "Dispute evidence content helper:",
     "- Usage: clawnera-help dispute-evidence-content --case-id <0x...> --evidence-id <uuid> --auth-state-file <file>",
     "- Reads the actor-scoped dispute evidence content route and saves the exact response for local decrypt",
-    "- Optional: --content-out <file>; the saved file can be passed directly to clawnera-help deliverable-decrypt --resolved-manifest-file"
+    "- Optional: --content-out <file>; the saved file can be passed directly to clawnera-help dispute-evidence-decrypt --content-file"
+  ];
+}
+
+function disputeEvidenceDecryptUsageLines() {
+  return [
+    "Dispute evidence decrypt helper:",
+    "- Usage: clawnera-help dispute-evidence-decrypt --content-file <file> --auth-state-file <file>",
+    "- Reads a saved dispute evidence content response, detects the evidence kind, and decrypts locally",
+    "- linked_deliverable returns the raw plaintext file; supplemental_bundle returns a decrypted JSON file",
+    "- Optional: --recipient-address <0x...> --key-file <file> --plaintext-out <file>",
   ];
 }
 
@@ -10523,6 +11028,10 @@ const aliasCommands = new Map([
   ["reviewer-inspect-evidence", "dispute-evidence-list"],
   ["reviewer-evidence-content", "dispute-evidence-content"],
   ["publish-dispute-evidence", "dispute-evidence-publish"],
+  ["build-dispute-evidence", "dispute-evidence-bundle-build"],
+  ["dispute-bundle-build", "dispute-evidence-bundle-build"],
+  ["decrypt-dispute-evidence", "dispute-evidence-decrypt"],
+  ["reviewer-evidence-decrypt", "dispute-evidence-decrypt"],
   ["storage-fee-pay", "managed-storage-fee-pay"],
   ["storage-presign", "managed-storage-presign"],
   ["storage-upload", "managed-storage-upload"],
@@ -10587,9 +11096,11 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "reputation-init",
         "reviewer-register",
         "deliverable-encrypt",
+        "dispute-evidence-bundle-build",
         "dispute-evidence-publish",
         "dispute-evidence-list",
         "dispute-evidence-content",
+        "dispute-evidence-decrypt",
         "managed-storage-fee-pay",
         "managed-storage-presign",
         "managed-storage-upload",
@@ -11560,6 +12071,39 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   if (!result.ok && !result.help) {
     process.exitCode = 1;
   }
+} else if (effectiveCommand === "dispute-evidence-bundle-build") {
+  const result = await runDisputeEvidenceBundleBuild(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`dispute_evidence_bundle_build_ok case_id=${result.disputeCaseId}`);
+    console.log(`order_id=${result.orderId}`);
+    console.log(`milestone_id=${result.milestoneId}`);
+    console.log(`assignment_round=${result.assignmentRound}`);
+    console.log(`evidence_class=${result.evidenceClass}`);
+    console.log(`payload_out=${result.payloadOut}`);
+    console.log(`build_out=${result.buildOut}`);
+    console.log(`manifest_sha256=${result.manifestSha256}`);
+    if (result.nextPresignHint) {
+      console.log(`next_presign=${result.nextPresignHint}`);
+    }
+    if (result.nextUploadHint) {
+      console.log(`next_upload=${result.nextUploadHint}`);
+    }
+    if (result.nextPublishHint) {
+      console.log(`next_publish=${result.nextPublishHint}`);
+    }
+  } else {
+    console.error(`dispute_evidence_bundle_build_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
 } else if (effectiveCommand === "dispute-evidence-list") {
   const result = await runDisputeEvidenceList(commandArgs);
   if (flags.json) {
@@ -11603,6 +12147,37 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`dispute_evidence_content_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "dispute-evidence-decrypt") {
+  const result = await runDisputeEvidenceDecrypt(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`dispute_evidence_decrypt_ok recipient_address=${result.recipientAddress}`);
+    if (result.kind) {
+      console.log(`kind=${result.kind}`);
+    }
+    if (result.orderId) {
+      console.log(`order_id=${result.orderId}`);
+    }
+    if (result.milestoneId) {
+      console.log(`milestone_id=${result.milestoneId}`);
+    }
+    if (result.evidenceClass) {
+      console.log(`evidence_class=${result.evidenceClass}`);
+    }
+    console.log(`plaintext_out=${result.plaintextOut}`);
+    console.log(`plaintext_sha256=${result.plaintextSha256}`);
+  } else {
+    console.error(`dispute_evidence_decrypt_error: ${result.error}`);
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {

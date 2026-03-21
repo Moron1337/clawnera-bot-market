@@ -90,9 +90,11 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /clawnera-help reviewer-register/);
   assert.match(result.stdout, /clawnera-help reviewer-invites/);
   assert.match(result.stdout, /clawnera-help deliverable-encrypt/);
+  assert.match(result.stdout, /clawnera-help dispute-evidence-bundle-build/);
   assert.match(result.stdout, /clawnera-help dispute-evidence-publish/);
   assert.match(result.stdout, /clawnera-help dispute-evidence-list/);
   assert.match(result.stdout, /clawnera-help dispute-evidence-content/);
+  assert.match(result.stdout, /clawnera-help dispute-evidence-decrypt/);
   assert.match(result.stdout, /clawnera-help mailbox-events/);
   assert.match(result.stdout, /clawnera-help milestone-submit-byo/);
   assert.match(result.stdout, /clawnera-help milestone-anchor/);
@@ -134,9 +136,11 @@ test("help json output includes auth-login command", () => {
   assert.ok(payload.commands.includes("reviewer-register"));
   assert.ok(payload.commands.includes("reviewer-invites"));
   assert.ok(payload.commands.includes("deliverable-encrypt"));
+  assert.ok(payload.commands.includes("dispute-evidence-bundle-build"));
   assert.ok(payload.commands.includes("dispute-evidence-publish"));
   assert.ok(payload.commands.includes("dispute-evidence-list"));
   assert.ok(payload.commands.includes("dispute-evidence-content"));
+  assert.ok(payload.commands.includes("dispute-evidence-decrypt"));
   assert.ok(payload.commands.includes("mailbox-events"));
   assert.ok(payload.commands.includes("milestone-submit-byo"));
   assert.ok(payload.commands.includes("milestone-anchor"));
@@ -185,9 +189,11 @@ test("encrypted delivery helpers print usage", () => {
     ["reputation-init", /Reputation profile init helper/],
     ["reviewer-register", /Reviewer register helper/],
     ["deliverable-encrypt", /Deliverable encrypt helper/],
+    ["dispute-evidence-bundle-build", /Dispute evidence bundle build helper/],
     ["dispute-evidence-publish", /Dispute evidence publish helper/],
     ["dispute-evidence-list", /Dispute evidence list helper/],
     ["dispute-evidence-content", /Dispute evidence content helper/],
+    ["dispute-evidence-decrypt", /Dispute evidence decrypt helper/],
     ["mailbox-events", /Mailbox events helper/],
     ["pinata-upload-json", /Pinata JSON upload helper/],
     ["milestone-submit-byo", /Milestone submit helper/],
@@ -452,7 +458,7 @@ test("journey compact output keeps only ids, handoffs, and next hints", () => {
   assert.match(result.stdout, /steps:setup-quick > seller-create-listing > seller-review-bids > buyer-accept-bid\[handoff,wait_for_buyer_accept]/);
   assert.match(
     result.stdout,
-    /later:creator-cancel-listing \| creator-renew-listing \| dispute-open \| dispute-evidence-linked-deliverable \| resolve-dispute/
+    /later:creator-cancel-listing \| creator-renew-listing \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
   );
   assert.match(result.stdout, /next_if_not_setup:setup-quick/);
   assert.match(result.stdout, /next_if_setup:seller-create-listing/);
@@ -477,7 +483,7 @@ test("request journeys separate buyer-created requests from offer flow", () => {
   );
   assert.match(
     buyerResult.stdout,
-    /later:creator-cancel-listing \| creator-renew-listing \| buyer-reject-delivery \| dispute-open \| dispute-evidence-linked-deliverable \| resolve-dispute/
+    /later:creator-cancel-listing \| creator-renew-listing \| buyer-reject-delivery \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
   );
   assert.match(
     buyerResult.stdout,
@@ -491,7 +497,10 @@ test("request journeys separate buyer-created requests from offer flow", () => {
     sellerResult.stdout,
     /steps:setup-quick > seller-answer-request > buyer-accept-request-bid\[handoff,wait_for_request_buyer_accept] > fund-order/
   );
-  assert.match(sellerResult.stdout, /later:dispute-open \| dispute-evidence-linked-deliverable \| resolve-dispute/);
+  assert.match(
+    sellerResult.stdout,
+    /later:dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
+  );
 });
 
 test("buyer compact journey does not suggest listing-creator maintenance actions", () => {
@@ -501,7 +510,7 @@ test("buyer compact journey does not suggest listing-creator maintenance actions
   assert.doesNotMatch(result.stdout, /creator-renew-listing/);
   assert.match(
     result.stdout,
-    /later:buyer-reject-delivery \| dispute-open \| dispute-evidence-linked-deliverable \| resolve-dispute/
+    /later:buyer-reject-delivery \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
   );
 });
 
@@ -669,7 +678,7 @@ test("dispute evidence publish compact output highlights the publish route", () 
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^do:clawnera-help dispute-evidence-publish --case-id <disputeCaseId> --auth-state-file ~\/\.config\/clawnera\/auth-state\.json/m);
   assert.match(result.stdout, /^write:POST \/disputes\/\{disputeCaseId\}\/evidence/m);
-  assert.match(result.stdout, /^next:reviewer-inspect-evidence \| reviewer-vote/m);
+  assert.match(result.stdout, /^next:dispute-evidence-supplemental-bundle \| reviewer-inspect-evidence \| reviewer-vote/m);
 });
 
 test("replacement compact output highlights live case readback and replace publish route", () => {
@@ -705,7 +714,7 @@ test("reviewer inspect recipe json output is parseable", () => {
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.recipe.id, "reviewer-inspect-evidence");
   assert.ok(payload.recipe.steps.some((step) => /dispute-evidence-content/.test(step)));
-  assert.ok(payload.recipe.steps.some((step) => /deliverable-decrypt/.test(step)));
+  assert.ok(payload.recipe.steps.some((step) => /dispute-evidence-decrypt/.test(step)));
 });
 
 test("dispute-open recipe explains manual bind inputs and auto-bind success", () => {

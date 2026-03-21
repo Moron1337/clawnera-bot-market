@@ -144,7 +144,8 @@ Reviewer participation is invite-gated:
 
 If the dispute needs reviewer-visible delivery proof:
 - buyer/seller publish it through `POST /disputes/{disputeCaseId}/evidence`
-- current phase-1 scope is the existing deliverable only; do not assume supplemental mailbox bundles already exist
+- use `linked_deliverable` for the already uploaded seller deliverable
+- use `supplemental_bundle` for buyer complaint, seller rebuttal, mailbox/checkpoint export, or other supporting dispute material
 - assigned reviewers read it through `GET /disputes/{disputeCaseId}/evidence/{evidenceId}/content`
 - do not use `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*` for reviewer access
 

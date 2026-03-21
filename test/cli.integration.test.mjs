@@ -459,8 +459,216 @@ test("dispute-evidence list and content helpers save actor-scoped reviewer files
     assert.equal(contentResult.status, 0);
     const contentPayload = JSON.parse(contentResult.stdout);
     assert.equal(contentPayload.contentOut, contentOut);
-    assert.match(contentPayload.nextDecryptHint, /deliverable-decrypt/);
+    assert.match(contentPayload.nextDecryptHint, /dispute-evidence-decrypt/);
     assert.equal(existsSync(contentOut), true);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("dispute-evidence-bundle-build creates supplemental bundle payloads and dispute-evidence-decrypt unwraps them", async () => {
+  const buyerAddress = `0x${"1".repeat(64)}`;
+  const sellerAddress = `0x${"2".repeat(64)}`;
+  const reviewerAddress = `0x${"3".repeat(64)}`;
+  const caseId = `0x${"4".repeat(64)}`;
+  const orderId = "order-dispute-supplemental";
+  const milestoneId = "milestone-supplemental";
+  const buyerKeys = generateKeyAgreementKeypair("u");
+  const sellerKeys = generateKeyAgreementKeypair("u");
+  const reviewerKeys = generateKeyAgreementKeypair("u");
+
+  const mock = await startMockServer({
+    [`GET /disputes/${caseId}`]: () => ({
+      status: 200,
+      body: {
+        disputeCase: {
+          objectId: caseId,
+          orderId,
+          milestoneId,
+          buyer: buyerAddress,
+          seller: sellerAddress,
+          assignedReviewers: [reviewerAddress],
+          assignmentRound: 1
+        }
+      }
+    }),
+    [`GET /reviewers/${reviewerAddress}`]: () => ({
+      status: 200,
+      body: {
+        reviewer: {
+          ownerAddress: reviewerAddress,
+          transportPubkeyHex: Buffer.from(reviewerKeys.publicKeyMultibase.slice(1), "base64url").toString("hex")
+        }
+      }
+    }),
+    default: (request) => {
+      if (request.method === "GET" && request.url === `/users/${buyerAddress}/key-agreement?keyVersion=1`) {
+        return {
+          status: 200,
+          body: {
+            keyAgreement: {
+              address: buyerAddress,
+              keyVersion: 1,
+              publicKeyMultibase: buyerKeys.publicKeyMultibase
+            }
+          }
+        };
+      }
+      if (request.method === "GET" && request.url === `/users/${sellerAddress}/key-agreement?keyVersion=1`) {
+        return {
+          status: 200,
+          body: {
+            keyAgreement: {
+              address: sellerAddress,
+              keyVersion: 1,
+              publicKeyMultibase: sellerKeys.publicKeyMultibase
+            }
+          }
+        };
+      }
+      if (request.method === "GET" && request.url === `/users/${reviewerAddress}/key-agreement?keyVersion=1`) {
+        return {
+          status: 200,
+          body: {
+            keyAgreement: {
+              address: reviewerAddress,
+              keyVersion: 1,
+              publicKeyMultibase: reviewerKeys.publicKeyMultibase
+            }
+          }
+        };
+      }
+      if (request.method === "GET" && request.url.startsWith(`/users/`) && request.url.includes(`/key-agreement?keyVersion=`)) {
+        return {
+          status: 404,
+          body: { error: "not_found" }
+        };
+      }
+      return {
+        status: 404,
+        body: { error: "not_found" }
+      };
+    }
+  });
+
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-dispute-supplemental-build-"));
+  const buyerAuthStateFile = path.join(tempHome, ".config", "clawnera", "buyer-auth-state.json");
+  const reviewerAuthStateFile = path.join(tempHome, ".config", "clawnera", "reviewer-auth-state.json");
+  const reviewerKeyFile = path.join(tempHome, "reviewer-key-agreement.json");
+  const plaintextFile = path.join(tempHome, "bundle-plaintext.json");
+  mkdirSync(path.dirname(buyerAuthStateFile), { recursive: true });
+  writeFileSync(
+    buyerAuthStateFile,
+    JSON.stringify({
+      jwt: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+      refreshToken: "refresh-token",
+      actorAddress: buyerAddress,
+      apiBase: mock.baseUrl
+    }),
+    "utf8"
+  );
+  writeFileSync(
+    reviewerAuthStateFile,
+    JSON.stringify({
+      jwt: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+      refreshToken: "refresh-token",
+      actorAddress: reviewerAddress,
+      apiBase: mock.baseUrl
+    }),
+    "utf8"
+  );
+  writeFileSync(
+    plaintextFile,
+    JSON.stringify(
+      {
+        statement: {
+          title: "Buyer complaint",
+          markdown: "Missing second attachment",
+          requestedOutcome: "buyer_refund"
+        },
+        items: [{ itemType: "mailbox_signal_ref", label: "signal-1" }]
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
+  await saveKeyAgreementRecord({
+    address: reviewerAddress,
+    keyVersion: 1,
+    publicKeyMultibase: reviewerKeys.publicKeyMultibase,
+    privateKeyMultibase: reviewerKeys.privateKeyMultibase,
+    expiresAtMs: Date.now() + 86_400_000,
+    filePath: reviewerKeyFile
+  });
+
+  try {
+    const buildResult = await runCli(
+      [
+        "dispute-evidence-bundle-build",
+        "--case-id",
+        caseId,
+        "--evidence-class",
+        "BUYER_COMPLAINT",
+        "--bundle-plaintext-file",
+        plaintextFile,
+        "--auth-state-file",
+        buyerAuthStateFile,
+        "--json"
+      ],
+      { HOME: tempHome }
+    );
+    assert.equal(buildResult.status, 0);
+    const buildPayload = JSON.parse(buildResult.stdout);
+    assert.equal(buildPayload.ok, true);
+    assert.equal(buildPayload.summary.containsStatement, true);
+    assert.equal(buildPayload.summary.mailboxSignalCount, 1);
+    assert.equal(existsSync(buildPayload.payloadOut), true);
+    assert.equal(existsSync(buildPayload.buildOut), true);
+
+    const payloadJson = JSON.parse(readFileSync(buildPayload.payloadOut, "utf8"));
+    const reviewerWrap = payloadJson.encrypted.cekWraps.find((entry) => entry.recipientAddress === reviewerAddress);
+    assert.ok(reviewerWrap);
+    const contentFile = path.join(tempHome, "supplemental-content.json");
+    writeFileSync(
+      contentFile,
+      JSON.stringify(
+        {
+          evidenceItem: {
+            evidenceId: "supplemental-evidence-1",
+            kind: "supplemental_bundle"
+          },
+          actorGrant: reviewerWrap,
+          resolvedManifest: {
+            payload: payloadJson
+          }
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+
+    const decryptResult = await runCli(
+      [
+        "dispute-evidence-decrypt",
+        "--content-file",
+        contentFile,
+        "--auth-state-file",
+        reviewerAuthStateFile,
+        "--key-file",
+        reviewerKeyFile,
+        "--json"
+      ],
+      { HOME: tempHome }
+    );
+    assert.equal(decryptResult.status, 0);
+    const decryptPayload = JSON.parse(decryptResult.stdout);
+    assert.equal(decryptPayload.ok, true);
+    assert.equal(decryptPayload.kind, "supplemental_bundle");
+    const decryptedJson = JSON.parse(readFileSync(decryptPayload.plaintextOut, "utf8"));
+    assert.equal(decryptedJson.statement.title, "Buyer complaint");
+    assert.equal(decryptedJson.items[0].itemType, "mailbox_signal_ref");
   } finally {
     await mock.close();
   }

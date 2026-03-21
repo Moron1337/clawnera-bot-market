@@ -3011,8 +3011,8 @@ paths:
       responses:
         '200':
           description: >-
-            Immutable dispute evidence snapshot published from an already stored deliverable manifest plus
-            reviewer-specific CEK wraps. Current phase-1 scope is linked_deliverable only.
+            Immutable dispute evidence snapshot published as either a reviewer-rewrapped linked deliverable or a
+            supplemental dispute bundle with actor-scoped recipient wraps.
           content:
             application/json:
               schema:
@@ -5065,11 +5065,15 @@ components:
       type: object
       additionalProperties: false
     DisputeEvidenceContentResponse:
+      oneOf:
+        - $ref: '#/components/schemas/DisputeLinkedDeliverableEvidenceContentResponse'
+        - $ref: '#/components/schemas/DisputeSupplementalBundleEvidenceContentResponse'
+    DisputeSupplementalBundleEvidenceContentResponse:
       properties:
         evidenceItem:
-          $ref: '#/components/schemas/DisputeEvidenceItem'
-        artifactManifest:
-          $ref: '#/components/schemas/DisputeEvidenceArtifactManifest'
+          $ref: '#/components/schemas/DisputeSupplementalBundleEvidenceItem'
+        bundleManifest:
+          $ref: '#/components/schemas/DisputeEvidenceBundleManifest'
         actorGrant:
           $ref: '#/components/schemas/DisputeEvidenceRecipientGrant'
         resolvedManifest:
@@ -5077,7 +5081,7 @@ components:
       type: object
       required:
         - evidenceItem
-        - artifactManifest
+        - bundleManifest
         - actorGrant
         - resolvedManifest
     DisputeEvidenceResolvedManifest:
@@ -5120,6 +5124,156 @@ components:
         - keyVersion
         - wrappedCek
         - createdAt
+    DisputeEvidenceBundleManifest:
+      properties:
+        orderId:
+          type: string
+        milestoneId:
+          type: string
+        manifestCid:
+          type: string
+        manifestSha256:
+          type: string
+        cipherSuite:
+          type: string
+        contentProtocol:
+          type: string
+          enum:
+            - clawdex.dispute-supplemental-bundle.v1
+        evidenceClass:
+          $ref: '#/components/schemas/DisputeSupplementalEvidenceClass'
+        replyToEvidenceId:
+          type: string
+          format: uuid
+      type: object
+      required:
+        - orderId
+        - milestoneId
+        - manifestCid
+        - manifestSha256
+        - cipherSuite
+        - contentProtocol
+        - evidenceClass
+    DisputeSupplementalEvidenceClass:
+      type: string
+      enum:
+        - BUYER_COMPLAINT
+        - SELLER_REBUTTAL
+        - MAILBOX_COORDINATION
+        - CHECKPOINT_HANDOVER
+        - MISCONDUCT_REPORT
+        - SUPPORTING_EXHIBIT
+    DisputeSupplementalBundleEvidenceItem:
+      properties:
+        evidenceId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+            - supplemental_bundle
+        declaredByActorAddress:
+          type: string
+        assignmentRound:
+          type: integer
+          minimum: 0
+        status:
+          $ref: '#/components/schemas/DisputeEvidenceStatus'
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        summary:
+          $ref: '#/components/schemas/DisputeSupplementalBundleEvidenceSummary'
+        actorCanReadContent:
+          type: boolean
+      type: object
+      required:
+        - evidenceId
+        - kind
+        - declaredByActorAddress
+        - assignmentRound
+        - status
+        - createdAt
+        - summary
+        - actorCanReadContent
+    DisputeSupplementalBundleEvidenceSummary:
+      properties:
+        orderId:
+          type: string
+        milestoneId:
+          type: string
+        manifestCid:
+          type: string
+        manifestSha256:
+          type: string
+        cipherSuite:
+          type: string
+        contentProtocol:
+          type: string
+          enum:
+            - clawdex.dispute-supplemental-bundle.v1
+        evidenceClass:
+          $ref: '#/components/schemas/DisputeSupplementalEvidenceClass'
+        replyToEvidenceId:
+          type: string
+          format: uuid
+        containsStatement:
+          type: boolean
+        attachmentCount:
+          type: integer
+          minimum: 0
+        mailboxSignalCount:
+          type: integer
+          minimum: 0
+        mailboxAckCount:
+          type: integer
+          minimum: 0
+        checkpointRefCount:
+          type: integer
+          minimum: 0
+        hasContent:
+          type: boolean
+      type: object
+      required:
+        - orderId
+        - milestoneId
+        - manifestCid
+        - manifestSha256
+        - cipherSuite
+        - contentProtocol
+        - evidenceClass
+        - containsStatement
+        - attachmentCount
+        - mailboxSignalCount
+        - mailboxAckCount
+        - checkpointRefCount
+        - hasContent
+    DisputeEvidenceStatus:
+      type: string
+      enum:
+        - ACTIVE
+        - CLOSED
+        - SUPERSEDED
+        - EXPIRED
+    DisputeLinkedDeliverableEvidenceContentResponse:
+      properties:
+        evidenceItem:
+          $ref: '#/components/schemas/DisputeLinkedDeliverableEvidenceItem'
+        artifactManifest:
+          $ref: '#/components/schemas/DisputeEvidenceArtifactManifest'
+        actorGrant:
+          $ref: '#/components/schemas/DisputeEvidenceRecipientGrant'
+        resolvedManifest:
+          $ref: '#/components/schemas/DisputeEvidenceResolvedManifest'
+      type: object
+      required:
+        - evidenceItem
+        - artifactManifest
+        - actorGrant
+        - resolvedManifest
     DisputeEvidenceArtifactManifest:
       properties:
         orderId:
@@ -5137,6 +5291,10 @@ components:
           minimum: 1
         cipherSuite:
           type: string
+        contentProtocol:
+          type: string
+          enum:
+            - clawdex.managed-deliverable.v1
       type: object
       required:
         - orderId
@@ -5146,7 +5304,8 @@ components:
         - sellerSignature
         - sellerKeyVersion
         - cipherSuite
-    DisputeEvidenceItem:
+        - contentProtocol
+    DisputeLinkedDeliverableEvidenceItem:
       properties:
         evidenceId:
           type: string
@@ -5169,7 +5328,7 @@ components:
           type: string
           format: date-time
         summary:
-          $ref: '#/components/schemas/DisputeEvidenceSummary'
+          $ref: '#/components/schemas/DisputeLinkedDeliverableEvidenceSummary'
         actorCanReadContent:
           type: boolean
       type: object
@@ -5182,7 +5341,7 @@ components:
         - createdAt
         - summary
         - actorCanReadContent
-    DisputeEvidenceSummary:
+    DisputeLinkedDeliverableEvidenceSummary:
       properties:
         orderId:
           type: string
@@ -5194,6 +5353,10 @@ components:
           type: string
         cipherSuite:
           type: string
+        contentProtocol:
+          type: string
+          enum:
+            - clawdex.managed-deliverable.v1
         hasContent:
           type: boolean
       type: object
@@ -5203,15 +5366,112 @@ components:
         - manifestCid
         - manifestSha256
         - cipherSuite
+        - contentProtocol
         - hasContent
-    DisputeEvidenceStatus:
-      type: string
-      enum:
-        - ACTIVE
-        - CLOSED
-        - SUPERSEDED
-        - EXPIRED
+    DisputeEvidenceItem:
+      oneOf:
+        - $ref: '#/components/schemas/DisputeLinkedDeliverableEvidenceItem'
+        - $ref: '#/components/schemas/DisputeSupplementalBundleEvidenceItem'
     DisputeEvidencePublishRequest:
+      oneOf:
+        - $ref: '#/components/schemas/DisputeLinkedDeliverableEvidencePublishRequest'
+        - $ref: '#/components/schemas/DisputeSupplementalBundleEvidencePublishRequest'
+    DisputeSupplementalBundleEvidencePublishRequest:
+      properties:
+        kind:
+          type: string
+          enum:
+            - supplemental_bundle
+        assignmentRound:
+          type: integer
+          minimum: 0
+        evidenceClass:
+          $ref: '#/components/schemas/DisputeSupplementalEvidenceClass'
+        manifestCid:
+          type: string
+          minLength: 3
+          maxLength: 1024
+        manifestSha256:
+          type: string
+          pattern: ^[a-fA-F0-9]{64}$
+        cipherSuite:
+          type: string
+          minLength: 3
+          maxLength: 128
+        contentProtocol:
+          type: string
+          enum:
+            - clawdex.dispute-supplemental-bundle.v1
+        recipientGrants:
+          type: array
+          minItems: 3
+          maxItems: 64
+          items:
+            $ref: '#/components/schemas/DisputeEvidenceRecipientGrantInput'
+        summary:
+          $ref: '#/components/schemas/DisputeSupplementalSummary'
+        replyToEvidenceId:
+          type: string
+          format: uuid
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - assignmentRound
+        - evidenceClass
+        - manifestCid
+        - manifestSha256
+        - cipherSuite
+        - contentProtocol
+        - recipientGrants
+        - summary
+    DisputeSupplementalSummary:
+      properties:
+        containsStatement:
+          type: boolean
+        attachmentCount:
+          type: integer
+          minimum: 0
+        mailboxSignalCount:
+          type: integer
+          minimum: 0
+        mailboxAckCount:
+          type: integer
+          minimum: 0
+        checkpointRefCount:
+          type: integer
+          minimum: 0
+      type: object
+      additionalProperties: false
+      required:
+        - containsStatement
+        - attachmentCount
+        - mailboxSignalCount
+        - mailboxAckCount
+        - checkpointRefCount
+    DisputeEvidenceRecipientGrantInput:
+      properties:
+        recipientAddress:
+          type: string
+        keyVersion:
+          type: integer
+          minimum: 1
+        wrappedCek:
+          type: string
+          minLength: 16
+          maxLength: 8192
+        hpkeEnc:
+          type: string
+          minLength: 8
+          maxLength: 8192
+      type: object
+      additionalProperties: false
+      required:
+        - recipientAddress
+        - keyVersion
+        - wrappedCek
+        - hpkeEnc
+    DisputeLinkedDeliverableEvidencePublishRequest:
       properties:
         kind:
           type: string

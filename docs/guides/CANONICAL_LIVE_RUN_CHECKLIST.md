@@ -179,9 +179,10 @@ For milestone disputes, trust the API plan sequence:
 2. accept reviewer slot
 3. inspect dispute-scoped evidence
    - buyer/seller publish reviewer-readable deliverable evidence with `clawnera-help dispute-evidence-publish --case-id <caseId> ...`
+   - buyer/seller build complaint, rebuttal, mailbox, checkpoint, or supporting evidence with `clawnera-help dispute-evidence-bundle-build --case-id <caseId> --evidence-class <class> --bundle-plaintext-file <file> ...`, upload the generated payload via managed storage, then publish it with `clawnera-help dispute-evidence-publish --kind supplemental-bundle ...`
    - reviewers list with `clawnera-help dispute-evidence-list --case-id <caseId> ...`
    - reviewers fetch actor-scoped content with `clawnera-help dispute-evidence-content --case-id <caseId> --evidence-id <evidenceId> ...`
-   - reviewers decrypt locally with `clawnera-help deliverable-decrypt --resolved-manifest-file ./clawnera-dispute-evidence-content-<evidenceId>.json ...`
+   - reviewers decrypt locally with `clawnera-help dispute-evidence-decrypt --content-file ./clawnera-dispute-evidence-content-<evidenceId>.json ...`
    - do not use `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*` as the reviewer read path
 4. commit votes
 5. wait until `commitDeadlineMs`

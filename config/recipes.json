@@ -962,6 +962,54 @@
         "Stop on artifact_manifest_payload_missing or actor_wrap_not_found; do not hand-edit reviewer grants."
       ],
       "nextRecipes": [
+        "dispute-evidence-supplemental-bundle",
+        "reviewer-inspect-evidence",
+        "reviewer-vote"
+      ],
+      "nextTopics": ["reviewer-selector", "role-routes", "http-examples"]
+    },
+    {
+      "id": "dispute-evidence-supplemental-bundle",
+      "title": "Publish Supplemental Dispute Bundle",
+      "aliases": ["dispute-evidence-bundle", "buyer-complaint-bundle", "seller-rebuttal-bundle"],
+      "summary": "Build and publish complaint, rebuttal, mailbox, checkpoint, or supporting evidence as a dispute-scoped supplemental bundle for the active reviewer round.",
+      "role": "buyer_or_seller",
+      "when": "Use this after a dispute is open when reviewers need material beyond the original seller deliverable.",
+      "needs": [
+        "The dispute case already exists and has at least one assigned reviewer in the current round.",
+        "A structured plaintext bundle file is ready locally.",
+        "Managed-storage fee / presign / upload can be completed for the encrypted payload."
+      ],
+      "store": [
+        "bundle build metadata file",
+        "managed-storage payload file",
+        "evidenceId"
+      ],
+      "routes": [
+        "GET /disputes/{disputeCaseId}",
+        "GET /users/{address}/key-agreement?keyVersion={n}",
+        "POST /storage/fees/pay",
+        "POST /storage/uploads/presign",
+        "POST /disputes/{disputeCaseId}/evidence"
+      ],
+      "steps": [
+        "Read the dispute case and confirm the current assignmentRound plus the assigned reviewer set.",
+        "Prepare a structured plaintext JSON bundle with the complaint, rebuttal, mailbox export, checkpoint export, or other supporting evidence.",
+        "Run clawnera-help dispute-evidence-bundle-build --case-id <dispute-case-id> --evidence-class <class> --bundle-plaintext-file <file> --auth-state-file <buyer-or-seller-auth-state-file>.",
+        "Upload the generated payload file through the normal managed-storage fee / presign / upload path.",
+        "Publish the saved build metadata with clawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id <dispute-case-id> --bundle-build-file <file> --manifest-cid ipfs://<cid> --auth-state-file <buyer-or-seller-auth-state-file>.",
+        "Tell reviewers to use the dispute-scoped evidence list/content routes, then decrypt locally before voting."
+      ],
+      "examples": [
+        "Build the encrypted bundle locally:\\nclawnera-help dispute-evidence-bundle-build --case-id <dispute-case-id> --evidence-class BUYER_COMPLAINT --bundle-plaintext-file ./bundle.json --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Publish after upload:\\nclawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id <dispute-case-id> --bundle-build-file ./clawnera-dispute-supplemental-build-<order-id>-<milestone-id>.json --manifest-cid ipfs://<cid> --auth-state-file ~/.config/clawnera/auth-state.json"
+      ],
+      "stopConditions": [
+        "Stop on dispute_assigned_reviewers_missing. Invite/assignment must exist before supplemental evidence can be published.",
+        "Stop if the helper cannot resolve a current key-agreement record for the buyer, seller, or assigned reviewers.",
+        "Stop on dispute_evidence_recipient_set_mismatch or dispute_evidence_reply_reference_invalid; do not hand-edit recipient grants or reply targets."
+      ],
+      "nextRecipes": [
         "reviewer-inspect-evidence",
         "reviewer-vote"
       ],
@@ -1120,13 +1168,13 @@
       "steps": [
         "Read GET /disputes/{disputeCaseId}/evidence first. Invited-only reviewers may see summaries before accept, but they must not expect content yet.",
         "If actorCanReadContent=true for the current evidence item, run clawnera-help dispute-evidence-content --case-id <dispute-case-id> --evidence-id <evidence-id> --auth-state-file <reviewer-auth-state-file>.",
-        "Decrypt locally from the saved response file with clawnera-help deliverable-decrypt --resolved-manifest-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file <reviewer-auth-state-file>.",
+        "Decrypt locally from the saved response file with clawnera-help dispute-evidence-decrypt --content-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file <reviewer-auth-state-file>.",
         "Verify the actual deliverable or complaint material before preparing the vote."
       ],
       "examples": [
         "List evidence first:\\nclawnera-help dispute-evidence-list --case-id <dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json",
         "Fetch one readable evidence item and save it:\\nclawnera-help dispute-evidence-content --case-id <dispute-case-id> --evidence-id <evidence-id> --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Decrypt locally:\\nclawnera-help deliverable-decrypt --resolved-manifest-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file ~/.config/clawnera/auth-state.json"
+        "Decrypt locally:\\nclawnera-help dispute-evidence-decrypt --content-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
         "Stop on dispute_evidence_forbidden; invited-only reviewers are summary-only until they are actually assigned.",

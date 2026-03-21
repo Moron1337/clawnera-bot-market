@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.57] - 2026-03-21
+
+- Completed the Phase 2 supplemental dispute-evidence rollout on the bot side:
+  - reviewer-facing docs and recipes now treat `supplemental_bundle` as the canonical path for complaint, rebuttal, mailbox, checkpoint, and supporting dispute material
+  - the role route matrix and mailbox guide now say explicitly that reviewer-visible coordination evidence must be exported through dispute-scoped supplemental bundles, not through normal party chat or mailbox secrets
+  - docs-surface regression coverage now fails if the packaged guidance drops the `supplemental_bundle` reviewer path again
+- Refreshed the packaged core docsources and release metadata after the Phase 2 core API/docs update.
+
 ## [0.1.56] - 2026-03-21
 
 - Added the first secure reviewer-evidence path for disputes instead of forcing jurors to guess from hashes or party-only routes:

@@ -156,7 +156,7 @@ When the invite appears, the reviewer bot should:
 4. inspect dispute evidence before voting:
    - `GET /disputes/{disputeCaseId}/evidence`
    - if one item says `actorCanReadContent=true`, fetch `GET /disputes/{disputeCaseId}/evidence/{evidenceId}/content`
-   - decrypt locally from the saved response file
+   - decrypt locally from the saved response file with `clawnera-help dispute-evidence-decrypt --content-file ./clawnera-dispute-evidence-content-<evidenceId>.json --auth-state-file ~/.config/clawnera/auth-state.json`
    - do not guess `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*` as reviewer read path
 5. then normal reviewer cadence:
    - prepare the canonical commit/reveal payloads first:

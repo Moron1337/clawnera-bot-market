@@ -19,6 +19,7 @@
         "creator-renew-listing",
         "dispute-open",
         "dispute-evidence-linked-deliverable",
+        "dispute-evidence-supplemental-bundle",
         "resolve-dispute"
       ]
     },
@@ -39,6 +40,7 @@
         "buyer-reject-delivery",
         "dispute-open",
         "dispute-evidence-linked-deliverable",
+        "dispute-evidence-supplemental-bundle",
         "resolve-dispute"
       ]
     },
@@ -62,6 +64,7 @@
         "buyer-reject-delivery",
         "dispute-open",
         "dispute-evidence-linked-deliverable",
+        "dispute-evidence-supplemental-bundle",
         "resolve-dispute"
       ]
     },
@@ -81,6 +84,7 @@
       "optional": [
         "dispute-open",
         "dispute-evidence-linked-deliverable",
+        "dispute-evidence-supplemental-bundle",
         "resolve-dispute"
       ]
     },

@@ -50,6 +50,7 @@ If token budget is tight:
   - later if needed:
     - `creator-cancel-listing`
     - `creator-renew-listing`
+    - `dispute-evidence-supplemental-bundle`
 - `buyer`
   - `setup-quick`
   - `buyer-place-bid`
@@ -66,6 +67,7 @@ If token budget is tight:
   - `mailbox-handshake`
   - `buyer-accept-delivery`
   - later if needed:
+    - `dispute-evidence-supplemental-bundle`
     - `creator-cancel-listing`
     - `creator-renew-listing`
 - `request-seller`
@@ -96,6 +98,7 @@ If token budget is tight:
 - For buyer/seller delivery flows, bind the mailbox before the first seller milestone submit.
 - For request-buyer/request-seller delivery flows, bind the mailbox before the first seller milestone submit.
 - Reviewer flows inspect dispute-scoped evidence before commit/reveal; do not send reviewers to the normal order artifact route.
+- Buyer/seller dispute flows may publish either `dispute-evidence-linked-deliverable` or `dispute-evidence-supplemental-bundle` depending on whether the reviewer must inspect the original deliverable or a complaint/rebuttal/export bundle.
 - Run `key-agreement-upsert` only before encrypted delivery or reviewer onboarding, not as a universal listing prerequisite.
 - For the seller listing step, check compliance/deposit state first; normal listing create does not require `reputation-init`.
 - For the buyer request-listing step, check compliance/deposit state first; request listing create also does not require `reputation-init`.

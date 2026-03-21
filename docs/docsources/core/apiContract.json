@@ -8052,21 +8052,9 @@
           "required": true,
           "schemaRef": "#/components/schemas/DisputeEvidencePublishRequest",
           "schemaName": "DisputeEvidencePublishRequest",
-          "requiredFields": [
-            "kind",
-            "assignmentRound",
-            "manifestCid",
-            "manifestSha256",
-            "reviewerGrants"
-          ],
+          "requiredFields": [],
           "optionalFields": [],
-          "propertyNames": [
-            "kind",
-            "assignmentRound",
-            "manifestCid",
-            "manifestSha256",
-            "reviewerGrants"
-          ]
+          "propertyNames": []
         },
         "responses": {
           "200": {
@@ -8075,28 +8063,8 @@
             "schemaRef": "#/components/schemas/DisputeEvidenceItem",
             "schemaName": "DisputeEvidenceItem",
             "requiredFields": [],
-            "optionalFields": [
-              "evidenceId",
-              "kind",
-              "declaredByActorAddress",
-              "assignmentRound",
-              "status",
-              "createdAt",
-              "expiresAt",
-              "summary",
-              "actorCanReadContent"
-            ],
-            "propertyNames": [
-              "evidenceId",
-              "kind",
-              "declaredByActorAddress",
-              "assignmentRound",
-              "status",
-              "createdAt",
-              "expiresAt",
-              "summary",
-              "actorCanReadContent"
-            ]
+            "optionalFields": [],
+            "propertyNames": []
           },
           "400": {
             "status": "400",
@@ -8197,19 +8165,9 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/DisputeEvidenceContentResponse",
             "schemaName": "DisputeEvidenceContentResponse",
-            "requiredFields": [
-              "evidenceItem",
-              "artifactManifest",
-              "actorGrant",
-              "resolvedManifest"
-            ],
+            "requiredFields": [],
             "optionalFields": [],
-            "propertyNames": [
-              "evidenceItem",
-              "artifactManifest",
-              "actorGrant",
-              "resolvedManifest"
-            ]
+            "propertyNames": []
           },
           "400": {
             "status": "400",
@@ -20064,21 +20022,9 @@
         "required": true,
         "schemaRef": "#/components/schemas/DisputeEvidencePublishRequest",
         "schemaName": "DisputeEvidencePublishRequest",
-        "requiredFields": [
-          "kind",
-          "assignmentRound",
-          "manifestCid",
-          "manifestSha256",
-          "reviewerGrants"
-        ],
+        "requiredFields": [],
         "optionalFields": [],
-        "propertyNames": [
-          "kind",
-          "assignmentRound",
-          "manifestCid",
-          "manifestSha256",
-          "reviewerGrants"
-        ]
+        "propertyNames": []
       },
       "responses": {
         "200": {
@@ -20087,28 +20033,8 @@
           "schemaRef": "#/components/schemas/DisputeEvidenceItem",
           "schemaName": "DisputeEvidenceItem",
           "requiredFields": [],
-          "optionalFields": [
-            "evidenceId",
-            "kind",
-            "declaredByActorAddress",
-            "assignmentRound",
-            "status",
-            "createdAt",
-            "expiresAt",
-            "summary",
-            "actorCanReadContent"
-          ],
-          "propertyNames": [
-            "evidenceId",
-            "kind",
-            "declaredByActorAddress",
-            "assignmentRound",
-            "status",
-            "createdAt",
-            "expiresAt",
-            "summary",
-            "actorCanReadContent"
-          ]
+          "optionalFields": [],
+          "propertyNames": []
         },
         "400": {
           "status": "400",
@@ -20206,19 +20132,9 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/DisputeEvidenceContentResponse",
           "schemaName": "DisputeEvidenceContentResponse",
-          "requiredFields": [
-            "evidenceItem",
-            "artifactManifest",
-            "actorGrant",
-            "resolvedManifest"
-          ],
+          "requiredFields": [],
           "optionalFields": [],
-          "propertyNames": [
-            "evidenceItem",
-            "artifactManifest",
-            "actorGrant",
-            "resolvedManifest"
-          ]
+          "propertyNames": []
         },
         "400": {
           "status": "400",
@@ -25359,6 +25275,12 @@
     },
     "DisputeEvidencePublishRequest": {
       "name": "DisputeEvidencePublishRequest",
+      "propertyNames": [],
+      "requiredFields": [],
+      "optionalFields": []
+    },
+    "DisputeLinkedDeliverableEvidencePublishRequest": {
+      "name": "DisputeLinkedDeliverableEvidencePublishRequest",
       "propertyNames": [
         "kind",
         "assignmentRound",
@@ -25374,6 +25296,34 @@
         "reviewerGrants"
       ],
       "optionalFields": []
+    },
+    "DisputeSupplementalBundleEvidencePublishRequest": {
+      "name": "DisputeSupplementalBundleEvidencePublishRequest",
+      "propertyNames": [
+        "kind",
+        "assignmentRound",
+        "evidenceClass",
+        "manifestCid",
+        "manifestSha256",
+        "cipherSuite",
+        "contentProtocol",
+        "recipientGrants",
+        "summary",
+        "replyToEvidenceId"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "kind",
+        "assignmentRound",
+        "evidenceClass",
+        "manifestCid",
+        "manifestSha256",
+        "cipherSuite",
+        "contentProtocol",
+        "recipientGrants",
+        "summary",
+        "replyToEvidenceId"
+      ]
     },
     "DisputeEvidenceReviewerGrantInput": {
       "name": "DisputeEvidenceReviewerGrantInput",
@@ -25391,6 +25341,22 @@
       ],
       "optionalFields": []
     },
+    "DisputeEvidenceRecipientGrantInput": {
+      "name": "DisputeEvidenceRecipientGrantInput",
+      "propertyNames": [
+        "recipientAddress",
+        "keyVersion",
+        "wrappedCek",
+        "hpkeEnc"
+      ],
+      "requiredFields": [
+        "recipientAddress",
+        "keyVersion",
+        "wrappedCek",
+        "hpkeEnc"
+      ],
+      "optionalFields": []
+    },
     "DisputeEvidenceViewerRole": {
       "name": "DisputeEvidenceViewerRole",
       "propertyNames": [],
@@ -25402,6 +25368,30 @@
       "propertyNames": [],
       "requiredFields": [],
       "optionalFields": []
+    },
+    "DisputeSupplementalEvidenceClass": {
+      "name": "DisputeSupplementalEvidenceClass",
+      "propertyNames": [],
+      "requiredFields": [],
+      "optionalFields": []
+    },
+    "DisputeSupplementalSummary": {
+      "name": "DisputeSupplementalSummary",
+      "propertyNames": [
+        "containsStatement",
+        "attachmentCount",
+        "mailboxSignalCount",
+        "mailboxAckCount",
+        "checkpointRefCount"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "containsStatement",
+        "attachmentCount",
+        "mailboxSignalCount",
+        "mailboxAckCount",
+        "checkpointRefCount"
+      ]
     },
     "DisputeEvidenceRecipientGrant": {
       "name": "DisputeEvidenceRecipientGrant",
@@ -25424,14 +25414,15 @@
         "hpkeEnc"
       ]
     },
-    "DisputeEvidenceSummary": {
-      "name": "DisputeEvidenceSummary",
+    "DisputeLinkedDeliverableEvidenceSummary": {
+      "name": "DisputeLinkedDeliverableEvidenceSummary",
       "propertyNames": [
         "orderId",
         "milestoneId",
         "manifestCid",
         "manifestSha256",
         "cipherSuite",
+        "contentProtocol",
         "hasContent"
       ],
       "requiredFields": [
@@ -25440,12 +25431,81 @@
         "manifestCid",
         "manifestSha256",
         "cipherSuite",
+        "contentProtocol",
         "hasContent"
       ],
       "optionalFields": []
     },
+    "DisputeSupplementalBundleEvidenceSummary": {
+      "name": "DisputeSupplementalBundleEvidenceSummary",
+      "propertyNames": [
+        "orderId",
+        "milestoneId",
+        "manifestCid",
+        "manifestSha256",
+        "cipherSuite",
+        "contentProtocol",
+        "evidenceClass",
+        "replyToEvidenceId",
+        "containsStatement",
+        "attachmentCount",
+        "mailboxSignalCount",
+        "mailboxAckCount",
+        "checkpointRefCount",
+        "hasContent"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "orderId",
+        "milestoneId",
+        "manifestCid",
+        "manifestSha256",
+        "cipherSuite",
+        "contentProtocol",
+        "evidenceClass",
+        "replyToEvidenceId",
+        "containsStatement",
+        "attachmentCount",
+        "mailboxSignalCount",
+        "mailboxAckCount",
+        "checkpointRefCount",
+        "hasContent"
+      ]
+    },
     "DisputeEvidenceItem": {
       "name": "DisputeEvidenceItem",
+      "propertyNames": [],
+      "requiredFields": [],
+      "optionalFields": []
+    },
+    "DisputeLinkedDeliverableEvidenceItem": {
+      "name": "DisputeLinkedDeliverableEvidenceItem",
+      "propertyNames": [
+        "evidenceId",
+        "kind",
+        "declaredByActorAddress",
+        "assignmentRound",
+        "status",
+        "createdAt",
+        "expiresAt",
+        "summary",
+        "actorCanReadContent"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "evidenceId",
+        "kind",
+        "declaredByActorAddress",
+        "assignmentRound",
+        "status",
+        "createdAt",
+        "expiresAt",
+        "summary",
+        "actorCanReadContent"
+      ]
+    },
+    "DisputeSupplementalBundleEvidenceItem": {
+      "name": "DisputeSupplementalBundleEvidenceItem",
       "propertyNames": [
         "evidenceId",
         "kind",
@@ -25479,18 +25539,44 @@
         "manifestSha256",
         "sellerSignature",
         "sellerKeyVersion",
-        "cipherSuite"
+        "cipherSuite",
+        "contentProtocol"
       ],
-      "requiredFields": [
+      "requiredFields": [],
+      "optionalFields": [
         "orderId",
         "milestoneId",
         "manifestCid",
         "manifestSha256",
         "sellerSignature",
         "sellerKeyVersion",
-        "cipherSuite"
+        "cipherSuite",
+        "contentProtocol"
+      ]
+    },
+    "DisputeEvidenceBundleManifest": {
+      "name": "DisputeEvidenceBundleManifest",
+      "propertyNames": [
+        "orderId",
+        "milestoneId",
+        "manifestCid",
+        "manifestSha256",
+        "cipherSuite",
+        "contentProtocol",
+        "evidenceClass",
+        "replyToEvidenceId"
       ],
-      "optionalFields": []
+      "requiredFields": [],
+      "optionalFields": [
+        "orderId",
+        "milestoneId",
+        "manifestCid",
+        "manifestSha256",
+        "cipherSuite",
+        "contentProtocol",
+        "evidenceClass",
+        "replyToEvidenceId"
+      ]
     },
     "DisputeEvidenceResolvedManifest": {
       "name": "DisputeEvidenceResolvedManifest",
@@ -25525,6 +25611,12 @@
     },
     "DisputeEvidenceContentResponse": {
       "name": "DisputeEvidenceContentResponse",
+      "propertyNames": [],
+      "requiredFields": [],
+      "optionalFields": []
+    },
+    "DisputeLinkedDeliverableEvidenceContentResponse": {
+      "name": "DisputeLinkedDeliverableEvidenceContentResponse",
       "propertyNames": [
         "evidenceItem",
         "artifactManifest",
@@ -25534,6 +25626,22 @@
       "requiredFields": [
         "evidenceItem",
         "artifactManifest",
+        "actorGrant",
+        "resolvedManifest"
+      ],
+      "optionalFields": []
+    },
+    "DisputeSupplementalBundleEvidenceContentResponse": {
+      "name": "DisputeSupplementalBundleEvidenceContentResponse",
+      "propertyNames": [
+        "evidenceItem",
+        "bundleManifest",
+        "actorGrant",
+        "resolvedManifest"
+      ],
+      "requiredFields": [
+        "evidenceItem",
+        "bundleManifest",
         "actorGrant",
         "resolvedManifest"
       ],

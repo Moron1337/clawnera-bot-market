@@ -165,6 +165,8 @@ Reviewer selection boundary:
 - invited reviewers may inspect `GET /disputes/{objectId}/evidence` summaries before deciding whether to accept
 - assigned reviewers read seller/buyer deliverable evidence via
   `GET /disputes/{objectId}/evidence/{evidenceId}/content`
+- buyer/seller may publish either `linked_deliverable` evidence or `supplemental_bundle` evidence on that same dispute-scoped route
+- supplemental bundles stay dispute-scoped and actor-scoped; they do not widen the normal mailbox or milestone artifact routes
 - the dispute evidence content response is actor-scoped; reviewers only receive their own wrap, not buyer/seller or peer reviewer wraps
 - do not send reviewers to `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*`;
   those routes stay buyer/seller-only

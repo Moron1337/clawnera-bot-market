@@ -52,7 +52,7 @@
 | `POST /orders/{orderId}/milestones/{milestoneId}/reject` | `order.milestone.reject` | buyer only | Bei Erfolg typischerweise Order -> `DISPUTED`. |
 | `POST /orders/{orderId}/dispute-bond/fund` | `order.dispute_bond.fund` | buyer/seller only; `side` muss zur Actor-Rolle passen | Bestehendes `bondObjectId` Pflicht. |
 | `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` | `order.dispute.open` | buyer/seller only | Milestone muss `REJECTED` oder `DISPUTED` sein; escrow-id/order-bindung wird geprueft. |
-| `POST /disputes/{disputeCaseId}/evidence` | bearer | buyer/seller only | Aktueller Public-Scope ist `linked_deliverable`; reviewer wraps muessen zum aktiven Round + Reviewer-Set passen. |
+| `POST /disputes/{disputeCaseId}/evidence` | bearer | buyer/seller only | Buyer/Seller publishen dispute-scoped `linked_deliverable` oder `supplemental_bundle`; `supplemental_bundle` erzwingt den exakten Live-Empfaengersatz buyer + seller + assigned reviewers des aktiven Round. |
 | `POST /disputes/{disputeCaseId}/reviewers/replace` | `dispute.reviewers.replace` | buyer/seller only | Nur sinnvoll bei Reviewer-Scarcity/No-Show. |
 | `POST /orders/{orderId}/deadline-ext/propose` | `order.deadline_ext.propose` | buyer/seller only | Escrow-Match zur Order wird geprueft. |
 | `POST /deadline-ext/{extensionObjectId}/accept` | `deadline_ext.accept` | capability-only | API ohne `orderId`-Check; Gegenpartei-Auth wird on-chain erzwungen. |

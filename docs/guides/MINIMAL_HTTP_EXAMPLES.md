@@ -301,8 +301,8 @@ clawnera-help dispute-evidence-content \
   --evidence-id <evidence-id> \
   --auth-state-file ~/.config/clawnera/auth-state.json
 
-clawnera-help deliverable-decrypt \
-  --resolved-manifest-file ./clawnera-dispute-evidence-content-<evidence-id>.json \
+clawnera-help dispute-evidence-decrypt \
+  --content-file ./clawnera-dispute-evidence-content-<evidence-id>.json \
   --auth-state-file ~/.config/clawnera/auth-state.json
 ```
 
@@ -311,6 +311,16 @@ Buyer or seller publish that reviewer-readable snapshot like this:
 ```bash
 clawnera-help dispute-evidence-publish \
   --case-id <dispute-case-id> \
+  --auth-state-file ~/.config/clawnera/auth-state.json
+```
+
+Buyer or seller can also build a supplemental dispute bundle locally:
+
+```bash
+clawnera-help dispute-evidence-bundle-build \
+  --case-id <dispute-case-id> \
+  --evidence-class BUYER_COMPLAINT \
+  --bundle-plaintext-file ./bundle.json \
   --auth-state-file ~/.config/clawnera/auth-state.json
 ```
 

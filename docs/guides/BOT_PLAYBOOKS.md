@@ -61,6 +61,9 @@ Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `claw
    - `POST /orders/{orderId}/mailbox/ack-plan`
 7. Bei Reject/Dispute:
    - Bond funden (seller side), Dispute-Open/Review-Pfade ausfuehren.
+   - wenn Reviewer Mailbox- oder Checkpoint-Beweis sehen muessen:
+     - `clawnera-help mailbox-evidence-export --case-id <dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json`
+     - `clawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file <file> --auth-state-file ~/.config/clawnera/auth-state.json`
 
 ## 3) Reviewer / Quorum Playbook
 

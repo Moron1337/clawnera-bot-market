@@ -995,13 +995,17 @@
       "steps": [
         "Read the dispute case and confirm the current assignmentRound plus the assigned reviewer set.",
         "Prepare a structured plaintext JSON bundle with the complaint, rebuttal, mailbox export, checkpoint export, or other supporting evidence.",
-        "Run clawnera-help dispute-evidence-bundle-build --case-id <dispute-case-id> --evidence-class <class> --bundle-plaintext-file <file> --auth-state-file <buyer-or-seller-auth-state-file>.",
+        "For mailbox coordination, prefer clawnera-help mailbox-evidence-export --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state-file>.",
+        "For delivery checkpoint handover, prefer clawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file <file> --auth-state-file <buyer-or-seller-auth-state-file>.",
+        "Otherwise run clawnera-help dispute-evidence-bundle-build --case-id <dispute-case-id> --evidence-class <class> --bundle-plaintext-file <file> --auth-state-file <buyer-or-seller-auth-state-file>.",
         "Upload the generated payload file through the normal managed-storage fee / presign / upload path.",
         "Publish the saved build metadata with clawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id <dispute-case-id> --bundle-build-file <file> --manifest-cid ipfs://<cid> --auth-state-file <buyer-or-seller-auth-state-file>.",
         "Tell reviewers to use the dispute-scoped evidence list/content routes, then decrypt locally before voting."
       ],
       "examples": [
         "Build the encrypted bundle locally:\\nclawnera-help dispute-evidence-bundle-build --case-id <dispute-case-id> --evidence-class BUYER_COMPLAINT --bundle-plaintext-file ./bundle.json --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Shortcut for mailbox coordination:\\nclawnera-help mailbox-evidence-export --case-id <dispute-case-id> --statement-text 'Explain the coordination issue for reviewers.' --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Shortcut for checkpoint handover:\\nclawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file ./clawnera-milestone-submit-<order-id>-<milestone-id>.json --payload-file ./clawnera-deliverable-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json",
         "Publish after upload:\\nclawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id <dispute-case-id> --bundle-build-file ./clawnera-dispute-supplemental-build-<order-id>-<milestone-id>.json --manifest-cid ipfs://<cid> --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
@@ -1010,10 +1014,106 @@
         "Stop on dispute_evidence_recipient_set_mismatch or dispute_evidence_reply_reference_invalid; do not hand-edit recipient grants or reply targets."
       ],
       "nextRecipes": [
+        "dispute-mailbox-evidence-export",
+        "dispute-checkpoint-evidence-export",
         "reviewer-inspect-evidence",
         "reviewer-vote"
       ],
       "nextTopics": ["reviewer-selector", "role-routes", "http-examples"]
+    },
+    {
+      "id": "dispute-mailbox-evidence-export",
+      "title": "Export Mailbox Evidence",
+      "aliases": ["mailbox-evidence", "dispute-mailbox-export"],
+      "summary": "Turn mailbox posted/acked signals into one reviewer-readable supplemental bundle without hand-writing JSON.",
+      "role": "buyer_or_seller",
+      "when": "Use this when the dispute turns on coordination, deliverable-ready signaling, missing acknowledgements, or timing of mailbox exchanges.",
+      "needs": [
+        "The dispute case already exists and the caller is the buyer or seller for that case.",
+        "The mailbox is already bound for the order and the relevant signal/ack events have indexed."
+      ],
+      "store": [
+        "bundle plaintext file",
+        "events file",
+        "bundle build metadata file",
+        "managed-storage payload file",
+        "evidenceId"
+      ],
+      "routes": [
+        "GET /disputes/{disputeCaseId}",
+        "GET /orders/{orderId}/mailbox",
+        "GET /events?scope=all&type=mailbox.signal_posted",
+        "GET /events?scope=all&type=mailbox.signal_acked",
+        "POST /disputes/{disputeCaseId}/evidence"
+      ],
+      "steps": [
+        "Run clawnera-help mailbox-evidence-export --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state-file>.",
+        "Optional: narrow the included proof set with --posted-seqs <csv> and --acked-seqs <csv>.",
+        "Inspect the saved bundle plaintext file and the normalized events file.",
+        "Upload the generated encrypted payload file through managed-storage fee / presign / upload.",
+        "Publish the saved build metadata with clawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id <dispute-case-id> --bundle-build-file <file> --manifest-cid ipfs://<cid> --auth-state-file <buyer-or-seller-auth-state-file>."
+      ],
+      "examples": [
+        "Export all indexed mailbox proof:\\nclawnera-help mailbox-evidence-export --case-id <dispute-case-id> --statement-text 'Review the delivery-ready signal and the missing ack progression.' --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Export only one specific signal plus its ack:\\nclawnera-help mailbox-evidence-export --case-id <dispute-case-id> --posted-seqs 5 --acked-seqs 5 --auth-state-file ~/.config/clawnera/auth-state.json"
+      ],
+      "stopConditions": [
+        "Stop on mailbox_object_id_missing or mailbox_evidence_no_selected_events; do not fabricate mailbox refs by hand.",
+        "Stop on dispute_assigned_reviewers_missing; reviewer-readable evidence still requires a live assignment set."
+      ],
+      "nextRecipes": [
+        "reviewer-inspect-evidence",
+        "reviewer-vote"
+      ],
+      "nextTopics": ["mailbox-flow", "http-examples", "role-routes"]
+    },
+    {
+      "id": "dispute-checkpoint-evidence-export",
+      "title": "Export Checkpoint Evidence",
+      "aliases": ["checkpoint-evidence", "dispute-checkpoint-export"],
+      "summary": "Build a canonical checkpoint handover packet and wrap it into one reviewer-readable supplemental bundle.",
+      "role": "buyer_or_seller",
+      "when": "Use this when reviewers must verify that a submitted/anchored delivery checkpoint matches the encrypted payload and its mailbox signal.",
+      "needs": [
+        "The dispute case already exists and the caller is the buyer or seller for that case.",
+        "A saved milestone-submit body file exists.",
+        "Either the managed deliverable payload file, an explicit ciphertext hash, or a mailbox signal can identify the ciphertext hash."
+      ],
+      "store": [
+        "checkpoint packet file",
+        "bundle plaintext file",
+        "bundle build metadata file",
+        "managed-storage payload file",
+        "evidenceId"
+      ],
+      "routes": [
+        "GET /disputes/{disputeCaseId}",
+        "GET /orders/{orderId}/mailbox",
+        "GET /events?scope=all&type=mailbox.signal_posted",
+        "POST /disputes/{disputeCaseId}/evidence"
+      ],
+      "steps": [
+        "Run clawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file <file> --auth-state-file <buyer-or-seller-auth-state-file>.",
+        "Prefer --payload-file <managed-deliverable-payload.json>; otherwise pass --ciphertext-hash <64-hex> or reuse a mailbox signal via --signal-seq <n>.",
+        "If you already saved milestone-anchor JSON, reuse it with --anchor-file <file>; otherwise pass the explicit anchor tx digest/event seq.",
+        "Inspect the saved checkpoint packet file and the plaintext dispute bundle.",
+        "Upload the generated encrypted payload file through managed-storage fee / presign / upload.",
+        "Publish the saved build metadata with clawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id <dispute-case-id> --bundle-build-file <file> --manifest-cid ipfs://<cid> --auth-state-file <buyer-or-seller-auth-state-file>."
+      ],
+      "examples": [
+        "Export checkpoint proof from submit + payload:\\nclawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file ./clawnera-milestone-submit-<order-id>-<milestone-id>.json --payload-file ./clawnera-deliverable-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Attach the anchored tx and the delivery-ready mailbox signal:\\nclawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file ./clawnera-milestone-submit-<order-id>-<milestone-id>.json --payload-file ./clawnera-deliverable-<order-id>-<milestone-id>.json --anchor-file ./milestone-anchor.json --signal-seq 9 --auth-state-file ~/.config/clawnera/auth-state.json"
+      ],
+      "stopConditions": [
+        "Stop on missing_ciphertext_hash or checkpoint_ciphertext_hash_mismatch; do not guess the deliverable hash.",
+        "Stop on anchor_tx_digest_required if you pass anchor status/event fields without the tx digest.",
+        "Stop on dispute_assigned_reviewers_missing; reviewer-readable evidence still requires a live assignment set."
+      ],
+      "nextRecipes": [
+        "reviewer-inspect-evidence",
+        "reviewer-vote"
+      ],
+      "nextTopics": ["mailbox-flow", "http-examples", "role-routes"]
     },
     {
       "id": "operator-shortlist-open",

@@ -674,6 +674,519 @@ test("dispute-evidence-bundle-build creates supplemental bundle payloads and dis
   }
 });
 
+test("mailbox-evidence-export builds reviewer-readable mailbox coordination bundles", async () => {
+  const buyerAddress = `0x${"1".repeat(64)}`;
+  const sellerAddress = `0x${"2".repeat(64)}`;
+  const reviewerAddress = `0x${"3".repeat(64)}`;
+  const caseId = `0x${"4".repeat(64)}`;
+  const orderId = "order-mailbox-evidence";
+  const milestoneId = "milestone-mailbox-evidence";
+  const buyerKeys = generateKeyAgreementKeypair("u");
+  const sellerKeys = generateKeyAgreementKeypair("u");
+  const reviewerKeys = generateKeyAgreementKeypair("u");
+
+  const mock = await startMockServer({
+    [`GET /disputes/${caseId}`]: () => ({
+      status: 200,
+      body: {
+        disputeCase: {
+          objectId: caseId,
+          orderId,
+          milestoneId,
+          buyer: buyerAddress,
+          seller: sellerAddress,
+          assignedReviewers: [reviewerAddress],
+          assignmentRound: 2
+        }
+      }
+    }),
+    [`GET /orders/${orderId}/mailbox`]: () => ({
+      status: 200,
+      body: {
+        mailboxObjectId: "0xmailboxevidence"
+      }
+    }),
+    [`GET /events?scope=all&type=mailbox.signal_posted&limit=20`]: () => ({
+      status: 200,
+      body: {
+        items: [
+          {
+            id: "posted-1",
+            entityId: "0xmailboxevidence",
+            createdAt: "2026-03-21T00:00:00.000Z",
+            payloadJson: {
+              mailboxObjectId: "0xmailboxevidence",
+              orderId,
+              seq: "5",
+              sender: sellerAddress,
+              senderRole: "seller",
+              signalIntent: "DELIVERABLE_READY",
+              payloadRef: "ipfs://bafymailboxpayload",
+              ciphertextHash: "a".repeat(64),
+              txDigest: "9sQffk7KX8a1W4sm6V2mY7dXZKxRB3Qw4s5E9tU2a1Fn",
+              chainCreatedAtMs: "1711000"
+            }
+          }
+        ]
+      }
+    }),
+    [`GET /events?scope=all&type=mailbox.signal_acked&limit=20`]: () => ({
+      status: 200,
+      body: {
+        items: [
+          {
+            id: "acked-1",
+            entityId: "0xmailboxevidence",
+            createdAt: "2026-03-21T00:00:05.000Z",
+            payloadJson: {
+              mailboxObjectId: "0xmailboxevidence",
+              orderId,
+              ackedSeq: "5",
+              acker: buyerAddress,
+              ackerRole: "buyer",
+              txDigest: "8sQffk7KX8a1W4sm6V2mY7dXZKxRB3Qw4s5E9tU2a1Fn",
+              chainAckedAtMs: "1712000"
+            }
+          }
+        ]
+      }
+    }),
+    [`GET /reviewers/${reviewerAddress}`]: () => ({
+      status: 200,
+      body: {
+        reviewer: {
+          ownerAddress: reviewerAddress,
+          transportPubkeyHex: Buffer.from(reviewerKeys.publicKeyMultibase.slice(1), "base64url").toString("hex")
+        }
+      }
+    }),
+    default: (request) => {
+      if (request.method === "GET" && request.url === `/users/${buyerAddress}/key-agreement?keyVersion=1`) {
+        return {
+          status: 200,
+          body: {
+            keyAgreement: {
+              address: buyerAddress,
+              keyVersion: 1,
+              publicKeyMultibase: buyerKeys.publicKeyMultibase
+            }
+          }
+        };
+      }
+      if (request.method === "GET" && request.url === `/users/${sellerAddress}/key-agreement?keyVersion=1`) {
+        return {
+          status: 200,
+          body: {
+            keyAgreement: {
+              address: sellerAddress,
+              keyVersion: 1,
+              publicKeyMultibase: sellerKeys.publicKeyMultibase
+            }
+          }
+        };
+      }
+      if (request.method === "GET" && request.url === `/users/${reviewerAddress}/key-agreement?keyVersion=1`) {
+        return {
+          status: 200,
+          body: {
+            keyAgreement: {
+              address: reviewerAddress,
+              keyVersion: 1,
+              publicKeyMultibase: reviewerKeys.publicKeyMultibase
+            }
+          }
+        };
+      }
+      if (request.method === "GET" && request.url.startsWith(`/users/`) && request.url.includes(`/key-agreement?keyVersion=`)) {
+        return {
+          status: 404,
+          body: { error: "not_found" }
+        };
+      }
+      return {
+        status: 404,
+        body: { error: "not_found" }
+      };
+    }
+  });
+
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-mailbox-evidence-export-"));
+  const buyerAuthStateFile = path.join(tempHome, ".config", "clawnera", "buyer-auth-state.json");
+  const reviewerAuthStateFile = path.join(tempHome, ".config", "clawnera", "reviewer-auth-state.json");
+  const reviewerKeyFile = path.join(tempHome, "reviewer-key-agreement.json");
+  mkdirSync(path.dirname(buyerAuthStateFile), { recursive: true });
+  writeFileSync(
+    buyerAuthStateFile,
+    JSON.stringify({
+      jwt: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+      refreshToken: "refresh-token",
+      actorAddress: buyerAddress,
+      apiBase: mock.baseUrl
+    }),
+    "utf8"
+  );
+  writeFileSync(
+    reviewerAuthStateFile,
+    JSON.stringify({
+      jwt: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+      refreshToken: "refresh-token",
+      actorAddress: reviewerAddress,
+      apiBase: mock.baseUrl
+    }),
+    "utf8"
+  );
+  await saveKeyAgreementRecord({
+    address: reviewerAddress,
+    keyVersion: 1,
+    publicKeyMultibase: reviewerKeys.publicKeyMultibase,
+    privateKeyMultibase: reviewerKeys.privateKeyMultibase,
+    expiresAtMs: Date.now() + 86_400_000,
+    filePath: reviewerKeyFile
+  });
+
+  try {
+    const exportResult = await runCli(
+      [
+        "mailbox-evidence-export",
+        "--case-id",
+        caseId,
+        "--statement-text",
+        "Reviewer should inspect the delivery-ready signal and buyer ack.",
+        "--auth-state-file",
+        buyerAuthStateFile,
+        "--json"
+      ],
+      { HOME: tempHome }
+    );
+    assert.equal(exportResult.status, 0);
+    const exportPayload = JSON.parse(exportResult.stdout);
+    assert.equal(exportPayload.ok, true);
+    assert.equal(exportPayload.evidenceClass, "MAILBOX_COORDINATION");
+    assert.equal(exportPayload.selectedPostedCount, 1);
+    assert.equal(exportPayload.selectedAckedCount, 1);
+    assert.equal(existsSync(exportPayload.bundlePlaintextOut), true);
+    assert.equal(existsSync(exportPayload.payloadOut), true);
+    const plaintextBundle = JSON.parse(readFileSync(exportPayload.bundlePlaintextOut, "utf8"));
+    assert.equal(plaintextBundle.items[0].itemType, "mailbox_signal_ref");
+    assert.equal(plaintextBundle.items[1].itemType, "mailbox_ack_ref");
+
+    const payloadJson = JSON.parse(readFileSync(exportPayload.payloadOut, "utf8"));
+    const reviewerWrap = payloadJson.encrypted.cekWraps.find((entry) => entry.recipientAddress === reviewerAddress);
+    assert.ok(reviewerWrap);
+    const contentFile = path.join(tempHome, "mailbox-evidence-content.json");
+    writeFileSync(
+      contentFile,
+      JSON.stringify(
+        {
+          evidenceItem: {
+            evidenceId: "mailbox-evidence-1",
+            kind: "supplemental_bundle"
+          },
+          actorGrant: reviewerWrap,
+          resolvedManifest: {
+            payload: payloadJson
+          }
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+
+    const decryptResult = await runCli(
+      [
+        "dispute-evidence-decrypt",
+        "--content-file",
+        contentFile,
+        "--auth-state-file",
+        reviewerAuthStateFile,
+        "--key-file",
+        reviewerKeyFile,
+        "--json"
+      ],
+      { HOME: tempHome }
+    );
+    assert.equal(decryptResult.status, 0);
+    const decryptPayload = JSON.parse(decryptResult.stdout);
+    const decryptedJson = JSON.parse(readFileSync(decryptPayload.plaintextOut, "utf8"));
+    assert.equal(decryptedJson.items[0].itemType, "mailbox_signal_ref");
+    assert.equal(decryptedJson.items[1].itemType, "mailbox_ack_ref");
+  } finally {
+    await mock.close();
+  }
+});
+
+test("checkpoint-evidence-export builds canonical checkpoint packets inside supplemental bundles", async () => {
+  const buyerAddress = `0x${"5".repeat(64)}`;
+  const sellerAddress = `0x${"6".repeat(64)}`;
+  const reviewerAddress = `0x${"7".repeat(64)}`;
+  const caseId = `0x${"8".repeat(64)}`;
+  const orderId = "order-checkpoint-evidence";
+  const milestoneId = "milestone-checkpoint-evidence";
+  const sellerKeys = generateKeyAgreementKeypair("u");
+  const buyerKeys = generateKeyAgreementKeypair("u");
+  const reviewerKeys = generateKeyAgreementKeypair("u");
+  const encrypted = await createEncryptedDeliverable({
+    plaintext: Buffer.from("checkpoint payload", "utf8"),
+    recipients: [
+      {
+        recipientAddress: sellerAddress,
+        keyVersion: 1,
+        recipientPublicKeyMultibase: sellerKeys.publicKeyMultibase
+      },
+      {
+        recipientAddress: buyerAddress,
+        keyVersion: 1,
+        recipientPublicKeyMultibase: buyerKeys.publicKeyMultibase
+      }
+    ]
+  });
+  const deliverablePayload = buildManagedDeliverablePayload({
+    orderId,
+    milestoneId,
+    plaintextLabel: "checkpoint.txt",
+    encrypted
+  });
+
+  const mock = await startMockServer({
+    [`GET /disputes/${caseId}`]: () => ({
+      status: 200,
+      body: {
+        disputeCase: {
+          objectId: caseId,
+          orderId,
+          milestoneId,
+          buyer: buyerAddress,
+          seller: sellerAddress,
+          assignedReviewers: [reviewerAddress],
+          assignmentRound: 3
+        }
+      }
+    }),
+    [`GET /orders/${orderId}/mailbox`]: () => ({
+      status: 200,
+      body: {
+        mailboxObjectId: "0xmailboxcheckpoint"
+      }
+    }),
+    [`GET /events?scope=all&type=mailbox.signal_posted&limit=20`]: () => ({
+      status: 200,
+      body: {
+        items: [
+          {
+            id: "posted-checkpoint",
+            entityId: "0xmailboxcheckpoint",
+            createdAt: "2026-03-21T00:01:00.000Z",
+            payloadJson: {
+              mailboxObjectId: "0xmailboxcheckpoint",
+              orderId,
+              seq: "9",
+              sender: sellerAddress,
+              senderRole: "seller",
+              signalIntent: "DELIVERABLE_READY",
+              payloadRef: "ipfs://bafycheckpointpayload",
+              ciphertextHash: deliverablePayload.encrypted.blob.ciphertextSha256,
+              txDigest: "9sQffk7KX8a1W4sm6V2mY7dXZKxRB3Qw4s5E9tU2a1Fn",
+              chainCreatedAtMs: "1713000"
+            }
+          }
+        ]
+      }
+    }),
+    [`GET /reviewers/${reviewerAddress}`]: () => ({
+      status: 200,
+      body: {
+        reviewer: {
+          ownerAddress: reviewerAddress,
+          transportPubkeyHex: Buffer.from(reviewerKeys.publicKeyMultibase.slice(1), "base64url").toString("hex")
+        }
+      }
+    }),
+    default: (request) => {
+      if (request.method === "GET" && request.url === `/users/${buyerAddress}/key-agreement?keyVersion=1`) {
+        return {
+          status: 200,
+          body: {
+            keyAgreement: {
+              address: buyerAddress,
+              keyVersion: 1,
+              publicKeyMultibase: buyerKeys.publicKeyMultibase
+            }
+          }
+        };
+      }
+      if (request.method === "GET" && request.url === `/users/${sellerAddress}/key-agreement?keyVersion=1`) {
+        return {
+          status: 200,
+          body: {
+            keyAgreement: {
+              address: sellerAddress,
+              keyVersion: 1,
+              publicKeyMultibase: sellerKeys.publicKeyMultibase
+            }
+          }
+        };
+      }
+      if (request.method === "GET" && request.url === `/users/${reviewerAddress}/key-agreement?keyVersion=1`) {
+        return {
+          status: 200,
+          body: {
+            keyAgreement: {
+              address: reviewerAddress,
+              keyVersion: 1,
+              publicKeyMultibase: reviewerKeys.publicKeyMultibase
+            }
+          }
+        };
+      }
+      if (request.method === "GET" && request.url.startsWith(`/users/`) && request.url.includes(`/key-agreement?keyVersion=`)) {
+        return {
+          status: 404,
+          body: { error: "not_found" }
+        };
+      }
+      return {
+        status: 404,
+        body: { error: "not_found" }
+      };
+    }
+  });
+
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-checkpoint-evidence-export-"));
+  const sellerAuthStateFile = path.join(tempHome, ".config", "clawnera", "seller-auth-state.json");
+  const reviewerAuthStateFile = path.join(tempHome, ".config", "clawnera", "reviewer-auth-state.json");
+  const reviewerKeyFile = path.join(tempHome, "reviewer-key-agreement.json");
+  const payloadFile = path.join(tempHome, "deliverable-payload.json");
+  const submitBodyFile = path.join(tempHome, "submit-body.json");
+  mkdirSync(path.dirname(sellerAuthStateFile), { recursive: true });
+  writeFileSync(
+    sellerAuthStateFile,
+    JSON.stringify({
+      jwt: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+      refreshToken: "refresh-token",
+      actorAddress: sellerAddress,
+      apiBase: mock.baseUrl
+    }),
+    "utf8"
+  );
+  writeFileSync(
+    reviewerAuthStateFile,
+    JSON.stringify({
+      jwt: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+      refreshToken: "refresh-token",
+      actorAddress: reviewerAddress,
+      apiBase: mock.baseUrl
+    }),
+    "utf8"
+  );
+  writeFileSync(payloadFile, JSON.stringify(deliverablePayload, null, 2), "utf8");
+  writeFileSync(
+    submitBodyFile,
+    JSON.stringify(
+      {
+        manifest: {
+          manifestCid: "ipfs://bafycheckpointmanifest",
+          manifestSha256: "b".repeat(64),
+          sellerSignature: "seller-signature-base64"
+        }
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
+  await saveKeyAgreementRecord({
+    address: reviewerAddress,
+    keyVersion: 1,
+    publicKeyMultibase: reviewerKeys.publicKeyMultibase,
+    privateKeyMultibase: reviewerKeys.privateKeyMultibase,
+    expiresAtMs: Date.now() + 86_400_000,
+    filePath: reviewerKeyFile
+  });
+
+  try {
+    const exportResult = await runCli(
+      [
+        "checkpoint-evidence-export",
+        "--case-id",
+        caseId,
+        "--submit-body-file",
+        submitBodyFile,
+        "--payload-file",
+        payloadFile,
+        "--signal-seq",
+        "9",
+        "--anchor-tx-digest",
+        "9sQffk7KX8a1W4sm6V2mY7dXZKxRB3Qw4s5E9tU2a1Fn",
+        "--anchor-event-seq",
+        "7",
+        "--anchor-status",
+        "CONFIRMED",
+        "--statement-text",
+        "Reviewer should confirm that the submitted checkpoint matches the anchored manifest.",
+        "--auth-state-file",
+        sellerAuthStateFile,
+        "--json"
+      ],
+      { HOME: tempHome }
+    );
+    assert.equal(exportResult.status, 0);
+    const exportPayload = JSON.parse(exportResult.stdout);
+    assert.equal(exportPayload.ok, true);
+    assert.equal(exportPayload.evidenceClass, "CHECKPOINT_HANDOVER");
+    assert.equal(exportPayload.selectedSignalSeq, "9");
+    assert.equal(existsSync(exportPayload.checkpointPacketOut), true);
+    const checkpointPacket = JSON.parse(readFileSync(exportPayload.checkpointPacketOut, "utf8"));
+    assert.equal(checkpointPacket.protocol, "clawdex.checkpoint-handover.v1");
+    assert.match(checkpointPacket.packetHash, /^sha256:/);
+
+    const payloadJson = JSON.parse(readFileSync(exportPayload.payloadOut, "utf8"));
+    const reviewerWrap = payloadJson.encrypted.cekWraps.find((entry) => entry.recipientAddress === reviewerAddress);
+    assert.ok(reviewerWrap);
+    const contentFile = path.join(tempHome, "checkpoint-evidence-content.json");
+    writeFileSync(
+      contentFile,
+      JSON.stringify(
+        {
+          evidenceItem: {
+            evidenceId: "checkpoint-evidence-1",
+            kind: "supplemental_bundle"
+          },
+          actorGrant: reviewerWrap,
+          resolvedManifest: {
+            payload: payloadJson
+          }
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+
+    const decryptResult = await runCli(
+      [
+        "dispute-evidence-decrypt",
+        "--content-file",
+        contentFile,
+        "--auth-state-file",
+        reviewerAuthStateFile,
+        "--key-file",
+        reviewerKeyFile,
+        "--json"
+      ],
+      { HOME: tempHome }
+    );
+    assert.equal(decryptResult.status, 0);
+    const decryptPayload = JSON.parse(decryptResult.stdout);
+    const decryptedJson = JSON.parse(readFileSync(decryptPayload.plaintextOut, "utf8"));
+    assert.equal(decryptedJson.items[0].itemType, "checkpoint_packet");
+    assert.equal(decryptedJson.items[0].packet.anchor.status, "CONFIRMED");
+    assert.equal(decryptedJson.items[0].mailboxSignalRef.seq, "9");
+  } finally {
+    await mock.close();
+  }
+});
+
 test("deliverable-decrypt can use actorGrant from a dispute evidence content file", async () => {
   const reviewerAddress = `0x${"9".repeat(64)}`;
   const reviewerKeys = generateKeyAgreementKeypair("u");

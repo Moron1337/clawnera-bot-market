@@ -265,7 +265,9 @@ Important:
   - buyer/seller-only publish route for `linked_deliverable` and `supplemental_bundle` evidence
   - package helper:
     - `clawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file <file>`
-    - for complaint/rebuttal/mailbox/checkpoint/supporting bundles: `clawnera-help dispute-evidence-bundle-build --case-id <dispute-case-id> --evidence-class <class> --bundle-plaintext-file <file> --auth-state-file <file>`
+    - for generic complaint/rebuttal/supporting bundles: `clawnera-help dispute-evidence-bundle-build --case-id <dispute-case-id> --evidence-class <class> --bundle-plaintext-file <file> --auth-state-file <file>`
+    - for mailbox coordination proof: `clawnera-help mailbox-evidence-export --case-id <dispute-case-id> --auth-state-file <file>`
+    - for delivery checkpoint proof: `clawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file <file> --auth-state-file <file>`
 - `GET /disputes/{disputeCaseId}/evidence/{evidenceId}/content`
   - actor-scoped reviewer/party content route
   - package helper:

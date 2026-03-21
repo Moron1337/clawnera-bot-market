@@ -40,6 +40,7 @@ import {
   DEFAULT_E2EE_CIPHER_SUITE,
   assertIpfsManifestCid,
   assertLowerHex64,
+  buildCheckpointHandoverPacket,
   buildKeyAgreementBindingMessage,
   buildDisputeSupplementalBundlePayload,
   buildManagedDeliverablePayload,
@@ -365,6 +366,8 @@ function printUsage() {
   console.log("  clawnera-help dispute-evidence-list [options]  Read dispute-scoped evidence summaries");
   console.log("  clawnera-help dispute-evidence-content [options]  Fetch actor-scoped dispute evidence content");
   console.log("  clawnera-help dispute-evidence-decrypt [options]  Decrypt saved dispute evidence locally");
+  console.log("  clawnera-help mailbox-evidence-export [options]  Export mailbox coordination into one encrypted dispute bundle");
+  console.log("  clawnera-help checkpoint-evidence-export [options]  Export checkpoint handover evidence into one encrypted dispute bundle");
   console.log("  clawnera-help managed-storage-fee-pay [options]  Pay the managed storage fee on-chain locally");
   console.log("  clawnera-help managed-storage-presign [options]  Get a signed managed-storage upload URL");
   console.log("  clawnera-help managed-storage-upload [options]   Upload the encrypted JSON payload to managed storage");
@@ -5616,6 +5619,541 @@ function ensureDisputeCasePayload(responseBody) {
   return disputeCase;
 }
 
+function readOptionalTextFile(targetPath, errorCode = "invalid_text_file") {
+  const resolvedPath =
+    typeof targetPath === "string" && targetPath.trim() ? path.resolve(String(targetPath).trim()) : "";
+  if (!resolvedPath) {
+    return null;
+  }
+  if (!fs.existsSync(resolvedPath)) {
+    throw new Error("missing_statement_file");
+  }
+  try {
+    return fs.readFileSync(resolvedPath, "utf8");
+  } catch {
+    throw new Error(errorCode);
+  }
+}
+
+function resolveDisputeEvidenceStatement(options = {}, defaultTitle = "") {
+  const title = normalizeString(options["statement-title"]);
+  const statementText = typeof options["statement-text"] === "string" ? options["statement-text"] : "";
+  const statementFile =
+    typeof options["statement-file"] === "string" && options["statement-file"].trim()
+      ? String(options["statement-file"]).trim()
+      : "";
+  const requestedOutcome = normalizeString(options["requested-outcome"]);
+  const statementSourceCount = [Boolean(statementText.trim()), Boolean(statementFile)].filter(Boolean).length;
+  if (statementSourceCount > 1) {
+    throw new Error("multiple_statement_sources");
+  }
+  if (statementSourceCount === 0) {
+    if (requestedOutcome) {
+      throw new Error("requested_outcome_requires_statement");
+    }
+    return null;
+  }
+  const markdown = statementFile ? readOptionalTextFile(statementFile, "invalid_statement_file") : statementText;
+  if (!normalizeString(markdown)) {
+    throw new Error("missing_statement_text");
+  }
+  return {
+    title: title || defaultTitle || "Dispute evidence note",
+    markdown,
+    ...(requestedOutcome ? { requestedOutcome } : {}),
+  };
+}
+
+function parseCommaSeparatedSeqValues(rawValue, fieldName) {
+  const normalized = normalizeString(rawValue);
+  if (!normalized) {
+    return [];
+  }
+  const entries = normalized
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (entries.length === 0) {
+    throw new Error(`invalid_${fieldName}`);
+  }
+  const uniqueValues = [...new Set(entries)];
+  for (const entry of uniqueValues) {
+    if (!/^[0-9]{1,32}$/.test(entry)) {
+      throw new Error(`invalid_${fieldName}`);
+    }
+  }
+  return uniqueValues;
+}
+
+function normalizeStoredMailboxEvent(entry) {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    return null;
+  }
+  const category = normalizeString(entry.category).toLowerCase();
+  if (category === "posted") {
+    return {
+      category: "posted",
+      id: typeof entry.id === "string" ? entry.id : null,
+      eventType: typeof entry.eventType === "string" ? entry.eventType : "mailbox.signal_posted",
+      mailboxObjectId: typeof entry.mailboxObjectId === "string" ? entry.mailboxObjectId : null,
+      orderId: typeof entry.orderId === "string" ? entry.orderId : null,
+      seq: typeof entry.seq === "string" ? entry.seq : entry.seq !== undefined && entry.seq !== null ? String(entry.seq) : null,
+      sender: typeof entry.sender === "string" ? entry.sender : null,
+      senderRole: typeof entry.senderRole === "string" ? entry.senderRole : null,
+      signalIntent: typeof entry.signalIntent === "string" ? entry.signalIntent : null,
+      payloadRef: typeof entry.payloadRef === "string" ? entry.payloadRef : null,
+      ciphertextHash: typeof entry.ciphertextHash === "string" ? entry.ciphertextHash : null,
+      txDigest: typeof entry.txDigest === "string" ? entry.txDigest : null,
+      chainTimestampMs:
+        typeof entry.chainTimestampMs === "string"
+          ? entry.chainTimestampMs
+          : entry.chainTimestampMs !== undefined && entry.chainTimestampMs !== null
+            ? String(entry.chainTimestampMs)
+            : null,
+      createdAt: typeof entry.createdAt === "string" ? entry.createdAt : null,
+      raw: entry.raw || entry,
+    };
+  }
+  if (category === "acked") {
+    return {
+      category: "acked",
+      id: typeof entry.id === "string" ? entry.id : null,
+      eventType: typeof entry.eventType === "string" ? entry.eventType : "mailbox.signal_acked",
+      mailboxObjectId: typeof entry.mailboxObjectId === "string" ? entry.mailboxObjectId : null,
+      orderId: typeof entry.orderId === "string" ? entry.orderId : null,
+      ackedSeq:
+        typeof entry.ackedSeq === "string"
+          ? entry.ackedSeq
+          : entry.ackedSeq !== undefined && entry.ackedSeq !== null
+            ? String(entry.ackedSeq)
+            : null,
+      acker: typeof entry.acker === "string" ? entry.acker : null,
+      ackerRole: typeof entry.ackerRole === "string" ? entry.ackerRole : null,
+      txDigest: typeof entry.txDigest === "string" ? entry.txDigest : null,
+      chainTimestampMs:
+        typeof entry.chainTimestampMs === "string"
+          ? entry.chainTimestampMs
+          : entry.chainTimestampMs !== undefined && entry.chainTimestampMs !== null
+            ? String(entry.chainTimestampMs)
+            : null,
+      createdAt: typeof entry.createdAt === "string" ? entry.createdAt : null,
+      raw: entry.raw || entry,
+    };
+  }
+  return null;
+}
+
+function loadMailboxEventsSnapshotFromFile(eventsFile, orderId) {
+  const payload = readJsonFileSync(eventsFile, "invalid_mailbox_events_file");
+  const payloadOrderId =
+    typeof payload?.orderId === "string"
+      ? payload.orderId.trim()
+      : typeof payload?.response?.orderId === "string"
+        ? payload.response.orderId.trim()
+        : "";
+  if (payloadOrderId && payloadOrderId !== orderId) {
+    throw new Error("mailbox_events_order_id_mismatch");
+  }
+  const mailboxObjectId =
+    typeof payload?.mailboxObjectId === "string"
+      ? payload.mailboxObjectId.trim()
+      : typeof payload?.response?.mailboxObjectId === "string"
+        ? payload.response.mailboxObjectId.trim()
+        : "";
+  const sourceEvents = Array.isArray(payload?.events)
+    ? payload.events
+    : Array.isArray(payload?.response?.events)
+      ? payload.response.events
+      : [];
+  const events = sourceEvents.map(normalizeStoredMailboxEvent).filter(Boolean);
+  const postedEvents = events.filter((entry) => entry.category === "posted");
+  const ackedEvents = events.filter((entry) => entry.category === "acked");
+  const latestPostedSeq = postedEvents.reduce((max, event) => {
+    const seq = Number.parseInt(String(event.seq ?? ""), 10);
+    return Number.isFinite(seq) && seq > max ? seq : max;
+  }, 0);
+  const latestAckByRole = ackedEvents.reduce((acc, event) => {
+    const role = event.ackerRole || "unknown";
+    const seq = Number.parseInt(String(event.ackedSeq ?? ""), 10);
+    if (Number.isFinite(seq) && (!Number.isFinite(acc[role]) || seq > acc[role])) {
+      acc[role] = seq;
+    }
+    return acc;
+  }, {});
+  return {
+    ok: true,
+    orderId,
+    mailboxObjectId: mailboxObjectId || null,
+    limit: events.length,
+    includeAcked: ackedEvents.length > 0,
+    eventCount: events.length,
+    latestPostedSeq: latestPostedSeq || null,
+    latestAckByRole,
+    eventsOut: path.resolve(eventsFile),
+    events,
+    note:
+      "Current runtime can map seller DELIVERABLE_READY signals back as CHECKPOINT in the event feed; use payloadRef + ciphertextHash + seq, not only the label.",
+  };
+}
+
+async function fetchMailboxEventsSnapshot(options, orderId, { timeoutMs, limit, includeAcked, eventsOut } = {}) {
+  const effectiveTimeoutMs = timeoutMs ?? parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+  const effectiveLimit = limit ?? parsePositiveIntOption(options.limit, "limit", 20);
+  const effectiveIncludeAcked =
+    includeAcked === undefined ? parseBooleanOption(options["include-acked"], true) : Boolean(includeAcked);
+  const mailboxCall = await callApiRoute({
+    method: "GET",
+    rawPath: `/orders/${orderId}/mailbox`,
+    options,
+    timeoutMs: effectiveTimeoutMs,
+  });
+  if (!mailboxCall.result.ok) {
+    return {
+      ok: false,
+      error: summarizeApiFailure(mailboxCall.result),
+      status: mailboxCall.result.status,
+      response: mailboxCall.result.body,
+    };
+  }
+  const mailboxObjectId =
+    typeof mailboxCall.result.body?.mailboxObjectId === "string" ? mailboxCall.result.body.mailboxObjectId.trim() : "";
+  if (!mailboxObjectId) {
+    return {
+      ok: false,
+      error: "mailbox_object_id_missing",
+    };
+  }
+
+  const postedCall = await callApiRoute({
+    method: "GET",
+    rawPath: `/events?scope=all&type=mailbox.signal_posted&limit=${effectiveLimit}`,
+    options,
+    timeoutMs: effectiveTimeoutMs,
+  });
+  if (!postedCall.result.ok) {
+    return {
+      ok: false,
+      error: summarizeApiFailure(postedCall.result),
+      status: postedCall.result.status,
+      response: postedCall.result.body,
+    };
+  }
+  const postedItems = Array.isArray(postedCall.result.body?.items) ? postedCall.result.body.items : [];
+  const postedEvents = postedItems
+    .filter((item) => {
+      const payload = item?.payloadJson && typeof item.payloadJson === "object" && !Array.isArray(item.payloadJson)
+        ? item.payloadJson
+        : {};
+      return payload.orderId === orderId || payload.mailboxObjectId === mailboxObjectId || item?.entityId === mailboxObjectId;
+    })
+    .map(normalizeMailboxPostedEvent);
+
+  let ackedEvents = [];
+  if (effectiveIncludeAcked) {
+    const ackCall = await callApiRoute({
+      method: "GET",
+      rawPath: `/events?scope=all&type=mailbox.signal_acked&limit=${effectiveLimit}`,
+      options,
+      timeoutMs: effectiveTimeoutMs,
+    });
+    if (!ackCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(ackCall.result),
+        status: ackCall.result.status,
+        response: ackCall.result.body,
+      };
+    }
+    const ackItems = Array.isArray(ackCall.result.body?.items) ? ackCall.result.body.items : [];
+    ackedEvents = ackItems
+      .filter((item) => {
+        const payload = item?.payloadJson && typeof item.payloadJson === "object" && !Array.isArray(item.payloadJson)
+          ? item.payloadJson
+          : {};
+        return payload.orderId === orderId || payload.mailboxObjectId === mailboxObjectId || item?.entityId === mailboxObjectId;
+      })
+      .map(normalizeMailboxAckedEvent);
+  }
+
+  const events = postedEvents.concat(ackedEvents).sort((left, right) => mailboxEventSortKey(left) - mailboxEventSortKey(right));
+  const latestPostedSeq = postedEvents.reduce((max, event) => {
+    const seq = Number.parseInt(String(event.seq ?? ""), 10);
+    return Number.isFinite(seq) && seq > max ? seq : max;
+  }, 0);
+  const latestAckByRole = ackedEvents.reduce((acc, event) => {
+    const role = event.ackerRole || "unknown";
+    const seq = Number.parseInt(String(event.ackedSeq ?? ""), 10);
+    if (Number.isFinite(seq) && (!Number.isFinite(acc[role]) || seq > acc[role])) {
+      acc[role] = seq;
+    }
+    return acc;
+  }, {});
+  const resolvedEventsOut = eventsOut ?? resolveOptionalPathOption(options["events-out"]);
+  if (resolvedEventsOut) {
+    writeOptionalOutputFile(resolvedEventsOut, `${JSON.stringify({ orderId, mailboxObjectId, events }, null, 2)}\n`);
+  }
+  return {
+    ok: true,
+    orderId,
+    mailboxObjectId,
+    limit: effectiveLimit,
+    includeAcked: effectiveIncludeAcked,
+    eventCount: events.length,
+    latestPostedSeq: latestPostedSeq || null,
+    latestAckByRole,
+    eventsOut: resolvedEventsOut || null,
+    events,
+    note:
+      "Current runtime can map seller DELIVERABLE_READY signals back as CHECKPOINT in the event feed; use payloadRef + ciphertextHash + seq, not only the label.",
+  };
+}
+
+async function resolveDisputeEvidenceBuildContext(options, disputeCaseId, runtimeContext = null) {
+  const effectiveRuntimeContext = runtimeContext || await resolveApiRuntimeContext(options);
+  const actorAddress = resolveActorAddressForSignedRun(options, effectiveRuntimeContext);
+  if (!actorAddress) {
+    return {
+      ok: false,
+      error: "missing_actor_address",
+    };
+  }
+  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+  const disputeCall = await callApiRoute({
+    method: "GET",
+    rawPath: `/disputes/${disputeCaseId}`,
+    options,
+    timeoutMs,
+  });
+  if (!disputeCall.result.ok) {
+    return {
+      ok: false,
+      error: summarizeApiFailure(disputeCall.result),
+      status: disputeCall.result.status,
+      response: disputeCall.result.body,
+    };
+  }
+  const disputeCase = ensureDisputeCasePayload(disputeCall.result.body);
+  const buyerAddress = normalizeIotaAddress(disputeCase.buyer || "");
+  const sellerAddress = normalizeIotaAddress(disputeCase.seller || "");
+  if (actorAddress !== buyerAddress && actorAddress !== sellerAddress) {
+    return {
+      ok: false,
+      error: "actor_not_dispute_party",
+      actorAddress,
+    };
+  }
+  const orderId = typeof disputeCase.orderId === "string" ? disputeCase.orderId.trim() : "";
+  const milestoneId = typeof disputeCase.milestoneId === "string" ? disputeCase.milestoneId.trim() : "";
+  if (!orderId || !milestoneId) {
+    return {
+      ok: false,
+      error: "dispute_order_or_milestone_missing",
+    };
+  }
+  const assignmentRound =
+    Number.isSafeInteger(Number(disputeCase.assignmentRound)) && Number(disputeCase.assignmentRound) >= 0
+      ? Number(disputeCase.assignmentRound)
+      : 0;
+  const assignedReviewers = Array.isArray(disputeCase.assignedReviewers)
+    ? disputeCase.assignedReviewers.map((value) => normalizeIotaAddress(value || "")).filter(Boolean)
+    : [];
+  if (assignedReviewers.length === 0) {
+    return {
+      ok: false,
+      error: "dispute_assigned_reviewers_missing",
+    };
+  }
+  return {
+    ok: true,
+    runtimeContext: effectiveRuntimeContext,
+    timeoutMs,
+    disputeCase,
+    disputeCaseId,
+    actorAddress,
+    actorRole: actorAddress === buyerAddress ? "buyer" : "seller",
+    buyerAddress,
+    sellerAddress,
+    orderId,
+    milestoneId,
+    assignmentRound,
+    assignedReviewers,
+  };
+}
+
+async function buildDisputeSupplementalBundleForCli(options, {
+  disputeCaseId,
+  runtimeContext = null,
+  actorAddress = "",
+  evidenceClass,
+  plaintextBundle,
+  replyToEvidenceId,
+  payloadOut = null,
+  buildOut = null,
+} = {}) {
+  const contextResult = await resolveDisputeEvidenceBuildContext(options, disputeCaseId, runtimeContext);
+  if (!contextResult.ok) {
+    return contextResult;
+  }
+  const {
+    runtimeContext: effectiveRuntimeContext,
+    timeoutMs,
+    buyerAddress,
+    sellerAddress,
+    orderId,
+    milestoneId,
+    assignmentRound,
+    assignedReviewers,
+  } = contextResult;
+  const resolvedActorAddress = actorAddress || contextResult.actorAddress;
+  const maxRecipientKeyVersion = parsePositiveIntOption(
+    options["max-recipient-key-version"],
+    "max_recipient_key_version",
+    8,
+  );
+  const buyerKeyAgreement = await resolveLatestUserKeyAgreement(options, buyerAddress, timeoutMs, maxRecipientKeyVersion);
+  if (!buyerKeyAgreement.ok) {
+    return buyerKeyAgreement;
+  }
+  const sellerKeyAgreement = await resolveLatestUserKeyAgreement(options, sellerAddress, timeoutMs, maxRecipientKeyVersion);
+  if (!sellerKeyAgreement.ok) {
+    return sellerKeyAgreement;
+  }
+  const reviewerKeyAgreements = [];
+  for (const reviewerAddress of assignedReviewers) {
+    const keyAgreement = await resolveReviewerEvidenceKeyAgreement(options, reviewerAddress, timeoutMs, maxRecipientKeyVersion);
+    if (!keyAgreement.ok) {
+      return keyAgreement;
+    }
+    reviewerKeyAgreements.push(keyAgreement.keyAgreement);
+  }
+  const built = await buildDisputeSupplementalBundlePayload({
+    disputeCaseObjectId: disputeCaseId,
+    orderId,
+    milestoneId,
+    assignmentRound,
+    evidenceClass,
+    declaredByActorAddress: resolvedActorAddress,
+    plaintextBundle,
+    replyToEvidenceId,
+    recipients: [
+      {
+        recipientAddress: buyerAddress,
+        keyVersion: buyerKeyAgreement.keyAgreement.keyVersion,
+        recipientPublicKeyMultibase: buyerKeyAgreement.keyAgreement.publicKeyMultibase,
+      },
+      {
+        recipientAddress: sellerAddress,
+        keyVersion: sellerKeyAgreement.keyAgreement.keyVersion,
+        recipientPublicKeyMultibase: sellerKeyAgreement.keyAgreement.publicKeyMultibase,
+      },
+      ...reviewerKeyAgreements.map((entry) => ({
+        recipientAddress: entry.reviewerAddress,
+        keyVersion: entry.keyVersion,
+        recipientPublicKeyMultibase: entry.publicKeyMultibase,
+      })),
+    ],
+  });
+  const manifestSha256 = sha256Hex(built.canonicalPayloadJson);
+  const resolvedPayloadOut =
+    payloadOut || resolveOptionalPathOption(options["payload-out"]) ||
+    path.resolve(process.cwd(), `clawnera-dispute-supplemental-payload-${orderId}-${milestoneId}.json`);
+  const resolvedBuildOut =
+    buildOut || resolveOptionalPathOption(options["build-out"]) ||
+    path.resolve(process.cwd(), `clawnera-dispute-supplemental-build-${orderId}-${milestoneId}.json`);
+  writeOptionalOutputFile(resolvedPayloadOut, `${JSON.stringify(built.payload, null, 2)}\n`);
+  const buildArtifact = {
+    kind: "supplemental_bundle",
+    disputeCaseId,
+    orderId,
+    milestoneId,
+    assignmentRound,
+    actorAddress: resolvedActorAddress,
+    evidenceClass,
+    manifestSha256,
+    cipherSuite: built.cipherSuite,
+    contentProtocol: DISPUTE_SUPPLEMENTAL_BUNDLE_PROTOCOL,
+    recipientGrants: built.payload.encrypted.cekWraps.map((wrap) => ({
+      recipientAddress: wrap.recipientAddress,
+      keyVersion: wrap.keyVersion,
+      wrappedCek: wrap.wrappedCek,
+      hpkeEnc: wrap.hpkeEnc,
+    })),
+    summary: built.summary,
+    ...(replyToEvidenceId ? { replyToEvidenceId } : {}),
+    payloadFile: resolvedPayloadOut,
+  };
+  writeOptionalOutputFile(resolvedBuildOut, `${JSON.stringify(buildArtifact, null, 2)}\n`);
+  const authStateHint = shellQuote(effectiveRuntimeContext.authStateFile || "~/.config/clawnera/auth-state.json");
+  return {
+    ok: true,
+    disputeCaseId,
+    orderId,
+    milestoneId,
+    actorAddress: resolvedActorAddress,
+    assignmentRound,
+    evidenceClass,
+    assignedReviewers,
+    manifestSha256,
+    cipherSuite: built.cipherSuite,
+    payloadOut: resolvedPayloadOut,
+    buildOut: resolvedBuildOut,
+    summary: built.summary,
+    nextUploadHint:
+      `clawnera-help managed-storage-upload --file ${shellQuote(resolvedPayloadOut)} --presign-file <presign-file.json>`,
+    nextPresignHint:
+      `clawnera-help managed-storage-presign --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} ` +
+      `--file ${shellQuote(resolvedPayloadOut)} --payment-proof-file <payment-proof.json> --auth-state-file ${authStateHint}`,
+    nextPublishHint:
+      `clawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id ${shellQuote(disputeCaseId)} ` +
+      `--bundle-build-file ${shellQuote(resolvedBuildOut)} --manifest-cid 'ipfs://<cid>' --auth-state-file ${authStateHint}`,
+  };
+}
+
+function parseMetadataOption(rawValue) {
+  const normalized = normalizeString(rawValue);
+  if (!normalized) {
+    return undefined;
+  }
+  const entries = normalized.split(",").map((entry) => entry.trim()).filter(Boolean);
+  if (entries.length === 0) {
+    throw new Error("invalid_metadata");
+  }
+  return Object.fromEntries(
+    entries.map((entry) => {
+      const separatorIndex = entry.indexOf("=");
+      if (separatorIndex <= 0 || separatorIndex === entry.length - 1) {
+        throw new Error("invalid_metadata");
+      }
+      return [entry.slice(0, separatorIndex).trim(), entry.slice(separatorIndex + 1).trim()];
+    }),
+  );
+}
+
+function resolveCheckpointAnchorFromFile(anchorFile) {
+  const raw = readJsonFileSync(anchorFile, "invalid_anchor_file");
+  const anchorCandidate =
+    (raw?.anchor && typeof raw.anchor === "object" && !Array.isArray(raw.anchor) ? raw.anchor : null) ||
+    (raw?.response?.anchor && typeof raw.response.anchor === "object" && !Array.isArray(raw.response.anchor) ? raw.response.anchor : null) ||
+    (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : null);
+  if (!anchorCandidate) {
+    throw new Error("invalid_anchor_file");
+  }
+  return {
+    txDigest:
+      normalizeString(anchorCandidate.txDigest) ||
+      normalizeString(raw?.txDigest) ||
+      "",
+    eventSeq: normalizeString(anchorCandidate.eventSeq || anchorCandidate.event_seq || ""),
+    status: normalizeString(anchorCandidate.status).toUpperCase(),
+    anchoredAtMs:
+      anchorCandidate.anchoredAtMs ??
+      anchorCandidate.anchored_at_ms ??
+      raw?.anchoredAtMs ??
+      raw?.anchored_at_ms ??
+      undefined,
+  };
+}
+
 async function resolveLatestUserKeyAgreement(options, address, timeoutMs, maxKeyVersion = 8) {
   let matched = null;
   for (let keyVersion = 1; keyVersion <= maxKeyVersion; keyVersion += 1) {
@@ -7648,163 +8186,466 @@ async function runDisputeEvidenceBundleBuild(commandArgs) {
         error: "missing_actor_address",
       };
     }
-    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
-    const disputeCall = await callApiRoute({
-      method: "GET",
-      rawPath: `/disputes/${disputeCaseId}`,
-      options,
-      timeoutMs,
-    });
-    if (!disputeCall.result.ok) {
-      return {
-        ok: false,
-        error: summarizeApiFailure(disputeCall.result),
-        status: disputeCall.result.status,
-        response: disputeCall.result.body,
-      };
-    }
-    const disputeCase = ensureDisputeCasePayload(disputeCall.result.body);
-    const buyerAddress = normalizeIotaAddress(disputeCase.buyer || "");
-    const sellerAddress = normalizeIotaAddress(disputeCase.seller || "");
-    if (actorAddress !== buyerAddress && actorAddress !== sellerAddress) {
-      return {
-        ok: false,
-        error: "actor_not_dispute_party",
-        actorAddress,
-      };
-    }
-    const orderId = typeof disputeCase.orderId === "string" ? disputeCase.orderId.trim() : "";
-    const milestoneId = typeof disputeCase.milestoneId === "string" ? disputeCase.milestoneId.trim() : "";
-    if (!orderId || !milestoneId) {
-      return {
-        ok: false,
-        error: "dispute_order_or_milestone_missing",
-      };
-    }
-    const assignmentRound =
-      Number.isSafeInteger(Number(disputeCase.assignmentRound)) && Number(disputeCase.assignmentRound) >= 0
-        ? Number(disputeCase.assignmentRound)
-        : 0;
-    const assignedReviewers = Array.isArray(disputeCase.assignedReviewers)
-      ? disputeCase.assignedReviewers.map((value) => normalizeIotaAddress(value || "")).filter(Boolean)
-      : [];
-    if (assignedReviewers.length === 0) {
-      return {
-        ok: false,
-        error: "dispute_assigned_reviewers_missing",
-      };
-    }
-    const maxRecipientKeyVersion = parsePositiveIntOption(
-      options["max-recipient-key-version"],
-      "max_recipient_key_version",
-      8,
-    );
-    const buyerKeyAgreement = await resolveLatestUserKeyAgreement(options, buyerAddress, timeoutMs, maxRecipientKeyVersion);
-    if (!buyerKeyAgreement.ok) {
-      return buyerKeyAgreement;
-    }
-    const sellerKeyAgreement = await resolveLatestUserKeyAgreement(options, sellerAddress, timeoutMs, maxRecipientKeyVersion);
-    if (!sellerKeyAgreement.ok) {
-      return sellerKeyAgreement;
-    }
-    const reviewerKeyAgreements = [];
-    for (const reviewerAddress of assignedReviewers) {
-      const keyAgreement = await resolveReviewerEvidenceKeyAgreement(options, reviewerAddress, timeoutMs, maxRecipientKeyVersion);
-      if (!keyAgreement.ok) {
-        return keyAgreement;
-      }
-      reviewerKeyAgreements.push(keyAgreement.keyAgreement);
-    }
     const plaintextBundle = readJsonFileSync(bundlePlaintextFile, "invalid_bundle_plaintext_file");
     const replyToEvidenceId =
       typeof options["reply-to-evidence-id"] === "string" && options["reply-to-evidence-id"].trim()
         ? options["reply-to-evidence-id"].trim()
         : undefined;
-    const built = await buildDisputeSupplementalBundlePayload({
-      disputeCaseObjectId: disputeCaseId,
-      orderId,
-      milestoneId,
-      assignmentRound,
+    return await buildDisputeSupplementalBundleForCli(options, {
+      disputeCaseId,
+      runtimeContext,
+      actorAddress,
       evidenceClass,
-      declaredByActorAddress: actorAddress,
       plaintextBundle,
       replyToEvidenceId,
-      recipients: [
-        {
-          recipientAddress: buyerAddress,
-          keyVersion: buyerKeyAgreement.keyAgreement.keyVersion,
-          recipientPublicKeyMultibase: buyerKeyAgreement.keyAgreement.publicKeyMultibase,
-        },
-        {
-          recipientAddress: sellerAddress,
-          keyVersion: sellerKeyAgreement.keyAgreement.keyVersion,
-          recipientPublicKeyMultibase: sellerKeyAgreement.keyAgreement.publicKeyMultibase,
-        },
-        ...reviewerKeyAgreements.map((entry) => ({
-          recipientAddress: entry.reviewerAddress,
-          keyVersion: entry.keyVersion,
-          recipientPublicKeyMultibase: entry.publicKeyMultibase,
-        })),
-      ],
     });
-    const manifestSha256 = sha256Hex(built.canonicalPayloadJson);
-    const payloadOut =
-      resolveOptionalPathOption(options["payload-out"]) ||
-      path.resolve(process.cwd(), `clawnera-dispute-supplemental-payload-${orderId}-${milestoneId}.json`);
-    const buildOut =
-      resolveOptionalPathOption(options["build-out"]) ||
-      path.resolve(process.cwd(), `clawnera-dispute-supplemental-build-${orderId}-${milestoneId}.json`);
-    writeOptionalOutputFile(payloadOut, `${JSON.stringify(built.payload, null, 2)}\n`);
-    const buildArtifact = {
-      kind: "supplemental_bundle",
-      disputeCaseId,
-      orderId,
-      milestoneId,
-      assignmentRound,
-      actorAddress,
-      evidenceClass,
-      manifestSha256,
-      cipherSuite: built.cipherSuite,
-      contentProtocol: DISPUTE_SUPPLEMENTAL_BUNDLE_PROTOCOL,
-      recipientGrants: built.payload.encrypted.cekWraps.map((wrap) => ({
-        recipientAddress: wrap.recipientAddress,
-        keyVersion: wrap.keyVersion,
-        wrappedCek: wrap.wrappedCek,
-        hpkeEnc: wrap.hpkeEnc,
-      })),
-      summary: built.summary,
-      ...(replyToEvidenceId ? { replyToEvidenceId } : {}),
-      payloadFile: payloadOut,
-    };
-    writeOptionalOutputFile(buildOut, `${JSON.stringify(buildArtifact, null, 2)}\n`);
-    const authStateHint = shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json");
-    return {
-      ok: true,
-      disputeCaseId,
-      orderId,
-      milestoneId,
-      actorAddress,
-      assignmentRound,
-      evidenceClass,
-      assignedReviewers,
-      manifestSha256,
-      cipherSuite: built.cipherSuite,
-      payloadOut,
-      buildOut,
-      summary: built.summary,
-      nextUploadHint:
-        `clawnera-help managed-storage-upload --file ${shellQuote(payloadOut)} --presign-file <presign-file.json>`,
-      nextPresignHint:
-        `clawnera-help managed-storage-presign --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} ` +
-        `--file ${shellQuote(payloadOut)} --payment-proof-file <payment-proof.json> --auth-state-file ${authStateHint}`,
-      nextPublishHint:
-        `clawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id ${shellQuote(disputeCaseId)} ` +
-        `--bundle-build-file ${shellQuote(buildOut)} --manifest-cid 'ipfs://<cid>' --auth-state-file ${authStateHint}`,
-    };
   } catch (error) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "dispute_evidence_bundle_build_failed",
+    };
+  }
+}
+
+async function runMailboxEvidenceExport(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: mailboxEvidenceExportUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+  const unexpectedOptions = findUnexpectedOptions(options, [
+    ...FORWARDED_REQUEST_OPTION_NAMES,
+    "case-id",
+    "limit",
+    "include-acked",
+    "posted-seqs",
+    "acked-seqs",
+    "events-file",
+    "events-out",
+    "bundle-plaintext-out",
+    "payload-out",
+    "build-out",
+    "reply-to-evidence-id",
+    "max-recipient-key-version",
+    "statement-title",
+    "statement-text",
+    "statement-file",
+    "requested-outcome",
+  ]);
+  if (unexpectedOptions.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_options",
+      unexpectedOptions,
+    };
+  }
+  const disputeCaseId =
+    typeof options["case-id"] === "string" && options["case-id"].trim()
+      ? normalizeIotaAddress(String(options["case-id"]).trim())
+      : "";
+  if (!disputeCaseId) {
+    return {
+      ok: false,
+      error: "missing_dispute_case_id",
+    };
+  }
+  try {
+    const runtimeContext = await resolveApiRuntimeContext(options);
+    const contextResult = await resolveDisputeEvidenceBuildContext(options, disputeCaseId, runtimeContext);
+    if (!contextResult.ok) {
+      return contextResult;
+    }
+    const postedSeqs = parseCommaSeparatedSeqValues(options["posted-seqs"], "posted_seqs");
+    const ackedSeqs = parseCommaSeparatedSeqValues(options["acked-seqs"], "acked_seqs");
+    const eventsFile =
+      typeof options["events-file"] === "string" && options["events-file"].trim()
+        ? path.resolve(String(options["events-file"]).trim())
+        : "";
+    const snapshot = eventsFile
+      ? loadMailboxEventsSnapshotFromFile(eventsFile, contextResult.orderId)
+      : await fetchMailboxEventsSnapshot(options, contextResult.orderId, {
+          limit: parsePositiveIntOption(options.limit, "limit", 20),
+          includeAcked: parseBooleanOption(options["include-acked"], true),
+          eventsOut: resolveOptionalPathOption(options["events-out"]),
+        });
+    if (!snapshot.ok) {
+      return snapshot;
+    }
+    const selectedPosted = snapshot.events.filter(
+      (entry) => entry.category === "posted" && (postedSeqs.length === 0 || postedSeqs.includes(String(entry.seq ?? ""))),
+    );
+    const selectedAcked = snapshot.events.filter(
+      (entry) => entry.category === "acked" && (ackedSeqs.length === 0 || ackedSeqs.includes(String(entry.ackedSeq ?? ""))),
+    );
+    const statement = resolveDisputeEvidenceStatement(options, "Mailbox coordination evidence");
+    const items = [
+      ...selectedPosted.map((event) => ({
+        itemType: "mailbox_signal_ref",
+        label: event.seq ? `mailbox-posted-seq-${event.seq}` : "mailbox-posted",
+        seq: event.seq,
+        sender: event.sender,
+        senderRole: event.senderRole,
+        signalIntent: event.signalIntent,
+        payloadRef: event.payloadRef,
+        ciphertextHash: event.ciphertextHash,
+        txDigest: event.txDigest,
+        chainTimestampMs: event.chainTimestampMs,
+        createdAt: event.createdAt,
+        eventId: event.id,
+      })),
+      ...selectedAcked.map((event) => ({
+        itemType: "mailbox_ack_ref",
+        label: event.ackedSeq ? `mailbox-ack-seq-${event.ackedSeq}` : "mailbox-ack",
+        ackedSeq: event.ackedSeq,
+        acker: event.acker,
+        ackerRole: event.ackerRole,
+        txDigest: event.txDigest,
+        chainTimestampMs: event.chainTimestampMs,
+        createdAt: event.createdAt,
+        eventId: event.id,
+      })),
+    ];
+    if (items.length === 0) {
+      return {
+        ok: false,
+        error: "mailbox_evidence_no_selected_events",
+      };
+    }
+    const bundlePlaintext = {
+      ...(statement ? { statement } : {}),
+      items,
+    };
+    const bundlePlaintextOut =
+      resolveOptionalPathOption(options["bundle-plaintext-out"]) ||
+      path.resolve(process.cwd(), `clawnera-dispute-mailbox-evidence-${contextResult.orderId}-${contextResult.milestoneId}.json`);
+    writeOptionalOutputFile(bundlePlaintextOut, `${JSON.stringify(bundlePlaintext, null, 2)}\n`);
+    const replyToEvidenceId =
+      typeof options["reply-to-evidence-id"] === "string" && options["reply-to-evidence-id"].trim()
+        ? options["reply-to-evidence-id"].trim()
+        : undefined;
+    const built = await buildDisputeSupplementalBundleForCli(options, {
+      disputeCaseId,
+      runtimeContext,
+      actorAddress: contextResult.actorAddress,
+      evidenceClass: "MAILBOX_COORDINATION",
+      plaintextBundle: bundlePlaintext,
+      replyToEvidenceId,
+    });
+    if (!built.ok) {
+      return built;
+    }
+    return {
+      ...built,
+      bundlePlaintextOut,
+      eventsOut: snapshot.eventsOut,
+      selectedPostedCount: selectedPosted.length,
+      selectedAckedCount: selectedAcked.length,
+      selectedPostedSeqs: selectedPosted.map((entry) => entry.seq).filter(Boolean),
+      selectedAckedSeqs: selectedAcked.map((entry) => entry.ackedSeq).filter(Boolean),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "mailbox_evidence_export_failed",
+    };
+  }
+}
+
+async function runCheckpointEvidenceExport(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: checkpointEvidenceExportUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+  const unexpectedOptions = findUnexpectedOptions(options, [
+    ...FORWARDED_REQUEST_OPTION_NAMES,
+    "case-id",
+    "submit-body-file",
+    "payload-file",
+    "ciphertext-hash",
+    "signal-seq",
+    "mailbox-events-file",
+    "events-out",
+    "limit",
+    "checkpoint-id",
+    "stage-index",
+    "stage-total",
+    "sender-role",
+    "anchor-file",
+    "anchor-tx-digest",
+    "anchor-event-seq",
+    "anchor-status",
+    "anchor-at-ms",
+    "metadata",
+    "bundle-plaintext-out",
+    "checkpoint-packet-out",
+    "payload-out",
+    "build-out",
+    "reply-to-evidence-id",
+    "max-recipient-key-version",
+    "statement-title",
+    "statement-text",
+    "statement-file",
+    "requested-outcome",
+  ]);
+  if (unexpectedOptions.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_options",
+      unexpectedOptions,
+    };
+  }
+  const disputeCaseId =
+    typeof options["case-id"] === "string" && options["case-id"].trim()
+      ? normalizeIotaAddress(String(options["case-id"]).trim())
+      : "";
+  const submitBodyFile =
+    typeof options["submit-body-file"] === "string" && options["submit-body-file"].trim()
+      ? path.resolve(String(options["submit-body-file"]).trim())
+      : "";
+  if (!disputeCaseId || !submitBodyFile) {
+    return {
+      ok: false,
+      error: "missing_dispute_case_id_or_submit_body_file",
+    };
+  }
+  if (!fs.existsSync(submitBodyFile)) {
+    return {
+      ok: false,
+      error: "missing_submit_body_file",
+      submitBodyFile,
+    };
+  }
+  try {
+    const runtimeContext = await resolveApiRuntimeContext(options);
+    const contextResult = await resolveDisputeEvidenceBuildContext(options, disputeCaseId, runtimeContext);
+    if (!contextResult.ok) {
+      return contextResult;
+    }
+    const submitBody = readJsonFileSync(submitBodyFile, "invalid_submit_body_file");
+    const manifest = submitBody?.manifest;
+    const manifestCid = assertIpfsManifestCid(manifest?.manifestCid);
+    const manifestSha256 = assertLowerHex64(manifest?.manifestSha256, "manifest_sha256");
+    const sellerSignature = normalizeString(manifest?.sellerSignature);
+    if (!sellerSignature) {
+      return {
+        ok: false,
+        error: "missing_seller_signature",
+      };
+    }
+
+    let mailboxSignal = null;
+    const mailboxEventsFile =
+      typeof options["mailbox-events-file"] === "string" && options["mailbox-events-file"].trim()
+        ? path.resolve(String(options["mailbox-events-file"]).trim())
+        : "";
+    const signalSeq = normalizeString(options["signal-seq"]);
+    const payloadFile =
+      typeof options["payload-file"] === "string" && options["payload-file"].trim()
+        ? path.resolve(String(options["payload-file"]).trim())
+        : "";
+    let ciphertextSha256 =
+      typeof options["ciphertext-hash"] === "string" && options["ciphertext-hash"].trim()
+        ? normalizeSha256HashOption(options["ciphertext-hash"], "ciphertext_hash")
+        : "";
+    if (payloadFile) {
+      if (!fs.existsSync(payloadFile)) {
+        return {
+          ok: false,
+          error: "missing_payload_file",
+          payloadFile,
+        };
+      }
+      const payload = normalizeManagedDeliverablePayload(readJsonFileSync(payloadFile, "invalid_payload_file"));
+      ciphertextSha256 = payload.encrypted.blob.ciphertextSha256;
+    }
+    if (mailboxEventsFile || signalSeq || !ciphertextSha256) {
+      const snapshot = mailboxEventsFile
+        ? loadMailboxEventsSnapshotFromFile(mailboxEventsFile, contextResult.orderId)
+        : await fetchMailboxEventsSnapshot(options, contextResult.orderId, {
+            limit: parsePositiveIntOption(options.limit, "limit", 20),
+            includeAcked: false,
+            eventsOut: resolveOptionalPathOption(options["events-out"]),
+          });
+      if (!snapshot.ok) {
+        return snapshot;
+      }
+      const postedSignals = snapshot.events.filter((entry) => entry.category === "posted");
+      mailboxSignal = signalSeq
+        ? postedSignals.find((entry) => String(entry.seq ?? "") === signalSeq) || null
+        : postedSignals[postedSignals.length - 1] || null;
+      if (!mailboxSignal && (signalSeq || !ciphertextSha256)) {
+        return {
+          ok: false,
+          error: "checkpoint_mailbox_signal_not_found",
+        };
+      }
+      if (!ciphertextSha256 && mailboxSignal?.ciphertextHash) {
+        ciphertextSha256 = normalizeSha256HashOption(mailboxSignal.ciphertextHash, "ciphertext_hash");
+      }
+      if (
+        ciphertextSha256 &&
+        mailboxSignal?.ciphertextHash &&
+        normalizeSha256HashOption(mailboxSignal.ciphertextHash, "ciphertext_hash") !== ciphertextSha256
+      ) {
+        return {
+          ok: false,
+          error: "checkpoint_ciphertext_hash_mismatch",
+        };
+      }
+    }
+    if (!ciphertextSha256) {
+      return {
+        ok: false,
+        error: "missing_ciphertext_hash",
+      };
+    }
+
+    let anchorFilePayload = null;
+    const anchorFile =
+      typeof options["anchor-file"] === "string" && options["anchor-file"].trim()
+        ? path.resolve(String(options["anchor-file"]).trim())
+        : "";
+    if (anchorFile) {
+      if (!fs.existsSync(anchorFile)) {
+        return {
+          ok: false,
+          error: "missing_anchor_file",
+          anchorFile,
+        };
+      }
+      anchorFilePayload = resolveCheckpointAnchorFromFile(anchorFile);
+    }
+    const anchorTxDigest =
+      normalizeString(options["anchor-tx-digest"]) ||
+      normalizeString(anchorFilePayload?.txDigest) ||
+      "";
+    const anchorEventSeq =
+      normalizeString(options["anchor-event-seq"]) ||
+      normalizeString(anchorFilePayload?.eventSeq) ||
+      "";
+    const anchorStatus =
+      normalizeString(options["anchor-status"]).toUpperCase() ||
+      normalizeString(anchorFilePayload?.status).toUpperCase() ||
+      "";
+    const anchorAtMs =
+      options["anchor-at-ms"] !== undefined && options["anchor-at-ms"] !== null && String(options["anchor-at-ms"]).trim()
+        ? parsePositiveIntOption(options["anchor-at-ms"], "anchor_at_ms")
+        : anchorFilePayload?.anchoredAtMs !== undefined && anchorFilePayload?.anchoredAtMs !== null
+          ? parsePositiveIntOption(anchorFilePayload.anchoredAtMs, "anchor_at_ms")
+          : null;
+    if (!anchorTxDigest && (anchorEventSeq || anchorStatus || anchorAtMs !== null)) {
+      return {
+        ok: false,
+        error: "anchor_tx_digest_required",
+      };
+    }
+    const packetMetadata = parseMetadataOption(options.metadata);
+    const checkpointPacket = buildCheckpointHandoverPacket({
+      orderId: contextResult.orderId,
+      milestoneId: contextResult.milestoneId,
+      checkpointId: normalizeString(options["checkpoint-id"]) || `${contextResult.milestoneId}-handover`,
+      stageIndex: options["stage-index"] !== undefined ? options["stage-index"] : 1,
+      stageTotal: options["stage-total"] !== undefined ? options["stage-total"] : 1,
+      senderRole: normalizeString(options["sender-role"]).toLowerCase() || contextResult.actorRole,
+      deliverable: {
+        cipherSuite: DEFAULT_E2EE_CIPHER_SUITE,
+        manifestCid,
+        manifestSha256,
+        ciphertextSha256,
+      },
+      ...(anchorTxDigest
+        ? {
+            anchor: {
+              txDigest: anchorTxDigest,
+              ...(anchorEventSeq ? { eventSeq: anchorEventSeq } : {}),
+              ...(anchorStatus ? { status: anchorStatus } : {}),
+              ...(anchorAtMs !== null ? { anchoredAtMs: anchorAtMs } : {}),
+            },
+          }
+        : {}),
+      ...(packetMetadata ? { metadata: packetMetadata } : {}),
+    });
+    const checkpointPacketOut =
+      resolveOptionalPathOption(options["checkpoint-packet-out"]) ||
+      path.resolve(process.cwd(), `clawnera-checkpoint-packet-${contextResult.orderId}-${contextResult.milestoneId}.json`);
+    writeOptionalOutputFile(checkpointPacketOut, `${JSON.stringify(checkpointPacket, null, 2)}\n`);
+    const statement = resolveDisputeEvidenceStatement(options, "Checkpoint handover evidence");
+    const bundlePlaintext = {
+      ...(statement ? { statement } : {}),
+      items: [
+        {
+          itemType: "checkpoint_packet",
+          label: `checkpoint-${checkpointPacket.checkpointId}`,
+          packet: checkpointPacket,
+          sellerSignatureHash: sha256Hex(sellerSignature),
+          ...(mailboxSignal
+            ? {
+                mailboxSignalRef: {
+                  seq: mailboxSignal.seq,
+                  signalIntent: mailboxSignal.signalIntent,
+                  payloadRef: mailboxSignal.payloadRef,
+                  ciphertextHash: mailboxSignal.ciphertextHash,
+                  txDigest: mailboxSignal.txDigest,
+                  chainTimestampMs: mailboxSignal.chainTimestampMs,
+                },
+              }
+            : {}),
+        },
+      ],
+    };
+    const bundlePlaintextOut =
+      resolveOptionalPathOption(options["bundle-plaintext-out"]) ||
+      path.resolve(process.cwd(), `clawnera-dispute-checkpoint-evidence-${contextResult.orderId}-${contextResult.milestoneId}.json`);
+    writeOptionalOutputFile(bundlePlaintextOut, `${JSON.stringify(bundlePlaintext, null, 2)}\n`);
+    const replyToEvidenceId =
+      typeof options["reply-to-evidence-id"] === "string" && options["reply-to-evidence-id"].trim()
+        ? options["reply-to-evidence-id"].trim()
+        : undefined;
+    const built = await buildDisputeSupplementalBundleForCli(options, {
+      disputeCaseId,
+      runtimeContext,
+      actorAddress: contextResult.actorAddress,
+      evidenceClass: "CHECKPOINT_HANDOVER",
+      plaintextBundle: bundlePlaintext,
+      replyToEvidenceId,
+    });
+    if (!built.ok) {
+      return built;
+    }
+    return {
+      ...built,
+      bundlePlaintextOut,
+      checkpointPacketOut,
+      selectedSignalSeq: mailboxSignal?.seq || null,
+      signalIntent: mailboxSignal?.signalIntent || null,
+      payloadRef: mailboxSignal?.payloadRef || null,
+      ciphertextSha256,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "checkpoint_evidence_export_failed",
     };
   }
 }
@@ -9193,114 +10034,7 @@ async function runMailboxEvents(commandArgs) {
   }
 
   try {
-    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
-    const limit = parsePositiveIntOption(options.limit, "limit", 20);
-    const includeAcked = parseBooleanOption(options["include-acked"], true);
-    const mailboxCall = await callApiRoute({
-      method: "GET",
-      rawPath: `/orders/${orderId}/mailbox`,
-      options,
-      timeoutMs,
-    });
-    if (!mailboxCall.result.ok) {
-      return {
-        ok: false,
-        error: summarizeApiFailure(mailboxCall.result),
-        status: mailboxCall.result.status,
-        response: mailboxCall.result.body,
-      };
-    }
-    const mailboxObjectId =
-      typeof mailboxCall.result.body?.mailboxObjectId === "string" ? mailboxCall.result.body.mailboxObjectId.trim() : "";
-    if (!mailboxObjectId) {
-      return {
-        ok: false,
-        error: "mailbox_object_id_missing",
-      };
-    }
-
-    const postedCall = await callApiRoute({
-      method: "GET",
-      rawPath: `/events?scope=all&type=mailbox.signal_posted&limit=${limit}`,
-      options,
-      timeoutMs,
-    });
-    if (!postedCall.result.ok) {
-      return {
-        ok: false,
-        error: summarizeApiFailure(postedCall.result),
-        status: postedCall.result.status,
-        response: postedCall.result.body,
-      };
-    }
-    const postedItems = Array.isArray(postedCall.result.body?.items) ? postedCall.result.body.items : [];
-    const postedEvents = postedItems
-      .filter((item) => {
-        const payload = item?.payloadJson && typeof item.payloadJson === "object" && !Array.isArray(item.payloadJson)
-          ? item.payloadJson
-          : {};
-        return payload.orderId === orderId || payload.mailboxObjectId === mailboxObjectId || item?.entityId === mailboxObjectId;
-      })
-      .map(normalizeMailboxPostedEvent);
-
-    let ackedEvents = [];
-    if (includeAcked) {
-      const ackCall = await callApiRoute({
-        method: "GET",
-        rawPath: `/events?scope=all&type=mailbox.signal_acked&limit=${limit}`,
-        options,
-        timeoutMs,
-      });
-      if (!ackCall.result.ok) {
-        return {
-          ok: false,
-          error: summarizeApiFailure(ackCall.result),
-          status: ackCall.result.status,
-          response: ackCall.result.body,
-        };
-      }
-      const ackItems = Array.isArray(ackCall.result.body?.items) ? ackCall.result.body.items : [];
-      ackedEvents = ackItems
-        .filter((item) => {
-          const payload = item?.payloadJson && typeof item.payloadJson === "object" && !Array.isArray(item.payloadJson)
-            ? item.payloadJson
-            : {};
-          return payload.orderId === orderId || payload.mailboxObjectId === mailboxObjectId || item?.entityId === mailboxObjectId;
-        })
-        .map(normalizeMailboxAckedEvent);
-    }
-
-    const events = postedEvents.concat(ackedEvents).sort((left, right) => mailboxEventSortKey(left) - mailboxEventSortKey(right));
-    const latestPostedSeq = postedEvents.reduce((max, event) => {
-      const seq = Number.parseInt(String(event.seq ?? ""), 10);
-      return Number.isFinite(seq) && seq > max ? seq : max;
-    }, 0);
-    const latestAckByRole = ackedEvents.reduce((acc, event) => {
-      const role = event.ackerRole || "unknown";
-      const seq = Number.parseInt(String(event.ackedSeq ?? ""), 10);
-      if (Number.isFinite(seq) && (!Number.isFinite(acc[role]) || seq > acc[role])) {
-        acc[role] = seq;
-      }
-      return acc;
-    }, {});
-    const eventsOut = resolveOptionalPathOption(options["events-out"]);
-    if (eventsOut) {
-      writeOptionalOutputFile(eventsOut, `${JSON.stringify({ orderId, mailboxObjectId, events }, null, 2)}\n`);
-    }
-    return {
-      ok: true,
-      orderId,
-      mailboxObjectId,
-      limit,
-      includeAcked,
-      eventCount: events.length,
-      latestPostedSeq: latestPostedSeq || null,
-      latestAckByRole,
-      eventsOut: eventsOut || null,
-      events,
-      note:
-        "Current runtime can map seller DELIVERABLE_READY signals back as CHECKPOINT in the event feed; use payloadRef + ciphertextHash + seq, not only the label.",
-    };
+    return await fetchMailboxEventsSnapshot(options, orderId);
   } catch (error) {
     return {
       ok: false,
@@ -10389,6 +11123,30 @@ function disputeEvidenceDecryptUsageLines() {
   ];
 }
 
+function mailboxEvidenceExportUsageLines() {
+  return [
+    "Mailbox evidence export helper:",
+    "- Usage: clawnera-help mailbox-evidence-export --case-id <0x...> --auth-state-file <file>",
+    "- Reads the live dispute, then exports mailbox posted/acked events into one canonical MAILBOX_COORDINATION supplemental bundle.",
+    "- Optional filters: --posted-seqs <csv> --acked-seqs <csv> --limit <n> --include-acked <true|false>",
+    "- Optional reuse: --events-file <saved-mailbox-events.json> instead of refetching the mailbox event feed",
+    "- Optional statement: --statement-title <text> plus --statement-text <text> or --statement-file <file>",
+    "- Writes one plaintext bundle JSON plus the normal encrypted payload/build files used by dispute-evidence-publish --kind supplemental-bundle",
+  ];
+}
+
+function checkpointEvidenceExportUsageLines() {
+  return [
+    "Checkpoint evidence export helper:",
+    "- Usage: clawnera-help checkpoint-evidence-export --case-id <0x...> --submit-body-file <file> --auth-state-file <file>",
+    "- Builds one canonical CHECKPOINT_HANDOVER packet locally, wraps it into a supplemental dispute bundle, and writes the normal payload/build artifacts.",
+    "- Ciphertext source: prefer --payload-file <managed-deliverable-payload.json>; fallback to --ciphertext-hash <64-hex> or a selected mailbox signal.",
+    "- Mailbox shortcut: --signal-seq <n> or reuse --mailbox-events-file <saved-mailbox-events.json> to attach the delivery-ready signal ref.",
+    "- Optional anchor: --anchor-file <milestone-anchor.json> or explicit --anchor-tx-digest <digest> [--anchor-event-seq <n>] [--anchor-status PENDING|CONFIRMED|MISMATCH]",
+    "- Optional statement: --statement-title <text> plus --statement-text <text> or --statement-file <file>",
+  ];
+}
+
 function managedStorageFeePayUsageLines() {
   return [
     "Managed storage fee helper:",
@@ -11032,6 +11790,10 @@ const aliasCommands = new Map([
   ["dispute-bundle-build", "dispute-evidence-bundle-build"],
   ["decrypt-dispute-evidence", "dispute-evidence-decrypt"],
   ["reviewer-evidence-decrypt", "dispute-evidence-decrypt"],
+  ["export-mailbox-evidence", "mailbox-evidence-export"],
+  ["build-mailbox-evidence", "mailbox-evidence-export"],
+  ["export-checkpoint-evidence", "checkpoint-evidence-export"],
+  ["build-checkpoint-evidence", "checkpoint-evidence-export"],
   ["storage-fee-pay", "managed-storage-fee-pay"],
   ["storage-presign", "managed-storage-presign"],
   ["storage-upload", "managed-storage-upload"],
@@ -11101,6 +11863,8 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "dispute-evidence-list",
         "dispute-evidence-content",
         "dispute-evidence-decrypt",
+        "mailbox-evidence-export",
+        "checkpoint-evidence-export",
         "managed-storage-fee-pay",
         "managed-storage-presign",
         "managed-storage-upload",
@@ -12178,6 +12942,67 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`plaintext_sha256=${result.plaintextSha256}`);
   } else {
     console.error(`dispute_evidence_decrypt_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "mailbox-evidence-export") {
+  const result = await runMailboxEvidenceExport(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`mailbox_evidence_export_ok case_id=${result.disputeCaseId}`);
+    console.log(`order_id=${result.orderId}`);
+    console.log(`milestone_id=${result.milestoneId}`);
+    console.log(`bundle_plaintext_file=${result.bundlePlaintextOut}`);
+    console.log(`selected_posted_count=${result.selectedPostedCount}`);
+    console.log(`selected_acked_count=${result.selectedAckedCount}`);
+    if (result.eventsOut) {
+      console.log(`events_file=${result.eventsOut}`);
+    }
+    console.log(`payload_file=${result.payloadOut}`);
+    console.log(`build_file=${result.buildOut}`);
+    console.log(`next_upload=${result.nextUploadHint}`);
+    console.log(`next_publish=${result.nextPublishHint}`);
+  } else {
+    console.error(`mailbox_evidence_export_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "checkpoint-evidence-export") {
+  const result = await runCheckpointEvidenceExport(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`checkpoint_evidence_export_ok case_id=${result.disputeCaseId}`);
+    console.log(`order_id=${result.orderId}`);
+    console.log(`milestone_id=${result.milestoneId}`);
+    console.log(`checkpoint_packet_file=${result.checkpointPacketOut}`);
+    console.log(`bundle_plaintext_file=${result.bundlePlaintextOut}`);
+    if (result.selectedSignalSeq) {
+      console.log(`signal_seq=${result.selectedSignalSeq}`);
+    }
+    if (result.payloadRef) {
+      console.log(`payload_ref=${result.payloadRef}`);
+    }
+    console.log(`ciphertext_sha256=${result.ciphertextSha256}`);
+    console.log(`payload_file=${result.payloadOut}`);
+    console.log(`build_file=${result.buildOut}`);
+    console.log(`next_upload=${result.nextUploadHint}`);
+    console.log(`next_publish=${result.nextPublishHint}`);
+  } else {
+    console.error(`checkpoint_evidence_export_error: ${result.error}`);
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {

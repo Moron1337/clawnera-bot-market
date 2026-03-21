@@ -95,6 +95,8 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /clawnera-help dispute-evidence-list/);
   assert.match(result.stdout, /clawnera-help dispute-evidence-content/);
   assert.match(result.stdout, /clawnera-help dispute-evidence-decrypt/);
+  assert.match(result.stdout, /clawnera-help mailbox-evidence-export/);
+  assert.match(result.stdout, /clawnera-help checkpoint-evidence-export/);
   assert.match(result.stdout, /clawnera-help mailbox-events/);
   assert.match(result.stdout, /clawnera-help milestone-submit-byo/);
   assert.match(result.stdout, /clawnera-help milestone-anchor/);
@@ -141,6 +143,8 @@ test("help json output includes auth-login command", () => {
   assert.ok(payload.commands.includes("dispute-evidence-list"));
   assert.ok(payload.commands.includes("dispute-evidence-content"));
   assert.ok(payload.commands.includes("dispute-evidence-decrypt"));
+  assert.ok(payload.commands.includes("mailbox-evidence-export"));
+  assert.ok(payload.commands.includes("checkpoint-evidence-export"));
   assert.ok(payload.commands.includes("mailbox-events"));
   assert.ok(payload.commands.includes("milestone-submit-byo"));
   assert.ok(payload.commands.includes("milestone-anchor"));
@@ -194,6 +198,8 @@ test("encrypted delivery helpers print usage", () => {
     ["dispute-evidence-list", /Dispute evidence list helper/],
     ["dispute-evidence-content", /Dispute evidence content helper/],
     ["dispute-evidence-decrypt", /Dispute evidence decrypt helper/],
+    ["mailbox-evidence-export", /Mailbox evidence export helper/],
+    ["checkpoint-evidence-export", /Checkpoint evidence export helper/],
     ["mailbox-events", /Mailbox events helper/],
     ["pinata-upload-json", /Pinata JSON upload helper/],
     ["milestone-submit-byo", /Milestone submit helper/],

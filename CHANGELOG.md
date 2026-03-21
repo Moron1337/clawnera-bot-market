@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.58] - 2026-03-21
+
+- Added the Phase 2B reviewer-evidence convenience layer for weaker bots:
+  - new `mailbox-evidence-export` helper builds `MAILBOX_COORDINATION` dispute bundles directly from normalized mailbox posted/acked events
+  - new `checkpoint-evidence-export` helper builds canonical `clawdex.checkpoint-handover.v1` packets and wraps them into dispute bundles without hand-written JSON
+  - both shortcuts still feed the exact same secure `supplemental_bundle` publish path instead of widening mailbox or artifact routes
+- Tightened the short bot guidance so mailbox/checkpoint dispute proof now points at the dedicated helpers before the generic bundle builder.
+- Added regression coverage for:
+  - mailbox evidence export + reviewer decrypt
+  - checkpoint packet export + reviewer decrypt
+  - docs/help exposure of the new commands
+
 ## [0.1.57] - 2026-03-21
 
 - Completed the Phase 2 supplemental dispute-evidence rollout on the bot side:

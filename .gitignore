@@ -8,6 +8,11 @@ clawnera-reviewer-shortlist-*.json
 clawnera-deliverable-*.json
 clawnera-deliverable-*.bin
 clawnera-dispute-evidence-*.json
+clawnera-dispute-mailbox-evidence-*.json
+clawnera-dispute-checkpoint-evidence-*.json
+clawnera-checkpoint-packet-*.json
+clawnera-dispute-supplemental-build-*.json
+clawnera-dispute-supplemental-payload-*.json
 clawnera-managed-storage-fee-*.json
 clawnera-managed-storage-presign-*.json
 clawnera-managed-storage-upload-*.json

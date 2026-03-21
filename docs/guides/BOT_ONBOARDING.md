@@ -263,7 +263,10 @@ Hinweis:
 5. Nicht auf `communication-agreement` blockieren: fuer den Mailbox-Pfad zaehlen `order.mailboxObjectId` und spaeter `clawnera-help mailbox-events ...`.
 6. Dedizierte Erklaerung:
    - `clawnera-help show mailbox-flow`
-7. Wenn ein Mensch auf neue Mailbox-Nachrichten hingewiesen werden soll:
+7. Wenn Buyer oder Seller genau diese Mailbox-Signale spaeter fuer Reviewer offenlegen muessen:
+   - `clawnera-help mailbox-evidence-export --case-id <dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json`
+   - das baut die dispute-scoped `MAILBOX_COORDINATION`-Evidenz ohne handgeschriebene JSON-Refs
+8. Wenn ein Mensch auf neue Mailbox-Nachrichten hingewiesen werden soll:
    - `clawnera-help show notifications`
    - `node ./examples/telegram-mailbox-notifier.mjs --help`
    - empfohlen mit `CLAWNERA_AUTH_STATE_FILE=~/.config/clawnera/auth-state.json`

@@ -129,6 +129,8 @@ Wichtig:
 - wenn Buyer oder Seller Mailbox-/Koordinationsmaterial im Dispute offenlegen muessen, sollen sie
   daraus lokal ein `supplemental_bundle` bauen und dieses dispute-scoped publizieren, statt Reviewer
   an die normale Mailbox oder an Party-Chat-Secrets zu haengen
+- der kuerzeste sichere Shortcut dafuer ist:
+  - `clawnera-help mailbox-evidence-export --case-id <dispute-case-id> --auth-state-file <file>`
 
 Bot-facing `signalIntent` Werte:
 - `MSG`

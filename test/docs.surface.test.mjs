@@ -73,11 +73,14 @@ test("reviewer docs require dispute-scoped evidence before voting", () => {
   assert.match(onboarding, /clawnera-help dispute-evidence-content/);
   assert.match(onboarding, /clawnera-help dispute-evidence-decrypt --content-file/);
   assert.match(readme, /dispute-evidence-bundle-build/);
+  assert.match(readme, /mailbox-evidence-export/);
+  assert.match(readme, /checkpoint-evidence-export/);
   assert.match(readme, /dispute-evidence-decrypt/);
   assert.match(recipes, /reviewer-inspect-evidence/);
   assert.match(recipes, /dispute-evidence-linked-deliverable/);
   assert.match(recipes, /dispute-evidence-supplemental-bundle/);
   assert.match(mailbox, /nicht der kanonische Evidence-Pfad/);
+  assert.match(mailbox, /mailbox-evidence-export/);
   assert.match(mailbox, /supplemental_bundle/);
   assert.match(routeMatrix, /linked_deliverable` oder `supplemental_bundle/);
 });

@@ -99,6 +99,10 @@ Auth note:
   - buyer/seller publish reviewer-readable deliverable evidence from the already uploaded payload
 - `dispute-evidence-supplemental-bundle`
   - buyer/seller build and publish complaint, rebuttal, mailbox, checkpoint, or supporting dispute bundles for the active reviewer round
+- `dispute-mailbox-evidence-export`
+  - buyer/seller export mailbox posted/acked proof into one reviewer-readable dispute bundle without hand-written JSON refs
+- `dispute-checkpoint-evidence-export`
+  - buyer/seller export a canonical checkpoint handover packet into one reviewer-readable dispute bundle
 - `operator-shortlist-open`
   - build selector receipt and publish the exact shortlist
 - `reviewer-register`

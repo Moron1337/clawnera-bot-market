@@ -2154,6 +2154,82 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /deadline-ext/{extensionObjectId}/accept:
+    post:
+      tags:
+        - Orders
+      operationId: acceptDeadlineExtensionPlan
+      parameters:
+        - name: extensionObjectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeadlineExtActionRequest'
+      responses:
+        '200':
+          description: Transaction plan for `deadline_ext::accept`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: On-chain validation unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /deadline-ext/{extensionObjectId}/reject:
+    post:
+      tags:
+        - Orders
+      operationId: rejectDeadlineExtensionPlan
+      parameters:
+        - name: extensionObjectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeadlineExtActionRequest'
+      responses:
+        '200':
+          description: Transaction plan for `deadline_ext::reject`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: On-chain validation unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /orders/{orderId}/cancel/request:
     post:
       tags:
@@ -2190,6 +2266,76 @@ paths:
           $ref: '#/components/responses/Conflict'
         '503':
           description: Marketplace package not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /cancel-requests/{cancelRequestObjectId}/accept:
+    post:
+      tags:
+        - Orders
+      operationId: acceptMutualCancelPlan
+      parameters:
+        - name: cancelRequestObjectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MutualCancelActionRequest'
+      responses:
+        '200':
+          description: Transaction plan for `mutual_cancel::accept`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: On-chain validation unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /cancel-requests/{cancelRequestObjectId}/reject:
+    post:
+      tags:
+        - Orders
+      operationId: rejectMutualCancelPlan
+      parameters:
+        - name: cancelRequestObjectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Transaction plan for `mutual_cancel::reject`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: On-chain validation unavailable.
           content:
             application/json:
               schema:
@@ -4362,6 +4508,14 @@ components:
         - pendingNoshowCount
         - pendingSlashCount
         - pendingSlashBpsTotal
+    MutualCancelActionRequest:
+      properties:
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+      type: object
+      additionalProperties: false
     MutualCancelRequest:
       properties:
         escrowId:
@@ -4385,6 +4539,20 @@ components:
         - escrowId
         - buyerRefundBps
         - amount
+    DeadlineExtActionRequest:
+      properties:
+        deadlineExtRegistryObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+      type: object
+      additionalProperties: false
+      required:
+        - deadlineExtRegistryObjectId
     DeadlineExtProposeRequest:
       properties:
         deadlineExtRegistryObjectId:

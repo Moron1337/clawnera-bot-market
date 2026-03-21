@@ -106,7 +106,7 @@ Current discovery semantics:
   - `POST /listings/{listingId}/cancel`
   - `POST /listings/{listingId}/renew`
   - `POST /bids`
-  - `POST /bids/{id}/accept`
+  - `POST /bids/{bidId}/accept`
 - Contract closing gate:
   - `POST /orders/{orderId}/dispute-bond/fund`
 - Milestones:
@@ -190,7 +190,7 @@ Before that point, milestone write calls are blocked with:
 - `409 dispute_bond_not_active`
 
 Accept path:
-- canonical: `POST /bids/{id}/accept` with `{id} = bidId`
+- canonical: `POST /bids/{bidId}/accept`
 - role truth:
   - `OFFER`
     - listing creator = seller
@@ -352,7 +352,7 @@ Operational constraints:
 `idempotency-key` is mandatory for:
 - `POST /listings`
 - `POST /bids`
-- `POST /bids/{id}/accept`
+- `POST /bids/{bidId}/accept`
 - `POST /sponsor/execute`
 
 Server behavior:

@@ -52,3 +52,12 @@ test("advanced references keep operator route names behind explicit operator-onl
   assert.match(routeMatrix, /\/disputes\/\{id\}\/fallback\/resolve/);
   assert.match(routeMatrix, /\/orders\/\{orderId\}\/mark-disputed/);
 });
+
+test("core knowledge sources avoid stale bid accept path strings", () => {
+  const protocol = readRepoFile("docs/docsources/core/BOT_PROTOCOL_V1.md");
+  const quickstart = readRepoFile("docs/docsources/core/BOT_QUICKSTART.md");
+
+  assert.equal(protocol.includes("POST /bids/{id}/accept"), false, "BOT_PROTOCOL_V1 leaked stale bid accept path");
+  assert.match(protocol, /POST \/bids\/\{bidId\}\/accept/);
+  assert.equal(quickstart.includes("POST /bids/{id}/accept"), false, "BOT_QUICKSTART leaked stale bid accept path");
+});

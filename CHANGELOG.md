@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.55] - 2026-03-21
+
+- Removed the last stale `POST /bids/{id}/accept` references from the active core protocol docs and refreshed the packaged copied docsources.
+- Added a docs-surface regression that fails if the bundled core knowledge sources drift back to the legacy bid-accept path name.
+
 ## [0.1.54] - 2026-03-21
 
 - Closed the remaining real findings from the full API-surface audit:

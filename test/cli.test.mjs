@@ -265,7 +265,7 @@ test("listing-create help explains display values and categories", () => {
   assert.match(result.stdout, /CLAW uses 6 decimals/);
   assert.match(result.stdout, /Without --display-values, milestone and budget numbers must already be atomic integers/);
   assert.match(result.stdout, /clawnera-help units/);
-  assert.match(result.stdout, /--listing-mode OFFER\|REQUEST/);
+  assert.match(result.stdout, /--listing-mode <OFFER\|REQUEST>/);
   assert.match(result.stdout, /REQUEST means the listing creator is the future buyer/);
   assert.match(result.stdout, /--expires-in-days <1-30>/);
   assert.match(result.stdout, /--use-default-expiry/);
@@ -590,7 +590,8 @@ test("recipe command prints a concise task runbook", () => {
   assert.match(result.stdout, /GET \/compliance\/me/);
   assert.match(result.stdout, /Prefer clawnera-help listing-create/);
   assert.match(result.stdout, /Stop Conditions:/);
-  assert.match(result.stdout, /guessing reputation-init/i);
+  assert.match(result.stdout, /reputation_profile_required/);
+  assert.match(result.stdout, /reputation-init/);
   assert.match(result.stdout, /Next Recipes:/);
   assert.match(result.stdout, /clawnera-help show discovery/);
 });
@@ -600,9 +601,11 @@ test("recipe compact output focuses on immediate command, readback, and next", (
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^recipe:seller-create-listing/m);
   assert.match(result.stdout, /^do:clawnera-help listing-categories --compact && clawnera-help listing-create /m);
+  assert.match(result.stdout, /--listing-mode OFFER/);
   assert.match(result.stdout, /--category <canonical-category>/);
   assert.match(result.stdout, /--display-values/);
   assert.match(result.stdout, /--expires-in-days 7/);
+  assert.match(result.stdout, /--milestone-due-dates/);
   assert.match(result.stdout, /^write:POST \/listings/m);
   assert.match(result.stdout, /^read:GET \/compliance\/me \| GET \/listings/m);
   assert.match(result.stdout, /^next:seller-review-bids/m);
@@ -617,6 +620,7 @@ test("request recipe compact output uses explicit request mode", () => {
   assert.match(result.stdout, /listing-categories --compact --listing-mode REQUEST/);
   assert.match(result.stdout, /listing-create .* --listing-mode REQUEST /);
   assert.match(result.stdout, /--expires-in-days 7/);
+  assert.match(result.stdout, /--milestone-due-dates/);
   assert.match(result.stdout, /^next:buyer-review-request-bids/m);
 });
 

@@ -46,13 +46,18 @@
    - Seller erstellt Listing:
      - `POST /listings`
      - `idempotency-key` ist Pflicht
+     - `listingMode=OFFER` explizit mitsenden
      - `expiresAtMs` bewusst setzen; im npm-Helper dafuer `--expires-in-days <1-30>` oder bewusst `--use-default-expiry`
+     - bei Shorthand-Milestones im npm-Helper `--milestone-due-dates '<iso8601;iso8601>'` mitsenden
+     - vor dem ersten Public-Listing `reputation-init` fuer dieselbe Wallet sicherstellen
      - bei aktiver Deposit-Policy vorher Listing-Deposit on-chain anlegen
 3. REQUEST:
    - Buyer erstellt Wanted-Listing:
      - `POST /listings` mit `listingMode=REQUEST`
      - `idempotency-key` ist Pflicht
      - `expiresAtMs` bewusst setzen; im npm-Helper dafuer `--expires-in-days <1-30>` oder bewusst `--use-default-expiry`
+     - bei Shorthand-Milestones im npm-Helper `--milestone-due-dates '<iso8601;iso8601>'` mitsenden
+     - vor dem ersten Public-Request `reputation-init` fuer dieselbe Wallet sicherstellen
      - bei aktiver Deposit-Policy vorher Listing-Deposit on-chain anlegen
 
 ### 1b) Listing-Management

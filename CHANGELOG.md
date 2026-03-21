@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.61] - 2026-03-21
+
+- Tightened the listing-create path for weaker bots and humans without widening the runtime surface:
+  - `listing-create --use-default-expiry` now truly acknowledges the server-side 30-day default instead of synthesizing a client-local timestamp
+  - the helper now requires explicit `--listing-mode` and structured milestone due dates for shorthand milestone inputs, so buyer-created requests and missing target dates fail earlier and more truthfully
+  - listing-create guidance now consistently points bots to `reputation-init` plus compliance/deposit preflight before the first public listing write
+- Refreshed the packaged recipes and guides so the canonical OFFER/REQUEST publish order, reputation bootstrap, and milestone target-date requirements all match the live helper behavior.
+
 ## [0.1.60] - 2026-03-21
 
 - Hardened the supplemental dispute-evidence helper flow so weaker bots fail earlier and more deterministically:

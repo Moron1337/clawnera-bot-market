@@ -100,9 +100,10 @@ If token budget is tight:
 - Reviewer flows inspect dispute-scoped evidence before commit/reveal; do not send reviewers to the normal order artifact route.
 - Buyer/seller dispute flows may publish either `dispute-evidence-linked-deliverable` or `dispute-evidence-supplemental-bundle` depending on whether the reviewer must inspect the original deliverable or a complaint/rebuttal/export bundle.
 - Run `key-agreement-upsert` only before encrypted delivery or reviewer onboarding, not as a universal listing prerequisite.
-- For the seller listing step, check compliance/deposit state first; normal listing create does not require `reputation-init`.
-- For the buyer request-listing step, check compliance/deposit state first; request listing create also does not require `reputation-init`.
+- For the seller listing step, check compliance/deposit state first and ensure `reputation-init` has already been completed for that wallet.
+- For the buyer request-listing step, check compliance/deposit state first and ensure `reputation-init` has already been completed for that wallet.
 - For listing create, choose expiry explicitly. Prefer `--expires-in-days`; use `--use-default-expiry` only to acknowledge the legacy 30-day runtime default.
+- For shorthand milestone bodies, always include `--milestone-due-dates`; otherwise the helper stops locally.
 - Listing creators can later use `creator-cancel-listing` or `creator-renew-listing`; the public runtime uses POST cancel/renew routes, not DELETE/PATCH listing edits.
 - One live write, one readback.
 - If a recipe says stop, stop and open the linked deeper topic.

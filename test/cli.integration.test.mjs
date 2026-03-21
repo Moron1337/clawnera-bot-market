@@ -19,6 +19,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
 const cliFile = path.join(repoRoot, "bin", "clawnera-help.mjs");
+const TEST_LISTING_DUE_AT_1 = "2026-04-20T12:00:00Z";
+const TEST_LISTING_DUE_AT_2 = "2026-04-27T12:00:00Z";
+const TEST_LISTING_DUE_AT_MS_1 = Date.parse(TEST_LISTING_DUE_AT_1);
+const TEST_LISTING_DUE_AT_MS_2 = Date.parse(TEST_LISTING_DUE_AT_2);
 
 function buildJwtWithExp(expSeconds) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -2745,6 +2749,8 @@ test("listing-create infers creator address and posts a canonical body", async (
       "listing-create",
       "--auth-state-file",
       authStateFile,
+      "--listing-mode",
+      "OFFER",
       "--title",
       "Two tiny IOTA text tasks",
       "--description",
@@ -2757,6 +2763,8 @@ test("listing-create infers creator address and posts a canonical body", async (
       String(expiresAtMs),
       "--milestones",
       "Milestone 1:500000000;Milestone 2:500000000",
+      "--milestone-due-dates",
+      `${TEST_LISTING_DUE_AT_1};${TEST_LISTING_DUE_AT_2}`,
       "--json"
     ]);
     assert.equal(result.status, 0);
@@ -2776,8 +2784,8 @@ test("listing-create infers creator address and posts a canonical body", async (
       budgetAmount: "1000000000",
       expiresAtMs,
       milestones: [
-        { title: "Milestone 1", amount: "500000000" },
-        { title: "Milestone 2", amount: "500000000" }
+        { title: "Milestone 1", amount: "500000000", dueAtMs: TEST_LISTING_DUE_AT_MS_1 },
+        { title: "Milestone 2", amount: "500000000", dueAtMs: TEST_LISTING_DUE_AT_MS_2 }
       ]
     });
   } finally {
@@ -2881,6 +2889,8 @@ test("listing-create converts display values into atomic amounts", async () => {
       "listing-create",
       "--auth-state-file",
       authStateFile,
+      "--listing-mode",
+      "OFFER",
       "--title",
       "Two empty txt files",
       "--description",
@@ -2893,6 +2903,8 @@ test("listing-create converts display values into atomic amounts", async () => {
       "--use-default-expiry",
       "--milestones",
       "file1.txt:1;file2.txt:1",
+      "--milestone-due-dates",
+      `${TEST_LISTING_DUE_AT_1};${TEST_LISTING_DUE_AT_2}`,
       "--json"
     ]);
     assert.equal(result.status, 0);
@@ -2904,8 +2916,8 @@ test("listing-create converts display values into atomic amounts", async () => {
     assert.equal(payload.explicitExpiry, false);
     assert.equal(Object.hasOwn(payload.response.seen, "expiresAtMs"), false);
     assert.deepEqual(payload.response.seen.milestones, [
-      { title: "file1.txt", amount: "1000000000" },
-      { title: "file2.txt", amount: "1000000000" }
+      { title: "file1.txt", amount: "1000000000", dueAtMs: TEST_LISTING_DUE_AT_MS_1 },
+      { title: "file2.txt", amount: "1000000000", dueAtMs: TEST_LISTING_DUE_AT_MS_2 }
     ]);
   } finally {
     await mock.close();
@@ -2934,6 +2946,8 @@ test("listing-create stops early when only one milestone is supplied", async () 
     "listing-create",
     "--auth-state-file",
     authStateFile,
+    "--listing-mode",
+    "OFFER",
     "--title",
     "One empty txt",
     "--description",
@@ -2990,6 +3004,8 @@ test("listing-create accepts display values with an explicit currency suffix", a
       "listing-create",
       "--auth-state-file",
       authStateFile,
+      "--listing-mode",
+      "OFFER",
       "--title",
       "Two empty txt files",
       "--description",
@@ -3002,6 +3018,8 @@ test("listing-create accepts display values with an explicit currency suffix", a
       "--use-default-expiry",
       "--milestones",
       "file1.txt:1 IOTA;file2.txt:1 IOTA",
+      "--milestone-due-dates",
+      `${TEST_LISTING_DUE_AT_1};${TEST_LISTING_DUE_AT_2}`,
       "--json"
     ]);
     assert.equal(result.status, 0);
@@ -3012,8 +3030,8 @@ test("listing-create accepts display values with an explicit currency suffix", a
     assert.equal(payload.explicitExpiry, false);
     assert.equal(Object.hasOwn(payload.response.seen, "expiresAtMs"), false);
     assert.deepEqual(payload.response.seen.milestones, [
-      { title: "file1.txt", amount: "1000000000" },
-      { title: "file2.txt", amount: "1000000000" }
+      { title: "file1.txt", amount: "1000000000", dueAtMs: TEST_LISTING_DUE_AT_MS_1 },
+      { title: "file2.txt", amount: "1000000000", dueAtMs: TEST_LISTING_DUE_AT_MS_2 }
     ]);
   } finally {
     await mock.close();
@@ -3056,6 +3074,8 @@ test("listing-create warns when atomic milestone amounts are smaller than one di
       "listing-create",
       "--auth-state-file",
       authStateFile,
+      "--listing-mode",
+      "OFFER",
       "--title",
       "Atomic units warning listing",
       "--description",
@@ -3067,6 +3087,8 @@ test("listing-create warns when atomic milestone amounts are smaller than one di
       "--use-default-expiry",
       "--milestones",
       "file1.txt:1;file2.txt:1",
+      "--milestone-due-dates",
+      `${TEST_LISTING_DUE_AT_1};${TEST_LISTING_DUE_AT_2}`,
       "--json"
     ]);
     assert.equal(result.status, 0);
@@ -3133,6 +3155,8 @@ test("listing-create forwards explicit request listing mode", async () => {
       "2026-04-20T12:00:00Z",
       "--milestones",
       "file1.txt:1;file2.txt:1",
+      "--milestone-due-dates",
+      `${TEST_LISTING_DUE_AT_1};${TEST_LISTING_DUE_AT_2}`,
       "--json"
     ]);
     assert.equal(result.status, 0);
@@ -3190,6 +3214,8 @@ test("listing-create forwards explicit promotion policy", async () => {
       "listing-create",
       "--auth-state-file",
       authStateFile,
+      "--listing-mode",
+      "OFFER",
       "--title",
       "Marketing offer",
       "--description",
@@ -3203,6 +3229,8 @@ test("listing-create forwards explicit promotion policy", async () => {
       "--use-default-expiry",
       "--milestones",
       "Milestone 1:500000;Milestone 2:500000",
+      "--milestone-due-dates",
+      `${TEST_LISTING_DUE_AT_1};${TEST_LISTING_DUE_AT_2}`,
       "--json"
     ]);
     assert.equal(result.status, 0);
@@ -3237,6 +3265,8 @@ test("listing-create rejects invalid category before posting", async () => {
     "listing-create",
     "--auth-state-file",
     authStateFile,
+    "--listing-mode",
+    "OFFER",
     "--title",
     "One empty txt",
     "--description",
@@ -3698,6 +3728,8 @@ test("listing-create prints compliance guidance for trader-account failures", as
       "listing-create",
       "--auth-state-file",
       authStateFile,
+      "--listing-mode",
+      "OFFER",
       "--title",
       "Two tiny IOTA text tasks",
       "--description",
@@ -3708,11 +3740,14 @@ test("listing-create prints compliance guidance for trader-account failures", as
       "IOTA",
       "--use-default-expiry",
       "--milestones",
-      "Milestone 1:500000000;Milestone 2:500000000"
+      "Milestone 1:500000000;Milestone 2:500000000",
+      "--milestone-due-dates",
+      `${TEST_LISTING_DUE_AT_1};${TEST_LISTING_DUE_AT_2}`
     ]);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /listing_create_error: listing_requires_trader_account/);
-    assert.match(result.stderr, /detail=normal_listing_create_does_not_require_reputation_init/);
+    assert.match(result.stderr, /detail=public_listing_create_now_requires_both_reputation_init_and_role_compliance_preflight/);
+    assert.match(result.stderr, /clawnera-help reputation-init/);
     assert.match(result.stderr, /GET \/compliance\/me/);
     assert.match(result.stderr, /POST \/compliance\/me\/account-type/);
   } finally {
@@ -3765,7 +3800,9 @@ test("request listing-create prints request-buyer compliance guidance for trader
       "IOTA",
       "--use-default-expiry",
       "--milestones",
-      "Milestone 1:500000000;Milestone 2:500000000"
+      "Milestone 1:500000000;Milestone 2:500000000",
+      "--milestone-due-dates",
+      `${TEST_LISTING_DUE_AT_1};${TEST_LISTING_DUE_AT_2}`
     ]);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /listing_create_error: listing_requires_trader_account/);
@@ -3821,7 +3858,9 @@ test("request listing-create prints request-buyer verification guidance for trad
       "IOTA",
       "--use-default-expiry",
       "--milestones",
-      "Milestone 1:500000000;Milestone 2:500000000"
+      "Milestone 1:500000000;Milestone 2:500000000",
+      "--milestone-due-dates",
+      `${TEST_LISTING_DUE_AT_1};${TEST_LISTING_DUE_AT_2}`
     ]);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /listing_create_error: trader_verification_required/);
@@ -3879,7 +3918,9 @@ test("request listing-create prints offer-only marketing guidance for request ma
       "PLATFORM_FUNDED_MARKETING",
       "--use-default-expiry",
       "--milestones",
-      "Milestone 1:500000000;Milestone 2:500000000"
+      "Milestone 1:500000000;Milestone 2:500000000",
+      "--milestone-due-dates",
+      `${TEST_LISTING_DUE_AT_1};${TEST_LISTING_DUE_AT_2}`
     ]);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /listing_create_error: request_listing_marketing_not_supported/);
@@ -3919,6 +3960,8 @@ test("listing-create rejects unexpected flags before posting", async () => {
       "listing-create",
       "--auth-state-file",
       authStateFile,
+      "--listing-mode",
+      "OFFER",
       "--title",
       "Unexpected option",
       "--description",
@@ -3975,6 +4018,8 @@ test("listing-create prints marketing guidance for sponsored-listing failures", 
       "listing-create",
       "--auth-state-file",
       authStateFile,
+      "--listing-mode",
+      "OFFER",
       "--title",
       "Two tiny IOTA text tasks",
       "--description",
@@ -3985,13 +4030,15 @@ test("listing-create prints marketing guidance for sponsored-listing failures", 
       "IOTA",
       "--use-default-expiry",
       "--milestones",
-      "Milestone 1:500000000;Milestone 2:500000000"
+      "Milestone 1:500000000;Milestone 2:500000000",
+      "--milestone-due-dates",
+      `${TEST_LISTING_DUE_AT_1};${TEST_LISTING_DUE_AT_2}`
     ]);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /listing_create_error: marketing_creator_not_allowed/);
     assert.match(result.stderr, /cause=sponsored_listing_requires_marketing_allowlist_and_live_campaign/);
     assert.match(result.stderr, /retry_as_standard_listing_without_marketing_promotion_policy/);
-    assert.match(result.stderr, /normal_listing_create_does_not_require_reputation_init/);
+    assert.match(result.stderr, /clawnera-help reputation-init/);
   } finally {
     await mock.close();
   }
@@ -4019,6 +4066,8 @@ test("listing-create stops early when expiry choice is missing", async () => {
     "listing-create",
     "--auth-state-file",
     authStateFile,
+    "--listing-mode",
+    "OFFER",
     "--title",
     "Missing expiry",
     "--description",

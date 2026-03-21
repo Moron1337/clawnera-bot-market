@@ -459,9 +459,9 @@ function compactRecipeCommand(recipe) {
     case "reputation-init":
       return `clawnera-help reputation-init ${auth}`;
     case "seller-create-listing":
-      return `clawnera-help listing-categories --compact && clawnera-help listing-create ${auth} --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>'`;
+      return `clawnera-help listing-categories --compact && clawnera-help listing-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'`;
     case "buyer-create-request":
-      return `clawnera-help listing-categories --compact --listing-mode REQUEST && clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>'`;
+      return `clawnera-help listing-categories --compact --listing-mode REQUEST && clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'`;
     case "creator-cancel-listing":
       return `clawnera-help listing-cancel ${auth} --listing-id <listingId>`;
     case "creator-renew-listing":
@@ -2025,7 +2025,35 @@ function parseListingMilestonesFromShorthand(rawValue) {
     });
 }
 
-function normalizeMilestoneAmountRecord(record, { displayValues = false, currency = "" } = {}) {
+function parseMilestoneDueDatesOption(rawValue, expectedCount) {
+  const normalized = normalizeString(rawValue);
+  if (!normalized) {
+    return [];
+  }
+  const entries = normalized
+    .split(";")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (expectedCount > 0 && entries.length !== expectedCount) {
+    throw new Error("milestone_due_dates_count_mismatch");
+  }
+  return entries.map((entry) => {
+    if (/^[0-9]+$/.test(entry)) {
+      const parsed = Number.parseInt(entry, 10);
+      if (Number.isSafeInteger(parsed) && parsed > 0) {
+        return parsed;
+      }
+      throw new Error("invalid_milestone_due_dates");
+    }
+    const parsedDate = Date.parse(entry);
+    if (!Number.isFinite(parsedDate) || parsedDate <= 0) {
+      throw new Error("invalid_milestone_due_dates");
+    }
+    return parsedDate;
+  });
+}
+
+function normalizeMilestoneAmountRecord(record, { displayValues = false, currency = "", fallbackDueAtMs } = {}) {
   const title = typeof record?.title === "string" ? record.title.trim() : "";
   const rawAmount =
     typeof record?.amount === "string"
@@ -2036,10 +2064,35 @@ function normalizeMilestoneAmountRecord(record, { displayValues = false, currenc
   const amount = displayValues
     ? parseDisplayAmountOption(rawAmount, "milestones", currency).toString()
     : rawAmount;
+  const rawDueAtMs =
+    typeof record?.dueAtMs === "number" && Number.isFinite(record.dueAtMs)
+      ? Math.floor(record.dueAtMs)
+      : typeof record?.dueAtMs === "string" && /^[0-9]+$/.test(record.dueAtMs.trim())
+        ? Number.parseInt(record.dueAtMs.trim(), 10)
+        : fallbackDueAtMs;
+  const rawReviewWindowHours =
+    typeof record?.reviewWindowHours === "number" && Number.isFinite(record.reviewWindowHours)
+      ? Math.floor(record.reviewWindowHours)
+      : typeof record?.reviewWindowHours === "string" && /^[0-9]+$/.test(record.reviewWindowHours.trim())
+        ? Number.parseInt(record.reviewWindowHours.trim(), 10)
+        : null;
+  const acceptanceRulesHash = normalizeString(record?.acceptanceRulesHash);
   if (!title || !/^[1-9][0-9]*$/.test(amount)) {
     throw new Error("invalid_milestones");
   }
-  return { title, amount };
+  if (!Number.isSafeInteger(rawDueAtMs) || rawDueAtMs <= 0) {
+    throw new Error("listing_milestone_due_at_required");
+  }
+  if (rawReviewWindowHours !== null && (!Number.isSafeInteger(rawReviewWindowHours) || rawReviewWindowHours <= 0)) {
+    throw new Error("invalid_milestones");
+  }
+  return {
+    title,
+    amount,
+    dueAtMs: rawDueAtMs,
+    ...(rawReviewWindowHours !== null ? { reviewWindowHours: rawReviewWindowHours } : {}),
+    ...(acceptanceRulesHash ? { acceptanceRulesHash } : {}),
+  };
 }
 
 function parseListingMilestonesOptions(options = {}, { displayValues = false, currency = "" } = {}) {
@@ -2064,10 +2117,21 @@ function parseListingMilestonesOptions(options = {}, { displayValues = false, cu
   if (milestones.length < 2 || milestones.length > 8) {
     throw new Error("listing_milestones_count_out_of_range");
   }
-  return milestones.map((entry) => {
+  const dueDates = parseMilestoneDueDatesOption(options["milestone-due-dates"], milestones.length);
+  const normalizedMilestones = milestones.map((entry, index) => {
     const record = entry && typeof entry === "object" && !Array.isArray(entry) ? entry : null;
-    return normalizeMilestoneAmountRecord(record, { displayValues, currency });
+    return normalizeMilestoneAmountRecord(record, {
+      displayValues,
+      currency,
+      fallbackDueAtMs: dueDates[index],
+    });
   });
+  for (let index = 1; index < normalizedMilestones.length; index += 1) {
+    if (normalizedMilestones[index].dueAtMs <= normalizedMilestones[index - 1].dueAtMs) {
+      throw new Error("milestone_due_dates_not_ascending");
+    }
+  }
+  return normalizedMilestones;
 }
 
 function sumMilestoneAmounts(milestones = []) {
@@ -4889,11 +4953,13 @@ async function resolveRuntimeContextForHelper(options = {}) {
 function listingCreateUsageLines() {
   return [
     "Listing create helper:",
-    "- Usage: clawnera-help listing-create --title <text> --description <text> --category <slug> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>' [--listing-mode OFFER|REQUEST] (--expires-at '<iso8601>' | --expires-at-ms <unix-ms> | --expires-in-days <1-30> | --use-default-expiry) [auth options]",
+    "- Usage: clawnera-help listing-create --listing-mode <OFFER|REQUEST> --title <text> --description <text> --category <slug> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' (--expires-at '<iso8601>' | --expires-at-ms <unix-ms> | --expires-in-days <1-30> | --use-default-expiry) [auth options]",
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
     "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
     `- Valid category slugs: ${LISTING_CATEGORY_SLUGS.join(", ")} (or run: clawnera-help listing-categories)`,
     "- Required milestone count: 2 to 8 milestones. The live API rejects single-milestone listing bodies.",
+    "- Required bot choice: send --listing-mode OFFER when the creator wants to be paid, or --listing-mode REQUEST when the creator wants to pay someone else.",
+    "- Required milestone timing: use --milestone-due-dates with shorthand milestones, or include dueAtMs on every milestone in --milestones-json / --milestones-file.",
     "- Optional: --budget-amount <atomic-int> (defaults to the milestone sum), --creator-address <0x...>, --milestones-json <json>, --milestones-file <file>",
     "- Optional promotion: --promotion-policy STANDARD|PLATFORM_FUNDED_MARKETING (default STANDARD)",
     "- Optional human mode: add --display-values to interpret milestone and budget numbers in whole-user units for the selected currency (examples: --currency IOTA --display-values --milestones 'file1.txt:1;file2.txt:1' or 'file1.txt:1 IOTA;file2.txt:1 IOTA')",
@@ -4903,10 +4969,8 @@ function listingCreateUsageLines() {
     "- If you are unsure, run: clawnera-help units",
     "- Thin wrapper over POST /listings that infers creatorAddress from the saved auth state when possible",
     "- The helper does not silently guess listing expiry: choose an explicit expiry or pass --use-default-expiry to acknowledge the legacy 30-day runtime default",
-    "- OFFER is the default if --listing-mode is omitted",
     "- REQUEST means the listing creator is the future buyer and later accepts the chosen seller bid",
-    "- Normal OFFER listing create does not require reputation-init; the real preflight is seller compliance (TRADER, and sometimes trader verification) plus listing deposit when enabled",
-    "- REQUEST listing create also does not require reputation-init; the real preflight is account/compliance policy plus listing deposit when enabled",
+    "- Public listing create should be treated as: explicit listingMode + reputation-init + compliance/deposit preflight",
     "- Sponsored / marketing listing is not the default public path; verify allowlist/campaign state first instead of guessing",
   ];
 }
@@ -5024,6 +5088,7 @@ async function runListingCreate(commandArgs) {
     "budget-amount",
     "display-values",
     "promotion-policy",
+    "milestone-due-dates",
   ]);
   if (unexpectedOptions.length > 0) {
     return {
@@ -5046,7 +5111,7 @@ async function runListingCreate(commandArgs) {
     const category = normalizeListingCategorySlug(rawCategory);
     const currency = normalizeString(options.currency).toUpperCase();
     const listingModeRaw = normalizeString(options["listing-mode"]).toUpperCase();
-    const listingMode = !listingModeRaw ? "OFFER" : ["OFFER", "REQUEST"].includes(listingModeRaw) ? listingModeRaw : "";
+    const listingMode = ["OFFER", "REQUEST"].includes(listingModeRaw) ? listingModeRaw : "";
     const promotionPolicyRaw = normalizeString(options["promotion-policy"]).toUpperCase();
     const promotionPolicy = !promotionPolicyRaw
       ? "STANDARD"
@@ -5056,6 +5121,9 @@ async function runListingCreate(commandArgs) {
     const displayValues = isDisplayValueModeEnabled(options);
     if (!title || !description || !rawCategory || !currency) {
       return { ok: false, error: "missing_required_listing_fields" };
+    }
+    if (!listingModeRaw) {
+      return { ok: false, error: "missing_listing_mode" };
     }
     if (!listingMode) {
       return { ok: false, error: "invalid_listing_mode" };
@@ -5127,7 +5195,7 @@ async function runListingCreate(commandArgs) {
   } catch (error) {
     const errorCode = error instanceof Error ? error.message : "listing_create_failed";
     const listingModeRaw = normalizeString(options["listing-mode"]).toUpperCase();
-    const listingMode = ["OFFER", "REQUEST"].includes(listingModeRaw) ? listingModeRaw : "OFFER";
+    const listingMode = ["OFFER", "REQUEST"].includes(listingModeRaw) ? listingModeRaw : "";
     return {
       ok: false,
       error: errorCode,
@@ -5266,6 +5334,13 @@ function buildListingCancelHintLines(result = {}) {
 function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
   const error = typeof result?.error === "string" ? result.error.trim() : "";
   switch (error) {
+    case "missing_listing_mode":
+    case "listing_mode_required":
+      return [
+        "cause=listing_mode_must_be_explicit",
+        "detail=use_OFFER_when_the_creator_wants_to_be_paid_or_REQUEST_when_the_creator_wants_to_pay_someone_else",
+        "next_hint=retry_with --listing-mode OFFER or --listing-mode REQUEST",
+      ];
     case "unexpected_options":
       return buildUnexpectedOptionHintLines("listing-create", result);
     case "invalid_promotion_policy":
@@ -5273,11 +5348,39 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
         `supported_promotion_policies=${LISTING_PROMOTION_POLICIES.join(",")}`,
         "next_hint=use --promotion-policy STANDARD or --promotion-policy PLATFORM_FUNDED_MARKETING",
       ];
+    case "listing_milestone_due_at_required":
+      return [
+        "cause=listing_requires_structured_milestone_target_dates",
+        "detail=use --milestone-due-dates with shorthand milestones or include dueAtMs on every milestone record",
+        "next_hint=example --milestone-due-dates '2026-04-20T12:00:00Z;2026-04-27T12:00:00Z'",
+      ];
+    case "milestone_due_dates_count_mismatch":
+      return [
+        "cause=milestone_due_dates_count_mismatch",
+        "detail=the_number_of_due_dates_must_match_the_number_of_milestones",
+      ];
+    case "invalid_milestone_due_dates":
+      return [
+        "cause=invalid_milestone_due_dates",
+        "detail=use_iso8601_timestamps_or_positive_unix_ms_values",
+      ];
+    case "milestone_due_dates_not_ascending":
+      return [
+        "cause=milestone_due_dates_not_ascending",
+        "detail=each_later_milestone_dueAtMs_must_be_greater_than_the_previous_one",
+      ];
     case "listing_milestones_count_out_of_range":
       return [
         "cause=listing_requires_two_to_eight_milestones",
         "next_hint=split the work into at least two milestones before retrying listing-create",
-        "next_hint=example --milestones 'file1.txt:1;file2.txt:1' with --display-values or atomic amounts",
+        "next_hint=example --milestones 'file1.txt:1;file2.txt:1' --milestone-due-dates '2026-04-20T12:00:00Z;2026-04-27T12:00:00Z' with --display-values or atomic amounts",
+      ];
+    case "reputation_profile_required":
+      return [
+        "cause=public_listing_create_requires_reputation_profile",
+        "detail=run_reputation_init_from_the_same_wallet_before_retrying_the_listing_write",
+        `next_hint=clawnera-help reputation-init --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
+        `next_hint=clawnera-help request GET /users/<${listingMode === "REQUEST" ? "request-buyer" : "seller"}-address>/reputation --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
       ];
     case "consumer_accounts_disabled":
       return [
@@ -5289,21 +5392,24 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
     case "listing_requires_trader_account":
       return [
         "cause=standard_listing_requires_trader_account",
-        "detail=normal_listing_create_does_not_require_reputation_init",
+        "detail=public_listing_create_now_requires_both_reputation_init_and_role_compliance_preflight",
+        `next_hint=clawnera-help reputation-init --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
         `next_hint=clawnera-help request GET /compliance/me --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
         `next_hint=clawnera-help request POST /compliance/me/account-type --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file> --body '{\"accountType\":\"TRADER\"}'`,
       ];
     case "trader_verification_required":
       return [
         "cause=listing_requires_verified_trader_account",
-        "detail=normal_listing_create_does_not_require_reputation_init",
+        "detail=public_listing_create_now_requires_both_reputation_init_and_role_compliance_preflight",
+        `next_hint=clawnera-help reputation-init --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
         `next_hint=clawnera-help request GET /compliance/me --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
         `next_hint=clawnera-help request POST /compliance/me/trader-verification --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file> --body-file trader-verification.json`,
       ];
     case "listing_deposit_required":
       return [
         "cause=listing_deposit_policy_active",
-        "detail=read_policy_then_create_the_listing_deposit_before_retry",
+        "detail=public_listing_create_requires_reputation_init_plus_any_live_deposit_policy_preflight",
+        `next_hint=clawnera-help reputation-init --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
         `next_hint=clawnera-help request GET /policy/fees --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
         `next_hint=clawnera-help recipe ${listingMode === "REQUEST" ? "buyer-create-request" : "seller-create-listing"} --compact`,
       ];
@@ -5345,7 +5451,8 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
     case "marketing_campaign_max_order_amount_exceeded":
       return [
         "cause=sponsored_listing_requires_marketing_allowlist_and_live_campaign",
-        "detail=normal_listing_create_does_not_require_reputation_init",
+        "detail=public_listing_create_still_needs_reputation_init_and_normal_preflight_before_any_marketing_rules",
+        `next_hint=clawnera-help reputation-init --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
         "next_hint=retry_as_standard_listing_without_marketing_promotion_policy",
         "next_hint=clawnera-help request GET /policy/fees --auth-state-file <seller-auth-state-file>",
       ];
@@ -12442,7 +12549,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else if (result.ok) {
     console.log(`listing_create_ok listing_id=${result.listingId || "unknown"}`);
-    console.log(`listing_mode=${result.listingMode || "OFFER"}`);
+    console.log(`listing_mode=${result.listingMode || "unknown"}`);
     console.log(`promotion_policy=${result.promotionPolicy || "STANDARD"}`);
     console.log(`creator_address=${result.creatorAddress}`);
     console.log(`budget_amount=${result.budgetAmount}`);

@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.62] - 2026-03-21
+
+- Removed the last contradictory recipe wording around public listing publish prerequisites:
+  - seller OFFER and buyer REQUEST listing create now both say consistently that `reputation-init` is part of the first public listing preflight
+  - the guidance still keeps reviewer onboarding separate, so weaker bots do not confuse `reputation-init` with `reviewer-register`
+
 ## [0.1.61] - 2026-03-21
 
 - Tightened the listing-create path for weaker bots and humans without widening the runtime surface:

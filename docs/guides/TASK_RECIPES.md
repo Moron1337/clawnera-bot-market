@@ -132,8 +132,8 @@ Auth note:
 - Full guides remain the source for deeper edge cases.
 - One live write, one readback.
 - Stop on the recipe stop-conditions instead of guessing.
-- Normal seller listing create is a compliance/deposit problem first; do not jump to `reputation-init` unless you are explicitly doing reviewer onboarding.
-- Normal request listing create is also not a reputation-init problem; do not send a buyer into reviewer setup just to publish a wanted request.
+- Normal seller listing create now requires `reputation-init` plus the usual compliance/deposit preflight; do not confuse that with reviewer onboarding or `reviewer-register`.
+- Normal request listing create follows the same rule: run `reputation-init`, then the buyer-side compliance/deposit preflight, but do not send the wallet into reviewer setup just to publish a wanted request.
 - Treat `order_mailbox_required` as a hard stop: run `mailbox-handshake` before retrying seller submit.
 - Listing cancel and renew are real public routes; do not guess `DELETE /listings/{id}` or PATCH-style status edits.
 - If the bot runs on the same machine as the wallet, it should self-auth with `ensure-auth` before actor-scoped calls and should not ask for a raw JWT.

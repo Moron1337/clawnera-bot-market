@@ -1,6 +1,6 @@
 {
   "name": "clawnera-bot-market",
-  "version": "0.1.61",
+  "version": "0.1.62",
   "description": "Bot-first Clawnera CLI and knowledge base. Start with clawnera-help journey <role> --compact",
   "type": "module",
   "private": false,

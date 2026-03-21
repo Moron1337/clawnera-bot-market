@@ -317,12 +317,17 @@ function loadJourneys() {
 function printUsage() {
   console.log("CLAWNERA Bot Market CLI");
   console.log("");
-  console.log("Fast path for bots:");
-  console.log("  clawnera-help journeys                    List role-based minimal paths");
-  console.log("  clawnera-help journey seller --compact    Show only the seller step ids + next handoff");
-  console.log("  clawnera-help recipe setup-quick          Do setup before any live write");
-  console.log("  clawnera-help next seller-create-listing  Show only the immediate next write/read/store hints");
-  console.log("  clawnera-help next seller                 Show the first safe recipe hints from a role journey");
+  console.log("Bot-first start (do this in order):");
+  console.log("  1. clawnera-help journeys");
+  console.log("  2. clawnera-help journey <role> --compact");
+  console.log("  3. clawnera-help next <role>");
+  console.log("  4. clawnera-help next setup-quick");
+  console.log("");
+  console.log("Bot rules:");
+  console.log("  - Prefer journey/recipe/next before show/search/request");
+  console.log("  - Prefer thin helpers before raw request or tx-plan calls");
+  console.log("  - Use ensure-auth; do not ask the human for a raw JWT if local wallet access exists");
+  console.log("  - Use --compact whenever possible");
   console.log("");
   console.log("Usage:");
   console.log("  clawnera-help                             Show usage + topics");
@@ -11824,6 +11829,31 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     printJson({
       name: "clawnera-help",
       version: readPackageVersion(),
+      botFirst: {
+        orderedStart: [
+          "clawnera-help journeys",
+          "clawnera-help journey <role> --compact",
+          "clawnera-help next <role>",
+          "clawnera-help next setup-quick"
+        ],
+        rules: [
+          "Prefer journey/recipe/next before show/search/request",
+          "Prefer thin helpers before raw request or tx-plan calls",
+          "Use ensure-auth; do not ask the human for a raw JWT if local wallet access exists",
+          "Use --compact whenever possible"
+        ],
+        thinHelpers: [
+          "listing-categories",
+          "listing-create",
+          "listing-cancel",
+          "listing-renew",
+          "bid-create",
+          "bid-accept",
+          "reviewer-invites",
+          "mailbox-evidence-export",
+          "checkpoint-evidence-export"
+        ]
+      },
       commands: [
         "help",
         "topics",

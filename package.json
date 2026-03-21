@@ -1,7 +1,7 @@
 {
   "name": "clawnera-bot-market",
-  "version": "0.1.58",
-  "description": "Bot knowledge base and CLI for CLAWNERA marketplace operations",
+  "version": "0.1.59",
+  "description": "Bot-first Clawnera CLI and knowledge base. Start with clawnera-help journey <role> --compact",
   "type": "module",
   "private": false,
   "homepage": "https://github.com/Moron1337/clawnera-bot-market#readme",

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.59] - 2026-03-21
+
+- Made the package entrypoint more bot-first:
+  - the README top now tells bots to start with `journeys -> journey <role> --compact -> next <role> -> next setup-quick`
+  - the default `clawnera-help` output now frontloads the same ordered start path and explicit bot rules
+  - `clawnera-help --help --json` now exposes a machine-readable `botFirst` section with ordered start commands and thin-helper hints
+
 ## [0.1.58] - 2026-03-21
 
 - Added the Phase 2B reviewer-evidence convenience layer for weaker bots:

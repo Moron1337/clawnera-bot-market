@@ -65,14 +65,19 @@ test("help command prints usage", () => {
   const result = runCli(["--help"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /CLAWNERA Bot Market CLI/);
-  assert.match(result.stdout, /Fast path for bots:/);
+  assert.match(result.stdout, /Bot-first start \(do this in order\):/);
   assert.match(result.stdout, /clawnera-help journeys/);
-  assert.match(result.stdout, /clawnera-help journey seller --compact/);
+  assert.match(result.stdout, /clawnera-help journey <role> --compact/);
+  assert.match(result.stdout, /clawnera-help next <role>/);
+  assert.match(result.stdout, /clawnera-help next setup-quick/);
+  assert.match(result.stdout, /Bot rules:/);
+  assert.match(result.stdout, /Prefer thin helpers before raw request or tx-plan calls/);
+  assert.match(result.stdout, /do not ask the human for a raw JWT/i);
   assert.match(result.stdout, /clawnera-help auth-login/);
   assert.match(result.stdout, /clawnera-help recipes/);
   assert.match(result.stdout, /clawnera-help recipe <id>/);
-  assert.match(result.stdout, /clawnera-help next seller-create-listing/);
-  assert.match(result.stdout, /clawnera-help next seller\s+Show the first safe recipe hints from a role journey/);
+  assert.doesNotMatch(result.stdout, /clawnera-help next seller-create-listing/);
+  assert.match(result.stdout, /clawnera-help next <recipe\|journey-id>\s+Show the compact next action for a recipe or role path/);
   assert.match(result.stdout, /journey\|recipe --compact/);
   assert.match(result.stdout, /clawnera-help wallet-init/);
   assert.match(result.stdout, /clawnera-help wallet-list/);
@@ -116,6 +121,17 @@ test("help json output includes auth-login command", () => {
   const result = runCli(["--help", "--json"]);
   assert.equal(result.status, 0);
   const payload = JSON.parse(result.stdout);
+  assert.deepEqual(payload.botFirst.orderedStart, [
+    "clawnera-help journeys",
+    "clawnera-help journey <role> --compact",
+    "clawnera-help next <role>",
+    "clawnera-help next setup-quick"
+  ]);
+  assert.ok(Array.isArray(payload.botFirst.rules));
+  assert.ok(payload.botFirst.rules.some((rule) => /ensure-auth/i.test(rule)));
+  assert.ok(Array.isArray(payload.botFirst.thinHelpers));
+  assert.ok(payload.botFirst.thinHelpers.includes("listing-create"));
+  assert.ok(payload.botFirst.thinHelpers.includes("checkpoint-evidence-export"));
   assert.ok(Array.isArray(payload.commands));
   assert.ok(payload.commands.includes("auth-login"));
   assert.ok(payload.commands.includes("journeys"));

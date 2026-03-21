@@ -161,7 +161,7 @@ Notes:
   - buyer/seller publish `linked_deliverable` reviewer evidence with `clawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state>`
   - buyer/seller build generic complaint, rebuttal, or supporting reviewer bundles locally with `clawnera-help dispute-evidence-bundle-build ...`, upload them through managed storage, then publish them with `clawnera-help dispute-evidence-publish --kind supplemental-bundle ...`
   - for mailbox coordination evidence, prefer `clawnera-help mailbox-evidence-export --case-id <dispute-case-id> ...`
-  - for delivery checkpoint proof, prefer `clawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file <file> ...`
+  - for delivery checkpoint proof, prefer `clawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file <file> ...` and choose the ciphertext source explicitly with `--payload-file`, `--ciphertext-hash`, or `--signal-seq`
   - reviewers list with `clawnera-help dispute-evidence-list ...`
   - reviewers fetch one actor-scoped content file with `clawnera-help dispute-evidence-content ...`
   - reviewers decrypt that saved file locally with `clawnera-help dispute-evidence-decrypt --content-file ...`

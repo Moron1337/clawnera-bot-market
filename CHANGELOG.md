@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.60] - 2026-03-21
+
+- Hardened the supplemental dispute-evidence helper flow so weaker bots fail earlier and more deterministically:
+  - `dispute-evidence-publish --kind supplemental-bundle` now revalidates the saved bundle-build artifact locally before any publish attempt
+  - malformed `replyToEvidenceId`, invalid evidence classes, and bad recipient grant sets now stop locally instead of surfacing only after upload or API rejection
+  - the local dispute E2EE helper now includes the missing positive-integer normalization used by reviewer decrypt/export flows
+- Tightened checkpoint evidence export semantics:
+  - `checkpoint-evidence-export` now requires an explicit ciphertext source by default
+  - latest-signal auto-pick remains available only behind `--allow-latest-signal-fallback`
+- Added regression coverage for:
+  - malformed supplemental bundle build files
+  - explicit checkpoint-source fail-closed behavior
+  - stricter reply-id and recipient-count validation in the local supplemental bundle builder
+
 ## [0.1.59] - 2026-03-21
 
 - Made the package entrypoint more bot-first:

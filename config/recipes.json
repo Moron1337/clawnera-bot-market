@@ -1077,7 +1077,7 @@
       "needs": [
         "The dispute case already exists and the caller is the buyer or seller for that case.",
         "A saved milestone-submit body file exists.",
-        "Either the managed deliverable payload file, an explicit ciphertext hash, or a mailbox signal can identify the ciphertext hash."
+        "Choose one ciphertext source explicitly: --payload-file, --ciphertext-hash, or --signal-seq. Latest-signal fallback is opt-in only."
       ],
       "store": [
         "checkpoint packet file",
@@ -1094,7 +1094,8 @@
       ],
       "steps": [
         "Run clawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file <file> --auth-state-file <buyer-or-seller-auth-state-file>.",
-        "Prefer --payload-file <managed-deliverable-payload.json>; otherwise pass --ciphertext-hash <64-hex> or reuse a mailbox signal via --signal-seq <n>.",
+        "Choose the ciphertext source explicitly with --payload-file <managed-deliverable-payload.json>, --ciphertext-hash <64-hex>, or --signal-seq <n>.",
+        "Only use --allow-latest-signal-fallback when you intentionally want the helper to pick the newest posted mailbox signal.",
         "If you already saved milestone-anchor JSON, reuse it with --anchor-file <file>; otherwise pass the explicit anchor tx digest/event seq.",
         "Inspect the saved checkpoint packet file and the plaintext dispute bundle.",
         "Upload the generated encrypted payload file through managed-storage fee / presign / upload.",
@@ -1105,7 +1106,7 @@
         "Attach the anchored tx and the delivery-ready mailbox signal:\\nclawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file ./clawnera-milestone-submit-<order-id>-<milestone-id>.json --payload-file ./clawnera-deliverable-<order-id>-<milestone-id>.json --anchor-file ./milestone-anchor.json --signal-seq 9 --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
-        "Stop on missing_ciphertext_hash or checkpoint_ciphertext_hash_mismatch; do not guess the deliverable hash.",
+        "Stop on checkpoint_ciphertext_source_required, missing_ciphertext_hash, or checkpoint_ciphertext_hash_mismatch; do not guess the deliverable hash.",
         "Stop on anchor_tx_digest_required if you pass anchor status/event fields without the tx digest.",
         "Stop on dispute_assigned_reviewers_missing; reviewer-readable evidence still requires a live assignment set."
       ],

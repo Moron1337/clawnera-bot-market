@@ -144,6 +144,7 @@ const SUPPLEMENTAL_EVIDENCE_CLASSES = Object.freeze([
   "MISCONDUCT_REPORT",
   "SUPPORTING_EXHIBIT",
 ]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const FORWARDED_REQUEST_OPTION_NAMES = Object.freeze([
   "auth-state-file",
   "env-file",
@@ -1517,6 +1518,17 @@ function normalizeString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizeUuidOption(rawValue, fieldName) {
+  const normalized = normalizeString(rawValue);
+  if (!normalized) {
+    return "";
+  }
+  if (!UUID_PATTERN.test(normalized)) {
+    throw new Error(`invalid_${fieldName}`);
+  }
+  return normalized;
+}
+
 function parsePositiveIntOption(rawValue, fieldName, fallback) {
   if (rawValue === undefined || rawValue === null || rawValue === "") {
     return fallback;
@@ -1527,6 +1539,21 @@ function parsePositiveIntOption(rawValue, fieldName, fallback) {
   }
   const parsed = Number(normalized);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(`invalid_${fieldName}`);
+  }
+  return parsed;
+}
+
+function parseNonNegativeIntOption(rawValue, fieldName, fallback) {
+  if (rawValue === undefined || rawValue === null || rawValue === "") {
+    return fallback;
+  }
+  const normalized = String(rawValue).trim();
+  if (!/^\d+$/.test(normalized)) {
+    throw new Error(`invalid_${fieldName}`);
+  }
+  const parsed = Number(normalized);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
     throw new Error(`invalid_${fieldName}`);
   }
   return parsed;
@@ -6114,6 +6141,77 @@ async function buildDisputeSupplementalBundleForCli(options, {
   };
 }
 
+function normalizeDisputeSupplementalBuildArtifact(build) {
+  if (!build || typeof build !== "object" || Array.isArray(build)) {
+    throw new Error("invalid_bundle_build_file");
+  }
+  const evidenceClass = normalizeString(build.evidenceClass).toUpperCase();
+  if (!SUPPLEMENTAL_EVIDENCE_CLASSES.includes(evidenceClass)) {
+    throw new Error("invalid_evidence_class");
+  }
+  const manifestSha256 = assertLowerHex64(build.manifestSha256, "manifest_sha256");
+  const cipherSuite = normalizeString(build.cipherSuite);
+  if (!cipherSuite) {
+    throw new Error("invalid_cipher_suite");
+  }
+  if (build.contentProtocol !== DISPUTE_SUPPLEMENTAL_BUNDLE_PROTOCOL) {
+    throw new Error("invalid_content_protocol");
+  }
+  const summary = build.summary;
+  if (!summary || typeof summary !== "object" || Array.isArray(summary)) {
+    throw new Error("invalid_dispute_evidence_summary");
+  }
+  const recipientGrantsRaw = Array.isArray(build.recipientGrants) ? build.recipientGrants : [];
+  if (recipientGrantsRaw.length < 3 || recipientGrantsRaw.length > 64) {
+    throw new Error("invalid_recipient_count");
+  }
+  const seenRecipientAddresses = new Set();
+  const recipientGrants = recipientGrantsRaw.map((grant) => {
+    if (!grant || typeof grant !== "object" || Array.isArray(grant)) {
+      throw new Error("invalid_recipient_grant");
+    }
+    const recipientAddress = normalizeIotaAddress(grant.recipientAddress || "");
+    if (!recipientAddress) {
+      throw new Error("invalid_recipient_address");
+    }
+    if (seenRecipientAddresses.has(recipientAddress)) {
+      throw new Error("duplicate_recipient_address");
+    }
+    seenRecipientAddresses.add(recipientAddress);
+    const keyVersion = parsePositiveIntOption(grant.keyVersion, "recipient_key_version");
+    const wrappedCek =
+      typeof grant.wrappedCek === "string" && grant.wrappedCek.length >= 16 && grant.wrappedCek.length <= 8_192
+        ? grant.wrappedCek
+        : "";
+    const hpkeEnc =
+      typeof grant.hpkeEnc === "string" && grant.hpkeEnc.length >= 8 && grant.hpkeEnc.length <= 8_192 ? grant.hpkeEnc : "";
+    if (!wrappedCek || !hpkeEnc) {
+      throw new Error("invalid_recipient_grant");
+    }
+    return {
+      recipientAddress,
+      keyVersion,
+      wrappedCek,
+      hpkeEnc,
+    };
+  });
+  return {
+    evidenceClass,
+    manifestSha256,
+    cipherSuite,
+    contentProtocol: DISPUTE_SUPPLEMENTAL_BUNDLE_PROTOCOL,
+    recipientGrants,
+    summary: {
+      containsStatement: parseBooleanOption(summary.containsStatement, false),
+      attachmentCount: parseNonNegativeIntOption(summary.attachmentCount, "attachment_count", 0),
+      mailboxSignalCount: parseNonNegativeIntOption(summary.mailboxSignalCount, "mailbox_signal_count", 0),
+      mailboxAckCount: parseNonNegativeIntOption(summary.mailboxAckCount, "mailbox_ack_count", 0),
+      checkpointRefCount: parseNonNegativeIntOption(summary.checkpointRefCount, "checkpoint_ref_count", 0),
+    },
+    replyToEvidenceId: normalizeUuidOption(build.replyToEvidenceId, "reply_to_evidence_id") || undefined,
+  };
+}
+
 function parseMetadataOption(rawValue) {
   const normalized = normalizeString(rawValue);
   if (!normalized) {
@@ -7937,26 +8035,18 @@ async function runDisputeEvidencePublish(commandArgs) {
           error: "missing_manifest_cid",
         };
       }
-      const build = readJsonFileSync(bundleBuildFile, "invalid_bundle_build_file");
-      const buildRecipientGrants = Array.isArray(build?.recipientGrants) ? build.recipientGrants : [];
+      const build = normalizeDisputeSupplementalBuildArtifact(readJsonFileSync(bundleBuildFile, "invalid_bundle_build_file"));
       requestBody = {
         kind: "supplemental_bundle",
         assignmentRound,
-        evidenceClass: build?.evidenceClass,
+        evidenceClass: build.evidenceClass,
         manifestCid,
-        manifestSha256: build?.manifestSha256,
-        cipherSuite: build?.cipherSuite,
-        contentProtocol: build?.contentProtocol || DISPUTE_SUPPLEMENTAL_BUNDLE_PROTOCOL,
-        recipientGrants: buildRecipientGrants.map((grant) => ({
-          recipientAddress: grant.recipientAddress,
-          keyVersion: grant.keyVersion,
-          wrappedCek: grant.wrappedCek,
-          hpkeEnc: grant.hpkeEnc,
-        })),
-        summary: build?.summary,
-        ...(typeof build?.replyToEvidenceId === "string" && build.replyToEvidenceId.trim()
-          ? { replyToEvidenceId: build.replyToEvidenceId.trim() }
-          : {}),
+        manifestSha256: build.manifestSha256,
+        cipherSuite: build.cipherSuite,
+        contentProtocol: build.contentProtocol,
+        recipientGrants: build.recipientGrants,
+        summary: build.summary,
+        ...(build.replyToEvidenceId ? { replyToEvidenceId: build.replyToEvidenceId } : {}),
       };
     } else {
       const artifactContentCall = await callApiRoute({
@@ -8192,10 +8282,7 @@ async function runDisputeEvidenceBundleBuild(commandArgs) {
       };
     }
     const plaintextBundle = readJsonFileSync(bundlePlaintextFile, "invalid_bundle_plaintext_file");
-    const replyToEvidenceId =
-      typeof options["reply-to-evidence-id"] === "string" && options["reply-to-evidence-id"].trim()
-        ? options["reply-to-evidence-id"].trim()
-        : undefined;
+    const replyToEvidenceId = normalizeUuidOption(options["reply-to-evidence-id"], "reply_to_evidence_id") || undefined;
     return await buildDisputeSupplementalBundleForCli(options, {
       disputeCaseId,
       runtimeContext,
@@ -8334,10 +8421,7 @@ async function runMailboxEvidenceExport(commandArgs) {
       resolveOptionalPathOption(options["bundle-plaintext-out"]) ||
       path.resolve(process.cwd(), `clawnera-dispute-mailbox-evidence-${contextResult.orderId}-${contextResult.milestoneId}.json`);
     writeOptionalOutputFile(bundlePlaintextOut, `${JSON.stringify(bundlePlaintext, null, 2)}\n`);
-    const replyToEvidenceId =
-      typeof options["reply-to-evidence-id"] === "string" && options["reply-to-evidence-id"].trim()
-        ? options["reply-to-evidence-id"].trim()
-        : undefined;
+    const replyToEvidenceId = normalizeUuidOption(options["reply-to-evidence-id"], "reply_to_evidence_id") || undefined;
     const built = await buildDisputeSupplementalBundleForCli(options, {
       disputeCaseId,
       runtimeContext,
@@ -8389,6 +8473,7 @@ async function runCheckpointEvidenceExport(commandArgs) {
     "payload-file",
     "ciphertext-hash",
     "signal-seq",
+    "allow-latest-signal-fallback",
     "mailbox-events-file",
     "events-out",
     "limit",
@@ -8465,6 +8550,7 @@ async function runCheckpointEvidenceExport(commandArgs) {
         ? path.resolve(String(options["mailbox-events-file"]).trim())
         : "";
     const signalSeq = normalizeString(options["signal-seq"]);
+    const allowLatestSignalFallback = parseBooleanOption(options["allow-latest-signal-fallback"], false);
     const payloadFile =
       typeof options["payload-file"] === "string" && options["payload-file"].trim()
         ? path.resolve(String(options["payload-file"]).trim())
@@ -8484,7 +8570,14 @@ async function runCheckpointEvidenceExport(commandArgs) {
       const payload = normalizeManagedDeliverablePayload(readJsonFileSync(payloadFile, "invalid_payload_file"));
       ciphertextSha256 = payload.encrypted.blob.ciphertextSha256;
     }
-    if (mailboxEventsFile || signalSeq || !ciphertextSha256) {
+    const hasExplicitCiphertextSource = Boolean(payloadFile || ciphertextSha256 || signalSeq);
+    if (!hasExplicitCiphertextSource && !allowLatestSignalFallback) {
+      return {
+        ok: false,
+        error: "checkpoint_ciphertext_source_required",
+      };
+    }
+    if (mailboxEventsFile || signalSeq || allowLatestSignalFallback) {
       const snapshot = mailboxEventsFile
         ? loadMailboxEventsSnapshotFromFile(mailboxEventsFile, contextResult.orderId)
         : await fetchMailboxEventsSnapshot(options, contextResult.orderId, {
@@ -8498,8 +8591,10 @@ async function runCheckpointEvidenceExport(commandArgs) {
       const postedSignals = snapshot.events.filter((entry) => entry.category === "posted");
       mailboxSignal = signalSeq
         ? postedSignals.find((entry) => String(entry.seq ?? "") === signalSeq) || null
-        : postedSignals[postedSignals.length - 1] || null;
-      if (!mailboxSignal && (signalSeq || !ciphertextSha256)) {
+        : allowLatestSignalFallback
+          ? postedSignals[postedSignals.length - 1] || null
+          : null;
+      if (!mailboxSignal && (signalSeq || allowLatestSignalFallback)) {
         return {
           ok: false,
           error: "checkpoint_mailbox_signal_not_found",
@@ -8623,10 +8718,7 @@ async function runCheckpointEvidenceExport(commandArgs) {
       resolveOptionalPathOption(options["bundle-plaintext-out"]) ||
       path.resolve(process.cwd(), `clawnera-dispute-checkpoint-evidence-${contextResult.orderId}-${contextResult.milestoneId}.json`);
     writeOptionalOutputFile(bundlePlaintextOut, `${JSON.stringify(bundlePlaintext, null, 2)}\n`);
-    const replyToEvidenceId =
-      typeof options["reply-to-evidence-id"] === "string" && options["reply-to-evidence-id"].trim()
-        ? options["reply-to-evidence-id"].trim()
-        : undefined;
+    const replyToEvidenceId = normalizeUuidOption(options["reply-to-evidence-id"], "reply_to_evidence_id") || undefined;
     const built = await buildDisputeSupplementalBundleForCli(options, {
       disputeCaseId,
       runtimeContext,
@@ -11145,8 +11237,9 @@ function checkpointEvidenceExportUsageLines() {
     "Checkpoint evidence export helper:",
     "- Usage: clawnera-help checkpoint-evidence-export --case-id <0x...> --submit-body-file <file> --auth-state-file <file>",
     "- Builds one canonical CHECKPOINT_HANDOVER packet locally, wraps it into a supplemental dispute bundle, and writes the normal payload/build artifacts.",
-    "- Ciphertext source: prefer --payload-file <managed-deliverable-payload.json>; fallback to --ciphertext-hash <64-hex> or a selected mailbox signal.",
-    "- Mailbox shortcut: --signal-seq <n> or reuse --mailbox-events-file <saved-mailbox-events.json> to attach the delivery-ready signal ref.",
+    "- Ciphertext source: choose one explicitly via --payload-file <managed-deliverable-payload.json>, --ciphertext-hash <64-hex>, or --signal-seq <n>.",
+    "- Mailbox shortcut: pair --signal-seq <n> with live mailbox reads or --mailbox-events-file <saved-mailbox-events.json> to attach the delivery-ready signal ref.",
+    "- Power-user fallback: add --allow-latest-signal-fallback only if you really want the helper to auto-pick the newest posted signal.",
     "- Optional anchor: --anchor-file <milestone-anchor.json> or explicit --anchor-tx-digest <digest> [--anchor-event-seq <n>] [--anchor-status PENDING|CONFIRMED|MISMATCH]",
     "- Optional statement: --statement-title <text> plus --statement-text <text> or --statement-file <file>",
   ];

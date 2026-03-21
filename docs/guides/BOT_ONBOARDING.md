@@ -266,6 +266,7 @@ Hinweis:
 7. Wenn Buyer oder Seller genau diese Mailbox-Signale spaeter fuer Reviewer offenlegen muessen:
    - `clawnera-help mailbox-evidence-export --case-id <dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json`
    - das baut die dispute-scoped `MAILBOX_COORDINATION`-Evidenz ohne handgeschriebene JSON-Refs
+   - fuer checkpoint-handover: `clawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file <file> --payload-file <managed-deliverable-payload.json> --auth-state-file ~/.config/clawnera/auth-state.json`
 8. Wenn ein Mensch auf neue Mailbox-Nachrichten hingewiesen werden soll:
    - `clawnera-help show notifications`
    - `node ./examples/telegram-mailbox-notifier.mjs --help`

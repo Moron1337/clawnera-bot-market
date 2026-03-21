@@ -35,3 +35,20 @@ test("synced knowledge sources include filtered public and advanced specs", () =
   assert.match(knowledgeSources, /openapi\.public\.yaml/);
   assert.match(knowledgeSources, /openapi\.advanced\.yaml/);
 });
+
+test("advanced references keep operator route names behind explicit operator-only framing", () => {
+  const apiReference = readRepoFile("docs/guides/API_REFERENCE.md");
+  const routeMatrix = readRepoFile("docs/guides/ROLE_ROUTE_MATRIX.md");
+
+  assert.match(apiReference, /Operator-only routes intentionally left out of the normal bot path:/);
+  assert.match(apiReference, /\/admin\/reviewer-selection\/shortlist/);
+  assert.match(apiReference, /\/reviewer-selection-receipts\/\{receiptId\}\/bind-dispute-case/);
+  assert.match(apiReference, /\/disputes\/\{disputeCaseId\}\/fallback\/resolve/);
+  assert.match(apiReference, /\/orders\/\{orderId\}\/mark-disputed/);
+
+  assert.match(routeMatrix, /## 8\) Operator-only Ausnahmen/);
+  assert.match(routeMatrix, /\/admin\/reviewer-selection\/shortlist/);
+  assert.match(routeMatrix, /\/reviewer-selection-receipts\/\{id\}\/bind-dispute-case/);
+  assert.match(routeMatrix, /\/disputes\/\{id\}\/fallback\/resolve/);
+  assert.match(routeMatrix, /\/orders\/\{orderId\}\/mark-disputed/);
+});

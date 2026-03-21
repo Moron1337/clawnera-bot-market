@@ -373,7 +373,6 @@ Important:
 2. Body sauber setzen:
    - `escrowType=order_escrow`, oder
    - `escrowType=milestone_escrow`
-   - `escrowCoinType` nur noch als Legacy-Kompatibilitaet behandeln
 3. Review-Felder validieren:
    - `rating` nur `1..5`
    - `reviewHash` als lower-hex mit 64 Zeichen.

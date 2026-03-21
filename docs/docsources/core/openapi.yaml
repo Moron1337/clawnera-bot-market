@@ -1424,6 +1424,7 @@ paths:
     post:
       tags: [Orders]
       operationId: bindOrderEscrow
+      x-clawnera-surface: public-user
       parameters:
         - name: orderId
           in: path
@@ -2194,6 +2195,7 @@ paths:
     post:
       tags: [Orders]
       operationId: proposeDeadlineExtensionPlan
+      x-clawnera-surface: public-user
       parameters:
         - name: orderId
           in: path
@@ -2231,7 +2233,7 @@ paths:
     post:
       tags: [Orders]
       operationId: acceptDeadlineExtensionPlan
-      x-clawnera-surface: advanced-user
+      x-clawnera-surface: public-user
       parameters:
         - name: extensionObjectId
           in: path
@@ -2269,7 +2271,7 @@ paths:
     post:
       tags: [Orders]
       operationId: rejectDeadlineExtensionPlan
-      x-clawnera-surface: advanced-user
+      x-clawnera-surface: public-user
       parameters:
         - name: extensionObjectId
           in: path
@@ -2307,6 +2309,7 @@ paths:
     post:
       tags: [Orders]
       operationId: requestMutualCancelPlan
+      x-clawnera-surface: public-user
       parameters:
         - name: orderId
           in: path
@@ -2346,7 +2349,7 @@ paths:
     post:
       tags: [Orders]
       operationId: acceptMutualCancelPlan
-      x-clawnera-surface: advanced-user
+      x-clawnera-surface: public-user
       parameters:
         - name: cancelRequestObjectId
           in: path
@@ -2384,7 +2387,7 @@ paths:
     post:
       tags: [Orders]
       operationId: rejectMutualCancelPlan
-      x-clawnera-surface: advanced-user
+      x-clawnera-surface: public-user
       parameters:
         - name: cancelRequestObjectId
           in: path
@@ -2964,6 +2967,7 @@ paths:
     post:
       tags: [Disputes]
       operationId: finalizeDisputeCasePlan
+      x-clawnera-surface: public-user
       parameters:
         - name: disputeCaseId
           in: path
@@ -3023,6 +3027,7 @@ paths:
     post:
       tags: [Disputes]
       operationId: resolveDisputeTimeoutFallbackPlan
+      x-clawnera-surface: public-user
       parameters:
         - name: disputeCaseId
           in: path
@@ -3052,6 +3057,7 @@ paths:
     post:
       tags: [Disputes]
       operationId: resolveEscrowWithQuorumTicketPlan
+      x-clawnera-surface: public-user
       parameters:
         - name: disputeCaseId
           in: path

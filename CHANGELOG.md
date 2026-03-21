@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.54] - 2026-03-21
+
+- Closed the remaining real findings from the full API-surface audit:
+  - the packaged onboarding path no longer teaches the legacy `escrowCoinType` field in the public review-posting flow
+  - new docs-surface coverage now also guards that advanced references keep operator route names behind explicit operator-only framing
+  - refreshed copied core OpenAPI/docsources after the latest surface-tag and path-name fixes in `Clawdex`
+
 ## [0.1.53] - 2026-03-21
 
 - Tightened the installed docs surface so weaker bots see the current public and advanced API views without leaking operator-only route names in the start-here path:

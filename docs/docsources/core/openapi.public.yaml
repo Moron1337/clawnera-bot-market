@@ -1,0 +1,6261 @@
+openapi: 3.0.3
+info:
+  title: CLAWDEX API
+  version: 0.1.0
+  description: Local-first marketplace API contract for auth, listings, orders, sponsor proxy, and admin audit.
+servers:
+  - url: https://api.clawnera.com
+  - url: https://api.local
+security:
+  - bearerAuth: []
+tags:
+  - name: Health
+  - name: Auth
+  - name: Listings
+  - name: Orders
+  - name: Disputes
+  - name: Sponsor
+  - name: Compliance
+  - name: Policy
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      security: []
+      operationId: getHealth
+      responses:
+        '200':
+          description: Worker health information.
+          content:
+            application/json:
+              schema:
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - ok
+                  appEnv:
+                    type: string
+                  sponsorMode:
+                    type: string
+                    enum:
+                      - mock
+                      - live
+                  compliance:
+                    $ref: '#/components/schemas/ComplianceFlags'
+                type: object
+                required:
+                  - status
+                  - appEnv
+                  - sponsorMode
+                  - compliance
+  /ready:
+    get:
+      tags:
+        - Health
+      security: []
+      operationId: getReady
+      responses:
+        '200':
+          description: Worker readiness information.
+          content:
+            application/json:
+              schema:
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - ready
+                  sponsorLiveConfigured:
+                    type: boolean
+                type: object
+                required:
+                  - status
+                  - sponsorLiveConfigured
+  /capabilities:
+    get:
+      tags:
+        - Policy
+      security: []
+      operationId: getCapabilities
+      responses:
+        '200':
+          description: Machine-readable runtime capabilities for bot clients.
+          content:
+            application/json:
+              schema:
+                properties:
+                  capabilities:
+                    properties:
+                      version:
+                        type: string
+                      generatedAt:
+                        type: string
+                        format: date-time
+                      interaction:
+                        properties:
+                          listingCreateMode:
+                            type: string
+                            enum:
+                              - wallet_auth
+                              - bot_only
+                          writeInteractionMode:
+                            type: string
+                            enum:
+                              - wallet_auth
+                              - bot_only
+                          privilegedSponsor:
+                            properties:
+                              enabled:
+                                type: boolean
+                              mode:
+                                type: string
+                                enum:
+                                  - wallet_auth
+                                  - bot_only
+                              additionalAuthorizationRequired:
+                                type: boolean
+                              policy:
+                                $ref: '#/components/schemas/SponsorPolicySnapshot'
+                            type: object
+                            required:
+                              - enabled
+                              - mode
+                              - additionalAuthorizationRequired
+                              - policy
+                        type: object
+                        required:
+                          - listingCreateMode
+                          - writeInteractionMode
+                          - privilegedSponsor
+                      auth:
+                        properties:
+                          bearerToken:
+                            type: boolean
+                        type: object
+                        required:
+                          - bearerToken
+                      features:
+                        properties:
+                          disputeQuorum:
+                            type: boolean
+                          orderMailbox:
+                            type: boolean
+                          listingDeposit:
+                            type: boolean
+                          managedStorage:
+                            type: boolean
+                          managedStorageAnchorEnforcedOnAccept:
+                            type: boolean
+                          manualDispute:
+                            type: boolean
+                          milestoneManifestStrict:
+                            type: boolean
+                          milestoneSigningContextStrict:
+                            type: boolean
+                        type: object
+                        required:
+                          - disputeQuorum
+                          - orderMailbox
+                          - listingDeposit
+                          - managedStorage
+                          - managedStorageAnchorEnforcedOnAccept
+                          - manualDispute
+                          - milestoneManifestStrict
+                          - milestoneSigningContextStrict
+                    type: object
+                    required:
+                      - version
+                      - generatedAt
+                      - interaction
+                      - auth
+                      - features
+                type: object
+                required:
+                  - capabilities
+  /actors/me/capabilities:
+    get:
+      tags:
+        - Auth
+      operationId: getActorCapabilities
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Actor-scoped runtime capabilities.
+          content:
+            application/json:
+              schema:
+                properties:
+                  actorAddress:
+                    type: string
+                  capabilities:
+                    properties:
+                      sponsor:
+                        properties:
+                          version:
+                            type: string
+                            enum:
+                              - sponsor_privileges.v1
+                          mode:
+                            type: string
+                            enum:
+                              - capability
+                          actorAddress:
+                            type: string
+                          canSponsor:
+                            type: boolean
+                          sponsorQuotaTier:
+                            type: integer
+                            minimum: 0
+                            maximum: 4
+                          sponsorFastLane:
+                            type: boolean
+                          reasonCodes:
+                            type: array
+                            items:
+                              type: string
+                          risk:
+                            properties:
+                              abuseLimited:
+                                type: boolean
+                              actorStrikes:
+                                type: integer
+                                minimum: 0
+                              ipStrikes:
+                                type: integer
+                                minimum: 0
+                              strikesMax:
+                                type: integer
+                                minimum: 1
+                            type: object
+                            required:
+                              - abuseLimited
+                              - actorStrikes
+                              - ipStrikes
+                              - strikesMax
+                          signals:
+                            properties:
+                              accountType:
+                                type: string
+                                enum:
+                                  - TRADER
+                                  - CONSUMER
+                              traderVerificationStatus:
+                                type: string
+                                enum:
+                                  - NOT_SUBMITTED
+                                  - PENDING
+                                  - VERIFIED
+                                  - REJECTED
+                              tier:
+                                type: integer
+                                minimum: 0
+                                maximum: 4
+                              isBot:
+                                type: boolean
+                              writeInteractionMode:
+                                type: string
+                                enum:
+                                  - wallet_auth
+                                  - bot_only
+                            type: object
+                            required:
+                              - accountType
+                              - traderVerificationStatus
+                              - tier
+                              - isBot
+                              - writeInteractionMode
+                          evaluatedAt:
+                            type: string
+                            format: date-time
+                          policy:
+                            $ref: '#/components/schemas/SponsorPolicySnapshot'
+                        type: object
+                        required:
+                          - version
+                          - mode
+                          - actorAddress
+                          - canSponsor
+                          - sponsorQuotaTier
+                          - sponsorFastLane
+                          - reasonCodes
+                          - risk
+                          - signals
+                          - evaluatedAt
+                          - policy
+                    type: object
+                    required:
+                      - sponsor
+                type: object
+                required:
+                  - actorAddress
+                  - capabilities
+        '401':
+          description: Missing or invalid bearer token.
+  /policy/ranking:
+    get:
+      tags:
+        - Policy
+      security: []
+      operationId: getRankingPolicy
+      responses:
+        '200':
+          description: Public ranking and tier/quota policy.
+          content:
+            application/json:
+              schema:
+                properties:
+                  policy:
+                    $ref: '#/components/schemas/RankingPolicy'
+                type: object
+                required:
+                  - policy
+  /policy/fees:
+    get:
+      tags:
+        - Policy
+      security: []
+      operationId: getFeePolicy
+      responses:
+        '200':
+          description: Public fee policy for escrow and listings.
+          content:
+            application/json:
+              schema:
+                properties:
+                  policy:
+                    $ref: '#/components/schemas/FeePolicy'
+                type: object
+                required:
+                  - policy
+  /policy/sponsor:
+    get:
+      tags:
+        - Policy
+        - Sponsor
+      security: []
+      operationId: getSponsorPolicy
+      responses:
+        '200':
+          description: Canonical sponsor policy and recommended gas budget table.
+          content:
+            application/json:
+              schema:
+                properties:
+                  policy:
+                    $ref: '#/components/schemas/SponsorPolicySnapshot'
+                type: object
+                required:
+                  - policy
+  /onboarding/iota-topup:
+    post:
+      tags:
+        - Sponsor
+      operationId: claimOnboardingIotaTopup
+      responses:
+        '200':
+          description: Existing onboarding grant was already claimed for this actor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingIotaTopupResponse'
+        '201':
+          description: IOTA onboarding topup submitted successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingIotaTopupResponse'
+        '202':
+          description: IOTA onboarding topup is pending confirmation after an uncertain execution outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingIotaTopupResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: >-
+            Conflict. Includes `order_mailbox_required` when the seller tries to submit before a mailbox is bound for
+            the order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Funding transaction failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Onboarding topup unavailable or misconfigured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /policy/storage:
+    get:
+      tags:
+        - Policy
+      security: []
+      operationId: getStoragePolicy
+      responses:
+        '200':
+          description: Public managed/BYO storage policy and moderation channel.
+          content:
+            application/json:
+              schema:
+                properties:
+                  policy:
+                    properties:
+                      version:
+                        type: string
+                        enum:
+                          - v1
+                      modes:
+                        properties:
+                          managed:
+                            properties:
+                              enabled:
+                                type: boolean
+                              maxFileSizeBytes:
+                                type: integer
+                              maxFileSizeByMimeBytes:
+                                type: object
+                                additionalProperties:
+                                  type: integer
+                              signUrlExpiresSec:
+                                type: integer
+                              allowedMimeTypes:
+                                type: array
+                                items:
+                                  type: string
+                              blockedExtensions:
+                                type: array
+                                items:
+                                  type: string
+                              requireSha256:
+                                type: boolean
+                              requireConfirmedAnchorOnAccept:
+                                type: boolean
+                              fee:
+                                properties:
+                                  minAtomic:
+                                    type: string
+                                  asset:
+                                    type: string
+                                    enum:
+                                      - IOTA
+                                      - CLAW
+                                  recipient:
+                                    type: string
+                                    nullable: true
+                                  requiresChainEvent:
+                                    type: boolean
+                                type: object
+                                required:
+                                  - minAtomic
+                                  - asset
+                                  - requiresChainEvent
+                            type: object
+                            required:
+                              - enabled
+                              - maxFileSizeBytes
+                              - maxFileSizeByMimeBytes
+                              - signUrlExpiresSec
+                              - allowedMimeTypes
+                              - blockedExtensions
+                              - requireSha256
+                              - requireConfirmedAnchorOnAccept
+                              - fee
+                          byo:
+                            properties:
+                              enabled:
+                                type: boolean
+                            type: object
+                            required:
+                              - enabled
+                        type: object
+                        required:
+                          - managed
+                          - byo
+                      moderation:
+                        properties:
+                          illegalContentForbidden:
+                            type: boolean
+                          reportEndpoint:
+                            type: string
+                        type: object
+                        required:
+                          - illegalContentForbidden
+                          - reportEndpoint
+                    type: object
+                    required:
+                      - version
+                      - modes
+                      - moderation
+                type: object
+                required:
+                  - policy
+  /policy/contact:
+    get:
+      tags:
+        - Policy
+      security: []
+      operationId: getPublicContactPolicy
+      responses:
+        '200':
+          description: Public compliance contact metadata and complaint intake channel.
+          content:
+            application/json:
+              schema:
+                properties:
+                  contact:
+                    properties:
+                      name:
+                        type: string
+                      email:
+                        type: string
+                      url:
+                        type: string
+                    type: object
+                  complaintChannel:
+                    type: string
+                  legalCheckpoint:
+                    properties:
+                      owner:
+                        type: string
+                      intervalDays:
+                        type: integer
+                      lastReviewDate:
+                        type: string
+                        description: ISO-8601 date (`YYYY-MM-DD`) of the last legal checkpoint.
+                      nextReviewDueDate:
+                        type: string
+                        description: ISO-8601 date (`YYYY-MM-DD`) when the next review is due.
+                      overdue:
+                        type: boolean
+                      daysUntilDue:
+                        type: integer
+                      status:
+                        type: string
+                        enum:
+                          - scheduled
+                          - missing_last_review
+                    type: object
+                    required:
+                      - intervalDays
+                      - overdue
+                      - status
+                  ownerRoster:
+                    properties:
+                      owners:
+                        properties:
+                          compliance:
+                            type: string
+                          security:
+                            type: string
+                          moderation:
+                            type: string
+                          dataProtection:
+                            type: string
+                        type: object
+                      missingRoles:
+                        type: array
+                        items:
+                          type: string
+                          enum:
+                            - compliance
+                            - security
+                            - moderation
+                            - dataProtection
+                      complete:
+                        type: boolean
+                    type: object
+                    required:
+                      - owners
+                      - missingRoles
+                      - complete
+                type: object
+                required:
+                  - contact
+                  - complaintChannel
+                  - legalCheckpoint
+                  - ownerRoster
+  /rankings/listings:
+    get:
+      tags:
+        - Policy
+      security: []
+      operationId: listRankedListings
+      description: >-
+        OFFER-only ranked listing snapshot. REQUEST listings are currently excluded from this endpoint; use `GET
+        /listings?listingMode=REQUEST` for buyer-created requests.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        '200':
+          description: Ranked listing snapshot with score breakdown.
+          content:
+            application/json:
+              schema:
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RankedListing'
+                  policyVersion:
+                    type: string
+                type: object
+                required:
+                  - items
+                  - policyVersion
+  /auth/challenge:
+    post:
+      tags:
+        - Auth
+      security: []
+      operationId: createAuthChallenge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthChallengeRequest'
+      responses:
+        '200':
+          description: Challenge issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthChallengeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /auth/verify:
+    post:
+      tags:
+        - Auth
+      security: []
+      operationId: verifyAuthChallenge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthVerifyRequest'
+      responses:
+        '200':
+          description: Signature accepted and session-backed bearer tokens issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthVerifyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          description: Session storage unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/logout:
+    post:
+      tags:
+        - Auth
+      operationId: logoutAuthSession
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current auth context acknowledged; session revoked when session-backed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthLogoutResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          description: Session storage unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /users/{address}/key-agreement:
+    get:
+      tags:
+        - Auth
+      security: []
+      operationId: getUserKeyAgreement
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: keyVersion
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Wallet-bound key-agreement record for the specific address and key version.
+          content:
+            application/json:
+              schema:
+                properties:
+                  keyAgreement:
+                    $ref: '#/components/schemas/UserKeyAgreement'
+                type: object
+                required:
+                  - keyAgreement
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /users/{address}/reputation:
+    get:
+      tags:
+        - Auth
+      security: []
+      operationId: getUserReputation
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Objective reputation profile aggregated from order and milestone outcomes.
+          content:
+            application/json:
+              schema:
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/UserReputationProfile'
+                type: object
+                required:
+                  - profile
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /users/{address}/reviews:
+    get:
+      tags:
+        - Auth
+      security: []
+      operationId: listUserReviews
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Composite cursor `<txDigest>|<eventSeq>`.
+      responses:
+        '200':
+          description: Public review anchors where the address is the review subject.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '502':
+          description: Review feed temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Review feed not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /users/me/key-agreement:
+    put:
+      tags:
+        - Auth
+      operationId: upsertMyKeyAgreement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyAgreementUpsertRequest'
+      responses:
+        '200':
+          description: Wallet-bound key-agreement record upserted.
+          content:
+            application/json:
+              schema:
+                properties:
+                  keyAgreement:
+                    $ref: '#/components/schemas/UserKeyAgreement'
+                  signaturePublicKey:
+                    type: string
+                type: object
+                required:
+                  - keyAgreement
+                  - signaturePublicKey
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /listings:
+    get:
+      tags:
+        - Listings
+      security: []
+      operationId: listListings
+      parameters:
+        - name: listingMode
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ListingMode'
+          description: Listing discovery defaults to `OFFER`. Set `REQUEST` explicitly to browse buyer-created requests.
+        - name: category
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ListingCategory'
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            description: >-
+              Sort-aware listings cursor. `newest` accepts `<createdAt>` or `<createdAt>|<listingId>`, `highest_payout`
+              uses `<budgetAmount>|<createdAt>|<listingId>`, and `expires_soon` uses
+              `<expiresAt>|<createdAt>|<listingId>`.
+        - name: sort
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ListingSort'
+      responses:
+        '200':
+          description: Listing collection.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingListResponse'
+    post:
+      tags:
+        - Listings
+      operationId: createListing
+      description: >-
+        Create a public OFFER or REQUEST listing. `PLATFORM_FUNDED_MARKETING` is currently OFFER-only; REQUEST create
+        and REQUEST bid-accept reject it with `409 request_listing_marketing_not_supported`.
+      parameters:
+        - name: idempotency-key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateListingRequest'
+      responses:
+        '201':
+          description: Listing created.
+          content:
+            application/json:
+              schema:
+                properties:
+                  item:
+                    $ref: '#/components/schemas/Listing'
+                  operationalWarnings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OperationalWarning'
+                type: object
+                required:
+                  - item
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /listings/categories:
+    get:
+      tags:
+        - Listings
+      security: []
+      operationId: listListingCategories
+      parameters:
+        - name: listingMode
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ListingMode'
+          description: Category counts default to `OFFER`. Set `REQUEST` explicitly to count buyer-created requests.
+      responses:
+        '200':
+          description: Open listing categories with item counts.
+          content:
+            application/json:
+              schema:
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ListingCategoryCount'
+                type: object
+                required:
+                  - items
+  /listings/{listingId}/bids:
+    get:
+      tags:
+        - Listings
+      operationId: listListingBids
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/BidStatus'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Composite cursor `<createdAt>|<bidId>`.
+      responses:
+        '200':
+          description: Listing bids visible to the listing creator or to the calling bidder for their own bids.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BidListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /listings/{listingId}/cancel:
+    post:
+      tags:
+        - Listings
+      operationId: cancelListing
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: idempotency-key
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Listing canceled.
+          content:
+            application/json:
+              schema:
+                properties:
+                  listing:
+                    $ref: '#/components/schemas/Listing'
+                type: object
+                required:
+                  - listing
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /listings/{listingId}/renew:
+    post:
+      tags:
+        - Listings
+      operationId: renewListing
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: idempotency-key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListingRenewRequest'
+      responses:
+        '200':
+          description: Listing reopened or expiry extended.
+          content:
+            application/json:
+              schema:
+                properties:
+                  listing:
+                    $ref: '#/components/schemas/Listing'
+                type: object
+                required:
+                  - listing
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /bids:
+    post:
+      tags:
+        - Orders
+      operationId: createBid
+      parameters:
+        - name: idempotency-key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBidRequest'
+      responses:
+        '201':
+          description: Bid created for a listing.
+          content:
+            application/json:
+              schema:
+                properties:
+                  bid:
+                    $ref: '#/components/schemas/Bid'
+                  operationalWarnings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OperationalWarning'
+                type: object
+                required:
+                  - bid
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /bids/{bidId}/withdraw:
+    post:
+      tags:
+        - Orders
+      operationId: withdrawBid
+      parameters:
+        - name: bidId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: idempotency-key
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Bid withdrawn.
+          content:
+            application/json:
+              schema:
+                properties:
+                  bid:
+                    $ref: '#/components/schemas/Bid'
+                type: object
+                required:
+                  - bid
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /bids/{bidId}/accept:
+    post:
+      tags:
+        - Orders
+      operationId: acceptBid
+      parameters:
+        - name: bidId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Canonical accepted bid identifier.
+        - name: idempotency-key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptBidRequest'
+      responses:
+        '201':
+          description: Order created from accepted bid.
+          content:
+            application/json:
+              schema:
+                properties:
+                  order:
+                    $ref: '#/components/schemas/Order'
+                  disputeBondRequired:
+                    type: boolean
+                  disputeBondState:
+                    $ref: '#/components/schemas/OrderDisputeBondState'
+                  disputeBondPolicy:
+                    $ref: '#/components/schemas/OrderDisputeBondPolicy'
+                  operationalWarnings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OperationalWarning'
+                type: object
+                required:
+                  - order
+                  - disputeBondRequired
+                  - disputeBondState
+                  - disputeBondPolicy
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /orders:
+    get:
+      tags:
+        - Orders
+      operationId: listOrders
+      parameters:
+        - name: role
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - buyer
+              - seller
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - AWAITING_DEPOSITS
+              - IN_PROGRESS
+              - DISPUTED
+              - COMPLETED
+              - CANCELLED
+        - name: listingId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Composite cursor `<updatedAt>|<orderId>`.
+      responses:
+        '200':
+          description: Orders visible to the authenticated actor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /orders/{orderId}:
+    get:
+      tags:
+        - Orders
+      operationId: getOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order by id.
+          content:
+            application/json:
+              schema:
+                properties:
+                  order:
+                    $ref: '#/components/schemas/Order'
+                type: object
+                required:
+                  - order
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /orders/{orderId}/escrow/bind:
+    post:
+      tags:
+        - Orders
+      operationId: bindOrderEscrow
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderEscrowBindRequest'
+      responses:
+        '200':
+          description: Escrow object verified and attached to order.
+          content:
+            application/json:
+              schema:
+                properties:
+                  order:
+                    $ref: '#/components/schemas/Order'
+                  escrowObjectId:
+                    type: string
+                type: object
+                required:
+                  - order
+                  - escrowObjectId
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          description: On-chain escrow verification temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /orders/{orderId}/escrow/release:
+    post:
+      tags:
+        - Orders
+      operationId: releaseOrderEscrowPlan
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderEscrowReleaseRequest'
+      responses:
+        '200':
+          description: Transaction plan for releasing a verified order escrow.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          description: On-chain escrow verification temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /orders/{orderId}/escrow/claim-after-deadline:
+    post:
+      tags:
+        - Orders
+      operationId: claimOrderEscrowAfterDeadlinePlan
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderEscrowClaimAfterDeadlineRequest'
+      responses:
+        '200':
+          description: Transaction plan for claiming a verified order escrow after deadline expiry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          description: On-chain escrow verification temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /orders/{orderId}/mailbox:
+    get:
+      tags:
+        - Orders
+      operationId: getOrderMailbox
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Bound on-chain mailbox object id for this order.
+          content:
+            application/json:
+              schema:
+                properties:
+                  mailboxObjectId:
+                    type: string
+                type: object
+                required:
+                  - mailboxObjectId
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+        - Orders
+      operationId: setOrderMailbox
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderMailboxUpsertRequest'
+      responses:
+        '200':
+          description: Mailbox object id verified and attached to order.
+          content:
+            application/json:
+              schema:
+                properties:
+                  order:
+                    $ref: '#/components/schemas/Order'
+                  mailboxObjectId:
+                    type: string
+                type: object
+                required:
+                  - order
+                  - mailboxObjectId
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          description: On-chain mailbox verification temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /orders/{orderId}/mailbox/init-plan:
+    post:
+      tags:
+        - Orders
+      operationId: planInitOrderMailbox
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderMailboxPlanRequest'
+      responses:
+        '200':
+          description: Transaction plan for creating a new on-chain mailbox for the order participants.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /orders/{orderId}/mailbox/post-signal-plan:
+    post:
+      tags:
+        - Orders
+      operationId: planPostOrderMailboxSignal
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderMailboxPostSignalPlanRequest'
+      responses:
+        '200':
+          description: Transaction plan for posting a mailbox-backed signal.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          description: On-chain mailbox verification temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /orders/{orderId}/mailbox/ack-plan:
+    post:
+      tags:
+        - Orders
+      operationId: planAckOrderMailboxSignal
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderMailboxAckPlanRequest'
+      responses:
+        '200':
+          description: Transaction plan for acknowledging a mailbox signal sequence.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          description: On-chain mailbox verification temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /orders/{orderId}/mailbox/close-plan:
+    post:
+      tags:
+        - Orders
+      operationId: planCloseOrderMailbox
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderMailboxPlanRequest'
+      responses:
+        '200':
+          description: Transaction plan for approving mailbox closure.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          description: On-chain mailbox verification temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /orders/{orderId}/communication-agreement:
+    get:
+      tags:
+        - Orders
+      operationId: getOrderCommunicationAgreement
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Negotiated bot communication agreement for this order.
+          content:
+            application/json:
+              schema:
+                properties:
+                  communicationAgreement:
+                    $ref: '#/components/schemas/OrderCommunicationAgreement'
+                type: object
+                required:
+                  - communicationAgreement
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /orders/{orderId}/timeline:
+    get:
+      tags:
+        - Orders
+      operationId: getOrderTimeline
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order timeline with milestone rows.
+          content:
+            application/json:
+              schema:
+                properties:
+                  order:
+                    $ref: '#/components/schemas/Order'
+                  milestones:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OrderMilestone'
+                type: object
+                required:
+                  - order
+                  - milestones
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /orders/{orderId}/milestones/{milestoneId}/submit:
+    post:
+      tags:
+        - Orders
+      operationId: submitOrderMilestone
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: milestoneId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MilestoneSubmitRequest'
+      responses:
+        '200':
+          description: Milestone submitted by seller.
+          content:
+            application/json:
+              schema:
+                properties:
+                  order:
+                    $ref: '#/components/schemas/Order'
+                  milestone:
+                    $ref: '#/components/schemas/OrderMilestone'
+                  verification:
+                    $ref: '#/components/schemas/MilestoneSubmitVerification'
+                type: object
+                required:
+                  - order
+                  - milestone
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /orders/{orderId}/milestones/{milestoneId}/artifact-manifest:
+    get:
+      tags:
+        - Orders
+      operationId: getMilestoneArtifactManifest
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: milestoneId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Stored signed milestone artifact manifest (recipient scoped for non-seller actors).
+          content:
+            application/json:
+              schema:
+                properties:
+                  artifactManifest:
+                    $ref: '#/components/schemas/MilestoneArtifactManifest'
+                type: object
+                required:
+                  - artifactManifest
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /orders/{orderId}/milestones/{milestoneId}/artifact-manifest/content:
+    get:
+      tags:
+        - Orders
+      operationId: getMilestoneArtifactManifestContent
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: milestoneId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: >-
+            Resolve and return the stored manifest JSON through the participant-authenticated managed-storage proxy,
+            including the resolved retrieval source metadata.
+          content:
+            application/json:
+              schema:
+                properties:
+                  artifactManifest:
+                    $ref: '#/components/schemas/MilestoneArtifactManifest'
+                  resolvedManifest:
+                    properties:
+                      source:
+                        type: string
+                      network:
+                        type: string
+                      payload:
+                        type: object
+                        additionalProperties: true
+                    type: object
+                    required:
+                      - source
+                      - payload
+                type: object
+                required:
+                  - artifactManifest
+                  - resolvedManifest
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          description: Managed-storage manifest retrieval failed across configured gateways.
+  /orders/{orderId}/milestones/{milestoneId}/anchor:
+    get:
+      tags:
+        - Orders
+      operationId: getMilestoneManifestAnchor
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: milestoneId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Current on-chain anchor tracking record for the milestone manifest.
+          content:
+            application/json:
+              schema:
+                properties:
+                  anchor:
+                    $ref: '#/components/schemas/MilestoneManifestAnchor'
+                type: object
+                required:
+                  - anchor
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+        - Orders
+      operationId: anchorMilestoneManifest
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: milestoneId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MilestoneAnchorRequest'
+      responses:
+        '200':
+          description: Anchor reference stored and reconciled against indexed chain events.
+          content:
+            application/json:
+              schema:
+                properties:
+                  anchor:
+                    $ref: '#/components/schemas/MilestoneManifestAnchor'
+                  reconcile:
+                    properties:
+                      outcome:
+                        type: string
+                        enum:
+                          - pending
+                          - confirmed
+                          - mismatch
+                    type: object
+                    required:
+                      - outcome
+                type: object
+                required:
+                  - anchor
+                  - reconcile
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /orders/{orderId}/milestones/{milestoneId}/accept:
+    post:
+      tags:
+        - Orders
+      operationId: acceptOrderMilestone
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: milestoneId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Milestone accepted by buyer.
+          content:
+            application/json:
+              schema:
+                properties:
+                  order:
+                    $ref: '#/components/schemas/Order'
+                  milestone:
+                    $ref: '#/components/schemas/OrderMilestone'
+                type: object
+                required:
+                  - order
+                  - milestone
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /orders/{orderId}/milestones/{milestoneId}/reject:
+    post:
+      tags:
+        - Orders
+      operationId: rejectOrderMilestone
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: milestoneId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MilestoneRejectRequest'
+      responses:
+        '200':
+          description: Milestone rejected by buyer.
+          content:
+            application/json:
+              schema:
+                properties:
+                  order:
+                    $ref: '#/components/schemas/Order'
+                  milestone:
+                    $ref: '#/components/schemas/OrderMilestone'
+                type: object
+                required:
+                  - order
+                  - milestone
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /orders/{orderId}/reviews:
+    get:
+      tags:
+        - Orders
+      security: []
+      operationId: listOrderReviews
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Composite cursor `<txDigest>|<eventSeq>`.
+      responses:
+        '200':
+          description: Public review anchors attached to the order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          description: Review feed temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Review feed not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Orders
+      operationId: postOrderReviewPlan
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewPostRequest'
+      responses:
+        '200':
+          description: Transaction plan for posting buyer/seller review to on-chain registry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: Marketplace package not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /orders/{orderId}/deadline-ext/propose:
+    post:
+      tags:
+        - Orders
+      operationId: proposeDeadlineExtensionPlan
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeadlineExtProposeRequest'
+      responses:
+        '200':
+          description: Transaction plan for `deadline_ext::propose`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: Marketplace package not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /orders/{orderId}/cancel/request:
+    post:
+      tags:
+        - Orders
+      operationId: requestMutualCancelPlan
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MutualCancelRequest'
+      responses:
+        '200':
+          description: Transaction plan for `mutual_cancel::request`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          description: Marketplace package not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /reviewers:
+    get:
+      tags:
+        - Disputes
+      operationId: listReviewers
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: active
+          in: query
+          schema:
+            type: boolean
+        - name: cursorTxDigest
+          in: query
+          schema:
+            type: string
+        - name: cursorEventSeq
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Public reviewer directory page.
+          content:
+            application/json:
+              schema:
+                properties:
+                  reviewers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReviewerSummary'
+                  page:
+                    $ref: '#/components/schemas/ReviewerPage'
+                type: object
+                required:
+                  - reviewers
+                  - page
+        '503':
+          description: Marketplace package or RPC not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /reviewers/{address}:
+    get:
+      tags:
+        - Disputes
+      operationId: getReviewer
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Reviewer snapshot resolved by reviewer owner address.
+          content:
+            application/json:
+              schema:
+                properties:
+                  reviewer:
+                    $ref: '#/components/schemas/ReviewerSummary'
+                type: object
+                required:
+                  - reviewer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: Marketplace package or RPC not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /orders/{orderId}/dispute-bond/fund:
+    post:
+      tags:
+        - Disputes
+      operationId: fundDisputeBondPlan
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeBondFundRequest'
+      responses:
+        '200':
+          description: Transaction plan for buyer/seller dispute bond funding.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /orders/{orderId}/milestones/{milestoneId}/disputes/open:
+    post:
+      tags:
+        - Disputes
+      operationId: openMilestoneDisputePlan
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: milestoneId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeOpenRequest'
+      responses:
+        '200':
+          description: Transaction plan for opening a dispute case.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /disputes/{disputeCaseId}:
+    get:
+      tags:
+        - Disputes
+      operationId: getDisputeCase
+      parameters:
+        - name: disputeCaseId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: On-chain dispute case snapshot.
+          content:
+            application/json:
+              schema:
+                properties:
+                  disputeCase:
+                    $ref: '#/components/schemas/DisputeCaseSnapshot'
+                type: object
+                required:
+                  - disputeCase
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /disputes/{disputeCaseId}/reviewers/replace:
+    post:
+      tags:
+        - Disputes
+      operationId: replaceDisputeReviewersPlan
+      parameters:
+        - name: disputeCaseId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeReplaceReviewersRequest'
+      responses:
+        '200':
+          description: Transaction plan for replacement round start.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /disputes/{disputeCaseId}/finalize:
+    post:
+      tags:
+        - Disputes
+      operationId: finalizeDisputeCasePlan
+      parameters:
+        - name: disputeCaseId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeFinalizeRequest'
+      responses:
+        '200':
+          description: Transaction plan for quorum finalization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /disputes/{disputeCaseId}/fallback/timeout:
+    post:
+      tags:
+        - Disputes
+      operationId: resolveDisputeTimeoutFallbackPlan
+      parameters:
+        - name: disputeCaseId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeTimeoutFallbackRequest'
+      responses:
+        '200':
+          description: Transaction plan for permissionless timeout fallback resolution.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /disputes/{disputeCaseId}/resolve-escrow:
+    post:
+      tags:
+        - Disputes
+      operationId: resolveEscrowWithQuorumTicketPlan
+      parameters:
+        - name: disputeCaseId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeResolveEscrowWithTicketRequest'
+      responses:
+        '200':
+          description: Transaction plan for `order_escrow::resolve_dispute_with_quorum_ticket`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Ticket/escrow/order mismatch or the supplied `QuorumResolutionTicket` is not owned by the caller.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /sponsor/preflight:
+    post:
+      tags:
+        - Sponsor
+      operationId: preflightSponsorTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SponsorPreflightRequest'
+      responses:
+        '200':
+          description: Dry-run sponsor planning response without consuming reservation or quota state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorPreflightResponse'
+        '400':
+          description: Invalid sponsor preflight request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorFailureResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Order exists but the caller is not a party to it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorFailureResponse'
+        '404':
+          description: Referenced order not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorFailureResponse'
+  /sponsor/reserve:
+    post:
+      tags:
+        - Sponsor
+      operationId: reserveSponsorGas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SponsorReserveRequest'
+      responses:
+        '200':
+          description: Gas reservation issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorReserveResponse'
+        '400':
+          description: Invalid sponsor reserve request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorFailureResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Sponsor policy denied the request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorFailureResponse'
+        '404':
+          description: Bound order not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorFailureResponse'
+        '429':
+          description: Rate or quota limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorFailureResponse'
+        '502':
+          description: Gas-Station reserve call failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorFailureResponse'
+        '503':
+          description: Sponsor service temporarily unavailable (circuit breaker open).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorFailureResponse'
+  /sponsor/execute:
+    post:
+      tags:
+        - Sponsor
+      operationId: executeSponsoredTransaction
+      parameters:
+        - name: idempotency-key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SponsorExecuteRequest'
+      responses:
+        '200':
+          description: Sponsored execution completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorExecuteResponse'
+        '400':
+          description: Invalid sponsor execute request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorFailureResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Sponsor execute denied by actor or order policy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorFailureResponse'
+        '404':
+          description: Reservation not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorFailureResponse'
+        '409':
+          description: Reservation, order, or intent state mismatch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorFailureResponse'
+        '429':
+          description: Abuse limiter or quota policy denied execution.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorFailureResponse'
+        '502':
+          description: Gas-Station execute call failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorFailureResponse'
+        '503':
+          description: Sponsor service temporarily unavailable (circuit breaker open).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorFailureResponse'
+  /compliance/notices:
+    post:
+      tags:
+        - Compliance
+      security: []
+      operationId: createComplianceNotice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoticeActionCreateRequest'
+      responses:
+        '201':
+          description: Notice accepted for moderation queue.
+          content:
+            application/json:
+              schema:
+                properties:
+                  notice:
+                    $ref: '#/components/schemas/ModerationNotice'
+                type: object
+                required:
+                  - notice
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /compliance/appeals:
+    post:
+      tags:
+        - Compliance
+      operationId: createComplianceAppeal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppealCaseCreateRequest'
+      responses:
+        '201':
+          description: Appeal case accepted and linked to a decided notice.
+          content:
+            application/json:
+              schema:
+                properties:
+                  appeal:
+                    $ref: '#/components/schemas/ComplianceAppealCase'
+                type: object
+                required:
+                  - appeal
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Notice exists but is not yet decided.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /compliance/me/appeals:
+    get:
+      tags:
+        - Compliance
+      operationId: listMyComplianceAppeals
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+      responses:
+        '200':
+          description: Appeal cases created by authenticated actor.
+          content:
+            application/json:
+              schema:
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ComplianceAppealCase'
+                type: object
+                required:
+                  - items
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /compliance/appeals/{appealId}:
+    get:
+      tags:
+        - Compliance
+      operationId: getComplianceAppealCase
+      parameters:
+        - name: appealId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Appeal case detail for owner or admin.
+          content:
+            application/json:
+              schema:
+                properties:
+                  appeal:
+                    $ref: '#/components/schemas/ComplianceAppealCase'
+                type: object
+                required:
+                  - appeal
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /compliance/me:
+    get:
+      tags:
+        - Compliance
+      operationId: getComplianceProfile
+      responses:
+        '200':
+          description: Compliance profile for authenticated user.
+          content:
+            application/json:
+              schema:
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/UserComplianceProfile'
+                  compliance:
+                    $ref: '#/components/schemas/ComplianceFlags'
+                type: object
+                required:
+                  - profile
+                  - compliance
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /compliance/me/account-type:
+    post:
+      tags:
+        - Compliance
+      operationId: setComplianceAccountType
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComplianceAccountTypeRequest'
+      responses:
+        '200':
+          description: Updated compliance profile.
+          content:
+            application/json:
+              schema:
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/UserComplianceProfile'
+                type: object
+                required:
+                  - profile
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /compliance/me/trader-verification:
+    post:
+      tags:
+        - Compliance
+      operationId: requestTraderVerification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TraderVerificationRequest'
+      responses:
+        '202':
+          description: Trader verification request submitted.
+          content:
+            application/json:
+              schema:
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/UserComplianceProfile'
+                type: object
+                required:
+                  - profile
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Trader account required before verification request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Conflict:
+      description: Request conflicts with current resource state.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadRequest:
+      description: Bad request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Caller is not allowed to perform this action.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Authentication required or token invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    TraderVerificationRequest:
+      properties:
+        legalName:
+          type: string
+          minLength: 2
+          maxLength: 200
+        countryCode:
+          type: string
+          minLength: 2
+          maxLength: 2
+        registrationNumber:
+          type: string
+          minLength: 2
+          maxLength: 128
+        vatId:
+          type: string
+          minLength: 2
+          maxLength: 128
+        contactEmail:
+          type: string
+          format: email
+        website:
+          type: string
+          format: uri
+      type: object
+      additionalProperties: false
+      required:
+        - legalName
+        - countryCode
+    ComplianceAccountTypeRequest:
+      properties:
+        accountType:
+          type: string
+          enum:
+            - TRADER
+            - CONSUMER
+      type: object
+      additionalProperties: false
+      required:
+        - accountType
+    UserComplianceProfile:
+      properties:
+        address:
+          type: string
+        tier:
+          type: integer
+          minimum: 0
+          maximum: 4
+        acceptsClaw:
+          type: boolean
+        accountType:
+          type: string
+          enum:
+            - TRADER
+            - CONSUMER
+        traderVerificationStatus:
+          type: string
+          enum:
+            - NOT_SUBMITTED
+            - PENDING
+            - VERIFIED
+            - REJECTED
+        traderVerificationPayload:
+          $ref: '#/components/schemas/TraderVerificationPayload'
+        traderVerificationNote:
+          type: string
+        traderVerificationUpdatedAt:
+          type: string
+          format: date-time
+        isBot:
+          type: boolean
+      type: object
+      required:
+        - address
+        - tier
+        - acceptsClaw
+        - accountType
+        - traderVerificationStatus
+        - traderVerificationUpdatedAt
+        - isBot
+    TraderVerificationPayload:
+      properties:
+        legalName:
+          type: string
+        countryCode:
+          type: string
+        registrationNumber:
+          type: string
+        vatId:
+          type: string
+        contactEmail:
+          type: string
+          format: email
+        website:
+          type: string
+          format: uri
+      type: object
+    ComplianceAppealCase:
+      properties:
+        id:
+          type: string
+        noticeId:
+          type: string
+        appellantAddress:
+          type: string
+        appellantContact:
+          type: string
+        reason:
+          type: string
+        details:
+          type: string
+        evidenceUrls:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum:
+            - OPEN
+            - IN_REVIEW
+            - CLOSED
+        retentionClass:
+          type: string
+        reviewerAddress:
+          type: string
+        decisionOutcome:
+          type: string
+          enum:
+            - UPHELD
+            - MODIFIED
+            - REVERSED
+        decisionSummary:
+          type: string
+        legalBasis:
+          type: string
+        decidedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      type: object
+      required:
+        - id
+        - noticeId
+        - reason
+        - details
+        - evidenceUrls
+        - status
+        - retentionClass
+        - createdAt
+        - updatedAt
+    AppealCaseCreateRequest:
+      properties:
+        noticeId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 320
+        details:
+          type: string
+          minLength: 8
+          maxLength: 4000
+        appellantContact:
+          type: string
+          minLength: 3
+          maxLength: 320
+        evidenceUrls:
+          type: array
+          maxItems: 6
+          items:
+            type: string
+            format: uri
+      type: object
+      additionalProperties: false
+      required:
+        - noticeId
+        - reason
+        - details
+    ModerationNotice:
+      properties:
+        id:
+          type: string
+        reporterAddress:
+          type: string
+        reporterContact:
+          type: string
+        targetType:
+          type: string
+          enum:
+            - LISTING
+            - BID
+            - ORDER
+            - PROFILE
+            - OTHER
+        targetId:
+          type: string
+        targetAddress:
+          type: string
+        reasonCode:
+          type: string
+          enum:
+            - ILLEGAL_CONTENT
+            - SCAM
+            - FRAUD
+            - IP
+            - OTHER
+        details:
+          type: string
+        evidenceUrls:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum:
+            - OPEN
+            - IN_REVIEW
+            - ACTION_TAKEN
+            - REJECTED
+        moderatorAddress:
+          type: string
+        decisionAction:
+          type: string
+          enum:
+            - NONE
+            - REMOVE
+            - RESTRICT
+            - SUSPEND
+        decisionReason:
+          type: string
+        legalBasis:
+          type: string
+        decidedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      type: object
+      required:
+        - id
+        - targetType
+        - targetId
+        - reasonCode
+        - details
+        - evidenceUrls
+        - status
+        - createdAt
+        - updatedAt
+    NoticeActionCreateRequest:
+      properties:
+        targetType:
+          type: string
+          enum:
+            - LISTING
+            - BID
+            - ORDER
+            - PROFILE
+            - OTHER
+        targetId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        targetAddress:
+          type: string
+        reasonCode:
+          type: string
+          enum:
+            - ILLEGAL_CONTENT
+            - SCAM
+            - FRAUD
+            - IP
+            - OTHER
+        details:
+          type: string
+          minLength: 8
+          maxLength: 4000
+        reporterContact:
+          type: string
+          minLength: 3
+          maxLength: 320
+        evidenceUrls:
+          type: array
+          maxItems: 6
+          items:
+            type: string
+            format: uri
+      type: object
+      additionalProperties: false
+      required:
+        - targetType
+        - targetId
+        - reasonCode
+        - details
+    SponsorExecuteResponse:
+      properties:
+        execution:
+          $ref: '#/components/schemas/SponsorExecuteResult'
+      type: object
+      additionalProperties: false
+      required:
+        - execution
+    SponsorExecuteResult:
+      properties:
+        reservationId:
+          type: string
+          minLength: 1
+        status:
+          type: string
+          enum:
+            - submitted
+            - accepted
+        txDigest:
+          type: string
+          minLength: 1
+      type: object
+      additionalProperties: false
+      required:
+        - reservationId
+        - status
+        - txDigest
+    SponsorExecuteRequest:
+      properties:
+        reservationId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        txBytesB64:
+          type: string
+          minLength: 1
+        userSig:
+          type: string
+          minLength: 1
+        orderId:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Canonical order identifier for order-scoped sponsor policy evaluation.
+        intent:
+          $ref: '#/components/schemas/SponsorExecutionIntentRequest'
+        intentSig:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          description: >
+            Serialized wallet personal-message signature over the canonical
+
+            sponsor intent message:
+
+            first line `CLAWDEX Sponsor Execute Intent v1`, second line
+
+            `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`.
+
+            Required whenever `intent` is provided.
+      type: object
+      additionalProperties: false
+      required:
+        - reservationId
+        - txBytesB64
+        - userSig
+    SponsorExecutionIntentRequest:
+      properties:
+        network:
+          type: string
+          minLength: 1
+          maxLength: 64
+        orderId:
+          type: string
+          minLength: 1
+          maxLength: 200
+        reservationId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        txDigest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        expiresAt:
+          type: string
+          format: date-time
+        purpose:
+          type: string
+          minLength: 1
+          maxLength: 64
+      type: object
+      additionalProperties: false
+      required:
+        - network
+        - orderId
+        - reservationId
+        - txDigest
+        - expiresAt
+        - purpose
+    SponsorReserveResponse:
+      properties:
+        reservation:
+          $ref: '#/components/schemas/SponsorReservationResponse'
+        usage:
+          $ref: '#/components/schemas/SponsorUsage'
+        caps:
+          properties:
+            maxTxCount:
+              type: integer
+              minimum: 0
+            maxGasPerDay:
+              type: integer
+              minimum: 0
+          type: object
+          additionalProperties: false
+          required:
+            - maxTxCount
+            - maxGasPerDay
+        sponsorWindow:
+          properties:
+            windowSec:
+              type: integer
+              minimum: 1
+            txCount:
+              type: integer
+              minimum: 0
+            gasTotal:
+              type: integer
+              minimum: 0
+          type: object
+          additionalProperties: false
+          required:
+            - windowSec
+            - txCount
+            - gasTotal
+        paymentCoin:
+          type: string
+          nullable: true
+        tier:
+          type: integer
+          minimum: 0
+        fastLane:
+          type: boolean
+        planning:
+          properties:
+            txFamily:
+              $ref: '#/components/schemas/SponsorTxFamily'
+            minimumGasBudget:
+              type: integer
+              minimum: 1
+            recommendedGasBudget:
+              type: integer
+              minimum: 1
+            maxGasBudget:
+              type: integer
+              minimum: 1
+          type: object
+          additionalProperties: false
+          required:
+            - txFamily
+            - minimumGasBudget
+            - recommendedGasBudget
+            - maxGasBudget
+      type: object
+      additionalProperties: false
+      required:
+        - reservation
+        - usage
+        - caps
+        - sponsorWindow
+        - paymentCoin
+        - tier
+        - fastLane
+        - planning
+    SponsorTxFamily:
+      type: string
+      enum:
+        - marketplace_write
+        - mailbox_signal
+        - milestone_submit
+        - review_post
+        - deadline_extension
+        - mutual_cancel
+        - dispute_bond
+        - dispute_vote
+        - dispute_resolution
+        - claw_payment
+    SponsorUsage:
+      properties:
+        address:
+          type: string
+        day:
+          type: string
+        gasUsed:
+          type: integer
+        txCount:
+          type: integer
+        lastSeen:
+          type: string
+          format: date-time
+      type: object
+      required:
+        - address
+        - day
+        - gasUsed
+        - txCount
+        - lastSeen
+    SponsorReservationResponse:
+      properties:
+        reservationId:
+          type: string
+          minLength: 1
+        sponsorAddress:
+          type: string
+          minLength: 1
+        gasBudget:
+          type: integer
+          minimum: 1
+        purpose:
+          type: string
+          enum:
+            - claw_payment
+            - bond
+            - onboarding
+            - marketplace_tx
+        gasCoins:
+          type: array
+          items:
+            $ref: '#/components/schemas/SponsorGasCoinRef'
+        orderId:
+          type: string
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+      type: object
+      additionalProperties: false
+      required:
+        - reservationId
+        - sponsorAddress
+        - gasBudget
+        - purpose
+        - gasCoins
+        - expiresAt
+    SponsorGasCoinRef:
+      properties:
+        objectId:
+          type: string
+          minLength: 1
+        version:
+          type: integer
+          minimum: 1
+        digest:
+          type: string
+          minLength: 1
+      type: object
+      additionalProperties: false
+      required:
+        - objectId
+        - version
+        - digest
+    SponsorReserveRequest:
+      properties:
+        purpose:
+          type: string
+          enum:
+            - claw_payment
+            - bond
+            - onboarding
+            - marketplace_tx
+        gasBudget:
+          type: integer
+          minimum: 1
+        paymentCoin:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Optional payment coin hint for sponsor policy checks.
+        orderId:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Canonical order identifier for order-scoped sponsor policy evaluation.
+      type: object
+      additionalProperties: false
+      required:
+        - purpose
+        - gasBudget
+    SponsorFailureResponse:
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+        field:
+          type: string
+        endpoint:
+          type: string
+        mode:
+          type: string
+        retryAfterSec:
+          type: integer
+          minimum: 0
+        fallback:
+          $ref: '#/components/schemas/SponsorFallbackPolicy'
+        retry:
+          $ref: '#/components/schemas/SponsorRetryPolicy'
+        usage:
+          $ref: '#/components/schemas/SponsorUsage'
+        caps:
+          type: object
+          additionalProperties: true
+        tier:
+          type: integer
+        actorStrikes:
+          type: integer
+        ipStrikes:
+          type: integer
+        autoRevokedUntil:
+          type: string
+          format: date-time
+        fields:
+          type: array
+          items:
+            type: string
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/SponsorFailureDiagnostic'
+      type: object
+      required:
+        - error
+      additionalProperties: true
+    SponsorFailureDiagnostic:
+      properties:
+        stage:
+          type: string
+          enum:
+            - preflight
+            - reserve
+            - execute
+        issue:
+          type: string
+        txFamily:
+          $ref: '#/components/schemas/SponsorTxFamily'
+        minimumGasBudget:
+          type: integer
+          minimum: 1
+        recommendedGasBudget:
+          type: integer
+          minimum: 1
+        maxGasBudget:
+          type: integer
+          minimum: 1
+        providedGasBudget:
+          type: integer
+          minimum: 1
+        orderIdRequired:
+          type: boolean
+        strictMode:
+          type: boolean
+        intentRequired:
+          type: boolean
+        intentSignatureRequired:
+          type: boolean
+        selfPayFallbackAvailable:
+          type: boolean
+        reservationTtlSec:
+          type: integer
+          minimum: 1
+        retryAfterSec:
+          type: integer
+          minimum: 0
+        upstreamStatus:
+          type: integer
+          minimum: 100
+          maximum: 599
+        upstreamDetail:
+          type: string
+        hint:
+          type: string
+      type: object
+      additionalProperties: false
+      required:
+        - stage
+        - issue
+        - txFamily
+        - minimumGasBudget
+        - recommendedGasBudget
+        - maxGasBudget
+        - orderIdRequired
+        - strictMode
+        - intentRequired
+        - intentSignatureRequired
+        - selfPayFallbackAvailable
+        - reservationTtlSec
+    SponsorRetryPolicy:
+      properties:
+        mode:
+          type: string
+          enum:
+            - sponsor_required
+        retryable:
+          type: boolean
+        retryAfterSec:
+          type: integer
+          minimum: 0
+      type: object
+      additionalProperties: false
+      required:
+        - mode
+        - retryable
+    SponsorFallbackPolicy:
+      properties:
+        mode:
+          type: string
+          enum:
+            - self_pay
+        available:
+          type: boolean
+        reason:
+          type: string
+      type: object
+      additionalProperties: false
+      required:
+        - mode
+        - available
+        - reason
+    SponsorPreflightResponse:
+      properties:
+        actorAddress:
+          type: string
+        purpose:
+          type: string
+        paymentCoin:
+          type: string
+          nullable: true
+        orderId:
+          type: string
+          nullable: true
+        order:
+          properties:
+            id:
+              type: string
+            status:
+              type: string
+            buyerAddress:
+              type: string
+            sellerAddress:
+              type: string
+            disputeBondPolicy:
+              type: string
+          type: object
+          nullable: true
+          additionalProperties: false
+          required:
+            - id
+            - status
+            - buyerAddress
+            - sellerAddress
+            - disputeBondPolicy
+        sponsorProxyMode:
+          type: string
+          enum:
+            - mock
+            - live
+        txFamily:
+          $ref: '#/components/schemas/SponsorTxFamily'
+        rationale:
+          type: string
+        strategy:
+          properties:
+            sponsorLikelyAllowed:
+              type: boolean
+            selfPayFallbackAvailable:
+              type: boolean
+            strictMode:
+              type: boolean
+            intentRequired:
+              type: boolean
+            intentSignatureRequired:
+              type: boolean
+            authGate:
+              properties:
+                mode:
+                  type: string
+                  enum:
+                    - capability
+                additionalAuthorizationRequired:
+                  type: boolean
+              type: object
+              additionalProperties: false
+              required:
+                - mode
+                - additionalAuthorizationRequired
+          type: object
+          additionalProperties: false
+          required:
+            - sponsorLikelyAllowed
+            - selfPayFallbackAvailable
+            - strictMode
+            - intentRequired
+            - intentSignatureRequired
+            - authGate
+        providedGasBudget:
+          type: integer
+          nullable: true
+          minimum: 1
+        acceptedGasBudget:
+          type: integer
+          nullable: true
+          minimum: 1
+        minimumGasBudget:
+          type: integer
+          minimum: 1
+        recommendedGasBudget:
+          type: integer
+          minimum: 1
+        maxGasBudget:
+          type: integer
+          minimum: 1
+        reservationTtlSec:
+          type: integer
+          minimum: 1
+        capabilities:
+          type: object
+          additionalProperties: true
+        policy:
+          $ref: '#/components/schemas/SponsorPolicySnapshot'
+        gasStationCircuit:
+          properties:
+            open:
+              type: boolean
+            retryAfterSec:
+              type: integer
+              minimum: 0
+          type: object
+          additionalProperties: false
+          required:
+            - open
+            - retryAfterSec
+        sponsorWindow:
+          properties:
+            allowed:
+              type: boolean
+            retryAfterSec:
+              type: integer
+              minimum: 0
+            usage:
+              properties:
+                txCount:
+                  type: integer
+                  minimum: 0
+                gasTotal:
+                  type: integer
+                  minimum: 0
+                blockedCount:
+                  type: integer
+                  minimum: 0
+              type: object
+              additionalProperties: false
+              required:
+                - txCount
+                - gasTotal
+                - blockedCount
+            caps:
+              properties:
+                windowSec:
+                  type: integer
+                  minimum: 1
+                maxTxCount:
+                  type: integer
+                  minimum: 1
+                maxGasPerWindow:
+                  type: integer
+                  minimum: 1
+              type: object
+              additionalProperties: false
+              required:
+                - windowSec
+                - maxTxCount
+                - maxGasPerWindow
+          type: object
+          additionalProperties: false
+          required:
+            - allowed
+            - usage
+            - caps
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/SponsorFailureDiagnostic'
+      type: object
+      additionalProperties: false
+      required:
+        - actorAddress
+        - purpose
+        - paymentCoin
+        - orderId
+        - order
+        - sponsorProxyMode
+        - txFamily
+        - rationale
+        - strategy
+        - providedGasBudget
+        - acceptedGasBudget
+        - minimumGasBudget
+        - recommendedGasBudget
+        - maxGasBudget
+        - reservationTtlSec
+        - capabilities
+        - policy
+        - gasStationCircuit
+        - sponsorWindow
+        - diagnostics
+    SponsorPolicySnapshot:
+      properties:
+        version:
+          type: string
+          enum:
+            - sponsor_policy.v2
+        allowedPurposes:
+          type: array
+          items:
+            type: string
+        allowedPaymentCoins:
+          type: array
+          items:
+            type: string
+        paymentCoinOptional:
+          type: boolean
+        selfPayFallback:
+          type: boolean
+        orderIdMode:
+          type: string
+          enum:
+            - optional
+            - required
+        reservationTtlSec:
+          type: integer
+          minimum: 1
+        liveMinimumGasBudget:
+          type: integer
+          minimum: 1
+        maxGasBudget:
+          type: integer
+          minimum: 1
+        reserve:
+          properties:
+            orderIdRequired:
+              type: boolean
+            rateLimitPerMin:
+              type: integer
+              minimum: 1
+            windowSec:
+              type: integer
+              minimum: 1
+            windowTxCap:
+              type: integer
+              minimum: 1
+            windowGasCap:
+              type: integer
+              minimum: 1
+          type: object
+          additionalProperties: false
+          required:
+            - orderIdRequired
+            - rateLimitPerMin
+            - windowSec
+            - windowTxCap
+            - windowGasCap
+        execute:
+          properties:
+            idempotencyHeader:
+              type: string
+              enum:
+                - idempotency-key
+            intentSupported:
+              type: boolean
+            intentRequiredForPlatformFundedMarketing:
+              type: boolean
+            intentSignatureRequiredForPlatformFundedMarketing:
+              type: boolean
+          type: object
+          additionalProperties: false
+          required:
+            - idempotencyHeader
+            - intentSupported
+            - intentRequiredForPlatformFundedMarketing
+            - intentSignatureRequiredForPlatformFundedMarketing
+        platformFundedMarketing:
+          properties:
+            sponsorPreferred:
+              type: boolean
+            sponsorRequired:
+              type: boolean
+            selfPayFallback:
+              type: boolean
+            intentRequired:
+              type: boolean
+            intentSignatureRequired:
+              type: boolean
+          type: object
+          additionalProperties: false
+          required:
+            - sponsorPreferred
+            - sponsorRequired
+            - selfPayFallback
+            - intentRequired
+            - intentSignatureRequired
+        onboardingIotaTopup:
+          properties:
+            enabled:
+              type: boolean
+            amount:
+              type: string
+              pattern: ^[0-9]+$
+            maxEligibleBalance:
+              type: string
+              pattern: ^[0-9]+$
+          type: object
+          additionalProperties: false
+          required:
+            - enabled
+            - amount
+            - maxEligibleBalance
+        recommendedGasBudgets:
+          properties:
+            marketplace_write:
+              $ref: '#/components/schemas/SponsorGasEstimate'
+            mailbox_signal:
+              $ref: '#/components/schemas/SponsorGasEstimate'
+            milestone_submit:
+              $ref: '#/components/schemas/SponsorGasEstimate'
+            review_post:
+              $ref: '#/components/schemas/SponsorGasEstimate'
+            deadline_extension:
+              $ref: '#/components/schemas/SponsorGasEstimate'
+            mutual_cancel:
+              $ref: '#/components/schemas/SponsorGasEstimate'
+            dispute_bond:
+              $ref: '#/components/schemas/SponsorGasEstimate'
+            dispute_vote:
+              $ref: '#/components/schemas/SponsorGasEstimate'
+            dispute_resolution:
+              $ref: '#/components/schemas/SponsorGasEstimate'
+            claw_payment:
+              $ref: '#/components/schemas/SponsorGasEstimate'
+          type: object
+          additionalProperties: false
+          required:
+            - marketplace_write
+            - mailbox_signal
+            - milestone_submit
+            - review_post
+            - deadline_extension
+            - mutual_cancel
+            - dispute_bond
+            - dispute_vote
+            - dispute_resolution
+            - claw_payment
+      type: object
+      additionalProperties: false
+      required:
+        - version
+        - allowedPurposes
+        - allowedPaymentCoins
+        - paymentCoinOptional
+        - selfPayFallback
+        - orderIdMode
+        - reservationTtlSec
+        - liveMinimumGasBudget
+        - maxGasBudget
+        - reserve
+        - execute
+        - platformFundedMarketing
+        - onboardingIotaTopup
+        - recommendedGasBudgets
+    SponsorGasEstimate:
+      properties:
+        txFamily:
+          $ref: '#/components/schemas/SponsorTxFamily'
+        purpose:
+          type: string
+        minimumGasBudget:
+          type: integer
+          minimum: 1
+        recommendedGasBudget:
+          type: integer
+          minimum: 1
+        maxGasBudget:
+          type: integer
+          minimum: 1
+        rationale:
+          type: string
+      type: object
+      additionalProperties: false
+      required:
+        - txFamily
+        - purpose
+        - minimumGasBudget
+        - recommendedGasBudget
+        - maxGasBudget
+        - rationale
+    SponsorPreflightRequest:
+      properties:
+        purpose:
+          type: string
+          enum:
+            - claw_payment
+            - bond
+            - onboarding
+            - marketplace_tx
+        paymentCoin:
+          type: string
+          minLength: 1
+          maxLength: 128
+        orderId:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Canonical order identifier for order-scoped sponsor policy evaluation.
+        gasBudget:
+          type: integer
+          minimum: 1
+        txFamily:
+          $ref: '#/components/schemas/SponsorTxFamily'
+      type: object
+      additionalProperties: false
+      required:
+        - purpose
+    DisputeResolveEscrowWithTicketRequest:
+      properties:
+        escrowObjectId:
+          type: string
+          description: Optional. When omitted, the API resolves the live escrow object id from the dispute case.
+        quorumResolutionTicketObjectId:
+          type: string
+      type: object
+      additionalProperties: false
+      required:
+        - quorumResolutionTicketObjectId
+    DisputeTimeoutFallbackRequest:
+      properties:
+        bondObjectId:
+          type: string
+          description: Optional. When omitted, the API auto-hydrates the bound dispute bond object id from the live dispute case.
+        reviewerRegistryObjectId:
+          type: string
+          description: >-
+            Optional. When omitted, the API resolves the live reviewer registry object id from the configured dispute
+            quorum package.
+        disputeQuorumConfigObjectId:
+          type: string
+          description: Optional. When omitted, the API uses the configured dispute quorum config object id.
+        clockObjectId:
+          type: string
+      type: object
+      additionalProperties: false
+    DisputeFinalizeRequest:
+      properties:
+        bondObjectId:
+          type: string
+          description: Optional. When omitted, the API auto-hydrates the bound dispute bond object id from the live dispute case.
+        reviewerRegistryObjectId:
+          type: string
+          description: >-
+            Optional. When omitted, the API resolves the live reviewer registry object id from the configured dispute
+            quorum package.
+        disputeQuorumConfigObjectId:
+          type: string
+          description: Optional. When omitted, the API uses the configured dispute quorum config object id.
+        clockObjectId:
+          type: string
+      type: object
+      additionalProperties: false
+    DisputeReplaceReviewersRequest:
+      properties:
+        reviewerRegistryObjectId:
+          type: string
+        invitedReviewerAddresses:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            type: string
+        reviewerSelectionReceiptId:
+          type: string
+          description: >-
+            Canonical operator shortlist publishes should carry the exact selector receipt id. Omit only for explicit
+            manual recovery / hand-curated fallback publishing.
+        clockObjectId:
+          type: string
+      type: object
+      additionalProperties: false
+      required:
+        - reviewerRegistryObjectId
+        - invitedReviewerAddresses
+    DisputeCaseSnapshot:
+      properties:
+        objectId:
+          type: string
+        type:
+          type: string
+        owner:
+          type: string
+        orderId:
+          type: string
+        milestoneId:
+          type: string
+        buyer:
+          type: string
+        seller:
+          type: string
+        bondObjectId:
+          type: string
+        escrowObjectId:
+          type: string
+        state:
+          type: integer
+        resolvedPath:
+          type: integer
+        requiredReviewerVotes:
+          type: integer
+        requiredReviewerVotesFloor:
+          type: integer
+        assignmentRound:
+          type: integer
+        invitedReviewers:
+          type: array
+          items:
+            type: string
+        assignedReviewers:
+          type: array
+          items:
+            type: string
+        blockedReviewers:
+          type: array
+          items:
+            type: string
+        votesYes:
+          type: integer
+        votesNo:
+          type: integer
+        openedAtMs:
+          type: integer
+          format: int64
+        acceptDeadlineMs:
+          type: integer
+          format: int64
+        commitDeadlineMs:
+          type: integer
+          format: int64
+        revealDeadlineMs:
+          type: integer
+          format: int64
+        challengeDeadlineMs:
+          type: integer
+          format: int64
+        hardTimeoutMs:
+          type: integer
+          format: int64
+        fallbackEligibleAtMs:
+          type: integer
+          format: int64
+        closedAtMs:
+          type: integer
+          format: int64
+      type: object
+      required:
+        - objectId
+        - type
+        - orderId
+        - milestoneId
+    DisputeOpenRequest:
+      properties:
+        escrowObjectId:
+          type: string
+        bondObjectId:
+          type: string
+        invitedReviewerAddresses:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            type: string
+        reviewerSelectionReceiptId:
+          type: string
+          description: >-
+            Canonical operator shortlist publishes should carry the exact selector receipt id. Omit only for explicit
+            manual recovery / hand-curated fallback publishing.
+        clockObjectId:
+          type: string
+      type: object
+      additionalProperties: false
+      required:
+        - escrowObjectId
+        - bondObjectId
+        - invitedReviewerAddresses
+    DisputeBondFundRequest:
+      properties:
+        bondObjectId:
+          type: string
+        disputeQuorumConfigObjectId:
+          type: string
+        side:
+          type: string
+          enum:
+            - buyer
+            - seller
+        amount:
+          type: string
+          pattern: ^[0-9]+$
+        paymentCoinObjectId:
+          type: string
+        marketingFundingCapObjectId:
+          type: string
+        marketingFundingCustodyProof:
+          $ref: '#/components/schemas/MarketingFundingCustodyProofRequest'
+        clockObjectId:
+          type: string
+      type: object
+      additionalProperties: false
+      required:
+        - bondObjectId
+        - disputeQuorumConfigObjectId
+        - side
+        - amount
+    MarketingFundingCustodyProofRequest:
+      properties:
+        jobId:
+          type: string
+          minLength: 3
+          maxLength: 160
+        approvalMode:
+          type: string
+          enum:
+            - four_eyes
+            - multisig_2of3
+        approverA:
+          type: string
+        approverB:
+          type: string
+      type: object
+      additionalProperties: false
+      required:
+        - jobId
+        - approvalMode
+        - approverA
+        - approverB
+    ReviewerPage:
+      properties:
+        limit:
+          type: integer
+        hasNextPage:
+          type: boolean
+        nextCursor:
+          properties:
+            txDigest:
+              type: string
+            eventSeq:
+              type: string
+          type: object
+          required:
+            - txDigest
+            - eventSeq
+      type: object
+      required:
+        - limit
+        - hasNextPage
+    ReviewerSummary:
+      properties:
+        objectId:
+          type: string
+        type:
+          type: string
+        owner:
+          type: string
+        reputationProfileId:
+          type: string
+        active:
+          type: boolean
+        transportType:
+          type: integer
+        transportPubkeyHex:
+          type: string
+        minCaseRewardIota:
+          type: string
+          pattern: ^[0-9]+$
+        joinedAtMs:
+          type: integer
+          format: int64
+        updatedAtMs:
+          type: integer
+          format: int64
+        stakeLocked:
+          type: string
+          pattern: ^[0-9]+$
+        effectiveStakeLocked:
+          type: string
+          pattern: ^[0-9]+$
+        performanceScore:
+          type: integer
+        decisionsTotal:
+          type: integer
+        decisionsMajority:
+          type: integer
+        decisionsOverturned:
+          type: integer
+        commitRevealFailures:
+          type: integer
+        noshowCount:
+          type: integer
+        pendingDecisionMetricsClaimRequired:
+          type: boolean
+        pendingReviewerOutcome:
+          $ref: '#/components/schemas/PendingReviewerOutcomeSummary'
+      type: object
+      required:
+        - objectId
+        - type
+        - owner
+        - active
+    PendingReviewerOutcomeSummary:
+      properties:
+        pendingDecisionsTotal:
+          type: integer
+        pendingDecisionsMajority:
+          type: integer
+        pendingDecisionsOverturned:
+          type: integer
+        pendingCommitRevealFailures:
+          type: integer
+        pendingNoshowCount:
+          type: integer
+        pendingSlashCount:
+          type: integer
+        pendingSlashBpsTotal:
+          type: integer
+        effectiveStakeLocked:
+          type: string
+          pattern: ^[0-9]+$
+      type: object
+      required:
+        - pendingDecisionsTotal
+        - pendingDecisionsMajority
+        - pendingDecisionsOverturned
+        - pendingCommitRevealFailures
+        - pendingNoshowCount
+        - pendingSlashCount
+        - pendingSlashBpsTotal
+    MutualCancelRequest:
+      properties:
+        escrowId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        buyerRefundBps:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        amount:
+          type: string
+          pattern: ^[0-9]+$
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+      type: object
+      additionalProperties: false
+      required:
+        - escrowId
+        - buyerRefundBps
+        - amount
+    DeadlineExtProposeRequest:
+      properties:
+        deadlineExtRegistryObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        escrowId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        currentDeadlineMs:
+          type: string
+          pattern: ^[0-9]+$
+        proposedDeadlineMs:
+          type: string
+          pattern: ^[0-9]+$
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+      type: object
+      additionalProperties: false
+      required:
+        - deadlineExtRegistryObjectId
+        - escrowId
+        - currentDeadlineMs
+        - proposedDeadlineMs
+    ReviewPostRequest:
+      properties:
+        reviewRegistryObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        escrowObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        escrowType:
+          type: string
+          enum:
+            - order_escrow
+            - milestone_escrow
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        reviewHash:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+      type: object
+      additionalProperties: false
+      required:
+        - reviewRegistryObjectId
+        - escrowObjectId
+        - escrowType
+        - rating
+        - reviewHash
+    MilestoneRejectRequest:
+      properties:
+        rejectionReasonHash:
+          type: string
+          minLength: 8
+          maxLength: 256
+      type: object
+      additionalProperties: false
+      required:
+        - rejectionReasonHash
+    MilestoneAnchorRequest:
+      properties:
+        txDigest:
+          type: string
+          minLength: 16
+          maxLength: 128
+        eventSeq:
+          type: string
+          minLength: 1
+          maxLength: 64
+      type: object
+      additionalProperties: false
+      required:
+        - txDigest
+    MilestoneManifestAnchor:
+      properties:
+        id:
+          type: string
+        orderId:
+          type: string
+        milestoneId:
+          type: string
+        txDigest:
+          type: string
+        eventSeq:
+          type: string
+        expectedManifestCid:
+          type: string
+        expectedManifestSha256:
+          type: string
+        status:
+          type: string
+          enum:
+            - PENDING
+            - CONFIRMED
+            - MISMATCH
+        mismatchReason:
+          type: string
+        confirmedAt:
+          type: string
+          format: date-time
+        lastCheckedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      type: object
+      required:
+        - id
+        - orderId
+        - milestoneId
+        - txDigest
+        - expectedManifestCid
+        - expectedManifestSha256
+        - status
+        - createdAt
+        - updatedAt
+    MilestoneArtifactManifest:
+      properties:
+        id:
+          type: string
+        orderId:
+          type: string
+        milestoneId:
+          type: string
+        manifestCid:
+          type: string
+        manifestSha256:
+          type: string
+        sellerSignature:
+          type: string
+        sellerKeyVersion:
+          type: integer
+        cipherSuite:
+          type: string
+        recipients:
+          type: array
+          items:
+            $ref: '#/components/schemas/MilestoneArtifactRecipient'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      type: object
+      required:
+        - id
+        - orderId
+        - milestoneId
+        - manifestCid
+        - manifestSha256
+        - sellerSignature
+        - sellerKeyVersion
+        - cipherSuite
+        - recipients
+        - createdAt
+        - updatedAt
+    MilestoneArtifactRecipient:
+      properties:
+        recipientAddress:
+          type: string
+        keyVersion:
+          type: integer
+          minimum: 1
+        wrappedCek:
+          type: string
+        hpkeEnc:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      type: object
+      required:
+        - recipientAddress
+        - keyVersion
+        - wrappedCek
+        - createdAt
+    MilestoneSubmitVerification:
+      properties:
+        signatureValid:
+          type: boolean
+        hashMatches:
+          type: boolean
+        cidMatches:
+          type: boolean
+        recipientKeysValid:
+          type: boolean
+      type: object
+      required:
+        - signatureValid
+        - hashMatches
+        - cidMatches
+        - recipientKeysValid
+    MilestoneSubmitRequest:
+      properties:
+        submissionProofHash:
+          type: string
+          minLength: 8
+          maxLength: 256
+        submissionRef:
+          type: string
+          minLength: 3
+          maxLength: 1024
+        manifest:
+          $ref: '#/components/schemas/MilestoneSubmitManifest'
+      type: object
+      additionalProperties: false
+      required:
+        - submissionProofHash
+    MilestoneSubmitManifest:
+      properties:
+        manifestVersion:
+          type: string
+          enum:
+            - v1
+        manifestCid:
+          type: string
+          minLength: 3
+          maxLength: 1024
+        manifestSha256:
+          type: string
+          minLength: 8
+          maxLength: 256
+        sellerSignature:
+          type: string
+          minLength: 16
+          maxLength: 8192
+        sellerKeyVersion:
+          type: integer
+          minimum: 1
+        cipherSuite:
+          type: string
+          minLength: 8
+          maxLength: 128
+        signingContext:
+          $ref: '#/components/schemas/MilestoneManifestSigningContext'
+        recipients:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            $ref: '#/components/schemas/MilestoneSubmitRecipient'
+      type: object
+      additionalProperties: false
+      required:
+        - manifestVersion
+        - manifestCid
+        - manifestSha256
+        - sellerSignature
+        - sellerKeyVersion
+        - cipherSuite
+        - recipients
+    MilestoneSubmitRecipient:
+      properties:
+        recipientAddress:
+          type: string
+          minLength: 1
+          maxLength: 200
+        keyVersion:
+          type: integer
+          minimum: 1
+        wrappedCek:
+          type: string
+          minLength: 16
+          maxLength: 8192
+        hpkeEnc:
+          type: string
+          minLength: 8
+          maxLength: 8192
+      type: object
+      additionalProperties: false
+      required:
+        - recipientAddress
+        - keyVersion
+        - wrappedCek
+    MilestoneManifestSigningContext:
+      properties:
+        intent:
+          type: string
+          minLength: 3
+          maxLength: 120
+        chain:
+          type: string
+          minLength: 1
+          maxLength: 40
+        audience:
+          type: string
+          minLength: 1
+          maxLength: 120
+        nonce:
+          type: string
+          minLength: 8
+          maxLength: 128
+        issuedAtMs:
+          type: integer
+          format: int64
+          minimum: 1
+        expiresAtMs:
+          type: integer
+          format: int64
+          minimum: 1
+      type: object
+      additionalProperties: false
+      required:
+        - intent
+        - chain
+        - audience
+        - nonce
+        - issuedAtMs
+        - expiresAtMs
+    OrderMilestone:
+      properties:
+        id:
+          type: string
+        orderId:
+          type: string
+        seq:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+        amount:
+          type: string
+        dueAtMs:
+          type: integer
+          format: int64
+        reviewWindowHours:
+          type: integer
+          minimum: 1
+          maximum: 168
+        acceptanceRulesHash:
+          type: string
+        status:
+          type: string
+          enum:
+            - PENDING
+            - SUBMITTED
+            - REJECTED
+            - DISPUTED
+            - SETTLED
+            - REFUNDED
+        submittedAt:
+          type: string
+          format: date-time
+        submissionProofHash:
+          type: string
+        submissionRef:
+          type: string
+        reviewDueAtMs:
+          type: integer
+          format: int64
+        rejectionReasonHash:
+          type: string
+        resolvedAt:
+          type: string
+          format: date-time
+        resolutionReason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      type: object
+      required:
+        - id
+        - orderId
+        - seq
+        - title
+        - amount
+        - dueAtMs
+        - reviewWindowHours
+        - status
+        - createdAt
+        - updatedAt
+    OrderCommunicationAgreement:
+      properties:
+        version:
+          type: string
+          enum:
+            - v1
+        status:
+          type: string
+          enum:
+            - ACTIVE
+        orderId:
+          type: string
+          format: uuid
+        transport:
+          type: string
+          enum:
+            - nostr
+        relayUrls:
+          type: array
+          items:
+            type: string
+        buyer:
+          $ref: '#/components/schemas/OrderCommunicationParticipant'
+        seller:
+          $ref: '#/components/schemas/OrderCommunicationParticipant'
+        negotiatedAt:
+          type: string
+          format: date-time
+        policySnapshot:
+          $ref: '#/components/schemas/ListingCommunicationPolicy'
+      type: object
+      required:
+        - version
+        - status
+        - orderId
+        - transport
+        - relayUrls
+        - buyer
+        - seller
+        - negotiatedAt
+        - policySnapshot
+    ListingCommunicationPolicy:
+      properties:
+        version:
+          type: string
+          enum:
+            - v1
+        transportOptions:
+          type: array
+          minItems: 1
+          maxItems: 4
+          items:
+            type: string
+            enum:
+              - nostr
+        relayUrls:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            type: string
+            pattern: ^wss://
+            minLength: 8
+            maxLength: 256
+        requireAck:
+          type: boolean
+        responseWindowSec:
+          type: integer
+          minimum: 30
+          maximum: 604800
+        messageTtlSec:
+          type: integer
+          minimum: 60
+          maximum: 604800
+      type: object
+      additionalProperties: false
+      required:
+        - version
+        - transportOptions
+        - relayUrls
+    OrderCommunicationParticipant:
+      properties:
+        address:
+          type: string
+        keyVersion:
+          type: integer
+          minimum: 1
+        publicKeyMultibase:
+          type: string
+        walletBindingMessage:
+          type: string
+        walletBindingSignature:
+          type: string
+        issuedAtMs:
+          type: integer
+          format: int64
+        expiresAtMs:
+          type: integer
+          format: int64
+        nonce:
+          type: string
+        signerPublicKey:
+          type: string
+      type: object
+      required:
+        - address
+        - keyVersion
+        - publicKeyMultibase
+        - walletBindingMessage
+        - walletBindingSignature
+        - issuedAtMs
+        - expiresAtMs
+        - nonce
+        - signerPublicKey
+    OrderMailboxAckPlanRequest:
+      properties:
+        ackedSeq:
+          type: string
+          pattern: ^[0-9]+$
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+      type: object
+      additionalProperties: false
+      required:
+        - ackedSeq
+    OrderMailboxPostSignalPlanRequest:
+      properties:
+        signalIntent:
+          $ref: '#/components/schemas/OrderMailboxSignalIntent'
+        ciphertextHash:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        payloadRef:
+          type: string
+          minLength: 1
+          maxLength: 256
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+      type: object
+      additionalProperties: false
+      required:
+        - signalIntent
+        - ciphertextHash
+    OrderMailboxSignalIntent:
+      type: string
+      enum:
+        - MSG
+        - DELIVERABLE_READY
+        - CHECKPOINT
+        - DISPUTE_NOTICE
+        - OTHER
+      description: >
+        Canonical bot-facing signal intent. Runtime maps these intents onto the current on-chain mailbox signal types
+        (`MSG`, `CHECKPOINT`, `OTHER`).
+    OrderMailboxPlanRequest:
+      properties:
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+      type: object
+      additionalProperties: false
+    OrderMailboxUpsertRequest:
+      properties:
+        mailboxObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+      type: object
+      additionalProperties: false
+      required:
+        - mailboxObjectId
+    OrderEscrowClaimAfterDeadlineRequest:
+      properties:
+        escrowObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        bondObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+      type: object
+      additionalProperties: false
+      required:
+        - escrowObjectId
+    TxPlanResponse:
+      properties:
+        status:
+          type: string
+          enum:
+            - tx_plan_unsigned
+        txBuilder:
+          type: string
+        request:
+          type: object
+          additionalProperties: true
+        txMoveCall:
+          allOf:
+            - $ref: '#/components/schemas/TxMoveCallSummary'
+          nullable: true
+      type: object
+      required:
+        - status
+        - txBuilder
+        - request
+    TxMoveCallSummary:
+      properties:
+        target:
+          type: string
+        module:
+          type: string
+        fn:
+          type: string
+      type: object
+      required:
+        - target
+        - module
+        - fn
+    OrderEscrowReleaseRequest:
+      properties:
+        escrowObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        bondObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+      type: object
+      additionalProperties: false
+      required:
+        - escrowObjectId
+    OrderEscrowBindRequest:
+      properties:
+        escrowObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+      type: object
+      additionalProperties: false
+      required:
+        - escrowObjectId
+    OrderListResponse:
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+        nextCursor:
+          type: string
+          nullable: true
+      type: object
+      required:
+        - items
+        - nextCursor
+    Order:
+      properties:
+        id:
+          type: string
+        listingId:
+          type: string
+        buyerAddress:
+          type: string
+        sellerAddress:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+          enum:
+            - IOTA
+            - CLAW
+        communicationAgreement:
+          $ref: '#/components/schemas/OrderCommunicationAgreement'
+        mailboxObjectId:
+          type: string
+        escrowObjectId:
+          type: string
+        disputeBondObjectId:
+          type: string
+        disputeBondPolicy:
+          $ref: '#/components/schemas/OrderDisputeBondPolicy'
+        disputeBondState:
+          $ref: '#/components/schemas/OrderDisputeBondState'
+        disputeBondActivatedAt:
+          type: string
+          format: date-time
+        marketingCampaignId:
+          type: string
+        deadlineMs:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum:
+            - AWAITING_DEPOSITS
+            - IN_PROGRESS
+            - DISPUTED
+            - COMPLETED
+            - CANCELLED
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      type: object
+      required:
+        - id
+        - listingId
+        - buyerAddress
+        - sellerAddress
+        - amount
+        - currency
+        - disputeBondPolicy
+        - disputeBondState
+        - status
+        - createdAt
+        - updatedAt
+    OrderDisputeBondState:
+      type: string
+      enum:
+        - PENDING
+        - ACTIVE
+        - CANCELED
+    OrderDisputeBondPolicy:
+      type: string
+      enum:
+        - DUAL_BOND_REQUIRED
+        - PLATFORM_FUNDED_MARKETING
+    AcceptBidRequest:
+      oneOf:
+        - $ref: '#/components/schemas/AcceptBidByListingRequest'
+        - $ref: '#/components/schemas/AcceptStoredBidRequest'
+    AcceptStoredBidRequest:
+      properties:
+        buyerAddress:
+          type: string
+        sellerAddress:
+          type: string
+        amount:
+          type: string
+          pattern: ^[0-9]+$
+        currency:
+          type: string
+          enum:
+            - IOTA
+            - CLAW
+        orderId:
+          type: string
+          format: uuid
+        communicationProposal:
+          $ref: '#/components/schemas/OrderCommunicationProposalRequest'
+      type: object
+      additionalProperties: false
+    OrderCommunicationProposalRequest:
+      properties:
+        version:
+          type: string
+          enum:
+            - v1
+        transport:
+          type: string
+          enum:
+            - nostr
+        relayUrls:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            type: string
+            pattern: ^wss://
+            minLength: 8
+            maxLength: 256
+        buyer:
+          $ref: '#/components/schemas/OrderCommunicationParticipantProposal'
+        seller:
+          $ref: '#/components/schemas/OrderCommunicationParticipantProposal'
+      type: object
+      additionalProperties: false
+      required:
+        - version
+        - transport
+        - relayUrls
+        - buyer
+        - seller
+    OrderCommunicationParticipantProposal:
+      properties:
+        keyVersion:
+          type: integer
+          minimum: 1
+        publicKeyMultibase:
+          type: string
+          minLength: 16
+          maxLength: 256
+        walletBindingMessage:
+          type: string
+          minLength: 24
+          maxLength: 8192
+        walletBindingSignature:
+          type: string
+          minLength: 16
+          maxLength: 8192
+      type: object
+      additionalProperties: false
+      required:
+        - keyVersion
+        - publicKeyMultibase
+        - walletBindingMessage
+        - walletBindingSignature
+    AcceptBidByListingRequest:
+      properties:
+        buyerAddress:
+          type: string
+        sellerAddress:
+          type: string
+        amount:
+          type: string
+          pattern: ^[0-9]+$
+        currency:
+          type: string
+          enum:
+            - IOTA
+            - CLAW
+        orderId:
+          type: string
+          format: uuid
+        communicationProposal:
+          $ref: '#/components/schemas/OrderCommunicationProposalRequest'
+      type: object
+      additionalProperties: false
+      required:
+        - buyerAddress
+        - sellerAddress
+        - amount
+        - currency
+    Bid:
+      properties:
+        id:
+          type: string
+          format: uuid
+        listingId:
+          type: string
+          format: uuid
+        bidderAddress:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+          enum:
+            - IOTA
+            - CLAW
+        message:
+          type: string
+        status:
+          $ref: '#/components/schemas/BidStatus'
+        createdAt:
+          type: string
+          format: date-time
+      type: object
+      required:
+        - id
+        - listingId
+        - bidderAddress
+        - amount
+        - currency
+        - status
+        - createdAt
+    BidStatus:
+      type: string
+      enum:
+        - OPEN
+        - ACCEPTED
+        - REJECTED
+        - WITHDRAWN
+    CreateBidRequest:
+      properties:
+        listingId:
+          type: string
+          format: uuid
+        bidderAddress:
+          type: string
+        amount:
+          type: string
+          pattern: ^[0-9]+$
+        currency:
+          type: string
+          enum:
+            - IOTA
+            - CLAW
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1000
+      type: object
+      additionalProperties: false
+      required:
+        - listingId
+        - bidderAddress
+        - amount
+        - currency
+    ListingRenewRequest:
+      properties:
+        expiresAtMs:
+          type: integer
+          format: int64
+          minimum: 1
+      type: object
+      additionalProperties: false
+      required:
+        - expiresAtMs
+    BidListResponse:
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Bid'
+        nextCursor:
+          type: string
+          nullable: true
+        accessScope:
+          type: string
+          enum:
+            - creator_all
+            - bidder_self
+          description: >-
+            Truthful access shape for the current viewer. `creator_all` means the listing creator sees every bid for the
+            listing regardless of `OFFER` or `REQUEST`.
+        viewerRole:
+          type: string
+          enum:
+            - seller
+            - buyer
+            - bidder
+          description: >-
+            Runtime role truth for this viewer on this bid feed. `REQUEST` listing creators read bids as `buyer`, not
+            `seller`.
+      type: object
+      required:
+        - items
+        - nextCursor
+        - accessScope
+        - viewerRole
+    ListingCategoryCount:
+      properties:
+        category:
+          $ref: '#/components/schemas/ListingCategory'
+        count:
+          type: integer
+          minimum: 0
+      type: object
+      required:
+        - category
+        - count
+    ListingCategory:
+      type: string
+      enum:
+        - dev
+        - design
+        - marketing
+        - ops
+        - security
+        - other
+    ErrorResponse:
+      properties:
+        error:
+          type: string
+      type: object
+      required:
+        - error
+    OperationalWarning:
+      properties:
+        code:
+          type: string
+        severity:
+          type: string
+          enum:
+            - warning
+        actorAddress:
+          type: string
+        relevantEventTypes:
+          type: array
+          items:
+            type: string
+        message:
+          type: string
+      type: object
+      required:
+        - code
+        - severity
+        - actorAddress
+        - relevantEventTypes
+        - message
+    Listing:
+      properties:
+        id:
+          type: string
+        creatorAddress:
+          type: string
+        listingMode:
+          $ref: '#/components/schemas/ListingMode'
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          $ref: '#/components/schemas/ListingCategory'
+        currency:
+          type: string
+          enum:
+            - IOTA
+            - CLAW
+            - BOTH
+        budgetAmount:
+          type: string
+        milestones:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingMilestone'
+        communicationPolicy:
+          $ref: '#/components/schemas/ListingCommunicationPolicy'
+        listingDepositObjectId:
+          type: string
+        listingDepositTxDigest:
+          type: string
+        listingDepositStatus:
+          type: string
+          enum:
+            - LOCKED
+            - REFUND_PENDING
+            - REFUNDED
+            - FORFEITED
+        creatorReputation:
+          $ref: '#/components/schemas/RoleReputationSummary'
+        creatorReputationStatus:
+          type: string
+          enum:
+            - AVAILABLE
+            - MISSING_PROFILE
+            - UNAVAILABLE
+          description: Explicit creator reputation state. `creatorReputation` is present only when this is `AVAILABLE`.
+        status:
+          type: string
+          enum:
+            - OPEN
+            - PAUSED
+            - FILLED
+            - EXPIRED
+            - CANCELLED
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      type: object
+      required:
+        - id
+        - creatorAddress
+        - listingMode
+        - title
+        - description
+        - currency
+        - budgetAmount
+        - milestones
+        - status
+        - createdAt
+    RoleReputationSummary:
+      properties:
+        role:
+          type: string
+          enum:
+            - seller
+            - buyer
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        confidence:
+          type: integer
+          minimum: 0
+          maximum: 100
+        level:
+          type: string
+          enum:
+            - NEW
+            - BRONZE
+            - SILVER
+            - GOLD
+            - PLATINUM
+        metrics:
+          $ref: '#/components/schemas/ReputationRoleMetrics'
+        factors:
+          properties:
+            completionRate:
+              type: number
+              minimum: 0
+              maximum: 1
+            disputeRate:
+              type: number
+              minimum: 0
+              maximum: 1
+            responsivenessRate:
+              type: number
+              minimum: 0
+              maximum: 1
+            volumeFactor:
+              type: number
+              minimum: 0
+              maximum: 1
+            penaltyPoints:
+              type: number
+              minimum: 0
+          type: object
+          required:
+            - completionRate
+            - disputeRate
+            - responsivenessRate
+            - volumeFactor
+            - penaltyPoints
+      type: object
+      required:
+        - role
+        - score
+        - confidence
+        - level
+        - metrics
+        - factors
+    ReputationRoleMetrics:
+      properties:
+        totalOrders:
+          type: integer
+          minimum: 0
+        closedOrders:
+          type: integer
+          minimum: 0
+        completedOrders:
+          type: integer
+          minimum: 0
+        disputedOrders:
+          type: integer
+          minimum: 0
+        cancelledOrders:
+          type: integer
+          minimum: 0
+        settledMilestones:
+          type: integer
+          minimum: 0
+        rejectedMilestones:
+          type: integer
+          minimum: 0
+        refundedMilestones:
+          type: integer
+          minimum: 0
+        manualReviewActions:
+          type: integer
+          minimum: 0
+        autoReleaseMisses:
+          type: integer
+          minimum: 0
+        sellerDeadlineMisses:
+          type: integer
+          minimum: 0
+      type: object
+      required:
+        - totalOrders
+        - closedOrders
+        - completedOrders
+        - disputedOrders
+        - cancelledOrders
+        - settledMilestones
+        - rejectedMilestones
+        - refundedMilestones
+        - manualReviewActions
+        - autoReleaseMisses
+        - sellerDeadlineMisses
+    ListingMilestone:
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 120
+        amount:
+          type: string
+          pattern: ^[0-9]+$
+        dueAtMs:
+          type: integer
+          format: int64
+        reviewWindowHours:
+          type: integer
+          minimum: 1
+          maximum: 168
+        acceptanceRulesHash:
+          type: string
+          minLength: 8
+          maxLength: 256
+      type: object
+      additionalProperties: false
+      required:
+        - title
+        - amount
+    ListingMode:
+      type: string
+      enum:
+        - OFFER
+        - REQUEST
+    CreateListingRequest:
+      properties:
+        creatorAddress:
+          type: string
+        listingMode:
+          $ref: '#/components/schemas/ListingMode'
+        title:
+          type: string
+          minLength: 4
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 2000
+        category:
+          $ref: '#/components/schemas/ListingCategory'
+        currency:
+          type: string
+          enum:
+            - IOTA
+            - CLAW
+            - BOTH
+        budgetAmount:
+          type: string
+          pattern: ^[0-9]+$
+        expiresAtMs:
+          type: integer
+          format: int64
+          minimum: 1
+          description: >-
+            Optional listing expiry timestamp in milliseconds since epoch. Bot-facing helpers should send this
+            explicitly. Omitted values still use the legacy 30-day default and may not exceed 30 days from creation.
+        communicationPolicy:
+          $ref: '#/components/schemas/ListingCommunicationPolicy'
+        listingDepositObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+          description: On-chain listing deposit object id for anti-spam economics.
+        listingDepositTxDigest:
+          type: string
+          minLength: 16
+          maxLength: 128
+          description: Optional tx digest proving creation of listing deposit object.
+        milestones:
+          type: array
+          minItems: 2
+          maxItems: 8
+          items:
+            $ref: '#/components/schemas/ListingMilestone'
+      type: object
+      additionalProperties: false
+      required:
+        - creatorAddress
+        - title
+        - currency
+        - budgetAmount
+        - milestones
+    ListingListResponse:
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Listing'
+        nextCursor:
+          type: string
+          nullable: true
+      type: object
+      required:
+        - items
+        - nextCursor
+    ListingSort:
+      type: string
+      enum:
+        - newest
+        - highest_payout
+        - expires_soon
+    KeyAgreementUpsertRequest:
+      properties:
+        publicKeyMultibase:
+          type: string
+          minLength: 16
+          maxLength: 256
+        keyVersion:
+          type: integer
+          minimum: 1
+        expiresAtMs:
+          type: integer
+          format: int64
+          minimum: 1
+        walletBindingMessage:
+          type: string
+          minLength: 16
+          maxLength: 8192
+        walletBindingSignature:
+          type: string
+          minLength: 16
+          maxLength: 8192
+      type: object
+      additionalProperties: false
+      required:
+        - publicKeyMultibase
+        - keyVersion
+        - expiresAtMs
+        - walletBindingMessage
+        - walletBindingSignature
+    ReviewListResponse:
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderReview'
+        nextCursor:
+          type: string
+          nullable: true
+        incompleteScan:
+          type: boolean
+          description: True when the on-chain event scan hit its safety cap before it could prove the page is complete.
+      type: object
+      required:
+        - items
+        - nextCursor
+        - incompleteScan
+    OrderReview:
+      properties:
+        reviewId:
+          type: string
+        orderId:
+          type: string
+        escrowId:
+          type: string
+        reviewerAddress:
+          type: string
+        reviewerRole:
+          type: string
+          enum:
+            - BUYER
+            - SELLER
+        subjectAddress:
+          type: string
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        reviewHash:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        txDigest:
+          type: string
+        eventSeq:
+          type: string
+      type: object
+      required:
+        - reviewId
+        - orderId
+        - escrowId
+        - reviewerAddress
+        - reviewerRole
+        - subjectAddress
+        - rating
+        - reviewHash
+        - createdAt
+        - txDigest
+        - eventSeq
+    UserReputationProfile:
+      properties:
+        address:
+          type: string
+        seller:
+          $ref: '#/components/schemas/RoleReputationSummary'
+        buyer:
+          $ref: '#/components/schemas/RoleReputationSummary'
+        updatedAt:
+          type: string
+          format: date-time
+      type: object
+      required:
+        - address
+        - seller
+        - buyer
+        - updatedAt
+    UserKeyAgreement:
+      properties:
+        address:
+          type: string
+        keyVersion:
+          type: integer
+          minimum: 1
+        publicKeyMultibase:
+          type: string
+        walletBindingMessage:
+          type: string
+        walletBindingSignature:
+          type: string
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - REVOKED
+        expiresAt:
+          type: string
+          format: date-time
+        isExpired:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      type: object
+      required:
+        - address
+        - keyVersion
+        - publicKeyMultibase
+        - walletBindingMessage
+        - walletBindingSignature
+        - status
+        - expiresAt
+        - isExpired
+        - createdAt
+        - updatedAt
+    AuthLogoutResponse:
+      properties:
+        ok:
+          type: boolean
+        revoked:
+          type: boolean
+        sessionId:
+          type: string
+          format: uuid
+        revokedAtMs:
+          type: integer
+          format: int64
+        reason:
+          type: string
+      type: object
+      required:
+        - ok
+        - revoked
+    AuthVerifyResponse:
+      properties:
+        token:
+          type: string
+        refreshToken:
+          type: string
+        claims:
+          $ref: '#/components/schemas/AuthClaims'
+        expiresAtMs:
+          type: integer
+          format: int64
+        session:
+          $ref: '#/components/schemas/AuthSessionView'
+      type: object
+      required:
+        - token
+        - refreshToken
+        - claims
+        - expiresAtMs
+        - session
+    AuthSessionView:
+      properties:
+        id:
+          type: string
+          format: uuid
+        refreshAvailable:
+          type: boolean
+        issuedAtMs:
+          type: integer
+          format: int64
+        refreshExpiresAtMs:
+          type: integer
+          format: int64
+        lastRefreshedAtMs:
+          type: integer
+          format: int64
+        revokedAtMs:
+          type: integer
+          format: int64
+          nullable: true
+      type: object
+      required:
+        - refreshAvailable
+    AuthClaims:
+      properties:
+        sub:
+          type: string
+        iat:
+          type: integer
+          format: int64
+        exp:
+          type: integer
+          format: int64
+        jti:
+          type: string
+        iss:
+          type: string
+          enum:
+            - clawdex-api
+        aud:
+          type: string
+          enum:
+            - clawdex-client
+        sid:
+          type: string
+          format: uuid
+        tokenType:
+          type: string
+          enum:
+            - access
+      type: object
+      required:
+        - sub
+        - iat
+        - exp
+        - jti
+        - iss
+        - aud
+    AuthVerifyRequest:
+      properties:
+        nonce:
+          type: string
+          minLength: 1
+          maxLength: 256
+        address:
+          type: string
+          minLength: 1
+          maxLength: 200
+        signature:
+          type: string
+          minLength: 1
+          maxLength: 8192
+        message:
+          type: string
+          minLength: 1
+          maxLength: 8192
+      type: object
+      additionalProperties: false
+      required:
+        - nonce
+        - address
+        - signature
+        - message
+    AuthChallengeResponse:
+      properties:
+        nonce:
+          type: string
+        address:
+          type: string
+        messageToSign:
+          type: string
+        expiresAtMs:
+          type: integer
+          format: int64
+      type: object
+      required:
+        - nonce
+        - address
+        - messageToSign
+        - expiresAtMs
+    AuthChallengeRequest:
+      properties:
+        address:
+          type: string
+          minLength: 1
+          maxLength: 200
+      type: object
+      additionalProperties: false
+      required:
+        - address
+    RankedListing:
+      properties:
+        listing:
+          $ref: '#/components/schemas/Listing'
+        creatorTier:
+          type: integer
+        creatorAcceptsClaw:
+          type: boolean
+        creatorReputation:
+          $ref: '#/components/schemas/RoleReputationSummary'
+        score:
+          type: integer
+        scoreBreakdown:
+          properties:
+            base:
+              type: integer
+            freshness:
+              type: integer
+            tierBoost:
+              type: integer
+            clawAcceptance:
+              type: integer
+          type: object
+          required:
+            - base
+            - freshness
+            - tierBoost
+            - clawAcceptance
+      type: object
+      required:
+        - listing
+        - creatorTier
+        - creatorAcceptsClaw
+        - score
+        - scoreBreakdown
+    OnboardingIotaTopupResponse:
+      properties:
+        funded:
+          type: boolean
+        alreadyClaimed:
+          type: boolean
+        pendingConfirmation:
+          type: boolean
+        amount:
+          type: string
+          pattern: ^[0-9]+$
+        txDigest:
+          type: string
+        senderAddress:
+          type: string
+        completedAt:
+          type: string
+          format: date-time
+        balanceBefore:
+          type: string
+          pattern: ^[0-9]+$
+        maxEligibleBalance:
+          type: string
+          pattern: ^[0-9]+$
+        detail:
+          type: string
+      type: object
+      additionalProperties: false
+      required:
+        - funded
+        - amount
+        - senderAddress
+        - maxEligibleBalance
+    FeePolicy:
+      properties:
+        version:
+          type: string
+        chainConfig:
+          properties:
+            marketplacePackageId:
+              type: string
+            marketplaceFeeConfigObjectId:
+              type: string
+            governanceConfigObjectId:
+              type: string
+            disputeQuorumConfigObjectId:
+              type: string
+            reputationInitFeeConfigObjectId:
+              type: string
+            listingDepositConfigObjectId:
+              type: string
+          type: object
+        escrowFeeBps:
+          properties:
+            IOTA:
+              type: integer
+              minimum: 0
+              maximum: 10000
+            CLAW:
+              type: integer
+              minimum: 0
+              maximum: 10000
+          type: object
+          required:
+            - IOTA
+            - CLAW
+        listingFee:
+          properties:
+            currency:
+              type: string
+              enum:
+                - IOTA
+            model:
+              type: string
+              enum:
+                - reference_execute_gas
+            amount:
+              type: string
+              pattern: ^[0-9]+$
+            referenceExecuteGas:
+              type: integer
+              minimum: 1
+            multiplierBps:
+              type: integer
+              minimum: 1
+              maximum: 10000
+            minAmount:
+              type: string
+              pattern: ^[0-9]+$
+            maxAmount:
+              type: string
+              pattern: ^[0-9]+$
+            updateCadenceSec:
+              type: integer
+              minimum: 1
+          type: object
+          required:
+            - currency
+            - model
+            - amount
+            - referenceExecuteGas
+            - multiplierBps
+            - minAmount
+            - maxAmount
+            - updateCadenceSec
+        listingDeposit:
+          properties:
+            enabled:
+              type: boolean
+            currency:
+              type: string
+              enum:
+                - IOTA
+            amount:
+              type: string
+              pattern: ^[0-9]+$
+            refundMode:
+              type: string
+              enum:
+                - full_or_partial_forfeit
+            partialRefundBps:
+              type: integer
+              minimum: 0
+              maximum: 10000
+            forfeitSink:
+              type: string
+            enforceRefBinding:
+              type: boolean
+            bindingRefFormat:
+              type: string
+              enum:
+                - sha256_hex_32_bytes_v1
+            requiredCreateField:
+              type: string
+              enum:
+                - listingDepositObjectId
+            optionalCreateField:
+              type: string
+              enum:
+                - listingDepositTxDigest
+          type: object
+          required:
+            - enabled
+            - currency
+            - amount
+            - refundMode
+            - partialRefundBps
+            - enforceRefBinding
+            - bindingRefFormat
+            - requiredCreateField
+            - optionalCreateField
+        reputationInitFee:
+          properties:
+            currency:
+              type: string
+              enum:
+                - IOTA
+            model:
+              type: string
+              enum:
+                - reference_execute_gas
+            amount:
+              type: string
+              pattern: ^[0-9]+$
+            referenceExecuteGas:
+              type: integer
+              minimum: 1
+            multiplierBps:
+              type: integer
+              minimum: 1
+              maximum: 10000
+            minAmount:
+              type: string
+              pattern: ^[0-9]+$
+            maxAmount:
+              type: string
+              pattern: ^[0-9]+$
+            updateCadenceSec:
+              type: integer
+              minimum: 1
+            configObjectId:
+              type: string
+            packageId:
+              type: string
+            requiredCreatePath:
+              type: string
+              enum:
+                - reputation::create_reputation_profile_iota_entry
+          type: object
+          required:
+            - currency
+            - model
+            - amount
+            - referenceExecuteGas
+            - multiplierBps
+            - minAmount
+            - maxAmount
+            - updateCadenceSec
+            - requiredCreatePath
+      type: object
+      required:
+        - version
+        - chainConfig
+        - escrowFeeBps
+        - listingFee
+        - listingDeposit
+        - reputationInitFee
+    RankingPolicy:
+      properties:
+        version:
+          type: string
+        formula:
+          properties:
+            baseScore:
+              type: integer
+            freshnessPerDay:
+              type: integer
+            clawAcceptanceBoost:
+              type: integer
+          type: object
+          required:
+            - baseScore
+            - freshnessPerDay
+            - clawAcceptanceBoost
+        tierRankingBoostBps:
+          type: object
+          additionalProperties:
+            type: integer
+        tierGaslessQuotaMultiplierBps:
+          type: object
+          additionalProperties:
+            type: integer
+      type: object
+      required:
+        - version
+        - formula
+        - tierRankingBoostBps
+        - tierGaslessQuotaMultiplierBps
+    ComplianceFlags:
+      properties:
+        enableConsumers:
+          type: boolean
+        enforceB2bOnly:
+          type: boolean
+        enableTraderVerification:
+          type: boolean
+        enableTaxCompliance:
+          type: boolean
+        enableAnalytics:
+          type: boolean
+        enableEmail:
+          type: boolean
+      type: object
+      required:
+        - enableConsumers
+        - enforceB2bOnly
+        - enableTraderVerification
+        - enableTaxCompliance
+        - enableAnalytics
+        - enableEmail

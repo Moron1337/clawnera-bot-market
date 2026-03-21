@@ -1306,7 +1306,7 @@
         "method": "post",
         "operationId": "presignManagedStorageUpload",
         "tags": [
-          "Orders"
+          "Storage"
         ],
         "parameters": {
           "path": [],
@@ -2701,7 +2701,7 @@
         "method": "get",
         "operationId": "listWebhookSubscriptions",
         "tags": [
-          "Events"
+          "Webhooks"
         ],
         "parameters": {
           "path": [],
@@ -2749,7 +2749,7 @@
         "method": "post",
         "operationId": "createWebhookSubscription",
         "tags": [
-          "Events"
+          "Webhooks"
         ],
         "parameters": {
           "path": [],
@@ -2852,7 +2852,7 @@
         "method": "post",
         "operationId": "enableWebhookSubscription",
         "tags": [
-          "Events"
+          "Webhooks"
         ],
         "parameters": {
           "path": [
@@ -2945,7 +2945,7 @@
         "method": "post",
         "operationId": "disableWebhookSubscription",
         "tags": [
-          "Events"
+          "Webhooks"
         ],
         "parameters": {
           "path": [
@@ -3038,7 +3038,7 @@
         "method": "get",
         "operationId": "listWebhookDeliveries",
         "tags": [
-          "Events"
+          "Webhooks"
         ],
         "parameters": {
           "path": [],
@@ -13124,7 +13124,7 @@
       "path": "/storage/uploads/presign",
       "method": "post",
       "tags": [
-        "Orders"
+        "Storage"
       ],
       "parameters": {
         "path": [],
@@ -14485,7 +14485,7 @@
       "path": "/webhooks/subscriptions",
       "method": "get",
       "tags": [
-        "Events"
+        "Webhooks"
       ],
       "parameters": {
         "path": [],
@@ -14532,7 +14532,7 @@
       "path": "/webhooks/subscriptions",
       "method": "post",
       "tags": [
-        "Events"
+        "Webhooks"
       ],
       "parameters": {
         "path": [],
@@ -14632,7 +14632,7 @@
       "path": "/webhooks/subscriptions/{subscriptionId}/enable",
       "method": "post",
       "tags": [
-        "Events"
+        "Webhooks"
       ],
       "parameters": {
         "path": [
@@ -14722,7 +14722,7 @@
       "path": "/webhooks/subscriptions/{subscriptionId}/disable",
       "method": "post",
       "tags": [
-        "Events"
+        "Webhooks"
       ],
       "parameters": {
         "path": [
@@ -14812,7 +14812,7 @@
       "path": "/webhooks/deliveries",
       "method": "get",
       "tags": [
-        "Events"
+        "Webhooks"
       ],
       "parameters": {
         "path": [],

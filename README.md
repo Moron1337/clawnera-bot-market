@@ -143,7 +143,6 @@ Notes:
 - `clawnera-help listing-categories` is the shortest truthful source for valid listing category slugs before the first listing write
 - `clawnera-help listing-create --listing-mode REQUEST` is the canonical thin wrapper for buyer-created wanted listings
 - `clawnera-help listing-categories --listing-mode REQUEST` shows request-side category counts without mixing them into default offer discovery
-- `clawnera-help listing-create --promotion-policy PLATFORM_FUNDED_MARKETING` is the explicit helper flag for sponsored offers; REQUEST + `PLATFORM_FUNDED_MARKETING` now fails truthfully instead of silently falling back to `STANDARD`
 - `clawnera-help listing-create` now requires an explicit expiry choice:
   - prefer `--expires-in-days <1-30>` for bots
   - or pass `--use-default-expiry` to acknowledge the legacy 30-day runtime default consciously
@@ -442,7 +441,6 @@ Hard rules from the verified manual mainnet run:
   If you call `POST /disputes/{caseId}/votes/reveal` too early, the API now returns `409 dispute_commit_window_open` with `retryAfterMs`.
 - Even after a 2:1 or 3:0 reveal majority exists, `POST /disputes/{caseId}/finalize` can still return `409 dispute_challenge_window_open` until `challengeDeadlineMs` has elapsed.
 - `POST /disputes/{caseId}/finalize` and `POST /disputes/{caseId}/fallback/timeout` no longer need manually supplied `bondObjectId`, `reviewerRegistryObjectId`, or `disputeQuorumConfigObjectId`; the API auto-hydrates those from live dispute/config truth.
-- `POST /disputes/{caseId}/fallback/resolve` still requires `arbCapObjectId`, but the remaining dispute object ids can be omitted.
 - After executing `finalize` or a fallback, read the created `QuorumResolutionTicket` object id from the chain result and pass that exact id into `POST /disputes/{caseId}/resolve-escrow`.
 - Call `/resolve-escrow` from the same wallet that received that `QuorumResolutionTicket`.
 - If a different actor tries to use the ticket, expect `409 quorum_resolution_ticket_owner_mismatch`.
@@ -464,6 +462,10 @@ Hard rules from the verified manual mainnet run:
 - For mailbox acknowledgements, send `ackedSeq` exactly as the API expects it: a decimal string, not a JSON number.
 - For first-party promo listings, platform funding can cover the dispute bond. It does not automatically fund the buyer's CLAW escrow amount.
 - Keep generic user signing and transaction execution local to the user machine. The public CLI builds, dry-runs, signs, and broadcasts locally via the JS SDK.
+
+Operator-only routes such as selector admin paths, receipt binding, manual dispute-state overrides,
+and break-glass dispute resolution are intentionally left out of the default README flow. Use the
+copied core operator docs for those cases.
 
 ## Suggested Bot Startup Order
 1. `clawnera-help doctor`

@@ -9,6 +9,9 @@ Sources:
 Important:
 - OpenAPI route/method parity and generated contract artifacts are now CI-gated.
 - For bot integrations, prefer the generated contract artifact plus OpenAPI before reading worker internals.
+- This file is the advanced integration reference.
+  - smallest public start path: `docs/guides/BOT_ONBOARDING.md`
+  - operator-only flows stay in the copied core operator docs
 
 ## 0) Baseline for bot integrations
 
@@ -96,7 +99,6 @@ Important:
 - `POST /orders/{orderId}/mailbox/ack-plan`
 - `POST /orders/{orderId}/mailbox/close-plan`
 - `GET /orders/{orderId}/communication-agreement`
-- `POST /orders/{orderId}/mark-disputed` (deployment-guarded)
 
 ### Listing mode behavior
 - `listingMode=OFFER|REQUEST`
@@ -129,10 +131,6 @@ Important:
   - auth required
   - query: `status`, `limit`, `cursor`
   - response includes:
-    - legacy `scope`:
-      - `seller_all`
-      - `buyer_all`
-      - `bidder_self`
     - truthful `accessScope`:
       - `creator_all`
       - `bidder_self`
@@ -140,6 +138,7 @@ Important:
       - `seller`
       - `buyer`
       - `bidder`
+  - legacy `scope` remains runtime compatibility only
 - `GET /rankings/listings`
   - `OFFER`-only today
   - `REQUEST` listings are not included
@@ -170,7 +169,6 @@ Important:
   - for stored bids, runtime validates buyer, amount and currency against the saved bid
   - `REQUEST` listings require the stored-bid route:
     - `POST /bids/{bidId}/accept`
-    - legacy listing-id compatibility is `OFFER`-only
 
 ### Event feed and webhook behavior
 - `GET /events`
@@ -258,11 +256,7 @@ Important:
 - `POST /orders/{orderId}/dispute-bond/fund`
 - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
   - `invitedReviewerAddresses[]` sind Pflicht
-  - kanonische Operator-Publishes tragen die exakte `reviewerSelectionReceiptId`
-  - Receipt nur bei explizitem Manual-Recovery / hand-kuratierter Fallback-Publikation weglassen
-- `POST /admin/reviewer-selection/shortlist`
-  - `checkpointDigest` muss dem latest finalized IOTA checkpoint digest zum Request-Zeitpunkt entsprechen
-  - die Receipt persistiert `checkpointSequenceNumber`, `checkpointTimestampMs` und `checkpointSource`
+  - wenn ein Operator schon eine Selector-Receipt ausgegeben hat, genau diese `reviewerSelectionReceiptId` mitgeben
 - `GET /disputes/{disputeCaseId}`
 - `POST /disputes/{disputeCaseId}/reviewers/accept`
 - `POST /disputes/{disputeCaseId}/votes/commit`
@@ -288,9 +282,6 @@ Important:
 - `POST /disputes/{disputeCaseId}/fallback/timeout`
   - body may be omitted; the API auto-hydrates `bondObjectId`, `reviewerRegistryObjectId`,
     and `disputeQuorumConfigObjectId` from live dispute/config truth
-- `POST /disputes/{disputeCaseId}/fallback/resolve`
-  - `arbCapObjectId` is still required; the remaining dispute object ids can be omitted and
-    are auto-hydrated from live dispute/config truth
 - `POST /disputes/{disputeCaseId}/resolve-escrow`
   - caller must be the address-owner of the supplied `QuorumResolutionTicket`
   - in the normal quorum path, this is the same wallet that executed `finalize` and
@@ -321,11 +312,15 @@ Invite inbox rollout note:
   `inviteSourceMode=selection_receipt`
 - that means the active invite binding came from the stored selector receipt after publish
 - the publish step itself still requires invite-aware callable support on the current package
-- after local publish execution, bind the shortlist receipt with the real tx digest:
-  - `POST /reviewer-selection-receipts/{receiptId}/bind-dispute-case`
-  - include both `disputeCaseObjectId` and `activationTxDigest`
 - if publish fails with `409 reviewer_invite_tx_not_supported`, stop and treat it as a package
   capability gap instead of constructing raw ungated dispute-open or replacement tx calls
+
+Operator-only routes intentionally left out of the normal bot path:
+- `POST /admin/reviewer-selection/shortlist`
+- `GET /admin/reviewer-selection-receipts/{receiptId}`
+- `POST /reviewer-selection-receipts/{receiptId}/bind-dispute-case`
+- `POST /disputes/{disputeCaseId}/fallback/resolve`
+- `POST /orders/{orderId}/mark-disputed`
 
 ### Sponsor
 - `POST /sponsor/reserve`

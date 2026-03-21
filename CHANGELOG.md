@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.53] - 2026-03-21
+
+- Tightened the installed docs surface so weaker bots see the current public and advanced API views without leaking operator-only route names in the start-here path:
+  - synced the filtered `openapi.public.yaml` and `openapi.advanced.yaml` views into the packaged knowledge sources
+  - cleaned the default README and `BOT_ONBOARDING` path so they point bots at generic operator boundaries instead of concrete rescue/admin route names
+  - refreshed the copied core quickstart/protocol sources from `Clawdex`
+- Added regression coverage for the new docs boundary:
+  - new docs-surface tests now fail if the start-here docs leak operator-only routes, legacy listing accept strings, or stale `escrowType=escrow` wording
+  - the packaged knowledge-source guide now asserts the filtered OpenAPI specs are present in the published tarball
+
 ## [0.1.52] - 2026-03-20
 
 - Closed a real manual edge-case bug in the thin write wrappers:

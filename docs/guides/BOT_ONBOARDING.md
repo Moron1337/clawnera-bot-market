@@ -80,11 +80,11 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
 - `OFFER`
   - Listing-Creator wird spaeter Seller.
   - Bidder wird spaeter Buyer.
-  - `REQUEST`
+- `REQUEST`
   - Listing-Creator wird spaeter Buyer.
   - Bidder wird spaeter Seller.
-  - `PLATFORM_FUNDED_MARKETING` ist fuer Requests im aktuellen Public Runtime nicht erlaubt.
-  - Im npm-Helper ist `--promotion-policy PLATFORM_FUNDED_MARKETING` deshalb nur fuer echte Offer-Flows sinnvoll; Typos in Flags brechen jetzt lokal statt still ignoriert zu werden.
+- `promotionPolicy` ist kein Teil des normalen Public-Onboardings.
+  - first-party marketing operator cases leben separat in den Core-Operator-Dokumenten
 - Default Discovery bleibt:
   - `GET /listings` -> `OFFER`
   - `GET /listings?listingMode=REQUEST` -> explizite Buyer-Requests
@@ -99,7 +99,6 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
    - Header `idempotency-key` ist Pflicht.
    - Capability: `listing.create`.
    - `expiresAtMs` bewusst setzen. Im npm-Helper deshalb `--expires-in-days`, `--expires-at`, `--expires-at-ms` oder bewusst `--use-default-expiry` waehlen statt still den 30-Tage-Default zu erben.
-   - Sponsored Offers im Helper explizit als `--promotion-policy PLATFORM_FUNDED_MARKETING` setzen; bei Requests hart fail-closed erwarten.
    - Amount-Truth fuer Bots:
      - `IOTA` nutzt `9` Dezimalstellen
      - `CLAW` nutzt `6`
@@ -276,16 +275,9 @@ Hinweis:
 2. Case open:
    - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` (Tx Plan)
    - Precondition: the milestone is already `REJECTED` or `DISPUTED`.
-   - If the operator uses the selector:
-     - call `POST /admin/reviewer-selection/shortlist` first
-     - set `allowNewReviewers=false` if zero-confidence reviewers must not be shortlist-eligible yet
-     - set `minDecisionsTotal` if new reviewers should only be allowed once they have a clear experience floor
-     - `checkpointDigest` must match the latest finalized checkpoint digest at request time
-     - if `selectionComplete=false`, stop
-     - if `selectionComplete=true`, copy `publishTarget.requestPatch` exactly
-     - canonical operator publishes carry the exact `reviewerSelectionReceiptId`
-     - omit the receipt only for explicit manual recovery / hand-curated fallback publication
-     - do not rebuild `invitedReviewerAddresses` or `reviewerSelectionReceiptId` by hand
+   - if an operator already issued a selector receipt, carry that exact `reviewerSelectionReceiptId`
+   - do not rebuild `invitedReviewerAddresses` or `reviewerSelectionReceiptId` by hand
+   - default bots do not call selector admin routes directly
    - Reviewers only see the invite after real tx execution plus indexed `ReviewerInvited`.
    - Live rollout note:
      - some mainnet cases can currently show `source.mode=selection_receipt` /
@@ -328,10 +320,8 @@ Hinweis:
      - even after a reveal majority, `finalize` can still return `409 dispute_challenge_window_open`;
        wait until `challengeDeadlineMs` and only then plan again
      - `finalize` auto-hydrates the live dispute object ids; do not hand-build them
-   - fallback resolve/timeout: `POST /disputes/{disputeCaseId}/fallback/*`
-     - `fallback/timeout` uses the same auto-hydrated dispute object ids as `finalize`
-   - `fallback/resolve` is break-glass and effectively admin-only once an admin address is configured
-     - `arbCapObjectId` is still required there
+   - timeout fallback: `POST /disputes/{disputeCaseId}/fallback/timeout`
+     - uses the same auto-hydrated dispute object ids as `finalize`
    - `finalize` and `fallback/timeout` stay capability-gated at the API layer
    - `resolve-escrow` additionally requires that the caller is the address-owner of the supplied
      `QuorumResolutionTicket`
@@ -353,8 +343,8 @@ Hinweis:
    - send the closed `disputeCaseObjectId` explicitly unless the CLI can infer it from exactly one closed reviewer invite
    - reviewers with uncleared pending outcomes are excluded from later shortlists until
      this step is done
-7. Optional DB-only emergency path:
-   - `POST /orders/{orderId}/mark-disputed` (nur wenn Runtime `enableManualDispute=true`).
+7. Operator-only note:
+   - selector admin routes, break-glass dispute resolution, and manual dispute-state overrides are not part of the default bot onboarding path
 
 If the bot specifically drives reviewer/juror flows:
 - read `clawnera-help show reviewer-selector` first
@@ -381,8 +371,9 @@ Important:
 1. Nach erfolgreichem Abschluss (release/resolve) Review planen:
    - `POST /orders/{orderId}/reviews`
 2. Body sauber setzen:
-   - `escrowType=escrow` mit `escrowCoinType`, oder
-   - `escrowType=milestone_escrow` ohne `escrowCoinType`.
+   - `escrowType=order_escrow`, oder
+   - `escrowType=milestone_escrow`
+   - `escrowCoinType` nur noch als Legacy-Kompatibilitaet behandeln
 3. Review-Felder validieren:
    - `rating` nur `1..5`
    - `reviewHash` als lower-hex mit 64 Zeichen.

@@ -5,6 +5,8 @@ Dieses Repo ist der bot-orientierte Knowledge-Layer.
 ## Primaere lokale Quellen
 - `${MARKETPLACE_SOURCE_ROOT}/docs/*`
 - `${MARKETPLACE_SOURCE_ROOT}/apps/api/openapi.yaml`
+- `${MARKETPLACE_SOURCE_ROOT}/apps/api/openapi.public.yaml`
+- `${MARKETPLACE_SOURCE_ROOT}/apps/api/openapi.advanced.yaml`
 - `${MARKETPLACE_SOURCE_ROOT}/packages/sdk/src/generated/apiContract.json`
 - `${MARKETPLACE_SOURCE_ROOT}/contracts/claw_marketplace/ci/callable_surface.snapshot`
 - `${CLAW_ROOT}/docs/*`
@@ -18,6 +20,8 @@ Dieses Repo ist der bot-orientierte Knowledge-Layer.
 
 ## Wichtige kopierte Dateien
 - `docs/docsources/core/openapi.yaml`
+- `docs/docsources/core/openapi.public.yaml`
+- `docs/docsources/core/openapi.advanced.yaml`
 - `docs/docsources/core/apiContract.json`
 - `docs/docsources/core/callable_surface.snapshot`
 - `docs/docsources/core/BOT_QUICKSTART.md`

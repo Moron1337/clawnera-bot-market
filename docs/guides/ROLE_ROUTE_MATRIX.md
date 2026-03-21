@@ -39,7 +39,7 @@
 | --- | --- | --- | --- |
 | `POST /bids` | `bid.create` | `bidderAddress == auth.actorAddress` | Listing muss `OPEN` sein; Self-Bid verboten; `idempotency-key` Pflicht. |
 | `POST /bids/{bidId}/accept` | `order.create_from_bid` | `buyerAddress == auth.actorAddress`; `sellerAddress == listing.creatorAddress` | `{bidId}` ist der kanonische `bidId`; Listing muss `OPEN` sein; `idempotency-key` Pflicht; optional `communicationProposal` nur mit `orderId`. |
-| `GET /listings/{listingId}/bids` | - | seller sees all; bidder sees self; outsiders forbidden | Query: `status`, `limit`, `cursor`; Response enthaelt `scope`. |
+| `GET /listings/{listingId}/bids` | - | seller sees all; bidder sees self; outsiders forbidden | Query: `status`, `limit`, `cursor`; neue Clients lesen `accessScope` + `viewerRole`. |
 | `GET /orders` | - | actor-scoped buyer/seller only | Query: `role`, `status`, `listingId`, `limit`, `cursor`. |
 | `GET /orders/{orderId}` | - | buyer/seller only | Einzel-Read fuer konkrete Order. |
 | `GET /orders/{orderId}/timeline` | - | buyer/seller only | Primäre Reconciliation-Quelle. |
@@ -65,7 +65,6 @@
 | `POST /orders/{orderId}/mailbox/ack-plan` | `order.mailbox.ack.plan` | buyer/seller only | Gebundene offene Mailbox Pflicht; `ackedSeq` numerisch > 0. |
 | `POST /orders/{orderId}/mailbox/close-plan` | `order.mailbox.close.plan` | buyer/seller only | Gebundene offene Mailbox Pflicht; final `closed` erst nach Buyer+Seller-Approve on-chain. |
 | `POST /storage/uploads/presign` | `storage.upload.presign` | buyer/seller only fuer `orderId` | Milestone darf nicht terminal (`SETTLED`/`REFUNDED`) sein; MIME/Size/Ext Regeln aktiv. |
-| `POST /orders/{orderId}/mark-disputed` | `order.mark_disputed` | buyer/seller only | Nur wenn Runtime `enableManualDispute=true`; DB-only Notfallpfad. |
 
 ## 3) Seller Order / Delivery Routes
 
@@ -110,8 +109,6 @@
 | `POST /disputes/{id}/finalize` | `dispute.finalize` | capability-only | Keine harte Buyer/Seller-Pruefung im Handler. |
 | `POST /disputes/{id}/fallback/timeout` | `dispute.fallback.timeout` | capability-only | Permissionless Timeout-Path; on-chain entscheidet final. |
 | `POST /disputes/{id}/resolve-escrow` | `dispute.resolve_escrow` | capability + ticket-owner | API verlangt den AddressOwner des `QuorumResolutionTicket`; Ticket- und Escrow-Bindung wird zusaetzlich on-chain geprueft. |
-| `POST /disputes/{id}/fallback/resolve` | `dispute.fallback.resolve` | bei gesetzter Admin-Adresse admin-only | Break-glass mit ArbCap. |
-
 ## 6) Wichtig: API-Guard vs. On-Chain-Guard
 
 - Einige Endpunkte pruefen Rollen strikt im API-Layer (z. B. Milestone submit/accept/reject, dispute open, reviewers replace).
@@ -129,3 +126,12 @@
   - `dispute_quorum::claim_force_deregistered_reviewer_stake`
 - Bond-Maintenance:
   - `dispute_quorum::cancel_pending_order_dispute_bond`
+
+## 8) Operator-only Ausnahmen
+
+Diese Routen sind real, aber nicht Teil des normalen Buyer-/Seller-/Reviewer-Pfads:
+- `POST /admin/reviewer-selection/shortlist`
+- `GET /admin/reviewer-selection-receipts/{receiptId}`
+- `POST /reviewer-selection-receipts/{id}/bind-dispute-case`
+- `POST /disputes/{id}/fallback/resolve`
+- `POST /orders/{orderId}/mark-disputed`

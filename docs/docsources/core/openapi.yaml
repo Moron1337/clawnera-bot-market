@@ -13,7 +13,10 @@ tags:
   - name: Auth
   - name: Listings
   - name: Orders
+  - name: Storage
   - name: Disputes
+  - name: Events
+  - name: Webhooks
   - name: Sponsor
   - name: Compliance
   - name: Policy
@@ -563,6 +566,7 @@ paths:
       tags: [Auth]
       security: []
       operationId: refreshAuthSession
+      x-clawnera-surface: advanced-user
       requestBody:
         required: true
         content:
@@ -590,6 +594,7 @@ paths:
     get:
       tags: [Auth]
       operationId: getAuthSession
+      x-clawnera-surface: advanced-user
       security:
         - bearerAuth: []
       responses:
@@ -758,8 +763,9 @@ paths:
           $ref: "#/components/responses/Unauthorized"
   /storage/uploads/presign:
     post:
-      tags: [Orders]
+      tags: [Storage]
       operationId: presignManagedStorageUpload
+      x-clawnera-surface: advanced-user
       requestBody:
         required: true
         content:
@@ -1116,7 +1122,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Canonical accepted bid identifier. `REQUEST` listings must use the stored bid id path; the legacy listing-id accept form remains `OFFER`-only.
+          description: Canonical accepted bid identifier.
         - name: idempotency-key
           in: header
           required: true
@@ -1213,6 +1219,7 @@ paths:
         - bearerAuth: []
         - {}
       operationId: listMarketplaceEvents
+      x-clawnera-surface: advanced-user
       parameters:
         - name: scope
           in: query
@@ -1251,8 +1258,9 @@ paths:
           $ref: "#/components/responses/Unauthorized"
   /webhooks/subscriptions:
     get:
-      tags: [Events]
+      tags: [Webhooks]
       operationId: listWebhookSubscriptions
+      x-clawnera-surface: advanced-user
       parameters:
         - name: activeOnly
           in: query
@@ -1269,8 +1277,9 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
     post:
-      tags: [Events]
+      tags: [Webhooks]
       operationId: createWebhookSubscription
+      x-clawnera-surface: advanced-user
       requestBody:
         required: true
         content:
@@ -1296,8 +1305,9 @@ paths:
           $ref: "#/components/responses/Conflict"
   /webhooks/subscriptions/{subscriptionId}/enable:
     post:
-      tags: [Events]
+      tags: [Webhooks]
       operationId: enableWebhookSubscription
+      x-clawnera-surface: advanced-user
       parameters:
         - name: subscriptionId
           in: path
@@ -1323,8 +1333,9 @@ paths:
           $ref: "#/components/responses/NotFound"
   /webhooks/subscriptions/{subscriptionId}/disable:
     post:
-      tags: [Events]
+      tags: [Webhooks]
       operationId: disableWebhookSubscription
+      x-clawnera-surface: advanced-user
       parameters:
         - name: subscriptionId
           in: path
@@ -1350,8 +1361,9 @@ paths:
           $ref: "#/components/responses/NotFound"
   /webhooks/deliveries:
     get:
-      tags: [Events]
+      tags: [Webhooks]
       operationId: listWebhookDeliveries
+      x-clawnera-surface: advanced-user
       parameters:
         - name: subscriptionId
           in: query
@@ -2219,6 +2231,7 @@ paths:
     post:
       tags: [Orders]
       operationId: acceptDeadlineExtensionPlan
+      x-clawnera-surface: advanced-user
       parameters:
         - name: extensionObjectId
           in: path
@@ -2256,6 +2269,7 @@ paths:
     post:
       tags: [Orders]
       operationId: rejectDeadlineExtensionPlan
+      x-clawnera-surface: advanced-user
       parameters:
         - name: extensionObjectId
           in: path
@@ -2332,6 +2346,7 @@ paths:
     post:
       tags: [Orders]
       operationId: acceptMutualCancelPlan
+      x-clawnera-surface: advanced-user
       parameters:
         - name: cancelRequestObjectId
           in: path
@@ -2369,6 +2384,7 @@ paths:
     post:
       tags: [Orders]
       operationId: rejectMutualCancelPlan
+      x-clawnera-surface: advanced-user
       parameters:
         - name: cancelRequestObjectId
           in: path
@@ -2400,6 +2416,7 @@ paths:
     post:
       tags: [Orders]
       operationId: markOrderDisputed
+      x-clawnera-surface: operator-internal
       parameters:
         - name: orderId
           in: path
@@ -2427,6 +2444,7 @@ paths:
     post:
       tags: [Disputes]
       operationId: registerReviewerPlan
+      x-clawnera-surface: reviewer-self
       requestBody:
         required: true
         content:
@@ -2525,6 +2543,7 @@ paths:
     get:
       tags: [Disputes]
       operationId: listReviewerSelfInvites
+      x-clawnera-surface: reviewer-self
       parameters:
         - name: limit
           in: query
@@ -2564,6 +2583,7 @@ paths:
     get:
       tags: [Disputes]
       operationId: getReviewerSelfMetrics
+      x-clawnera-surface: reviewer-self
       responses:
         "200":
           description: Authenticated reviewer self-view of current reviewer metrics and registration state.
@@ -2583,6 +2603,7 @@ paths:
     post:
       tags: [Disputes]
       operationId: bindReviewerSelectionReceiptToDisputeCase
+      x-clawnera-surface: operator-internal
       parameters:
         - name: id
           in: path
@@ -2620,6 +2641,7 @@ paths:
     post:
       tags: [Disputes]
       operationId: updateReviewerPlan
+      x-clawnera-surface: reviewer-self
       requestBody:
         required: true
         content:
@@ -2643,6 +2665,7 @@ paths:
     post:
       tags: [Disputes]
       operationId: deregisterReviewerPlan
+      x-clawnera-surface: reviewer-self
       requestBody:
         required: true
         content:
@@ -2666,6 +2689,7 @@ paths:
     post:
       tags: [Disputes]
       operationId: claimReviewerDecisionMetricsPlan
+      x-clawnera-surface: reviewer-self
       parameters:
         - name: address
           in: path
@@ -2793,6 +2817,7 @@ paths:
     post:
       tags: [Disputes]
       operationId: acceptDisputeReviewerPlan
+      x-clawnera-surface: reviewer-self
       parameters:
         - name: disputeCaseId
           in: path
@@ -2830,6 +2855,7 @@ paths:
     post:
       tags: [Disputes]
       operationId: commitDisputeVotePlan
+      x-clawnera-surface: reviewer-self
       parameters:
         - name: disputeCaseId
           in: path
@@ -2859,6 +2885,7 @@ paths:
     post:
       tags: [Disputes]
       operationId: revealDisputeVotePlan
+      x-clawnera-surface: reviewer-self
       parameters:
         - name: disputeCaseId
           in: path
@@ -2888,6 +2915,7 @@ paths:
     post:
       tags: [Disputes]
       operationId: challengeDisputeVote
+      x-clawnera-surface: reviewer-self
       parameters:
         - name: disputeCaseId
           in: path
@@ -2965,6 +2993,7 @@ paths:
     post:
       tags: [Disputes]
       operationId: resolveDisputeFallbackPlan
+      x-clawnera-surface: operator-internal
       parameters:
         - name: disputeCaseId
           in: path
@@ -3407,6 +3436,7 @@ paths:
     get:
       tags: [Admin, Compliance]
       operationId: listComplianceNotices
+      x-clawnera-surface: operator-internal
       parameters:
         - name: status
           in: query
@@ -3442,6 +3472,7 @@ paths:
     post:
       tags: [Admin, Compliance]
       operationId: decideComplianceNotice
+      x-clawnera-surface: operator-internal
       parameters:
         - name: noticeId
           in: path
@@ -3481,6 +3512,7 @@ paths:
     get:
       tags: [Admin, Compliance]
       operationId: listComplianceAppeals
+      x-clawnera-surface: operator-internal
       parameters:
         - name: status
           in: query
@@ -3516,6 +3548,7 @@ paths:
     post:
       tags: [Admin, Compliance]
       operationId: decideComplianceAppeal
+      x-clawnera-surface: operator-internal
       parameters:
         - name: appealId
           in: path
@@ -3557,6 +3590,7 @@ paths:
     get:
       tags: [Admin, Compliance]
       operationId: exportStatementsOfReasons
+      x-clawnera-surface: operator-internal
       parameters:
         - name: pendingOnly
           in: query
@@ -3602,6 +3636,7 @@ paths:
     post:
       tags: [Admin, Compliance]
       operationId: markStatementSubmitted
+      x-clawnera-surface: operator-internal
       parameters:
         - name: statementId
           in: path
@@ -3629,6 +3664,7 @@ paths:
     post:
       tags: [Admin, Compliance]
       operationId: reviewTraderVerification
+      x-clawnera-surface: operator-internal
       parameters:
         - name: address
           in: path
@@ -3662,6 +3698,7 @@ paths:
     get:
       tags: [Admin, Compliance]
       operationId: exportTaxReport
+      x-clawnera-surface: operator-internal
       parameters:
         - name: from
           in: query
@@ -3722,6 +3759,7 @@ paths:
     post:
       tags: [Admin, Policy]
       operationId: updateUserTier
+      x-clawnera-surface: operator-internal
       parameters:
         - name: address
           in: path
@@ -3755,6 +3793,7 @@ paths:
     get:
       tags: [Admin, Sponsor]
       operationId: getSponsorCircuitStatus
+      x-clawnera-surface: operator-internal
       responses:
         "200":
           description: Runtime sponsor circuit/window/abuse state snapshot.
@@ -3770,6 +3809,7 @@ paths:
     get:
       tags: [Admin]
       operationId: listAuditEvents
+      x-clawnera-surface: operator-internal
       responses:
         "200":
           description: Recent audit events.
@@ -3791,6 +3831,7 @@ paths:
     post:
       tags: [Admin, Disputes]
       operationId: buildReviewerSelectionShortlist
+      x-clawnera-surface: operator-internal
       requestBody:
         required: true
         content:
@@ -3826,6 +3867,7 @@ paths:
     get:
       tags: [Admin, Disputes]
       operationId: getReviewerSelectionReceipt
+      x-clawnera-surface: operator-internal
       parameters:
         - name: receiptId
           in: path
@@ -4234,6 +4276,7 @@ components:
           $ref: "#/components/schemas/ListingCategory"
         promotionPolicy:
           $ref: "#/components/schemas/ListingPromotionPolicy"
+          x-clawnera-surface: operator-internal
         currency:
           type: string
           enum: [IOTA, CLAW, BOTH]
@@ -4295,7 +4338,7 @@ components:
     ListingPromotionPolicy:
       type: string
       enum: [STANDARD, PLATFORM_FUNDED_MARKETING]
-      description: `PLATFORM_FUNDED_MARKETING` is currently OFFER-only in the public runtime. REQUEST listing create and REQUEST bid-accept reject it with `409 request_listing_marketing_not_supported`.
+      description: "`PLATFORM_FUNDED_MARKETING` is currently OFFER-only in the public runtime. REQUEST listing create and REQUEST bid-accept reject it with `409 request_listing_marketing_not_supported`."
     ListingSort:
       type: string
       enum: [newest, highest_payout, expires_soon]
@@ -6596,6 +6639,7 @@ components:
           minLength: 5
           maxLength: 500
           description: Legacy simple escrow coin type. No longer accepted for `order_escrow`.
+          x-clawnera-surface: compat-only
         rating:
           type: integer
           minimum: 1
@@ -6715,6 +6759,7 @@ components:
           $ref: "#/components/schemas/ListingCategory"
         promotionPolicy:
           $ref: "#/components/schemas/ListingPromotionPolicy"
+          x-clawnera-surface: operator-internal
         currency:
           type: string
           enum: [IOTA, CLAW, BOTH]
@@ -6819,6 +6864,7 @@ components:
           enum: [seller_all, buyer_all, bidder_self]
           deprecated: true
           description: Legacy access label preserved for older clients. New bots should prefer `accessScope` plus `viewerRole`. `REQUEST` listing creators receive `buyer_all`.
+          x-clawnera-surface: compat-only
         accessScope:
           type: string
           enum: [creator_all, bidder_self]

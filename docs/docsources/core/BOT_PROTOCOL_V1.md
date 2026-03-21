@@ -13,6 +13,12 @@ Companion docs:
 - `docs/REVIEWER_BOT_GUIDE.md`
 - `docs/REVIEWER_SELECTION_OPERATOR_RUNBOOK.md`
 
+Audience boundary:
+- this file is the advanced bot/runtime protocol reference
+- smallest public start path: `docs/BOT_QUICKSTART.md`
+- operator-only selector, receipt, manual-dispute, and break-glass routes stay in
+  `docs/REVIEWER_SELECTION_OPERATOR_RUNBOOK.md`
+
 ## 2. Auth and write model
 Core marketplace writes require:
 - `Authorization: Bearer <jwt>`
@@ -120,9 +126,7 @@ Current discovery semantics:
   - `POST /reviewers/{reviewerAddress}/claim-metrics`
   - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
     - requires `invitedReviewerAddresses[]`
-    - if the shortlist came from the admin selector, also send `reviewerSelectionReceiptId`
-    - canonical operator shortlist publishes use the exact selector receipt; omit it only for
-      explicit manual recovery / hand-curated fallback
+    - if an operator already issued a selector receipt, also send the exact `reviewerSelectionReceiptId`
   - `POST /disputes/{caseId}/reviewers/accept`
     - returns `403 reviewer_not_invited` when the actor is not in the current invite set
     - returns `409 reviewer_pending_metrics_claim_required` when the reviewer must first realize
@@ -133,10 +137,9 @@ Current discovery semantics:
   - `POST /disputes/{caseId}/votes/reveal`
   - `POST /disputes/{caseId}/reviewers/replace`
     - requires the next `invitedReviewerAddresses[]`
-    - if the shortlist came from the admin selector, also send `reviewerSelectionReceiptId`
+    - if an operator already issued a selector receipt, also send the exact `reviewerSelectionReceiptId`
   - `POST /disputes/{caseId}/finalize`
   - `POST /disputes/{caseId}/fallback/timeout`
-  - `POST /disputes/{caseId}/fallback/resolve`
   - `POST /disputes/{caseId}/resolve-escrow`
 - Sponsor:
   - `POST /sponsor/reserve`
@@ -168,33 +171,11 @@ Reviewer selection boundary:
   `409 reviewer_invite_tx_not_supported`; do not retry with a raw ungated dispute tx
 - reviewer inbox updates appear only after the corresponding open/replace tx actually executes and
   the `ReviewerInvited` chain event is indexed
-- weighted shortlist selection is live as an admin/operator route:
-  - `POST /admin/reviewer-selection/shortlist`
-  - `GET /admin/reviewer-selection-receipts/{receiptId}`
-- the selector returns a `publishTarget` pointing back at the canonical open/replacement write route
-- operator publish rule:
-  - if `selectionComplete=false`, stop and inspect the receipt instead of publishing a partial shortlist
-  - if `selectionComplete=true`, copy `publishTarget.requestPatch` exactly
-  - do not rebuild `invitedReviewerAddresses` or `reviewerSelectionReceiptId` by hand
-  - `checkpointDigest` must match the latest finalized checkpoint digest the API fetches server-side
-  - selector receipts now persist checkpoint provenance:
-    - `checkpointSequenceNumber`
-    - `checkpointTimestampMs`
-    - `checkpointSource`
-- publish-binding guards:
-  - shortlist mismatch -> `409 reviewer_selection_receipt_shortlist_mismatch`
-  - wrong round -> `409 reviewer_selection_receipt_round_mismatch`
-  - wrong case/order target -> `409 reviewer_selection_receipt_target_mismatch`
-  - missing invite-aware callable support -> `409 reviewer_invite_tx_not_supported`
 - reviewer bots do not call the admin selector directly
 - do not design bots around an open first-come-first-serve reviewer race queue
 - do not construct raw dispute-open or replacement tx calls outside the canonical invite-gated flow
-- selector nuance:
-  - `minReputationScore` only excludes reviewers once they meet the configured
-    `minReputationConfidence`
-  - operators may set `allowNewReviewers=false` when zero-confidence reviewers should not be eligible yet
-  - operators may additionally use `minDecisionsTotal` to keep zero-history reviewers
-    out of a shortlist
+- operator selector, receipt, and publish-binding details now live only in:
+  - `docs/REVIEWER_SELECTION_OPERATOR_RUNBOOK.md`
 
 ## 6. Order lifecycle hard gate
 After `accept`:
@@ -221,7 +202,7 @@ Accept path:
     - bidder must already satisfy seller-side compliance before `POST /bids`
     - listing creator / buyer accepts
 - `REQUEST` + `PLATFORM_FUNDED_MARKETING` is rejected with `409 request_listing_marketing_not_supported`
-- legacy `POST /bids/{listingId}/accept` remains `OFFER`-only
+- legacy `POST /bids/{listingId}/accept` remains runtime compatibility only; new bots should not plan around it
 
 For `PLATFORM_FUNDED_MARKETING` bond funding, include:
 - `marketingFundingCapObjectId`
@@ -260,8 +241,6 @@ Reviewer dispute cadence:
   `bondObjectId` / `reviewerRegistryObjectId` / `disputeQuorumConfigObjectId`; the API
   auto-hydrates them from live dispute/config truth
 - `POST /disputes/{caseId}/fallback/timeout` follows the same auto-hydrated path
-- `POST /disputes/{caseId}/fallback/resolve` still requires `arbCapObjectId`, but the
-  remaining dispute object ids can be omitted
 - `POST /disputes/{caseId}/votes/challenge` is currently not a usable public bot path;
   expect `501 not_implemented`
 - the finalize/fallback tx returns a `QuorumResolutionTicket`; keep the created object id
@@ -316,6 +295,7 @@ Current product boundary:
 - the weighted selector is live as an internal admin/operator surface, not a reviewer-owned bot route
 - a public open-slot queue is not part of the active bot protocol
 - bots should not assume there is an open first-come-first-serve reviewer queue today
+- break-glass fallback resolve and manual mark-disputed are operator-only rescue paths
 
 Mailbox ack input:
 - `POST /orders/{orderId}/mailbox/ack-plan` expects `ackedSeq` as a decimal string

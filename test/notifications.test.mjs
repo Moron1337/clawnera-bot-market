@@ -38,6 +38,30 @@ test("unknown event types are reported instead of silently accepted", () => {
   assert.ok(!resolved.eventTypes.includes("not.real.event"));
 });
 
+test("explicit advanced event types are accepted even when presets stay low-noise", () => {
+  const resolved = resolveNotificationEventTypes({
+    preset: "buyer",
+    eventTypes:
+      "dispute.finalization_planned,dispute.escrow_resolution_planned,mailbox.bound,mailbox.signal_acked"
+  });
+  assert.ok(resolved.eventTypes.includes("order.status_changed"));
+  assert.ok(resolved.eventTypes.includes("dispute.finalization_planned"));
+  assert.ok(resolved.eventTypes.includes("dispute.escrow_resolution_planned"));
+  assert.ok(resolved.eventTypes.includes("mailbox.bound"));
+  assert.ok(resolved.eventTypes.includes("mailbox.signal_acked"));
+  assert.deepEqual(resolved.invalidEventTypes, []);
+});
+
+test("removed drift dispute event types are rejected explicitly", () => {
+  const resolved = resolveNotificationEventTypes({
+    preset: "buyer",
+    eventTypes: "dispute.finalized,dispute.resolved"
+  });
+  assert.deepEqual(resolved.invalidEventTypes, ["dispute.finalized", "dispute.resolved"]);
+  assert.equal(resolved.eventTypes.includes("dispute.finalized"), false);
+  assert.equal(resolved.eventTypes.includes("dispute.resolved"), false);
+});
+
 test("custom preset keeps only explicit event types", () => {
   const resolved = resolveNotificationEventTypes({
     preset: CUSTOM_NOTIFICATION_PRESET,
@@ -82,6 +106,32 @@ test("notification env text contains auth, preset, and telegram placeholders whe
   assert.match(envText, /CLAWNERA_NOTIFY_EVENT_TYPES=bid\.created,mailbox\.signal_posted/);
   assert.match(envText, /# TELEGRAM_BOT_TOKEN=<set your bot token>/);
   assert.match(envText, /# TELEGRAM_CHAT_ID=<set your chat id>/);
+});
+
+test("advanced dispute and mailbox event formatting stays human-readable", () => {
+  const finalizeText = formatNotificationEventForTelegram({
+    eventType: "dispute.finalization_planned",
+    payloadJson: {
+      orderId: "order-1",
+      disputeCaseId: "case-1",
+      resolutionPath: "seller"
+    }
+  });
+  assert.match(finalizeText, /^Clawnera dispute action/m);
+  assert.match(finalizeText, /Dispute finalize plan is ready/);
+  assert.match(finalizeText, /resolutionPath: seller/);
+
+  const ackText = formatNotificationEventForTelegram({
+    eventType: "mailbox.signal_acked",
+    payloadJson: {
+      orderId: "order-1",
+      ackedSeq: "4",
+      ackerRole: "buyer"
+    }
+  });
+  assert.match(ackText, /^Clawnera mailbox ack/m);
+  assert.match(ackText, /Mailbox acknowledgement recorded/);
+  assert.match(ackText, /ackedSeq: 4/);
 });
 
 test("notification service text points at the generic event notifier", () => {

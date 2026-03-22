@@ -176,17 +176,25 @@ Important:
   - cursor format: `<createdAt>|<eventId>`
   - default without auth: public feed only
   - `scope=actor|all` requires bearer token
-- event types currently emitted:
+- current actor-visible lifecycle events:
   - `listing.created`
   - `listing.status_changed`
   - `bid.created`
   - `order.accepted`
   - `order.status_changed`
   - `milestone.submitted|accepted|rejected`
-  - `dispute.opened|finalized|resolved`
-  - `mailbox.bound`
+  - `dispute.opened`
   - `mailbox.signal_posted|signal_acked`
   - `sponsor.executed`
+- advanced opt-in plan and mailbox lifecycle events:
+  - `dispute.finalization_planned`
+  - `dispute.escrow_resolution_planned`
+  - `mailbox.bound`
+- what does not auto-emit today:
+  - no `dispute.finalized`
+  - no `dispute.resolved`
+  - no automatic mailbox dispute outcome message
+  - terminal dispute closeout automation should use `order.status_changed`
 - `POST /webhooks/subscriptions`
   - body: `url`, optional `eventTypes[]`, optional `signingSecret`
   - response never returns the secret; only `hasSigningSecret`

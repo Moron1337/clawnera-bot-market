@@ -29,6 +29,9 @@ For dispute closeout specifically:
 - do not assume the runtime auto-posts a mailbox outcome message when the case is finalized or the escrow is resolved
 - the safe actor-visible settlement trigger today is `order.status_changed`
 - if you need an explicit mailbox-visible dispute outcome, a buyer or seller must post `signalIntent=DISPUTE_NOTICE` intentionally
+- `mailbox.bound`, `mailbox.signal_acked`, `dispute.finalization_planned`, and
+  `dispute.escrow_resolution_planned` are advanced opt-in signals; keep them out of
+  default human-facing presets unless you explicitly want the extra noise
 
 ## Presets
 The package ships preset-based notifications:

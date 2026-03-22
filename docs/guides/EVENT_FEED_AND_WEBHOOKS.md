@@ -26,7 +26,7 @@
   - mit Bearer-Token und `scope=all` public + actor-visible Events
   - `scope=actor|all` ohne Bearer liefert `401`
 
-## Aktuelle Event-Typen
+## Standard Event-Typen
 - `listing.created`
 - `listing.status_changed`
 - `bid.created`
@@ -36,10 +36,17 @@
 - `milestone.accepted`
 - `milestone.rejected`
 - `dispute.opened`
-- `mailbox.bound`
 - `mailbox.signal_posted`
 - `mailbox.signal_acked`
 - `sponsor.executed`
+
+## Advanced opt-in Event-Typen
+- `dispute.finalization_planned`
+- `dispute.escrow_resolution_planned`
+- `mailbox.bound`
+
+Diese Events sind echt und explizit waehlbar, gehoeren aber bewusst nicht in die
+rauscharme Default-Benachrichtigung fuer Menschen.
 
 Wichtig fuer Dispute-Closeout:
 - bots sollten heute nicht auf automatische `dispute.finalized` / `dispute.resolved` feed items bauen
@@ -63,6 +70,9 @@ Wichtig fuer Dispute-Closeout:
   - optional `signingSecret`
 - Wenn `eventTypes` fehlt oder leer ist, bekommt die Subscription alle sichtbaren Events.
 - Responses geben nie das Secret zurueck, nur `hasSigningSecret`.
+- Die Notification-Presets bleiben absichtlich low-noise; fuer
+  `dispute.finalization_planned`, `dispute.escrow_resolution_planned`, `mailbox.bound`
+  oder `mailbox.signal_acked` die Event-Typen explizit angeben.
 
 ### Delivery-Vertrag
 - Runtime sendet JSON mit:

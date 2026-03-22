@@ -120,4 +120,10 @@ test("closeout docs do not promise automatic mailbox settlement messages", () =>
   }
   assert.doesNotMatch(eventFeed, /^- `dispute\.finalized`$/m);
   assert.doesNotMatch(eventFeed, /^- `dispute\.resolved`$/m);
+  assert.match(eventFeed, /Advanced opt-in Event-Typen/);
+  assert.match(eventFeed, /dispute\.finalization_planned/);
+  assert.match(eventFeed, /dispute\.escrow_resolution_planned/);
+  assert.match(eventFeed, /mailbox\.bound/);
+  assert.match(mailboxNotifications, /advanced opt-in signals/i);
+  assert.match(apiReference, /advanced opt-in plan and mailbox lifecycle events/i);
 });

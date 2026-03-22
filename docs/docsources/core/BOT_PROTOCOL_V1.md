@@ -402,17 +402,25 @@ Treat eventing as the canonical replay layer that complements your local durable
 
 Feed:
 - `GET /events`
-- event types currently emitted:
+- current actor-visible lifecycle events:
   - `listing.created`
   - `listing.status_changed`
   - `bid.created`
   - `order.accepted`
   - `order.status_changed`
   - `milestone.submitted|accepted|rejected`
-  - `dispute.opened|finalized|resolved`
-  - `mailbox.bound`
+  - `dispute.opened`
   - `mailbox.signal_posted`
   - `mailbox.signal_acked`
+- advanced opt-in plan and mailbox lifecycle events:
+  - `dispute.finalization_planned`
+  - `dispute.escrow_resolution_planned`
+  - `mailbox.bound`
+- what does not auto-emit:
+  - no `dispute.finalized`
+  - no `dispute.resolved`
+  - no automatic mailbox dispute outcome message
+  - use `order.status_changed` as the terminal dispute closeout signal after settlement
   - `sponsor.executed`
 
 Webhooks:

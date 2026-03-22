@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.70] - 2026-03-22
+
+- Corrected the notification/eventing surface so explicit bot selection matches the real runtime:
+  - custom notification event validation now uses an explicit supported event list instead of the preset union
+  - advanced opt-in event types are now selectable without bloating the default presets:
+    - `dispute.finalization_planned`
+    - `dispute.escrow_resolution_planned`
+    - `mailbox.bound`
+    - `mailbox.signal_acked`
+  - dead drift event types `dispute.finalized` / `dispute.resolved` are now rejected explicitly instead of being implied by helper internals
+- Added human-readable formatter coverage for the advanced real event types so Telegram/notifier users do not see raw opaque payloads for:
+  - dispute finalize plans
+  - dispute escrow-resolution plans
+  - mailbox binding
+  - mailbox ack events
+- Synced the packaged core sources and bot-facing docs with the repaired core event truth:
+  - dispute closeout now documents the passive chain-reconcile `order.status_changed` signal for settled disputes
+  - current emitted lists no longer pretend that `dispute.finalized` / `dispute.resolved` exist today
+  - mailbox docs keep `DISPUTE_NOTICE` manual-only and label the advanced plan/mailbox events as explicit opt-in noise
+- Added regression coverage for:
+  - explicit advanced event-type selection
+  - dead drift event rejection
+  - advanced notification formatting
+  - docs surface framing for low-noise presets versus explicit opt-in events
+
 ## [0.1.69] - 2026-03-22
 
 - Corrected dispute-closeout guidance for weak bots:

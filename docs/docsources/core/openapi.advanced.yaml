@@ -6791,6 +6791,10 @@ components:
         - FAILED
     MarketplaceEventType:
       type: string
+      description: >
+        Currently emitted marketplace event types. `dispute.finalization_planned`, `dispute.escrow_resolution_planned`,
+        `mailbox.bound`, and `mailbox.signal_acked` are advanced opt-in signals. Terminal dispute settlement automation
+        should use `order.status_changed`; the system does not auto-post mailbox dispute outcome messages.
       enum:
         - listing.created
         - listing.status_changed
@@ -6802,9 +6806,7 @@ components:
         - milestone.accepted
         - milestone.rejected
         - dispute.opened
-        - dispute.finalized
         - dispute.finalization_planned
-        - dispute.resolved
         - dispute.escrow_resolution_planned
         - mailbox.bound
         - mailbox.signal_posted

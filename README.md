@@ -424,6 +424,12 @@ Recommended live role mapping:
 - seller/listing creator wallet: must watch `bid.created`
 - buyer/bidder wallet: must watch `order.accepted`
 - mixed-role wallet: use `--preset all` or run separate notifiers
+- advanced opt-in notifications stay explicit:
+  - `dispute.finalization_planned`
+  - `dispute.escrow_resolution_planned`
+  - `mailbox.bound`
+  - `mailbox.signal_acked`
+  - the safe terminal dispute closeout signal remains `order.status_changed`
 
 Packaged systemd example:
 - `./examples/telegram-event-notifier.service.example`

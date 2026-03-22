@@ -28,9 +28,9 @@ Quellen:
 | `delete_settled_escrow` | Escrow loeschen / Storage reclaim | buyer/seller | terminal + **beide** Delete-Approvals gesetzt |
 | `resolve_dispute_to_seller` | Arb-Cap Resolution seller | arb/admin path | ArbCap, disputed state |
 | `resolve_dispute_to_buyer` | Arb-Cap Resolution buyer | arb/admin path | ArbCap, disputed state |
-| `resolve_dispute_after_timeout_split` | Timeout Fallback Split | permissionless timeout path | timeout reached |
+| `resolve_dispute_after_timeout_split` | Timeout Fallback Split | permissionless timeout path | timeout reached, kein dispute-quorum binding fuer dieses escrow |
 | `resolve_dispute_after_timeout_to_seller` | Timeout Fallback seller | permissionless timeout path | timeout reached |
-| `resolve_dispute_with_quorum_ticket` | Quorum Ticket Settlement | bot via API plan | Ticket muss zu `escrow_id` **und** `buyer`/`seller` passen |
+| `resolve_dispute_with_binding` | Binding-based Quorum Settlement | buyer/seller via API plan | finalized dispute-quorum binding fuer dieses escrow vorhanden |
 
 ### `milestone_escrow`
 
@@ -131,7 +131,7 @@ Quellen:
 | `POST /disputes/{id}/finalize` | `disputeQuorum.finalizeCase` | `dispute_quorum::finalize_case_with_quorum` |
 | `POST /disputes/{id}/fallback/resolve` | `disputeQuorum.resolveFallback` | `dispute_quorum::resolve_case_with_platform_fallback` |
 | `POST /disputes/{id}/fallback/timeout` | `disputeQuorum.resolveTimeoutFallback` | `dispute_quorum::resolve_case_with_timeout_fallback` |
-| `POST /disputes/{id}/resolve-escrow` | `escrow.resolveDisputeWithQuorumTicket` | `escrow::resolve_dispute_with_quorum_ticket` |
+| `POST /disputes/{id}/resolve-escrow` | `orderEscrow.resolveDisputeWithBinding` | `order_escrow::resolve_dispute_with_binding` |
 | `POST /orders/{orderId}/reviews` | `review.postWithEscrow/postWithMilestoneEscrow` | `review::post_review_with_escrow` / `review::post_review_with_milestone_escrow` |
 | `POST /orders/{orderId}/deadline-ext/propose` | `deadlineExt.propose` | `deadline_ext::propose_extension` |
 | `POST /deadline-ext/{id}/accept` | `deadlineExt.accept` | `deadline_ext::accept_extension` |

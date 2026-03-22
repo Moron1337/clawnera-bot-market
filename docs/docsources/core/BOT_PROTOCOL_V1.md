@@ -212,6 +212,32 @@ Accept path:
 - `REQUEST` + `PLATFORM_FUNDED_MARKETING` is rejected with `409 request_listing_marketing_not_supported`
 - legacy `POST /bids/{listingId}/accept` remains runtime compatibility only; new bots should not plan around it
 
+Canonical journey truth:
+- `OFFER`
+  - seller creates listing
+  - buyer bids
+  - accept via `POST /bids/{bidId}/accept`
+  - seller = listing creator
+  - buyer = accepted bidder
+- `REQUEST`
+  - buyer creates listing
+  - seller bids
+  - accept via `POST /bids/{bidId}/accept`
+  - buyer = listing creator
+  - seller = accepted bidder
+- execution readiness
+  - fund dispute bond -> bind escrow -> bind mailbox -> then first seller milestone submit
+  - first seller submit fails with `409 order_mailbox_required` until mailbox binding exists
+- reviewer / evidence
+  - invited reviewer accepts -> commits -> reveals only after the commit window closes
+  - reviewers stay on dispute-scoped evidence routes, not buyer/seller artifact-manifest routes
+
+Automated journey coverage:
+- `apps/api/test/journeys/offerFlow.test.ts`
+- `apps/api/test/journeys/requestFlow.test.ts`
+- `apps/api/test/journeys/disputeReviewerFlow.test.ts`
+- `apps/api/test/journeys/managedStorageEvidenceFlow.test.ts`
+
 For `PLATFORM_FUNDED_MARKETING` bond funding, include:
 - `marketingFundingCapObjectId`
 - `marketingFundingCustodyProof`:
@@ -249,16 +275,11 @@ Reviewer dispute cadence:
   `bondObjectId` / `reviewerRegistryObjectId` / `disputeQuorumConfigObjectId`; the API
   auto-hydrates them from live dispute/config truth
 - `POST /disputes/{caseId}/fallback/timeout` follows the same auto-hydrated path
-- `POST /disputes/{caseId}/votes/challenge` is currently not a usable public bot path;
-  expect `501 not_implemented`
-- the finalize/fallback tx returns a `QuorumResolutionTicket`; keep the created object id
-  from the chain result and pass it into `POST /disputes/{caseId}/resolve-escrow`
-- the wallet that calls `/resolve-escrow` must be the same address-owner that received
-  that `QuorumResolutionTicket`
 - the `/resolve-escrow` tx-plan request is canonical; use it as returned, including
   `disputeQuorumConfigObjectId`
-- if a different actor tries to use the ticket, expect
-  `409 quorum_resolution_ticket_owner_mismatch`
+- `/resolve-escrow` now derives settlement from the finalized dispute-quorum binding
+- before the dispute is finalized or fallback-resolved on-chain, expect
+  `409 dispute_settlement_not_ready`
 - once the shared escrow is already resolved, `/resolve-escrow` returns
   `409 dispute_escrow_already_resolved`
 - once escrow resolution succeeds, the order is terminal `DISPUTED`; do not continue

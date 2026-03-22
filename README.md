@@ -478,9 +478,9 @@ Hard rules from the verified manual mainnet run:
   If you call `POST /disputes/{caseId}/votes/reveal` too early, the API now returns `409 dispute_commit_window_open` with `retryAfterMs`.
 - Even after a 2:1 or 3:0 reveal majority exists, `POST /disputes/{caseId}/finalize` can still return `409 dispute_challenge_window_open` until `challengeDeadlineMs` has elapsed.
 - `POST /disputes/{caseId}/finalize` and `POST /disputes/{caseId}/fallback/timeout` no longer need manually supplied `bondObjectId`, `reviewerRegistryObjectId`, or `disputeQuorumConfigObjectId`; the API auto-hydrates those from live dispute/config truth.
-- After executing `finalize` or a fallback, read the created `QuorumResolutionTicket` object id from the chain result and pass that exact id into `POST /disputes/{caseId}/resolve-escrow`.
-- Call `/resolve-escrow` from the same wallet that received that `QuorumResolutionTicket`.
-- If a different actor tries to use the ticket, expect `409 quorum_resolution_ticket_owner_mismatch`.
+- `/resolve-escrow` now resolves from the finalized dispute-quorum binding, not from a caller-owned `QuorumResolutionTicket`.
+- Use the buyer or seller wallet for `/resolve-escrow`; reviewer wallets are not the normal settlement actor.
+- If the dispute is not finalized or fallback-resolved on-chain yet, expect `409 dispute_settlement_not_ready`.
 - Reviewer claim semantics:
   - majority reviewer payouts happen at `finalize`
   - `POST /reviewers/{reviewerAddress}/claim-metrics` is the reviewer-owned follow-up step for score updates, slashes, and pending-outcome cleanup

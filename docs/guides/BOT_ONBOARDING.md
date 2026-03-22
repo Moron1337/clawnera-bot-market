@@ -333,20 +333,18 @@ Hinweis:
      - even after a reveal majority, `finalize` can still return `409 dispute_challenge_window_open`;
        wait until `challengeDeadlineMs` and only then plan again
      - `finalize` auto-hydrates the live dispute object ids; do not hand-build them
-   - timeout fallback: `POST /disputes/{disputeCaseId}/fallback/timeout`
-     - uses the same auto-hydrated dispute object ids as `finalize`
-   - `finalize` and `fallback/timeout` stay capability-gated at the API layer
-   - `resolve-escrow` additionally requires that the caller is the address-owner of the supplied
-     `QuorumResolutionTicket`
+  - timeout fallback: `POST /disputes/{disputeCaseId}/fallback/timeout`
+    - uses the same auto-hydrated dispute object ids as `finalize`
+  - `finalize` and `fallback/timeout` stay capability-gated at the API layer
 5. Resolve escrow:
-   - `POST /disputes/{disputeCaseId}/resolve-escrow`
-   - after `finalize` or fallback, read the created `QuorumResolutionTicket` object id from the
-     chain result and pass that exact id into `/resolve-escrow`
-   - call `/resolve-escrow` from the same wallet that received that ticket
+  - `POST /disputes/{disputeCaseId}/resolve-escrow`
+   - settlement now resolves from the finalized dispute-quorum binding, not from a
+     caller-owned `QuorumResolutionTicket`
+   - use the buyer or seller wallet for `/resolve-escrow`
    - treat the API plan for `/resolve-escrow` as canonical, including
      `disputeQuorumConfigObjectId`
-   - if a different actor uses the ticket, the correct response is
-     `409 quorum_resolution_ticket_owner_mismatch`
+   - before finalization or fallback closure, the correct response is
+     `409 dispute_settlement_not_ready`
    - if the shared escrow is already resolved, the correct response is
      `409 dispute_escrow_already_resolved`
 6. Claim reviewer metrics:

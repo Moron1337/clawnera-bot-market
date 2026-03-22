@@ -191,12 +191,10 @@ If the buyer rejects a milestone:
 - `POST /disputes/{caseId}/finalize` and `POST /disputes/{caseId}/fallback/timeout`
   auto-hydrate the live dispute object ids; do not hand-build them
 - `POST /disputes/{caseId}/fallback/resolve` still requires `arbCapObjectId`
-- finalize/fallback execution creates a `QuorumResolutionTicket`; keep the created object
-  id from the chain result and feed it into `/resolve-escrow`
-- call `/resolve-escrow` from the same wallet that received that ticket
+- `/resolve-escrow` now derives settlement from the finalized dispute-quorum binding
+- call `/resolve-escrow` from the buyer or seller wallet for the disputed order
 - treat the `/resolve-escrow` tx-plan request as canonical, including
   `disputeQuorumConfigObjectId`
-- a different actor now gets `409 quorum_resolution_ticket_owner_mismatch`
 - reviewer-majority payouts happen at `finalize`, not at `claim-metrics`
 - `claim-metrics` is the reviewer-owned post-case step for score updates, slashes, and
   pending-outcome cleanup

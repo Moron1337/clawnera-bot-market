@@ -84,3 +84,14 @@ test("reviewer docs require dispute-scoped evidence before voting", () => {
   assert.match(mailbox, /supplemental_bundle/);
   assert.match(routeMatrix, /linked_deliverable` oder `supplemental_bundle/);
 });
+
+test("active dispute guides avoid ticket-owner handoff language for escrow settlement", () => {
+  const manualFlow = readRepoFile("docs/guides/LIVE_MANUAL_ORDER_FLOW.md");
+  const checklist = readRepoFile("docs/guides/CANONICAL_LIVE_RUN_CHECKLIST.md");
+  const reviewerFlow = readRepoFile("docs/guides/REVIEWER_SELECTOR_FLOW.md");
+
+  for (const text of [manualFlow, checklist, reviewerFlow]) {
+    assert.equal(text.includes("same wallet that received the `QuorumResolutionTicket`"), false);
+    assert.equal(text.includes("quorum_resolution_ticket_owner_mismatch"), false);
+  }
+});

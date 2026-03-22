@@ -12815,9 +12815,6 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         console.log(`mailbox_signal_acker_role=${result.mailboxSignalAcked.ackerRole}`);
       }
     }
-    if (result.quorumResolutionTicketObjectId) {
-      console.log(`quorum_resolution_ticket_object_id=${result.quorumResolutionTicketObjectId}`);
-    }
     if (result.planOut) {
       console.log(`plan_file=${result.planOut}`);
     }

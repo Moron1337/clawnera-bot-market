@@ -2,10 +2,24 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildClawdexTxFromPlan,
   extractLatestEventByTypeSuffix,
   extractMailboxSignalAcked,
   extractMailboxSignalPosted,
 } from "../lib/clawdex-onchain.mjs";
+
+function addr(char) {
+  return `0x${char.repeat(64)}`;
+}
+
+function extractLastMoveCallFunction(tx) {
+  const data = tx.getData();
+  const lastCommand = data.commands.at(-1);
+  if (!lastCommand || !("MoveCall" in lastCommand) || !lastCommand.MoveCall) {
+    throw new Error("missing_move_call");
+  }
+  return lastCommand.MoveCall.function;
+}
 
 test("mailbox event extractors normalize posted and acked events from execution results", () => {
   const executionResult = {
@@ -79,4 +93,35 @@ test("mailbox event extractors return null when the expected event is missing", 
   assert.equal(extractLatestEventByTypeSuffix(executionResult, "::order_mailbox::SignalPosted"), null);
   assert.equal(extractMailboxSignalPosted(executionResult), null);
   assert.equal(extractMailboxSignalAcked(executionResult), null);
+});
+
+test("buildClawdexTxFromPlan dispatches canonical binding-based order-escrow settlement", () => {
+  const tx = buildClawdexTxFromPlan({
+    txBuilder: "orderEscrow.resolveDisputeWithBinding",
+    request: {
+      packageId: addr("1"),
+      sender: addr("a"),
+      escrowObjectId: addr("b"),
+      escrowCoinType: `${addr("2")}::coin::COIN`,
+      disputeQuorumConfigObjectId: addr("c"),
+    },
+  });
+
+  assert.equal(extractLastMoveCallFunction(tx), "resolve_dispute_with_binding");
+});
+
+test("buildClawdexTxFromPlan keeps legacy quorum-ticket settlement as explicit compat path", () => {
+  const tx = buildClawdexTxFromPlan({
+    txBuilder: "orderEscrow.resolveDisputeWithQuorumTicket",
+    request: {
+      packageId: addr("1"),
+      sender: addr("a"),
+      escrowObjectId: addr("b"),
+      escrowCoinType: `${addr("2")}::coin::COIN`,
+      quorumResolutionTicketObjectId: addr("c"),
+      disputeQuorumConfigObjectId: addr("d"),
+    },
+  });
+
+  assert.equal(extractLastMoveCallFunction(tx), "resolve_dispute_with_quorum_ticket");
 });

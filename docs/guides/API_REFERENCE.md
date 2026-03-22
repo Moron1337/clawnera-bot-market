@@ -292,20 +292,17 @@ Important:
     and `disputeQuorumConfigObjectId` from live dispute/config truth
   - returns `409 dispute_challenge_window_open` with `challengeDeadlineMs` and
     `retryAfterMs` when quorum exists but the post-reveal challenge window is still open
-  - live builder note: executing the finalize plan returns a `QuorumResolutionTicket`
-    object to the sender wallet; read its created object id from the chain result and
-    pass that id into `/resolve-escrow`
 - `POST /disputes/{disputeCaseId}/fallback/timeout`
   - body may be omitted; the API auto-hydrates `bondObjectId`, `reviewerRegistryObjectId`,
     and `disputeQuorumConfigObjectId` from live dispute/config truth
 - `POST /disputes/{disputeCaseId}/resolve-escrow`
-  - caller must be the address-owner of the supplied `QuorumResolutionTicket`
-  - in the normal quorum path, this is the same wallet that executed `finalize` and
-    received the ticket in its chain result
+  - canonical settlement now resolves from the finalized dispute-quorum binding, not from
+    a caller-owned `QuorumResolutionTicket`
+  - request body may be omitted or contain only `escrowObjectId`
   - the returned tx-plan request is builder-ready and includes
     `disputeQuorumConfigObjectId`
-  - if a different actor tries to use the ticket, the route returns
-    `409 quorum_resolution_ticket_owner_mismatch`
+  - before quorum/fallback closure lands on-chain, the route returns
+    `409 dispute_settlement_not_ready`
   - once the shared escrow is already resolved, the route returns
     `409 dispute_escrow_already_resolved`
   - after escrow resolution, the order is terminal for later milestones; milestone

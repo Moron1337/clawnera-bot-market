@@ -1302,7 +1302,7 @@
       "store": [
         "commit tx result",
         "reveal tx result",
-        "QuorumResolutionTicket object id if finalization produced one"
+        "closed disputeCaseId"
       ],
       "routes": [
         "POST /disputes/{disputeCaseId}/votes/commit",
@@ -1334,8 +1334,7 @@
         "Stop if the prepared vote/nonce no longer match what you were about to reveal."
       ],
       "nextRecipes": [
-        "reviewer-claim-metrics",
-        "resolve-dispute"
+        "reviewer-claim-metrics"
       ],
       "nextTopics": ["reviewer-selector", "api", "order-states"]
     },
@@ -1430,13 +1429,12 @@
       "id": "resolve-dispute",
       "title": "Resolve Dispute Escrow",
       "aliases": ["dispute-resolve", "finalize-dispute-resolution"],
-      "summary": "Use the exact QuorumResolutionTicket and canonical resolve-escrow plan after finalization.",
-      "role": "ticket_owner",
+      "summary": "Resolve the shared escrow from the finalized dispute binding after quorum or fallback closure.",
+      "role": "buyer_or_seller",
       "when": "Use this after the dispute is finalized or fallback-resolved.",
       "needs": [
-        "The dispute has already finalized or fallback-resolved.",
-        "The QuorumResolutionTicket object id is known from the chain result.",
-        "The same wallet that received that QuorumResolutionTicket is the wallet executing this step."
+        "The dispute has already finalized or fallback-resolved on-chain.",
+        "The wallet is the buyer or seller for the disputed order."
       ],
       "store": [
         "terminal dispute status",
@@ -1448,18 +1446,17 @@
         "GET /orders/{orderId}"
       ],
       "steps": [
-        "Read the exact QuorumResolutionTicket object id from the chain result.",
-        "Stay on the same wallet that received that ticket.",
-        "POST /disputes/{disputeCaseId}/resolve-escrow with that exact ticket id.",
+        "Stay on the buyer or seller wallet for the disputed order.",
+        "POST /disputes/{disputeCaseId}/resolve-escrow.",
         "Execute the returned tx locally.",
         "Read back the dispute and order state."
       ],
       "examples": [
-        "Use the same wallet that received the QuorumResolutionTicket:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/resolve-escrow --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"quorumResolutionTicketObjectId\": \"<ticket-object-id>\"\\n}'",
+        "Resolve from the finalized dispute binding:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/resolve-escrow --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'",
         "Read back the closed dispute and terminal order immediately after resolution:\\nclawnera-help request GET /disputes/<dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request GET /orders/<order-id> --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
-        "Stop if quorum_resolution_ticket_owner_mismatch is returned; switch back to the wallet that received the ticket.",
+        "Stop if dispute_settlement_not_ready is returned; wait for finalized or fallback-resolved dispute state first.",
         "Stop if dispute_escrow_already_resolved is returned.",
         "After resolution, stop all later milestone writes; the order is terminal."
       ],

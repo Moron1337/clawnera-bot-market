@@ -204,6 +204,7 @@ escrow|public|resolve_dispute_after_timeout_split
 escrow|public|resolve_dispute_after_timeout_to_seller
 escrow|public|resolve_dispute_to_buyer
 escrow|public|resolve_dispute_to_seller
+escrow|public|resolve_dispute_with_binding
 escrow|public|resolve_dispute_with_quorum_ticket
 escrow|public|resolved_state
 escrow|public|settlement_split_path
@@ -295,6 +296,7 @@ order_escrow|public|resolve_dispute_after_timeout_split
 order_escrow|public|resolve_dispute_after_timeout_to_seller
 order_escrow|public|resolve_dispute_to_buyer
 order_escrow|public|resolve_dispute_to_seller
+order_escrow|public|resolve_dispute_with_binding
 order_escrow|public|resolve_dispute_with_quorum_ticket
 order_escrow|public|resolved_state
 order_escrow|public|settlement_split_path

@@ -153,6 +153,7 @@ Normal participant paths after quorum:
 - `POST /disputes/{disputeCaseId}/finalize`
 - `POST /disputes/{disputeCaseId}/fallback/timeout`
 - `POST /disputes/{disputeCaseId}/resolve-escrow`
+  - resolves from the finalized dispute-quorum binding
 
 Keep out of the normal public path:
 - selector admin shortlist routes

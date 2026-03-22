@@ -853,7 +853,7 @@ paths:
     post:
       tags: [Listings]
       operationId: createListing
-      description: Create a public OFFER or REQUEST listing. `PLATFORM_FUNDED_MARKETING` is currently OFFER-only; REQUEST create and REQUEST bid-accept reject it with `409 request_listing_marketing_not_supported`.
+      description: Create a public OFFER or REQUEST listing. Send `listingMode` explicitly even though the legacy runtime still defaults omitted values to `OFFER`. Live runtimes with on-chain reputation config may reject missing creator reputation profiles with `409 reputation_profile_required`. `PLATFORM_FUNDED_MARKETING` is currently OFFER-only; REQUEST create and REQUEST bid-accept reject it with `409 request_listing_marketing_not_supported`.
       parameters:
         - name: idempotency-key
           in: header
@@ -997,6 +997,7 @@ paths:
     post:
       tags: [Listings]
       operationId: renewListing
+      description: Reopen or extend a listing expiry from the creator wallet. Live runtimes with on-chain reputation config may reject renewals from wallets that still lack a reputation profile with `409 reputation_profile_required`.
       parameters:
         - name: listingId
           in: path
@@ -3021,7 +3022,7 @@ paths:
     post:
       tags: [Disputes]
       operationId: challengeDisputeVote
-      x-clawnera-surface: reviewer-self
+      x-clawnera-surface: compat-only
       parameters:
         - name: disputeCaseId
           in: path
@@ -3159,7 +3160,7 @@ paths:
   /disputes/{disputeCaseId}/resolve-escrow:
     post:
       tags: [Disputes]
-      operationId: resolveEscrowWithQuorumTicketPlan
+      operationId: resolveEscrowWithDisputeBindingPlan
       x-clawnera-surface: public-user
       parameters:
         - name: disputeCaseId
@@ -3168,20 +3169,20 @@ paths:
           schema:
             type: string
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DisputeResolveEscrowWithTicketRequest"
+              $ref: "#/components/schemas/DisputeResolveEscrowRequest"
       responses:
         "200":
-          description: Transaction plan for `order_escrow::resolve_dispute_with_quorum_ticket`.
+          description: Transaction plan for `order_escrow::resolve_dispute_with_binding`.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/TxPlanResponse"
         "409":
-          description: Ticket/escrow/order mismatch or the supplied `QuorumResolutionTicket` is not owned by the caller.
+          description: Escrow/order mismatch, already-resolved escrow, or dispute settlement not yet finalized on-chain.
           content:
             application/json:
               schema:
@@ -4374,6 +4375,7 @@ components:
           type: string
         listingMode:
           $ref: "#/components/schemas/ListingMode"
+          description: Send this explicitly. The legacy runtime still defaults omitted values to `OFFER`, but bot-facing helpers should always choose `OFFER` or `REQUEST` intentionally.
         title:
           type: string
           minLength: 4
@@ -4430,6 +4432,7 @@ components:
         dueAtMs:
           type: integer
           format: int64
+          description: Structured milestone target date in milliseconds since epoch. Bot-facing helpers should provide this explicitly for every milestone so human and bot surfaces can show reliable target dates.
         reviewWindowHours:
           type: integer
           minimum: 1
@@ -6210,16 +6213,16 @@ components:
           description: "Optional. When omitted, the API uses the configured dispute quorum config object id."
         clockObjectId:
           type: string
-    DisputeResolveEscrowWithTicketRequest:
+    DisputeResolveEscrowRequest:
       type: object
       additionalProperties: false
-      required: [quorumResolutionTicketObjectId]
       properties:
         escrowObjectId:
           type: string
           description: "Optional. When omitted, the API resolves the live escrow object id from the dispute case."
-        quorumResolutionTicketObjectId:
+        disputeQuorumConfigObjectId:
           type: string
+          description: "Optional. When omitted, the API uses the configured dispute quorum config object id."
     TxMoveCallSummary:
       type: object
       required: [target, module, fn]

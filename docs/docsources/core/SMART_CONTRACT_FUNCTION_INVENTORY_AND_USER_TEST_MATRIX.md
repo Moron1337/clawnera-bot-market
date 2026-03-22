@@ -3,6 +3,25 @@
 Stand: 2026-02-25
 Scope: `/home/codex/clawdex/contracts/claw_marketplace/sources/*.move`
 
+## 0a) Automated journey matrix (API + contract-facing truth)
+
+These are the canonical multi-step regression slices that should stay green when
+contract, API, or bot-facing lifecycle semantics change:
+
+- `apps/api/test/journeys/offerFlow.test.ts`
+  - explicit `OFFER` listing -> bid -> accept-by-bid-id -> bid-status settlement
+- `apps/api/test/journeys/requestFlow.test.ts`
+  - explicit `REQUEST` listing -> seller bids -> inverted buyer/seller truth after accept
+- `apps/api/test/journeys/disputeReviewerFlow.test.ts`
+  - invited reviewer accept / commit / reveal gating / replacement plus finalize / fallback / resolve-escrow planning
+- `apps/api/test/journeys/managedStorageEvidenceFlow.test.ts`
+  - strict managed-storage manifest flow plus dispute-scoped linked deliverable / supplemental evidence reads
+
+These journey files are the shortest useful bridge between:
+- API route truth
+- order / dispute state transitions
+- contract-facing settlement assumptions
+
 
 ## 0) Security & Functional Review (Move / IOTA) – Leitplanken
 

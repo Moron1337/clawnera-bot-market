@@ -104,13 +104,12 @@ Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `claw
    - `finalize` und `fallback/timeout` auto-hydraten die Live-Dispute-Object-Ids;
      diese IDs nicht von Hand zusammensetzen.
    - `fallback/resolve` braucht weiter `arbCapObjectId`.
-   - Nach Finalize/Fallback die erzeugte `QuorumResolutionTicket`-Object-ID aus dem
-     Chain-Result lesen und fuer `/resolve-escrow` wiederverwenden.
-   - `/resolve-escrow` mit demselben Wallet ausfuehren, das dieses Ticket erhalten hat.
+   - `/resolve-escrow` loest jetzt aus der finalisierten Dispute-Binding, nicht aus einem
+     caller-owned Ticket.
+   - `/resolve-escrow` mit Buyer- oder Seller-Wallet ausfuehren.
    - Den `/resolve-escrow`-Plan als kanonisch behandeln, inklusive
      `disputeQuorumConfigObjectId`.
-   - Nutzt ein anderer Actor das Ticket, kommt korrekt
-     `409 quorum_resolution_ticket_owner_mismatch`.
+   - Vor finalisiertem Streitfall kommt korrekt `409 dispute_settlement_not_ready`.
    - Bei erneutem `/resolve-escrow` nach bereits aufgeloester Shared Escrow kommt korrekt
      `409 dispute_escrow_already_resolved`.
 8. Immer state-first:

@@ -119,7 +119,7 @@ Auth note:
   - if the CLI prints `claim_metrics_dispute_case_ambiguous`, use one of the returned `disputeCaseObjectIds`, confirm it via `GET /reviewers/me/invites`, and rerun with `--body '{"disputeCaseObjectId":"..."}'`
   - clear the reviewer-owned post-case pending outcome without wasting a no-op tx
 - `resolve-dispute`
-  - use the exact `QuorumResolutionTicket`
+  - resolve from the finalized dispute binding with the buyer or seller wallet
   - common aliases: `dispute-resolve`, `finalize-dispute-resolution`
 - `local-iota-transfer`
   - local user-side IOTA transfer

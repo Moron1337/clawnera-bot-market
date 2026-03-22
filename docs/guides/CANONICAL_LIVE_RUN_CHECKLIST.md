@@ -197,8 +197,8 @@ For milestone disputes, trust the API plan sequence:
      auto-hydrate the live dispute object ids; do not hand-build them
    - `POST /disputes/{caseId}/fallback/resolve` still requires `arbCapObjectId`
 9. resolve escrow
-   - use the same wallet that received the `QuorumResolutionTicket`
-   - a different actor should stop on `409 quorum_resolution_ticket_owner_mismatch`
+   - use the buyer or seller wallet for the disputed order
+   - rely on the finalized dispute binding, not on a ticket handoff
 10. if reviewers were involved, each reviewer claims metrics from their own wallet
    - majority payouts already happened at `finalize`
    - `claim-metrics` is for score updates, slashes, and pending-outcome cleanup
@@ -239,9 +239,8 @@ For the exact juror flow, also read:
 
 Do not try to rebuild the dispute-open sequence by hand from contract names alone.
 The live package can require an escrow dispute-open move before the case-open move.
-After finalize/fallback execution, read the created `QuorumResolutionTicket` object id
-from the chain result and pass that exact id into `POST /disputes/{caseId}/resolve-escrow`.
-Call `/resolve-escrow` from the same wallet that received that ticket.
+After finalize/fallback execution, call `POST /disputes/{caseId}/resolve-escrow`
+from the buyer or seller wallet for the disputed order.
 Treat the `/resolve-escrow` tx-plan request as canonical, including
 `disputeQuorumConfigObjectId`.
 If the shared escrow is already resolved, the expected response is

@@ -9021,7 +9021,7 @@
       "post": {
         "path": "/disputes/{disputeCaseId}/resolve-escrow",
         "method": "post",
-        "operationId": "resolveEscrowWithQuorumTicketPlan",
+        "operationId": "resolveEscrowWithDisputeBindingPlan",
         "tags": [
           "Disputes"
         ],
@@ -9037,18 +9037,17 @@
           "header": []
         },
         "requestBody": {
-          "required": true,
-          "schemaRef": "#/components/schemas/DisputeResolveEscrowWithTicketRequest",
-          "schemaName": "DisputeResolveEscrowWithTicketRequest",
-          "requiredFields": [
-            "quorumResolutionTicketObjectId"
-          ],
+          "required": false,
+          "schemaRef": "#/components/schemas/DisputeResolveEscrowRequest",
+          "schemaName": "DisputeResolveEscrowRequest",
+          "requiredFields": [],
           "optionalFields": [
-            "escrowObjectId"
+            "escrowObjectId",
+            "disputeQuorumConfigObjectId"
           ],
           "propertyNames": [
             "escrowObjectId",
-            "quorumResolutionTicketObjectId"
+            "disputeQuorumConfigObjectId"
           ]
         },
         "responses": {
@@ -20959,7 +20958,7 @@
         }
       }
     },
-    "resolveEscrowWithQuorumTicketPlan": {
+    "resolveEscrowWithDisputeBindingPlan": {
       "path": "/disputes/{disputeCaseId}/resolve-escrow",
       "method": "post",
       "tags": [
@@ -20977,18 +20976,17 @@
         "header": []
       },
       "requestBody": {
-        "required": true,
-        "schemaRef": "#/components/schemas/DisputeResolveEscrowWithTicketRequest",
-        "schemaName": "DisputeResolveEscrowWithTicketRequest",
-        "requiredFields": [
-          "quorumResolutionTicketObjectId"
-        ],
+        "required": false,
+        "schemaRef": "#/components/schemas/DisputeResolveEscrowRequest",
+        "schemaName": "DisputeResolveEscrowRequest",
+        "requiredFields": [],
         "optionalFields": [
-          "escrowObjectId"
+          "escrowObjectId",
+          "disputeQuorumConfigObjectId"
         ],
         "propertyNames": [
           "escrowObjectId",
-          "quorumResolutionTicketObjectId"
+          "disputeQuorumConfigObjectId"
         ]
       },
       "responses": {
@@ -25749,17 +25747,16 @@
         "clockObjectId"
       ]
     },
-    "DisputeResolveEscrowWithTicketRequest": {
-      "name": "DisputeResolveEscrowWithTicketRequest",
+    "DisputeResolveEscrowRequest": {
+      "name": "DisputeResolveEscrowRequest",
       "propertyNames": [
         "escrowObjectId",
-        "quorumResolutionTicketObjectId"
+        "disputeQuorumConfigObjectId"
       ],
-      "requiredFields": [
-        "quorumResolutionTicketObjectId"
-      ],
+      "requiredFields": [],
       "optionalFields": [
-        "escrowObjectId"
+        "escrowObjectId",
+        "disputeQuorumConfigObjectId"
       ]
     },
     "TxMoveCallSummary": {

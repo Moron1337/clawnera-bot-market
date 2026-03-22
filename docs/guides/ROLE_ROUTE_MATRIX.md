@@ -109,9 +109,9 @@
 
 | Route | Capability | API-Rollencheck | Hinweis |
 | --- | --- | --- | --- |
-| `POST /disputes/{id}/finalize` | `dispute.finalize` | capability-only | Keine harte Buyer/Seller-Pruefung im Handler. |
-| `POST /disputes/{id}/fallback/timeout` | `dispute.fallback.timeout` | capability-only | Permissionless Timeout-Path; on-chain entscheidet final. |
-| `POST /disputes/{id}/resolve-escrow` | `dispute.resolve_escrow` | capability + ticket-owner | API verlangt den AddressOwner des `QuorumResolutionTicket`; Ticket- und Escrow-Bindung wird zusaetzlich on-chain geprueft. |
+| `POST /disputes/{id}/finalize` | `dispute.finalize` | capability, optional strict party guard | API kann buyer/seller/admin/arb hart begrenzen; on-chain payout ist deterministisch. |
+| `POST /disputes/{id}/fallback/timeout` | `dispute.fallback.timeout` | capability, optional strict party guard | Permissionless on-chain fallback bleibt deterministisch, HTTP kann aber buyer/seller/admin/arb begrenzen. |
+| `POST /disputes/{id}/resolve-escrow` | `dispute.resolve_escrow` | capability, optional strict party guard | API plant jetzt `resolve_dispute_with_binding`; keine caller-owned Ticket-Pflicht mehr. |
 ## 6) Wichtig: API-Guard vs. On-Chain-Guard
 
 - Einige Endpunkte pruefen Rollen strikt im API-Layer (z. B. Milestone submit/accept/reject, dispute open, reviewers replace).

@@ -732,6 +732,7 @@ test("recipe json output is parseable", () => {
   assert.ok(payload.recipe.steps.some((step) => /reviewer-vote-prepare/.test(step)));
   assert.ok(payload.recipe.steps.some((step) => /sequentially, not in parallel/.test(step)));
   assert.ok(payload.recipe.stopConditions.some((step) => /reviewer_vote_already_committed/.test(step)));
+  assert.equal(payload.recipe.nextRecipes.includes("resolve-dispute"), false);
 });
 
 test("reviewer inspect recipe json output is parseable", () => {
@@ -867,7 +868,8 @@ test("resolve dispute alias resolves to the canonical resolve recipe", () => {
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, true);
   assert.equal(payload.recipe.id, "resolve-dispute");
-  assert.ok(payload.recipe.examples.some((example) => /quorumResolutionTicketObjectId/.test(example)));
+  assert.ok(payload.recipe.examples.some((example) => /resolve-escrow/.test(example)));
+  assert.ok(payload.recipe.examples.every((example) => !/quorumResolutionTicketObjectId/.test(example)));
 });
 
 test("seller review recipe warns that seller cannot accept the bid", () => {
@@ -922,10 +924,13 @@ test("reviewer claim recipe explains explicit case-id versus safe inference", ()
   assert.match(result.stdout, /reviewer_metrics_claim_not_required/);
 });
 
-test("resolve dispute recipe shows the exact ticket body", () => {
+test("resolve dispute recipe shows the binding-based resolve flow", () => {
   const result = runCli(["recipe", "resolve-dispute"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /quorumResolutionTicketObjectId/);
+  assert.match(result.stdout, /finalized dispute binding/);
+  assert.match(result.stdout, /dispute_settlement_not_ready/);
+  assert.doesNotMatch(result.stdout, /quorumResolutionTicketObjectId/);
+  assert.doesNotMatch(result.stdout, /quorum_resolution_ticket_object_id/);
   assert.match(result.stdout, /GET \/disputes\/<dispute-case-id>/);
 });
 

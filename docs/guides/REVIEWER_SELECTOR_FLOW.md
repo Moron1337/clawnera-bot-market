@@ -177,7 +177,7 @@ When the invite appears, the reviewer bot should:
     - `finalize` and `fallback/timeout` auto-hydrate the live dispute object ids
     - `fallback/resolve` still requires `arbCapObjectId`
   - resolve escrow
-    - use the same wallet that received the `QuorumResolutionTicket`
+    - use the buyer or seller wallet for the disputed order
    - claim metrics
      - majority reviewer payouts already happened at `finalize`
      - `claim-metrics` is the reviewer-owned post-case step for score updates,

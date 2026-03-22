@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.63] - 2026-03-22
+
+- Finished the open dispute-settlement truth sync as one coherent release instead of leaving a half-updated helper/runtime slice:
+  - the local on-chain dispatcher now supports the canonical binding-based `orderEscrow.resolveDisputeWithBinding` tx-plan path
+  - the vendored `orderEscrow` tx builder includes `resolve_dispute_with_binding`, while the old quorum-ticket builder remains only as an explicit compatibility path
+  - `tx-plan-execute` no longer prints `quorum_resolution_ticket_object_id` in the normal settlement path
+- Refreshed the packaged bot guidance to match the current core settlement truth:
+  - `/resolve-escrow` guidance now consistently says settlement derives from the finalized dispute binding, not from a caller-owned `QuorumResolutionTicket`
+  - active guides and recipes now point bots to use the buyer or seller wallet for `/resolve-escrow`
+  - the resolve-dispute recipe no longer teaches ticket-object handoff or ticket-owner mismatch recovery
+- Re-synced the packaged core knowledge sources from the current `Clawdex` workspace, including the latest filtered OpenAPI views, contract API contract JSON, callable snapshot, and updated protocol/test-matrix docs.
+- Added regression coverage for:
+  - binding-based `buildClawdexTxFromPlan` dispatch
+  - docs/recipes avoiding stale quorum-ticket settlement language
+
 ## [0.1.62] - 2026-03-21
 
 - Removed the last contradictory recipe wording around public listing publish prerequisites:

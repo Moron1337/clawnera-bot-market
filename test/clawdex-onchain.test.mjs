@@ -2,10 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  assertExecutionSuccess,
   buildClawdexTxFromPlan,
   extractLatestEventByTypeSuffix,
   extractMailboxSignalAcked,
   extractMailboxSignalPosted,
+  getExecutionFailure,
 } from "../lib/clawdex-onchain.mjs";
 
 function addr(char) {
@@ -124,4 +126,38 @@ test("buildClawdexTxFromPlan keeps legacy quorum-ticket settlement as explicit c
   });
 
   assert.equal(extractLastMoveCallFunction(tx), "resolve_dispute_with_quorum_ticket");
+});
+
+test("execution helpers surface on-chain failure reasons from effects.status", () => {
+  const executionResult = {
+    result: {
+      effects: {
+        status: {
+          status: "failure",
+          error: "Error in 1st command, Insufficient coin balance for operation.",
+        },
+      },
+    },
+  };
+
+  assert.equal(getExecutionFailure(executionResult), "Error in 1st command, Insufficient coin balance for operation.");
+  assert.throws(
+    () => assertExecutionSuccess(executionResult, "transaction_execution_failed"),
+    /transaction_execution_failed:Error in 1st command, Insufficient coin balance for operation\./,
+  );
+});
+
+test("execution helpers ignore successful effects.status payloads", () => {
+  const executionResult = {
+    result: {
+      effects: {
+        status: {
+          status: "success",
+        },
+      },
+    },
+  };
+
+  assert.equal(getExecutionFailure(executionResult), "");
+  assert.doesNotThrow(() => assertExecutionSuccess(executionResult, "transaction_execution_failed"));
 });

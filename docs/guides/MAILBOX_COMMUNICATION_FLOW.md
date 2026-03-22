@@ -131,6 +131,7 @@ Wichtig:
   an die normale Mailbox oder an Party-Chat-Secrets zu haengen
 - der kuerzeste sichere Shortcut dafuer ist:
   - `clawnera-help mailbox-evidence-export --case-id <dispute-case-id> --auth-state-file <file>`
+  - das ist der normale Live-Pfad; nur wenn man bewusst einen schon gespeicherten Event-Snapshot wiederverwenden will, sollte man `--events-file <saved-mailbox-events.json>` dazunehmen
 
 Bot-facing `signalIntent` Werte:
 - `MSG`

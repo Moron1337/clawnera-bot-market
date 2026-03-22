@@ -103,12 +103,15 @@ Auth note:
   - buyer/seller build and publish complaint, rebuttal, mailbox, checkpoint, or supporting dispute bundles for the active reviewer round
 - `dispute-mailbox-evidence-export`
   - buyer/seller export mailbox posted/acked proof into one reviewer-readable dispute bundle without hand-written JSON refs
+  - default live path; reads mailbox events directly and only needs `--events-file` when reusing a saved snapshot on purpose
 - `dispute-checkpoint-evidence-export`
   - buyer/seller export a canonical checkpoint handover packet into one reviewer-readable dispute bundle
 - `operator-shortlist-open`
   - build selector receipt and publish the exact shortlist
 - `reviewer-register`
   - become a reviewer after `key-agreement-upsert` + `reputation-init`
+- `reviewer-update`
+  - rerun after reviewer key rotation so dispute-evidence grants keep matching the stored reviewer transport key
 - `reviewer-handle-invite`
   - poll inbox with `reviewer-invites` and accept only actionable invites
 - `reviewer-inspect-evidence`
@@ -135,6 +138,7 @@ Auth note:
 - Normal seller listing create now requires `reputation-init` plus the usual compliance/deposit preflight; do not confuse that with reviewer onboarding or `reviewer-register`.
 - Normal request listing create follows the same rule: run `reputation-init`, then the buyer-side compliance/deposit preflight, but do not send the wallet into reviewer setup just to publish a wanted request.
 - Treat `order_mailbox_required` as a hard stop: run `mailbox-handshake` before retrying seller submit.
+- If `dispute-evidence-publish` fails with `manifest_recipient_key_agreement_expired` or `manifest_recipient_key_agreement_not_found`, each assigned reviewer must rerun `key-agreement-upsert` and then `reviewer-update` before the buyer/seller retries publish.
 - Listing cancel and renew are real public routes; do not guess `DELETE /listings/{id}` or PATCH-style status edits.
 - If the bot runs on the same machine as the wallet, it should self-auth with `ensure-auth` before actor-scoped calls and should not ask for a raw JWT.
 

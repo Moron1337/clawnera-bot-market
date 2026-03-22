@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.64] - 2026-03-22
+
+- Hardened the real weak-bot/live-reviewer dispute flow instead of leaving the last manual recovery steps implicit:
+  - added `reviewer-update` as the canonical helper after reviewer key rotation so dispute-evidence recipient grants keep matching the stored reviewer transport key
+  - `dispute-evidence-publish` now prints direct recovery hints when reviewer key agreement state is missing or expired
+  - `order-create-escrow` now fails closed on on-chain execution failure instead of returning a misleading success-shaped result
+- Made reviewer-readable supplemental evidence materially easier to run from the thin helper surface:
+  - recipient key-agreement reads for mailbox/checkpoint/supplemental bundle builds now run in parallel instead of serially
+  - mailbox event reads now retry with a smaller recent-event window on transient feed timeouts
+  - the direct `mailbox-evidence-export --case-id ...` live path was revalidated end-to-end with managed storage and reviewer decrypt, so bots no longer need to start from a hand-built `--events-file` rescue path
+- Refreshed the packaged bot guidance to match the real live flow:
+  - mailbox evidence docs now say the direct helper is the default live path and `--events-file` is only a reuse/replay fallback
+  - reviewer docs and help output now point weaker bots to rerun `key-agreement-upsert` plus `reviewer-update` after key rotation
+- Added regression coverage for:
+  - `buildClawdexTxFromPlan` failing closed on bad execution effects
+  - `reviewer-update` help/json exposure
+  - mailbox-evidence supplemental bundle decrypt path
+  - mailbox event limit fallback on transient feed failures
+  - parallelized mailbox-evidence recipient key resolution
+
 ## [0.1.63] - 2026-03-22
 
 - Finished the open dispute-settlement truth sync as one coherent release instead of leaving a half-updated helper/runtime slice:

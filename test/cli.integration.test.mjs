@@ -615,7 +615,7 @@ test("dispute-evidence-bundle-build creates supplemental bundle payloads and dis
         }
       }
     }),
-    default: (request) => {
+    default: async (request) => {
       if (request.method === "GET" && request.url === `/users/${buyerAddress}/key-agreement?keyVersion=1`) {
         return {
           status: 200,
@@ -870,6 +870,15 @@ test("mailbox-evidence-export builds reviewer-readable mailbox coordination bund
   const buyerKeys = generateKeyAgreementKeypair("u");
   const sellerKeys = generateKeyAgreementKeypair("u");
   const reviewerKeys = generateKeyAgreementKeypair("u");
+  let buyerKeyAgreementAttempts = 0;
+  let activeKeyAgreementCalls = 0;
+  let maxActiveKeyAgreementCalls = 0;
+  const waitForConcurrentWindow = async () => {
+    activeKeyAgreementCalls += 1;
+    maxActiveKeyAgreementCalls = Math.max(maxActiveKeyAgreementCalls, activeKeyAgreementCalls);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    activeKeyAgreementCalls -= 1;
+  };
 
   const mock = await startMockServer({
     [`GET /disputes/${caseId}`]: () => ({
@@ -946,8 +955,16 @@ test("mailbox-evidence-export builds reviewer-readable mailbox coordination bund
         }
       }
     }),
-    default: (request) => {
+    default: async (request) => {
       if (request.method === "GET" && request.url === `/users/${buyerAddress}/key-agreement?keyVersion=1`) {
+        buyerKeyAgreementAttempts += 1;
+        if (buyerKeyAgreementAttempts === 1) {
+          return {
+            status: 503,
+            body: { error: "backend_timeout" }
+          };
+        }
+        await waitForConcurrentWindow();
         return {
           status: 200,
           body: {
@@ -960,6 +977,7 @@ test("mailbox-evidence-export builds reviewer-readable mailbox coordination bund
         };
       }
       if (request.method === "GET" && request.url === `/users/${sellerAddress}/key-agreement?keyVersion=1`) {
+        await waitForConcurrentWindow();
         return {
           status: 200,
           body: {
@@ -972,6 +990,7 @@ test("mailbox-evidence-export builds reviewer-readable mailbox coordination bund
         };
       }
       if (request.method === "GET" && request.url === `/users/${reviewerAddress}/key-agreement?keyVersion=1`) {
+        await waitForConcurrentWindow();
         return {
           status: 200,
           body: {
@@ -1097,6 +1116,18 @@ test("mailbox-evidence-export builds reviewer-readable mailbox coordination bund
     const decryptedJson = JSON.parse(readFileSync(decryptPayload.plaintextOut, "utf8"));
     assert.equal(decryptedJson.items[0].itemType, "mailbox_signal_ref");
     assert.equal(decryptedJson.items[1].itemType, "mailbox_ack_ref");
+
+    const keyAgreementRequests = mock.requests
+      .filter((request) => request.method === "GET" && request.url.includes("/key-agreement?keyVersion="))
+      .map((request) => request.url);
+    assert.equal(buyerKeyAgreementAttempts, 2);
+    assert.ok(maxActiveKeyAgreementCalls >= 2);
+    assert.ok(keyAgreementRequests.includes(`/users/${buyerAddress}/key-agreement?keyVersion=2`));
+    assert.ok(keyAgreementRequests.includes(`/users/${sellerAddress}/key-agreement?keyVersion=2`));
+    assert.ok(keyAgreementRequests.includes(`/users/${reviewerAddress}/key-agreement?keyVersion=2`));
+    assert.ok(!keyAgreementRequests.includes(`/users/${buyerAddress}/key-agreement?keyVersion=3`));
+    assert.ok(!keyAgreementRequests.includes(`/users/${sellerAddress}/key-agreement?keyVersion=3`));
+    assert.ok(!keyAgreementRequests.includes(`/users/${reviewerAddress}/key-agreement?keyVersion=3`));
   } finally {
     await mock.close();
   }
@@ -2064,6 +2095,102 @@ test("mailbox-events normalizes posted and acked mailbox events", async () => {
     assert.equal(payload.events.length, 2);
     assert.equal(payload.events[0].category, "posted");
     assert.equal(payload.events[1].category, "acked");
+  } finally {
+    await mock.close();
+  }
+});
+
+test("mailbox-events retries with a smaller limit after transient event-feed failures", async () => {
+  const mock = await startMockServer({
+    "GET /orders/order-1/mailbox": () => ({
+      status: 200,
+      body: {
+        mailboxObjectId: "0xmailbox1",
+      },
+    }),
+    "GET /events?scope=all&type=mailbox.signal_posted&limit=20": () => ({
+      status: 503,
+      body: {
+        error: "backend_timeout",
+      },
+    }),
+    "GET /events?scope=all&type=mailbox.signal_acked&limit=20": () => ({
+      status: 503,
+      body: {
+        error: "backend_timeout",
+      },
+    }),
+    "GET /events?scope=all&type=mailbox.signal_posted&limit=10": () => ({
+      status: 200,
+      body: {
+        items: [
+          {
+            id: "posted-1",
+            eventType: "mailbox.signal_posted",
+            entityId: "0xmailbox1",
+            createdAt: "2026-03-19T10:00:00.000Z",
+            payloadJson: {
+              orderId: "order-1",
+              mailboxObjectId: "0xmailbox1",
+              seq: "2",
+              sender: "0xseller",
+              senderRole: "seller",
+              signalIntent: "CHECKPOINT",
+              payloadRef: "ipfs://payload-1",
+              ciphertextHash: "aa".repeat(32),
+              txDigest: "tx-posted-1",
+              chainCreatedAtMs: "1773914400000",
+            },
+          },
+        ],
+      },
+    }),
+    "GET /events?scope=all&type=mailbox.signal_acked&limit=10": () => ({
+      status: 200,
+      body: {
+        items: [
+          {
+            id: "acked-1",
+            eventType: "mailbox.signal_acked",
+            entityId: "0xmailbox1",
+            createdAt: "2026-03-19T10:01:00.000Z",
+            payloadJson: {
+              orderId: "order-1",
+              mailboxObjectId: "0xmailbox1",
+              ackedSeq: "2",
+              acker: "0xbuyer",
+              ackerRole: "buyer",
+              txDigest: "tx-acked-1",
+              chainAckedAtMs: "1773914460000",
+            },
+          },
+        ],
+      },
+    }),
+  });
+
+  try {
+    const result = await runCli([
+      "mailbox-events",
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      "test-jwt",
+      "--order-id",
+      "order-1",
+      "--json",
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.limit, 10);
+    assert.equal(payload.downgradedFromLimit, 20);
+    assert.equal(payload.events.length, 2);
+    const requestedUrls = mock.requests.map((request) => request.url);
+    assert.ok(requestedUrls.includes("/events?scope=all&type=mailbox.signal_posted&limit=20"));
+    assert.ok(requestedUrls.includes("/events?scope=all&type=mailbox.signal_posted&limit=10"));
+    assert.ok(requestedUrls.includes("/events?scope=all&type=mailbox.signal_acked&limit=20"));
+    assert.ok(requestedUrls.includes("/events?scope=all&type=mailbox.signal_acked&limit=10"));
   } finally {
     await mock.close();
   }

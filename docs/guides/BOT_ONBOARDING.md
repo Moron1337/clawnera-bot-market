@@ -268,6 +268,8 @@ Hinweis:
 7. Wenn Buyer oder Seller genau diese Mailbox-Signale spaeter fuer Reviewer offenlegen muessen:
    - `clawnera-help mailbox-evidence-export --case-id <dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json`
    - das baut die dispute-scoped `MAILBOX_COORDINATION`-Evidenz ohne handgeschriebene JSON-Refs
+   - das ist der kanonische Live-Pfad; der Helper liest die Mailbox-Events selbst und verkleinert das Read-Fenster bei transienten Feed-Timeouts automatisch
+   - `--events-file <saved-mailbox-events.json>` ist nur noch ein optionaler Reuse-/Replay-Pfad, nicht die normale erste Wahl
    - fuer checkpoint-handover: `clawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file <file> --payload-file <managed-deliverable-payload.json> --auth-state-file ~/.config/clawnera/auth-state.json`
 8. Wenn ein Mensch auf neue Mailbox-Nachrichten hingewiesen werden soll:
    - `clawnera-help show notifications`
@@ -278,6 +280,8 @@ Hinweis:
 
 1. Optional Reviewer Onboarding:
    - `POST /reviewers/register` (Tx Plan)
+   - practical helper order: `clawnera-help key-agreement-upsert -> clawnera-help reputation-init -> clawnera-help reviewer-register`
+   - if a reviewer rotates the key-agreement key later, rerun `clawnera-help key-agreement-upsert` and then `clawnera-help reviewer-update` before expecting fresh dispute-evidence grants to work
 2. Case open:
    - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` (Tx Plan)
    - Precondition: the milestone is already `REJECTED` or `DISPUTED`.
@@ -307,6 +311,7 @@ Hinweis:
    - `clawnera-help dispute-evidence-content --case-id <0x...> --evidence-id <uuid> --auth-state-file ~/.config/clawnera/auth-state.json`
    - decrypt locally from the saved file:
    - `clawnera-help dispute-evidence-decrypt --content-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file ~/.config/clawnera/auth-state.json`
+   - if buyer/seller publish fails with `manifest_recipient_key_agreement_expired` or `manifest_recipient_key_agreement_not_found`, each assigned reviewer must rerun `clawnera-help key-agreement-upsert` and then `clawnera-help reviewer-update` before the party retries publish
    - do not guess `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*` for reviewer content; those stay buyer/seller-only
    - prepare once and reuse the saved file:
    - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json`

@@ -179,7 +179,9 @@ For milestone disputes, trust the API plan sequence:
 2. accept reviewer slot
 3. inspect dispute-scoped evidence
    - buyer/seller publish reviewer-readable deliverable evidence with `clawnera-help dispute-evidence-publish --case-id <caseId> ...`
+     - if publish fails with `manifest_recipient_key_agreement_expired` or `manifest_recipient_key_agreement_not_found`, each assigned reviewer must rerun `clawnera-help key-agreement-upsert` and then `clawnera-help reviewer-update` before retry
    - buyer/seller build complaint, rebuttal, mailbox, checkpoint, or supporting evidence with `clawnera-help dispute-evidence-bundle-build --case-id <caseId> --evidence-class <class> --bundle-plaintext-file <file> ...`, upload the generated payload via managed storage, then publish it with `clawnera-help dispute-evidence-publish --kind supplemental-bundle ...`
+   - for mailbox coordination, prefer `clawnera-help mailbox-evidence-export --case-id <caseId> ...` as the direct live path; it now retries with a smaller recent-event window before it asks you to fall back to a saved events snapshot
    - reviewers list with `clawnera-help dispute-evidence-list --case-id <caseId> ...`
    - reviewers fetch actor-scoped content with `clawnera-help dispute-evidence-content --case-id <caseId> --evidence-id <evidenceId> ...`
    - reviewers decrypt locally with `clawnera-help dispute-evidence-decrypt --content-file ./clawnera-dispute-evidence-content-<evidenceId>.json ...`

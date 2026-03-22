@@ -93,6 +93,7 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /clawnera-help key-agreement-upsert/);
   assert.match(result.stdout, /clawnera-help reputation-init/);
   assert.match(result.stdout, /clawnera-help reviewer-register/);
+  assert.match(result.stdout, /clawnera-help reviewer-update/);
   assert.match(result.stdout, /clawnera-help reviewer-invites/);
   assert.match(result.stdout, /clawnera-help deliverable-encrypt/);
   assert.match(result.stdout, /clawnera-help dispute-evidence-bundle-build/);
@@ -131,6 +132,7 @@ test("help json output includes auth-login command", () => {
   assert.ok(payload.botFirst.rules.some((rule) => /ensure-auth/i.test(rule)));
   assert.ok(Array.isArray(payload.botFirst.thinHelpers));
   assert.ok(payload.botFirst.thinHelpers.includes("listing-create"));
+  assert.ok(payload.botFirst.thinHelpers.includes("reviewer-update"));
   assert.ok(payload.botFirst.thinHelpers.includes("checkpoint-evidence-export"));
   assert.ok(Array.isArray(payload.commands));
   assert.ok(payload.commands.includes("auth-login"));
@@ -152,6 +154,7 @@ test("help json output includes auth-login command", () => {
   assert.ok(payload.commands.includes("key-agreement-upsert"));
   assert.ok(payload.commands.includes("reputation-init"));
   assert.ok(payload.commands.includes("reviewer-register"));
+  assert.ok(payload.commands.includes("reviewer-update"));
   assert.ok(payload.commands.includes("reviewer-invites"));
   assert.ok(payload.commands.includes("deliverable-encrypt"));
   assert.ok(payload.commands.includes("dispute-evidence-bundle-build"));
@@ -208,6 +211,7 @@ test("encrypted delivery helpers print usage", () => {
     ["key-agreement-upsert", /Key agreement upsert helper/],
     ["reputation-init", /Reputation profile init helper/],
     ["reviewer-register", /Reviewer register helper/],
+    ["reviewer-update", /Reviewer update helper/],
     ["deliverable-encrypt", /Deliverable encrypt helper/],
     ["dispute-evidence-bundle-build", /Dispute evidence bundle build helper/],
     ["dispute-evidence-publish", /Dispute evidence publish helper/],
@@ -332,6 +336,15 @@ test("reviewer register help explains onboarding prerequisites", () => {
   assert.match(result.stdout, /Requires a local key-agreement record and an on-chain reputation profile/);
   assert.match(result.stdout, /key-agreement-upsert/);
   assert.match(result.stdout, /reputation-init/);
+});
+
+test("reviewer update help explains transport refresh usage", () => {
+  const result = runCli(["reviewer-update", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Reviewer update helper/);
+  assert.match(result.stdout, /refreshes transportPubkeyHex from the local key-agreement record/);
+  assert.match(result.stdout, /key-agreement-upsert --rotate/);
+  assert.match(result.stdout, /reviewer-register/);
 });
 
 test("iota prepare transfer help prints usage", () => {

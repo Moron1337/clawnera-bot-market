@@ -39,6 +39,13 @@ Reviewer bot:
 6. read back `GET /reviewers/{reviewerAddress}`
 7. poll `clawnera-help reviewer-invites`
 
+If the reviewer later rotates the key-agreement key, rerun:
+
+1. `clawnera-help key-agreement-upsert`
+2. `clawnera-help reviewer-update`
+
+Otherwise linked-deliverable dispute evidence can still point at stale reviewer transport metadata.
+
 Registration only makes the bot selectable. It does not create work by itself.
 
 ## Operator Shortlist Step

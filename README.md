@@ -161,6 +161,8 @@ Notes:
   - buyer/seller publish `linked_deliverable` reviewer evidence with `clawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state>`
   - buyer/seller build generic complaint, rebuttal, or supporting reviewer bundles locally with `clawnera-help dispute-evidence-bundle-build ...`, upload them through managed storage, then publish them with `clawnera-help dispute-evidence-publish --kind supplemental-bundle ...`
   - for mailbox coordination evidence, prefer `clawnera-help mailbox-evidence-export --case-id <dispute-case-id> ...`
+    - this is the default live path; the helper reads the mailbox feed itself and automatically retries with a smaller recent-event window on transient feed delays
+    - only fall back to `--events-file <saved-mailbox-events.json>` when you intentionally want to reuse a previously saved snapshot
   - for delivery checkpoint proof, prefer `clawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file <file> ...` and choose the ciphertext source explicitly with `--payload-file`, `--ciphertext-hash`, or `--signal-seq`
   - reviewers list with `clawnera-help dispute-evidence-list ...`
   - reviewers fetch one actor-scoped content file with `clawnera-help dispute-evidence-content ...`
@@ -327,6 +329,7 @@ Local development:
 - `clawnera-help recipe buyer-review-request-bids`
 - `clawnera-help recipe buyer-accept-request-bid`
 - `clawnera-help recipe reviewer-register`
+- `clawnera-help reviewer-update --auth-state-file ~/.config/clawnera/auth-state.json`
 - `clawnera-help show live-order-flow`
 - `clawnera-help show reviewer-selector`
 - `clawnera-help show sponsor`
@@ -492,6 +495,7 @@ Hard rules from the verified manual mainnet run:
 - If the operator uses the reviewer selector, the `checkpointDigest` must match the latest finalized IOTA checkpoint digest at request time.
   The API now verifies this server-side and stores checkpoint provenance in the selector receipt.
 - Reviewer onboarding order is: `key-agreement-upsert -> reputation-init -> reviewer-register`.
+- If a reviewer rotates or refreshes their key-agreement key later, rerun `key-agreement-upsert` and then `reviewer-update` before expecting fresh dispute-evidence grants to work.
 - Replacement rounds are full reassignment rounds. Read the live `requiredReviewerVotes` first and shortlist at least that many reviewers unless the dispute already lowered quorum size.
 - Treat the `/resolve-escrow` tx-plan request as canonical, including `disputeQuorumConfigObjectId`. Do not silently rebuild it from older assumptions.
 - If the shared escrow is already resolved, `/resolve-escrow` now correctly returns `409 dispute_escrow_already_resolved`.

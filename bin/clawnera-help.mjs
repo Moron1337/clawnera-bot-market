@@ -26,6 +26,7 @@ import {
   buildClawdexTxFromPlan,
   buildCreateOrderEscrowTx,
   buildInitOrderBondTx,
+  assertExecutionSuccess,
   executeTransaction,
   extractCreatedObjectIdByTypeFragment,
   extractCreatedObjectIdByTypeSuffix,
@@ -366,6 +367,7 @@ function printUsage() {
   console.log("  clawnera-help key-agreement-upsert [options]  Bind a local E2EE key-agreement key to the actor wallet");
   console.log("  clawnera-help reputation-init [options]   Create the actor reputation profile on-chain locally");
   console.log("  clawnera-help reviewer-register [options]  Register the actor as a reviewer with auto-filled live config");
+  console.log("  clawnera-help reviewer-update [options]    Refresh reviewer transport metadata after key rotation");
   console.log("  clawnera-help deliverable-encrypt [options]  Encrypt one seller deliverable for seller + buyer locally");
   console.log("  clawnera-help dispute-evidence-bundle-build [options]  Build encrypted supplemental dispute evidence locally");
   console.log("  clawnera-help dispute-evidence-publish [options]  Publish reviewer-readable linked deliverable evidence");
@@ -3079,20 +3081,21 @@ async function runIotaGetBalance(commandArgs) {
   }
 
   try {
+    const balanceResult = await getIotaBalance({
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+      keystorePath:
+        typeof options["keystore-path"] === "string" && options["keystore-path"].trim()
+          ? path.resolve(String(options["keystore-path"]).trim())
+          : defaultIotaKeystorePath(),
+      alias: typeof options.alias === "string" ? options.alias.trim() : "",
+      address: typeof options.address === "string" ? options.address.trim() : "",
+      coinType: typeof options["coin-type"] === "string" ? options["coin-type"].trim() : "",
+      withCoins: parseBooleanOption(options["with-coins"], false),
+    });
     return {
       ok: true,
-      ...(await getIotaBalance({
-        network: options.network,
-        rpcUrl: options["rpc-url"],
-        keystorePath:
-          typeof options["keystore-path"] === "string" && options["keystore-path"].trim()
-            ? path.resolve(String(options["keystore-path"]).trim())
-            : defaultIotaKeystorePath(),
-        alias: typeof options.alias === "string" ? options.alias.trim() : "",
-        address: typeof options.address === "string" ? options.address.trim() : "",
-        coinType: typeof options["coin-type"] === "string" ? options["coin-type"].trim() : "",
-        withCoins: parseBooleanOption(options["with-coins"], false),
-      })),
+      ...balanceResult,
     };
   } catch (error) {
     return {
@@ -3302,6 +3305,7 @@ async function runIotaExecuteTransfer(commandArgs) {
       signerAddress: draft.signerAddress,
       signature: typeof options.signature === "string" ? options.signature.trim() : "",
     });
+    assertExecutionSuccess(result, "iota_transfer_execution_failed");
     await deleteIotaTransferDraft(draftsPath, draftId);
     return {
       ok: true,
@@ -4213,6 +4217,32 @@ async function callApiRoute({ method, rawPath, options = {}, timeoutMs = 20_000 
     bodySelect,
     result,
   };
+}
+
+function isTransientReadRouteFailure(result) {
+  if (!result || typeof result !== "object") {
+    return false;
+  }
+  const code = summarizeApiFailure(result);
+  return code === "backend_timeout" || code === "http_timeout";
+}
+
+async function callApiRouteWithTransientRetry({
+  method,
+  rawPath,
+  options = {},
+  timeoutMs = 20_000,
+  maxAttempts = 3,
+} = {}) {
+  let lastCall = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    lastCall = await callApiRoute({ method, rawPath, options, timeoutMs });
+    if (lastCall.result.ok || attempt === maxAttempts || !isTransientReadRouteFailure(lastCall.result)) {
+      return lastCall;
+    }
+    await sleep(250 * attempt);
+  }
+  return lastCall;
 }
 
 function detectTxPlanPayload(body) {
@@ -5940,7 +5970,7 @@ async function fetchMailboxEventsSnapshot(options, orderId, { timeoutMs, limit, 
   const effectiveLimit = limit ?? parsePositiveIntOption(options.limit, "limit", 20);
   const effectiveIncludeAcked =
     includeAcked === undefined ? parseBooleanOption(options["include-acked"], true) : Boolean(includeAcked);
-  const mailboxCall = await callApiRoute({
+  const mailboxCall = await callApiRouteWithTransientRetry({
     method: "GET",
     rawPath: `/orders/${orderId}/mailbox`,
     options,
@@ -5963,12 +5993,39 @@ async function fetchMailboxEventsSnapshot(options, orderId, { timeoutMs, limit, 
     };
   }
 
-  const postedCall = await callApiRoute({
-    method: "GET",
-    rawPath: `/events?scope=all&type=mailbox.signal_posted&limit=${effectiveLimit}`,
-    options,
-    timeoutMs: effectiveTimeoutMs,
-  });
+  const eventLimitCandidates = Array.from(
+    new Set([effectiveLimit, 10, 5].filter((value) => Number.isFinite(value) && value > 0 && value <= effectiveLimit)),
+  );
+  let usedLimit = effectiveLimit;
+  let postedCall = null;
+  let ackCall = null;
+  for (const candidateLimit of eventLimitCandidates) {
+    const [candidatePostedCall, candidateAckCall] = await Promise.all([
+      callApiRouteWithTransientRetry({
+        method: "GET",
+        rawPath: `/events?scope=all&type=mailbox.signal_posted&limit=${candidateLimit}`,
+        options,
+        timeoutMs: effectiveTimeoutMs,
+      }),
+      effectiveIncludeAcked
+        ? callApiRouteWithTransientRetry({
+            method: "GET",
+            rawPath: `/events?scope=all&type=mailbox.signal_acked&limit=${candidateLimit}`,
+            options,
+            timeoutMs: effectiveTimeoutMs,
+          })
+        : Promise.resolve(null),
+    ]);
+    postedCall = candidatePostedCall;
+    ackCall = candidateAckCall;
+    usedLimit = candidateLimit;
+    const postedTransientFailure = !candidatePostedCall.result.ok && isTransientReadRouteFailure(candidatePostedCall.result);
+    const ackTransientFailure =
+      candidateAckCall && !candidateAckCall.result.ok && isTransientReadRouteFailure(candidateAckCall.result);
+    if (!postedTransientFailure && !ackTransientFailure) {
+      break;
+    }
+  }
   if (!postedCall.result.ok) {
     return {
       ok: false,
@@ -5988,13 +6045,7 @@ async function fetchMailboxEventsSnapshot(options, orderId, { timeoutMs, limit, 
     .map(normalizeMailboxPostedEvent);
 
   let ackedEvents = [];
-  if (effectiveIncludeAcked) {
-    const ackCall = await callApiRoute({
-      method: "GET",
-      rawPath: `/events?scope=all&type=mailbox.signal_acked&limit=${effectiveLimit}`,
-      options,
-      timeoutMs: effectiveTimeoutMs,
-    });
+  if (ackCall) {
     if (!ackCall.result.ok) {
       return {
         ok: false,
@@ -6035,13 +6086,14 @@ async function fetchMailboxEventsSnapshot(options, orderId, { timeoutMs, limit, 
     ok: true,
     orderId,
     mailboxObjectId,
-    limit: effectiveLimit,
+    limit: usedLimit,
     includeAcked: effectiveIncludeAcked,
     eventCount: events.length,
     latestPostedSeq: latestPostedSeq || null,
     latestAckByRole,
     eventsOut: resolvedEventsOut || null,
     events,
+    ...(usedLimit !== effectiveLimit ? { downgradedFromLimit: effectiveLimit } : {}),
     note:
       "Current runtime can map seller DELIVERABLE_READY signals back as CHECKPOINT in the event feed; use payloadRef + ciphertextHash + seq, not only the label.",
   };
@@ -6057,7 +6109,7 @@ async function resolveDisputeEvidenceBuildContext(options, disputeCaseId, runtim
     };
   }
   const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
-  const disputeCall = await callApiRoute({
+  const disputeCall = await callApiRouteWithTransientRetry({
     method: "GET",
     rawPath: `/disputes/${disputeCaseId}`,
     options,
@@ -6149,22 +6201,26 @@ async function buildDisputeSupplementalBundleForCli(options, {
     "max_recipient_key_version",
     8,
   );
-  const buyerKeyAgreement = await resolveLatestUserKeyAgreement(options, buyerAddress, timeoutMs, maxRecipientKeyVersion);
+  const [buyerKeyAgreement, sellerKeyAgreement, reviewerKeyAgreementResults] = await Promise.all([
+    resolveLatestUserKeyAgreement(options, buyerAddress, timeoutMs, maxRecipientKeyVersion),
+    resolveLatestUserKeyAgreement(options, sellerAddress, timeoutMs, maxRecipientKeyVersion),
+    Promise.all(
+      assignedReviewers.map((reviewerAddress) =>
+        resolveReviewerEvidenceKeyAgreement(options, reviewerAddress, timeoutMs, maxRecipientKeyVersion),
+      ),
+    ),
+  ]);
   if (!buyerKeyAgreement.ok) {
     return buyerKeyAgreement;
   }
-  const sellerKeyAgreement = await resolveLatestUserKeyAgreement(options, sellerAddress, timeoutMs, maxRecipientKeyVersion);
   if (!sellerKeyAgreement.ok) {
     return sellerKeyAgreement;
   }
-  const reviewerKeyAgreements = [];
-  for (const reviewerAddress of assignedReviewers) {
-    const keyAgreement = await resolveReviewerEvidenceKeyAgreement(options, reviewerAddress, timeoutMs, maxRecipientKeyVersion);
-    if (!keyAgreement.ok) {
-      return keyAgreement;
-    }
-    reviewerKeyAgreements.push(keyAgreement.keyAgreement);
+  const failedReviewerKeyAgreement = reviewerKeyAgreementResults.find((entry) => !entry.ok);
+  if (failedReviewerKeyAgreement) {
+    return failedReviewerKeyAgreement;
   }
+  const reviewerKeyAgreements = reviewerKeyAgreementResults.map((entry) => entry.keyAgreement);
   const built = await buildDisputeSupplementalBundlePayload({
     disputeCaseObjectId: disputeCaseId,
     orderId,
@@ -6365,16 +6421,20 @@ function resolveCheckpointAnchorFromFile(anchorFile) {
 }
 
 async function resolveLatestUserKeyAgreement(options, address, timeoutMs, maxKeyVersion = 8) {
+  const perKeyTimeoutMs = Math.min(timeoutMs, 8_000);
   let matched = null;
   for (let keyVersion = 1; keyVersion <= maxKeyVersion; keyVersion += 1) {
-    const keyAgreementCall = await callApiRoute({
+    const keyAgreementCall = await callApiRouteWithTransientRetry({
       method: "GET",
       rawPath: `/users/${address}/key-agreement?keyVersion=${keyVersion}`,
       options,
-      timeoutMs,
+      timeoutMs: perKeyTimeoutMs,
     });
     if (!keyAgreementCall.result.ok) {
       if (keyAgreementCall.result.status === 404) {
+        if (matched) {
+          break;
+        }
         continue;
       }
       return {
@@ -6411,11 +6471,12 @@ async function resolveLatestUserKeyAgreement(options, address, timeoutMs, maxKey
 }
 
 async function resolveReviewerEvidenceKeyAgreement(options, reviewerAddress, timeoutMs, maxKeyVersion = 8) {
-  const reviewerCall = await callApiRoute({
+  const perKeyTimeoutMs = Math.min(timeoutMs, 8_000);
+  const reviewerCall = await callApiRouteWithTransientRetry({
     method: "GET",
     rawPath: `/reviewers/${reviewerAddress}`,
     options,
-    timeoutMs,
+    timeoutMs: perKeyTimeoutMs,
   });
   if (!reviewerCall.result.ok) {
     return {
@@ -6438,14 +6499,17 @@ async function resolveReviewerEvidenceKeyAgreement(options, reviewerAddress, tim
 
   let matchedKeyAgreement = null;
   for (let keyVersion = 1; keyVersion <= maxKeyVersion; keyVersion += 1) {
-    const keyAgreementCall = await callApiRoute({
+    const keyAgreementCall = await callApiRouteWithTransientRetry({
       method: "GET",
       rawPath: `/users/${reviewerAddress}/key-agreement?keyVersion=${keyVersion}`,
       options,
-      timeoutMs,
+      timeoutMs: perKeyTimeoutMs,
     });
     if (!keyAgreementCall.result.ok) {
       if (keyAgreementCall.result.status === 404) {
+        if (matchedKeyAgreement) {
+          break;
+        }
         continue;
       }
       return {
@@ -7173,9 +7237,13 @@ async function runOrderCreateEscrow(commandArgs) {
       execution: executed.result,
     };
   } catch (error) {
+    const message = error instanceof Error ? error.message : "order_create_escrow_failed";
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "order_create_escrow_failed",
+      error: message,
+      hint: /insufficient coin balance/i.test(message)
+        ? "run clawnera-help iota-get-balance --alias <buyer-wallet-alias> --json and either lower the order amount or top up the buyer wallet before rerunning order-create-escrow"
+        : "",
     };
   }
 }
@@ -7800,6 +7868,202 @@ async function runReviewerRegister(commandArgs) {
   }
 }
 
+async function runReviewerUpdate(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: reviewerUpdateUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  try {
+    const runtimeContext = await resolveApiRuntimeContext(options);
+    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const actorAddress =
+      normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
+      normalizeIotaAddress(signer.entry.address || "");
+    if (!actorAddress) {
+      return {
+        ok: false,
+        error: "missing_actor_address",
+      };
+    }
+    if (actorAddress !== normalizeIotaAddress(signer.entry.address)) {
+      return {
+        ok: false,
+        error: "signer_actor_mismatch",
+      };
+    }
+
+    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+    const reviewerRead = await callApiRoute({
+      method: "GET",
+      rawPath: `/reviewers/${actorAddress}`,
+      options,
+      timeoutMs,
+    });
+    if (!reviewerRead.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(reviewerRead.result),
+        status: reviewerRead.result.status,
+        response: reviewerRead.result.body,
+        hint: reviewerRead.result.status === 404 ? "run clawnera-help reviewer-register first" : "",
+      };
+    }
+    const reviewer = reviewerRead.result.body?.reviewer;
+    const reviewerEntryObjectId = normalizeIotaAddress(reviewer?.objectId || "");
+    if (!reviewerEntryObjectId) {
+      return {
+        ok: false,
+        error: "reviewer_entry_object_id_missing",
+      };
+    }
+
+    const { chainConfig } = await fetchPolicyAndChainConfig(options, {
+      requireDisputeQuorumConfig: true,
+      requireEscrowFeeConfig: false,
+      requireGovernanceConfig: false,
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+
+    const transportKeyVersion = parsePositiveIntOption(options["transport-key-version"], "transport_key_version", 1);
+    const transportKeyFile = resolveKeyAgreementRecordPathOption(
+      actorAddress,
+      transportKeyVersion,
+      options["transport-key-file"] || options["key-file"],
+      runtimeContext.authStateFile,
+    );
+    let keyRecord;
+    try {
+      keyRecord = await loadKeyAgreementRecord(transportKeyFile, {
+        expectedAddress: actorAddress,
+        expectedKeyVersion: transportKeyVersion,
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "missing_key_agreement_record",
+        keyFile: transportKeyFile,
+        hint: "run clawnera-help key-agreement-upsert first",
+      };
+    }
+
+    const currentMinCaseRewardIota =
+      reviewer && reviewer.minCaseRewardIota !== undefined && reviewer.minCaseRewardIota !== null
+        ? String(reviewer.minCaseRewardIota).trim() || "1"
+        : "1";
+    const body = {
+      reviewerRegistryObjectId: chainConfig.reviewerRegistryObjectId,
+      reviewerEntryObjectId,
+      transportType: parseU8Option(options["transport-type"], "transport_type", reviewer?.transportType ?? 0),
+      transportPubkeyHex: keyAgreementPublicKeyHex(keyRecord.publicKeyMultibase),
+      minCaseRewardIota:
+        options["min-case-reward-iota"] !== undefined
+          ? parsePositiveBigIntOption(options["min-case-reward-iota"], "min_case_reward_iota").toString()
+          : currentMinCaseRewardIota,
+      active: parseBooleanOption(options.active, reviewer?.active !== false),
+    };
+
+    const planCall = await callApiRoute({
+      method: "POST",
+      rawPath: "/reviewers/update",
+      options: {
+        ...options,
+        body: JSON.stringify(body),
+      },
+      timeoutMs,
+    });
+    if (!planCall.result.ok) {
+      return {
+        ok: false,
+        error: summarizeApiFailure(planCall.result),
+        status: planCall.result.status,
+        response: planCall.result.body,
+        requestBody: body,
+      };
+    }
+    const txPlan = detectTxPlanPayload(planCall.result.body);
+    if (!txPlan) {
+      return {
+        ok: false,
+        error: "missing_tx_plan",
+        response: planCall.result.body,
+      };
+    }
+
+    const transaction = buildClawdexTxFromPlan(planCall.result.body);
+    const dryRun = parseBooleanOption(options["dry-run"], false);
+    if (dryRun) {
+      const result = await dryRunTransaction(transaction, {
+        network: options.network,
+        rpcUrl: options["rpc-url"],
+      });
+      return {
+        ok: true,
+        mode: "dry_run",
+        actorAddress,
+        txBuilder: txPlan.txBuilder,
+        requestBody: body,
+        gasSummary: formatDryRunGasSummary(result.result),
+        dryRun: result.result,
+      };
+    }
+
+    const executed = await executeTransaction(transaction, {
+      alias: signer.alias,
+      address: signer.address,
+      keystorePath: signer.keystorePath,
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+
+    let reviewerReadback = null;
+    for (const retryDelayMs of [0, 400, 1000]) {
+      if (retryDelayMs > 0) {
+        await sleep(retryDelayMs);
+      }
+      const readback = await callApiRoute({
+        method: "GET",
+        rawPath: `/reviewers/${actorAddress}`,
+        options,
+        timeoutMs,
+      });
+      if (readback.result.ok && readback.result.body?.reviewer) {
+        reviewerReadback = readback.result.body.reviewer;
+        break;
+      }
+    }
+
+    return {
+      ok: true,
+      mode: "execute",
+      actorAddress,
+      txBuilder: txPlan.txBuilder,
+      txDigest: executed.result?.digest || null,
+      requestBody: body,
+      reviewer: reviewerReadback,
+      createdObjects: extractCreatedObjects(executed),
+      execution: executed.result,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "reviewer_update_failed",
+    };
+  }
+}
+
 async function runDeliverableEncrypt(commandArgs) {
   const { options, positionals } = parseLongOptions(commandArgs);
   if (options.help || options.h) {
@@ -8299,13 +8563,15 @@ async function runDisputeEvidencePublish(commandArgs) {
       timeoutMs,
     });
     if (!publishCall.result.ok) {
+      const error = summarizeApiFailure(publishCall.result);
       return {
         ok: false,
-        error: summarizeApiFailure(publishCall.result),
+        error,
         status: publishCall.result.status,
         response: publishCall.result.body,
         bodyOut,
         requestBody,
+        hintLines: buildDisputeEvidencePublishHintLines({ error }),
       };
     }
     const responseOut = resolveOptionalPathOption(options["response-out"]);
@@ -8544,6 +8810,8 @@ async function runMailboxEvidenceExport(commandArgs) {
       ...built,
       bundlePlaintextOut,
       eventsOut: snapshot.eventsOut,
+      mailboxEventLimit: snapshot.limit,
+      mailboxEventDowngradedFromLimit: snapshot.downgradedFromLimit || null,
       selectedPostedCount: selectedPosted.length,
       selectedAckedCount: selectedAcked.length,
       selectedPostedSeqs: selectedPosted.map((entry) => entry.seq).filter(Boolean),
@@ -8652,6 +8920,7 @@ async function runCheckpointEvidenceExport(commandArgs) {
     }
 
     let mailboxSignal = null;
+    let snapshot = null;
     const mailboxEventsFile =
       typeof options["mailbox-events-file"] === "string" && options["mailbox-events-file"].trim()
         ? path.resolve(String(options["mailbox-events-file"]).trim())
@@ -8685,7 +8954,7 @@ async function runCheckpointEvidenceExport(commandArgs) {
       };
     }
     if (mailboxEventsFile || signalSeq || allowLatestSignalFallback) {
-      const snapshot = mailboxEventsFile
+      snapshot = mailboxEventsFile
         ? loadMailboxEventsSnapshotFromFile(mailboxEventsFile, contextResult.orderId)
         : await fetchMailboxEventsSnapshot(options, contextResult.orderId, {
             limit: parsePositiveIntOption(options.limit, "limit", 20),
@@ -8841,6 +9110,8 @@ async function runCheckpointEvidenceExport(commandArgs) {
       ...built,
       bundlePlaintextOut,
       checkpointPacketOut,
+      mailboxEventLimit: snapshot?.limit || null,
+      mailboxEventDowngradedFromLimit: snapshot?.downgradedFromLimit || null,
       selectedSignalSeq: mailboxSignal?.seq || null,
       signalIntent: mailboxSignal?.signalIntent || null,
       payloadRef: mailboxSignal?.payloadRef || null,
@@ -11225,6 +11496,8 @@ function orderCreateEscrowUsageLines() {
     "- IOTA orders may omit --payment-coin-object-id to split from tx.gas",
     "- CLAW orders require --claw-coin-type plus either --payment-coin-object-id or --claw-coin-object-id",
     "- Optional execution mode: --dry-run",
+    "- Execute mode hard-fails if the on-chain tx itself fails; do not treat a digest alone as success",
+    "- On success the helper prints order_escrow_object_id for the next bind step",
     "- After execute, bind the created escrow object id with `clawnera-help request POST /orders/{orderId}/escrow/bind ...`"
   ];
 }
@@ -11266,6 +11539,33 @@ function reviewerRegisterUsageLines() {
   ];
 }
 
+function buildDisputeEvidencePublishHintLines(result = {}) {
+  const error = normalizeString(result.error);
+  if (
+    error !== "manifest_recipient_key_agreement_expired" &&
+    error !== "manifest_recipient_key_agreement_not_found"
+  ) {
+    return [];
+  }
+  return [
+    "cause=assigned reviewer transport metadata or key-agreement readback is stale",
+    "next_hint=each assigned reviewer should rerun clawnera-help key-agreement-upsert --auth-state-file <reviewer-auth-state-file>",
+    "next_hint=then each assigned reviewer should rerun clawnera-help reviewer-update --auth-state-file <reviewer-auth-state-file>",
+    "next_hint=after all assigned reviewers update, rerun clawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state-file>",
+  ];
+}
+
+function reviewerUpdateUsageLines() {
+  return [
+    "Reviewer update helper:",
+    "- Usage: clawnera-help reviewer-update --auth-state-file <file>",
+    "- Reads the current reviewer entry, then refreshes transportPubkeyHex from the local key-agreement record for the same wallet",
+    "- Use this after `key-agreement-upsert --rotate`, after any key file replacement, or when reviewer-readable dispute evidence reports reviewer key-agreement drift",
+    "- Optional: --transport-type <u8> --transport-key-file <file> --transport-key-version <int> --min-case-reward-iota <int> --active <true|false> --dry-run",
+    "- If the actor is not registered yet, stop and run `clawnera-help reviewer-register` first"
+  ];
+}
+
 function deliverableEncryptUsageLines() {
   return [
     "Deliverable encrypt helper:",
@@ -11284,6 +11584,7 @@ function disputeEvidencePublishUsageLines() {
     "- Supplemental bundle mode: pass --kind supplemental-bundle --bundle-build-file <file> --manifest-cid ipfs://<cid>",
     "- Reads GET /disputes/{disputeCaseId}, GET /orders/{orderId}/milestones/{milestoneId}/artifact-manifest/content, reviewer transport metadata, and matching reviewer key-agreement records",
     "- Optional: --no-post to only build the request body, --body-out <file>, --key-file <local-key-agreement.json>, --max-reviewer-key-version <n>",
+    "- If publish fails with reviewer key-agreement drift, each assigned reviewer should rerun `clawnera-help key-agreement-upsert` and then `clawnera-help reviewer-update` before the seller/buyer retries publish",
     "- The normal two-party artifact routes stay buyer/seller-only; reviewers must use the dispute-scoped evidence routes afterwards"
   ];
 }
@@ -11333,6 +11634,7 @@ function mailboxEvidenceExportUsageLines() {
     "- Usage: clawnera-help mailbox-evidence-export --case-id <0x...> --auth-state-file <file>",
     "- Reads the live dispute, then exports mailbox posted/acked events into one canonical MAILBOX_COORDINATION supplemental bundle.",
     "- Optional filters: --posted-seqs <csv> --acked-seqs <csv> --limit <n> --include-acked <true|false>",
+    "- Live event reads are the default; on transient feed timeouts the helper automatically retries with a smaller recent-event window before failing.",
     "- Optional reuse: --events-file <saved-mailbox-events.json> instead of refetching the mailbox event feed",
     "- Optional statement: --statement-title <text> plus --statement-text <text> or --statement-file <file>",
     "- Writes one plaintext bundle JSON plus the normal encrypted payload/build files used by dispute-evidence-publish --kind supplemental-bundle",
@@ -11406,6 +11708,7 @@ function mailboxEventsUsageLines() {
     "- Usage: clawnera-help mailbox-events --order-id <id> --auth-state-file <file>",
     "- Reads the bound mailbox object id, then fetches mailbox.signal_posted and mailbox.signal_acked events for that order",
     "- Optional: --limit <n> --include-acked <true|false> --events-out <file>",
+    "- If the wider event read times out transiently, the helper automatically retries with a smaller recent-event window",
     "- Use this instead of guessing seq numbers from raw /events queries",
     "- If indexing is still catching up, use the mailbox_signal_posted_seq or mailbox_signal_acked_seq printed by tx-plan-execute as the temporary source of truth and re-read later"
   ];
@@ -11985,6 +12288,8 @@ const aliasCommands = new Map([
   ["key-agreement", "key-agreement-upsert"],
   ["rep-init", "reputation-init"],
   ["reviewer-onboard", "reviewer-register"],
+  ["reviewer-refresh", "reviewer-update"],
+  ["refresh-reviewer", "reviewer-update"],
   ["delivery-encrypt", "deliverable-encrypt"],
   ["dispute-evidence", "dispute-evidence-list"],
   ["reviewer-evidence", "dispute-evidence-list"],
@@ -12049,6 +12354,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
           "listing-renew",
           "bid-create",
           "bid-accept",
+          "reviewer-update",
           "reviewer-invites",
           "mailbox-evidence-export",
           "checkpoint-evidence-export"
@@ -12087,6 +12393,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "key-agreement-upsert",
         "reputation-init",
         "reviewer-register",
+        "reviewer-update",
         "deliverable-encrypt",
         "dispute-evidence-bundle-build",
         "dispute-evidence-publish",
@@ -12895,6 +13202,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`order_create_escrow_error: ${result.error}`);
+    if (result.hint) {
+      console.error(`hint=${result.hint}`);
+    }
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {
@@ -13006,6 +13316,38 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   if (!result.ok && !result.help) {
     process.exitCode = 1;
   }
+} else if (effectiveCommand === "reviewer-update") {
+  const result = await runReviewerUpdate(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`reviewer_update_ok address=${result.actorAddress}`);
+    if (result.mode) {
+      console.log(`mode=${result.mode}`);
+    }
+    if (result.txDigest) {
+      console.log(`tx_digest=${result.txDigest}`);
+    }
+    if (result.reviewer?.objectId) {
+      console.log(`reviewer_entry_object_id=${result.reviewer.objectId}`);
+    }
+    if (result.requestBody?.transportPubkeyHex) {
+      console.log(`transport_pubkey_hex=${result.requestBody.transportPubkeyHex}`);
+    }
+  } else {
+    console.error(`reviewer_update_error: ${result.error}`);
+    if (result.hint) {
+      console.error(`hint=${result.hint}`);
+    }
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
 } else if (effectiveCommand === "deliverable-encrypt") {
   const result = await runDeliverableEncrypt(commandArgs);
   if (flags.json) {
@@ -13057,6 +13399,11 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`dispute_evidence_publish_error: ${result.error}`);
+    if (Array.isArray(result.hintLines) && result.hintLines.length > 0) {
+      for (const line of result.hintLines) {
+        console.error(line);
+      }
+    }
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {
@@ -13189,6 +13536,13 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`bundle_plaintext_file=${result.bundlePlaintextOut}`);
     console.log(`selected_posted_count=${result.selectedPostedCount}`);
     console.log(`selected_acked_count=${result.selectedAckedCount}`);
+    if (result.mailboxEventLimit) {
+      console.log(`mailbox_event_limit=${result.mailboxEventLimit}`);
+    }
+    if (result.mailboxEventDowngradedFromLimit) {
+      console.log(`warning=mailbox_event_limit_downgraded`);
+      console.log(`mailbox_event_limit_downgraded_from=${result.mailboxEventDowngradedFromLimit}`);
+    }
     if (result.eventsOut) {
       console.log(`events_file=${result.eventsOut}`);
     }
@@ -13217,6 +13571,13 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`milestone_id=${result.milestoneId}`);
     console.log(`checkpoint_packet_file=${result.checkpointPacketOut}`);
     console.log(`bundle_plaintext_file=${result.bundlePlaintextOut}`);
+    if (result.mailboxEventLimit) {
+      console.log(`mailbox_event_limit=${result.mailboxEventLimit}`);
+    }
+    if (result.mailboxEventDowngradedFromLimit) {
+      console.log(`warning=mailbox_event_limit_downgraded`);
+      console.log(`mailbox_event_limit_downgraded_from=${result.mailboxEventDowngradedFromLimit}`);
+    }
     if (result.selectedSignalSeq) {
       console.log(`signal_seq=${result.selectedSignalSeq}`);
     }
@@ -13405,6 +13766,11 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`mailbox_events_ok order_id=${result.orderId}`);
     console.log(`mailbox_object_id=${result.mailboxObjectId}`);
     console.log(`event_count=${result.eventCount}`);
+    console.log(`limit=${result.limit}`);
+    if (result.downgradedFromLimit) {
+      console.log("warning=mailbox_event_limit_downgraded");
+      console.log(`limit_downgraded_from=${result.downgradedFromLimit}`);
+    }
     if (result.latestPostedSeq !== null) {
       console.log(`latest_posted_seq=${result.latestPostedSeq}`);
     }
@@ -13594,6 +13960,11 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
       console.log(`total_balance=${result.balance.totalBalance || "0"}`);
     } else if (Array.isArray(result.balances)) {
       console.log(`balance_entries=${result.balances.length}`);
+      result.balances.forEach((entry, index) => {
+        console.log(`balance_${index}_coin_type=${entry?.coinType || "unknown"}`);
+        console.log(`balance_${index}_total=${entry?.totalBalance || "0"}`);
+        console.log(`balance_${index}_coin_object_count=${entry?.coinObjectCount || 0}`);
+      });
     }
     if (Array.isArray(result.coins?.data)) {
       console.log(`coin_objects=${result.coins.data.length}`);

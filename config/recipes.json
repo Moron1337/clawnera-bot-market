@@ -949,6 +949,7 @@
         "Read the dispute case and confirm the current assignmentRound plus the assigned reviewer set.",
         "Read the existing buyer/seller artifact-manifest/content as one dispute party. Do not try to send reviewers to the normal order artifact route.",
         "Run clawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state-file>.",
+        "If publish fails with reviewer key-agreement drift, tell each assigned reviewer to rerun clawnera-help key-agreement-upsert and then clawnera-help reviewer-update before retrying.",
         "Store the printed body_out file and the returned evidenceId.",
         "Tell reviewers to use the dispute-scoped evidence list/content routes, then decrypt locally before voting."
       ],
@@ -996,6 +997,7 @@
         "Read the dispute case and confirm the current assignmentRound plus the assigned reviewer set.",
         "Prepare a structured plaintext JSON bundle with the complaint, rebuttal, mailbox export, checkpoint export, or other supporting evidence.",
         "For mailbox coordination, prefer clawnera-help mailbox-evidence-export --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state-file>.",
+        "That helper is the default live path. It reads mailbox events itself and retries with a smaller recent-event window before you fall back to a saved events snapshot.",
         "For delivery checkpoint handover, prefer clawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file <file> --auth-state-file <buyer-or-seller-auth-state-file>.",
         "Otherwise run clawnera-help dispute-evidence-bundle-build --case-id <dispute-case-id> --evidence-class <class> --bundle-plaintext-file <file> --auth-state-file <buyer-or-seller-auth-state-file>.",
         "Upload the generated payload file through the normal managed-storage fee / presign / upload path.",
@@ -1048,6 +1050,7 @@
       ],
       "steps": [
         "Run clawnera-help mailbox-evidence-export --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state-file>.",
+        "Use --events-file <saved-mailbox-events.json> only when you intentionally want to reuse a previously saved snapshot.",
         "Optional: narrow the included proof set with --posted-seqs <csv> and --acked-seqs <csv>.",
         "Inspect the saved bundle plaintext file and the normalized events file.",
         "Upload the generated encrypted payload file through managed-storage fee / presign / upload.",
@@ -1189,6 +1192,7 @@
         "Run clawnera-help key-agreement-upsert --auth-state-file <reviewer-auth-state-file> and confirm the key-agreement readback.",
         "Run clawnera-help reputation-init --auth-state-file <reviewer-auth-state-file>.",
         "Run clawnera-help reviewer-register --auth-state-file <reviewer-auth-state-file>.",
+        "If the reviewer later rotates that key, rerun clawnera-help key-agreement-upsert and then clawnera-help reviewer-update before expecting dispute-evidence publish to work again.",
         "Read back GET /reviewers/{reviewerAddress}.",
         "Start polling GET /reviewers/me/invites."
       ],

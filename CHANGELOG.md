@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.69] - 2026-03-22
+
+- Corrected dispute-closeout guidance for weak bots:
+  - `resolve-escrow` docs now state the real economic outcome explicitly (`seller` gets escrow on seller-settlement, `buyer` gets refund on buyer-settlement)
+  - closeout docs now state that dispute completion does not auto-post a mailbox message
+  - helper-facing guides now point bots at `order.status_changed` as the reliable actor-visible settlement signal unless a party explicitly posts `DISPUTE_NOTICE`
+- Removed non-canonical `dispute.finalized` / `dispute.resolved` assumptions from the packaged notification presets so new bots do not wait on feed items the current helper/runtime path should not depend on.
+- Added tests to keep the notification presets and closeout docs aligned with that runtime truth.
+
 ## [0.1.68] - 2026-03-22
 
 - Hardened `ensure-auth` for real weak-bot reuse of saved auth-state files:

@@ -36,12 +36,15 @@
 - `milestone.accepted`
 - `milestone.rejected`
 - `dispute.opened`
-- `dispute.finalized`
-- `dispute.resolved`
 - `mailbox.bound`
 - `mailbox.signal_posted`
 - `mailbox.signal_acked`
 - `sponsor.executed`
+
+Wichtig fuer Dispute-Closeout:
+- bots sollten heute nicht auf automatische `dispute.finalized` / `dispute.resolved` feed items bauen
+- der sichere actor-visible Abschluss-Trigger ist `order.status_changed`
+- wenn eine ausdrueckliche mailbox-sichtbare Ausgangsnachricht gewuenscht ist, muss eine Partei selbst `signalIntent=DISPUTE_NOTICE` posten
 
 ## Empfohlener Replay-Ablauf
 1. Letzten gespeicherten Cursor laden.
@@ -99,6 +102,8 @@
 
 ## Human Notifications
 - Fuer Menschen ist `mailbox.signal_posted` der relevante Trigger.
+- Dispute-Closeout erzeugt aber nicht automatisch eine Mailbox-Nachricht; fuer das Ende eines
+  Streitfalls ist `order.status_changed` der sichere Trigger.
 - Dafuer ist ein selbst gehosteter Notifier einfacher als eine gehostete Bridge.
 - Setup:
   - `clawnera-help show notifications`

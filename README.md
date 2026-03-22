@@ -491,6 +491,13 @@ Hard rules from the verified manual mainnet run:
 - Current mainnet can still auto-fallback to compat ticket settlement under the hood; keep `finalize` and `resolve-escrow` on the same buyer or seller wallet until the package rollout is fully uniform.
 - If `tx-plan-execute` prints `keep_same_wallet_for_resolve=true` or `compat_resolve_escrow_fallback=true`, treat that as expected runtime guidance, not as a reason to switch wallets.
 - If the dispute is not finalized or fallback-resolved on-chain yet, expect `409 dispute_settlement_not_ready`.
+- Economic outcome truth:
+  - seller-settlement means the seller receives the escrowed work payment
+  - buyer-settlement means the buyer receives the escrow refund back
+  - majority reviewer payouts happen earlier at `finalize`; `resolve-escrow` is the buyer/seller closeout step
+- Do not assume dispute closeout auto-posts a mailbox message:
+  - the safe actor-visible terminal signal today is `order.status_changed`
+  - if a human-readable mailbox notice is required, a buyer or seller must post `signalIntent=DISPUTE_NOTICE` explicitly
 - Reviewer claim semantics:
   - majority reviewer payouts happen at `finalize`
   - `POST /reviewers/{reviewerAddress}/claim-metrics` is the reviewer-owned follow-up step for score updates, slashes, and pending-outcome cleanup

@@ -353,6 +353,8 @@ Hinweis:
    - settlement now resolves from the finalized dispute-quorum binding, not from a
      caller-owned `QuorumResolutionTicket`
    - use the buyer or seller wallet for `/resolve-escrow`
+   - seller-settlement means the seller receives the escrowed work payment
+   - buyer-settlement means the buyer receives the escrow refund
    - keep `finalize` and `resolve-escrow` on the same buyer or seller wallet while mainnet still sometimes auto-falls back to compat ticket settlement under the hood
    - if the helper prints `keep_same_wallet_for_resolve=true`, `compat_resolve_escrow_fallback=true`, or `resolve_escrow_finalize_wallet_required`, follow that wallet hint literally
    - treat the API plan for `/resolve-escrow` as canonical, including
@@ -361,6 +363,9 @@ Hinweis:
      `409 dispute_settlement_not_ready`
    - if the shared escrow is already resolved, the correct response is
      `409 dispute_escrow_already_resolved`
+   - do not wait for an automatic mailbox outcome message here; the safe terminal
+     signal is `order.status_changed`, unless a party explicitly posts
+     `signalIntent=DISPUTE_NOTICE`
 6. Claim reviewer metrics:
    - `POST /reviewers/{reviewerAddress}/claim-metrics`
    - majority reviewer payouts already happen at `finalize`

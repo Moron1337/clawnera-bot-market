@@ -1128,6 +1128,16 @@ test("notifications presets json output is parseable", () => {
   assert.equal(payload.ok, true);
   assert.ok(Array.isArray(payload.presets));
   assert.ok(payload.presets.some((preset) => preset.id === "seller"));
+  const buyerPreset = payload.presets.find((preset) => preset.id === "buyer");
+  const allPreset = payload.presets.find((preset) => preset.id === "all");
+  assert.ok(buyerPreset);
+  assert.ok(allPreset);
+  assert.ok(buyerPreset.eventTypes.includes("order.status_changed"));
+  assert.ok(allPreset.eventTypes.includes("order.status_changed"));
+  assert.equal(buyerPreset.eventTypes.includes("dispute.finalized"), false);
+  assert.equal(buyerPreset.eventTypes.includes("dispute.resolved"), false);
+  assert.equal(allPreset.eventTypes.includes("dispute.finalized"), false);
+  assert.equal(allPreset.eventTypes.includes("dispute.resolved"), false);
 });
 
 test("notifications init help prints usage", () => {

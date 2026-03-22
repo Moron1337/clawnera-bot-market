@@ -103,3 +103,21 @@ test("active dispute guides avoid ticket-owner handoff language for escrow settl
   assert.match(tasks, /refresh the original buyer\/seller key-agreement records first/i);
   assert.equal(tasks.includes("each assigned reviewer must rerun `key-agreement-upsert` and then `reviewer-update` before the buyer/seller retries publish"), false);
 });
+
+test("closeout docs do not promise automatic mailbox settlement messages", () => {
+  const readme = readRepoFile("README.md");
+  const apiReference = readRepoFile("docs/guides/API_REFERENCE.md");
+  const onboarding = readRepoFile("docs/guides/BOT_ONBOARDING.md");
+  const mailboxNotifications = readRepoFile("docs/guides/MAILBOX_NOTIFICATIONS.md");
+  const eventFeed = readRepoFile("docs/guides/EVENT_FEED_AND_WEBHOOKS.md");
+  const orderStates = readRepoFile("docs/guides/ORDER_STATES.md");
+
+  for (const text of [readme, apiReference, onboarding, mailboxNotifications, eventFeed, orderStates]) {
+    assert.match(text, /order\.status_changed/);
+  }
+  for (const text of [readme, apiReference, onboarding, mailboxNotifications, eventFeed]) {
+    assert.match(text, /DISPUTE_NOTICE/);
+  }
+  assert.doesNotMatch(eventFeed, /^- `dispute\.finalized`$/m);
+  assert.doesNotMatch(eventFeed, /^- `dispute\.resolved`$/m);
+});

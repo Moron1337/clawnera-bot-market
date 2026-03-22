@@ -301,6 +301,10 @@ Important:
     a caller-owned `QuorumResolutionTicket`
   - while current mainnet still sometimes auto-falls back to compat ticket settlement,
     keep `finalize` and `resolve-escrow` on the same buyer or seller wallet
+  - seller-settlement means the seller receives the escrowed work payment
+  - buyer-settlement means the buyer receives the escrow refund
+  - majority reviewer payouts happen earlier at `finalize`; `resolve-escrow` is the
+    buyer/seller economic closeout step
   - request body may be omitted or contain only `escrowObjectId`
   - the returned tx-plan request is builder-ready and includes
     `disputeQuorumConfigObjectId`
@@ -311,6 +315,9 @@ Important:
   - after escrow resolution, the order should read back terminal `COMPLETED`; milestone
     submit/accept/reject should read back `409 order_not_in_progress` with the
     terminal status
+  - dispute closeout does not auto-post a mailbox message; rely on `order.status_changed`
+    as the actor-visible terminal signal unless a party intentionally posts
+    `signalIntent=DISPUTE_NOTICE`
 - `POST /reviewers/{reviewerAddress}/claim-metrics`
   - reviewer-owned tx-plan route
   - majority reviewer payouts happen at `finalize`

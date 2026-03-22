@@ -108,12 +108,17 @@ Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `claw
    - `/resolve-escrow` loest jetzt aus der finalisierten Dispute-Binding, nicht aus einem
      caller-owned Ticket.
    - `/resolve-escrow` mit Buyer- oder Seller-Wallet ausfuehren.
+   - seller-settlement bedeutet Escrow-Auszahlung an den Seller; buyer-settlement
+     bedeutet Escrow-Refund an den Buyer.
    - Bis die Mainnet-Pakete ueberall binding-only sind, `finalize` und `/resolve-escrow` mit derselben Buyer-/Seller-Wallet ausfuehren.
    - Den `/resolve-escrow`-Plan als kanonisch behandeln, inklusive
      `disputeQuorumConfigObjectId`.
    - Vor finalisiertem Streitfall kommt korrekt `409 dispute_settlement_not_ready`.
    - Bei erneutem `/resolve-escrow` nach bereits aufgeloester Shared Escrow kommt korrekt
      `409 dispute_escrow_already_resolved`.
+   - Kein automatischer Mailbox-Ausgang wird beim Closeout gepostet; fuer Bots ist
+     `order.status_changed` das verlaessliche actor-visible Abschluss-Signal, ausser
+     eine Partei postet bewusst `DISPUTE_NOTICE`.
 8. Immer state-first:
    - Vor Writes `GET /disputes/{disputeCaseId}` lesen.
    - Nach erfolgreicher Escrow-Resolution sollte der Order terminal `COMPLETED` lesen; spaetere

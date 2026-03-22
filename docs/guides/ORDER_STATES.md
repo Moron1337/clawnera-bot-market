@@ -71,3 +71,7 @@ Wichtig:
   - optionaler DB-only Notfallpfad auf `DISPUTED` (nur wenn Runtime dies erlaubt).
 - Dispute Settlement (`/disputes/*/finalize|fallback/*|resolve-escrow`):
   - je nach Quorum-/Fallback-Outcome final `COMPLETED` oder `CANCELLED`.
+  - seller-settlement -> Seller bekommt das Escrow.
+  - buyer-settlement -> Buyer bekommt den Escrow-Refund.
+  - fuer Bots ist danach `order.status_changed` das verlaessliche actor-visible Abschluss-Signal;
+    es gibt keinen automatischen Mailbox-Ausgang nur wegen des Dispute-Endes.

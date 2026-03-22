@@ -25,6 +25,11 @@ Use:
 
 Mailbox is not the first trigger for discovery. It is the communication trigger after a real order exists.
 
+For dispute closeout specifically:
+- do not assume the runtime auto-posts a mailbox outcome message when the case is finalized or the escrow is resolved
+- the safe actor-visible settlement trigger today is `order.status_changed`
+- if you need an explicit mailbox-visible dispute outcome, a buyer or seller must post `signalIntent=DISPUTE_NOTICE` intentionally
+
 ## Presets
 The package ships preset-based notifications:
 

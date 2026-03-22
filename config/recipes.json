@@ -675,7 +675,7 @@
       ],
       "nextRecipes": [
         "mailbox-handshake",
-        "seller-deliver-encrypted-byo",
+        "seller-deliver-encrypted",
         "buyer-accept-delivery"
       ],
       "nextTopics": ["canonical-flow", "sponsor", "payments", "order-states", "http-examples"]
@@ -708,7 +708,7 @@
       "steps": [
         "Read GET /orders/{orderId} first and treat order.mailboxObjectId as the canonical mailbox binding truth.",
         "Before the first seller milestone submit, request POST /orders/{orderId}/mailbox/init-plan with body {} and execute the returned plan locally with clawnera-help tx-plan-execute POST /orders/{orderId}/mailbox/init-plan --body '{}'.",
-        "Bind the resulting mailbox object with POST /orders/{orderId}/mailbox.",
+        "Store order_mailbox_object_id directly from the tx-plan-execute output, then bind that exact object with POST /orders/{orderId}/mailbox.",
         "For signals, request POST /orders/{orderId}/mailbox/post-signal-plan and execute that plan locally.",
         "For acknowledgements, request POST /orders/{orderId}/mailbox/ack-plan and execute that plan locally.",
         "Store mailbox_signal_posted_seq or mailbox_signal_acked_seq directly from tx-plan-execute output whenever it prints them.",
@@ -717,8 +717,8 @@
       ],
       "examples": [
         "Read the order first and treat mailboxObjectId as the binding truth:\\nclawnera-help request GET /orders/<order-id> --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Initialize the mailbox locally:\\nclawnera-help request POST /orders/<order-id>/mailbox/init-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/init-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'",
-        "Bind the created mailbox object:\\nclawnera-help request POST /orders/<order-id>/mailbox --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"mailboxObjectId\": \"<mailbox-object-id>\"\\n}'",
+        "Initialize the mailbox locally and capture order_mailbox_object_id from the tx output:\\nclawnera-help request POST /orders/<order-id>/mailbox/init-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/init-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'",
+        "Bind the created mailbox object using that exact order_mailbox_object_id:\\nclawnera-help request POST /orders/<order-id>/mailbox --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"mailboxObjectId\": \"<order_mailbox_object_id>\"\\n}'",
         "Post a signal, then read it back and acknowledge it:\\nclawnera-help request POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://example\"\\n}'\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://example\"\\n}'\\n# if mailbox-events is still empty, trust mailbox_signal_posted_seq from the tx output first\\nclawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request POST /orders/<order-id>/mailbox/ack-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"ackedSeq\": \"1\"\\n}'\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/ack-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"ackedSeq\": \"1\"\\n}'"
       ],
       "stopConditions": [
@@ -728,13 +728,14 @@
         "Stop if you were about to guess mailboxObjectId or ackedSeq."
       ],
       "nextRecipes": [
-        "seller-deliver-encrypted-byo",
+        "seller-deliver-encrypted",
         "buyer-accept-delivery"
       ],
       "nextTopics": ["mailbox-flow", "role-routes"]
     },
     {
-      "id": "seller-deliver-encrypted-byo",
+      "id": "seller-deliver-encrypted",
+      "aliases": ["seller-deliver-encrypted-byo"],
       "title": "Seller Deliver Encrypted Payload",
       "summary": "Encrypt the binary locally, upload the encrypted JSON payload, then submit, anchor, and signal it in the canonical order.",
       "role": "seller",
@@ -1294,8 +1295,8 @@
     {
       "id": "reviewer-vote",
       "title": "Reviewer Commit And Reveal Vote",
-      "aliases": ["reviewer-vote-commit", "reviewer-vote-reveal", "reviewer-vote-finalize"],
-      "summary": "Commit, wait, reveal, then finalize or fallback in the exact order the case deadlines allow.",
+      "aliases": ["reviewer-vote-commit", "reviewer-vote-reveal"],
+      "summary": "Commit, wait, and reveal in the exact order the case deadlines allow, then hand dispute closure back to buyer or seller.",
       "role": "reviewer",
       "when": "Use this after a reviewer was assigned to a case.",
       "needs": [
@@ -1306,12 +1307,11 @@
       "store": [
         "commit tx result",
         "reveal tx result",
-        "closed disputeCaseId"
+        "revealed disputeCaseId"
       ],
       "routes": [
         "POST /disputes/{disputeCaseId}/votes/commit",
-        "POST /disputes/{disputeCaseId}/votes/reveal",
-        "POST /disputes/{disputeCaseId}/finalize"
+        "POST /disputes/{disputeCaseId}/votes/reveal"
       ],
       "steps": [
         "If you have not inspected the dispute-scoped evidence yet, stop and run reviewer-inspect-evidence first.",
@@ -1321,22 +1321,21 @@
         "Wait until commitDeadlineMs.",
         "Run clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/reveal --body-file reviewer-vote.json --body-select revealRequestBody.",
         "Remember: vote=1 resolves to seller settlement, vote=0 resolves to buyer settlement.",
-        "If needed, wait until challengeDeadlineMs before finalize.",
-        "Finalize with the canonical tx-plan path once the challenge window allows it. Do not hand-build dispute object ids for finalize or timeout-fallback; the API auto-hydrates them.",
-        "Store the closed disputeCaseId and move immediately to reviewer-claim-metrics."
+        "After reveal, stop. Buyer or seller closes the dispute with finalize/fallback and later resolves escrow.",
+        "Return only after the case is closed to run reviewer-claim-metrics from the same reviewer wallet."
       ],
       "examples": [
         "Prepare the canonical commit/reveal bodies first:\\nclawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote seller --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json",
         "Commit the prepared hash:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody",
         "Reveal with the exact prepared vote + nonce:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody",
-        "Finalize after the challenge window with no manual object-id body:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/finalize --auth-state-file ~/.config/clawnera/auth-state.json"
+        "Then stop and let buyer or seller close the case with finalize/fallback + resolve-escrow from the same party wallet."
       ],
       "stopConditions": [
         "Stop on dispute_commit_window_open and wait.",
-        "Stop on dispute_challenge_window_open and wait.",
         "Stop on reviewer_vote_already_committed and keep the saved reviewer-vote.json for the later reveal step instead of regenerating a new nonce.",
         "Stop on reviewer_vote_commit_window_closed. Do not retry commit; wait until the printed revealDeadlineMs and hand off to buyer/seller replacement flow if the round still lacks quorum after that.",
-        "Stop if the prepared vote/nonce no longer match what you were about to reveal."
+        "Stop if the prepared vote/nonce no longer match what you were about to reveal.",
+        "Stop after reveal; reviewers do not run finalize or timeout-fallback on the normal path."
       ],
       "nextRecipes": [
         "reviewer-claim-metrics"
@@ -1382,9 +1381,7 @@
         "Stop if the CLI cannot safely infer disputeCaseObjectId and you do not have the exact closed case id.",
         "Do not treat claim-metrics as the main payout step; majority payouts already happen at finalize."
       ],
-      "nextRecipes": [
-        "resolve-dispute"
-      ],
+      "nextRecipes": [],
       "nextTopics": ["reviewer-selector", "api", "order-states"]
     },
     {

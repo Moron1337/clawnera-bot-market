@@ -716,7 +716,7 @@ test("seller review compact output stays read-only and marks the buyer handoff",
 });
 
 test("seller delivery compact output highlights delivery writes instead of key setup", () => {
-  const result = runCli(["recipe", "seller-deliver-encrypted-byo", "--compact"]);
+  const result = runCli(["recipe", "seller-deliver-encrypted", "--compact"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^do:clawnera-help deliverable-encrypt --order-id <orderId> --milestone-id <milestoneId> --plaintext-file \.\/deliverable\.bin /m);
   assert.match(
@@ -728,6 +728,14 @@ test("seller delivery compact output highlights delivery writes instead of key s
     /^read:GET \/orders\/\{orderId\}\/milestones\/\{milestoneId\}\/anchor \| GET \/events\?scope=all&type=mailbox\.signal_posted/m
   );
   assert.doesNotMatch(result.stdout, /^write:PUT \/users\/me\/key-agreement/m);
+});
+
+test("legacy seller delivery alias resolves to the managed-first canonical recipe", () => {
+  const result = runCli(["recipe", "seller-deliver-encrypted-byo", "--json"]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.recipe.id, "seller-deliver-encrypted");
+  assert.ok(payload.recipe.aliases.includes("seller-deliver-encrypted-byo"));
 });
 
 test("creator cancel compact output uses mode-aware feed wording", () => {
@@ -790,9 +798,21 @@ test("recipe json output is parseable", () => {
   assert.ok(payload.recipe.steps.some((step) => /tx-plan-execute POST .*votes\/commit/.test(step)));
   assert.ok(payload.recipe.steps.some((step) => /reviewer-vote-prepare/.test(step)));
   assert.ok(payload.recipe.steps.some((step) => /sequentially, not in parallel/.test(step)));
+  assert.ok(payload.recipe.steps.some((step) => /buyer or seller closes the dispute/i.test(step)));
+  assert.ok(payload.recipe.stopConditions.some((step) => /reviewers do not run finalize/i.test(step)));
   assert.ok(payload.recipe.stopConditions.some((step) => /reviewer_vote_already_committed/.test(step)));
   assert.ok(payload.recipe.stopConditions.some((step) => /reviewer_vote_commit_window_closed/.test(step)));
   assert.equal(payload.recipe.nextRecipes.includes("resolve-dispute"), false);
+  assert.equal(payload.recipe.aliases.includes("reviewer-vote-finalize"), false);
+  assert.equal(payload.recipe.routes.includes("POST /disputes/{disputeCaseId}/finalize"), false);
+});
+
+test("reviewer vote compact output stops at reveal and points claim-metrics to later closeout", () => {
+  const result = runCli(["recipe", "reviewer-vote", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^write:POST \/disputes\/\{disputeCaseId\}\/votes\/commit \| POST \/disputes\/\{disputeCaseId\}\/votes\/reveal/m);
+  assert.doesNotMatch(result.stdout, /POST \/disputes\/\{disputeCaseId\}\/finalize/);
+  assert.match(result.stdout, /^next:reviewer-claim-metrics\[after_buyer_or_seller_closeout]/m);
 });
 
 test("reviewer inspect recipe json output is parseable", () => {
@@ -816,9 +836,17 @@ test("mailbox handshake recipe explains tx output seq fallback", () => {
   const result = runCli(["recipe", "mailbox-handshake"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /order\.mailboxObjectId as the canonical mailbox binding truth/);
+  assert.match(result.stdout, /order_mailbox_object_id/);
   assert.match(result.stdout, /clawnera-help mailbox-events --order-id <order-id>/);
   assert.match(result.stdout, /mailbox_signal_posted_seq/);
   assert.match(result.stdout, /mailbox_signal_acked_seq/);
+});
+
+test("next mailbox-handshake includes the explicit bind handoff after init-plan", () => {
+  const result = runCli(["next", "mailbox-handshake"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^do:clawnera-help tx-plan-execute POST \/orders\/<orderId>\/mailbox\/init-plan/m);
+  assert.match(result.stdout, /then bind POST \/orders\/<orderId>\/mailbox with order_mailbox_object_id/);
 });
 
 test("replacement recipe explains full reassignment semantics", () => {

@@ -12,7 +12,7 @@
         "buyer-accept-bid",
         "fund-order",
         "mailbox-handshake",
-        "seller-deliver-encrypted-byo"
+        "seller-deliver-encrypted"
       ],
       "optional": [
         "creator-cancel-listing",
@@ -79,7 +79,7 @@
         "buyer-accept-request-bid",
         "fund-order",
         "mailbox-handshake",
-        "seller-deliver-encrypted-byo"
+        "seller-deliver-encrypted"
       ],
       "optional": [
         "dispute-open",
@@ -91,7 +91,7 @@
     {
       "id": "reviewer",
       "title": "Reviewer Minimal Path",
-      "summary": "Wallet -> key agreement -> reputation -> reviewer register -> poll reviewer-invites -> accept -> commit/reveal -> claim metrics.",
+      "summary": "Wallet -> key agreement -> reputation -> reviewer register -> poll reviewer-invites -> accept -> inspect -> commit/reveal -> return later for claim metrics after buyer/seller closeout.",
       "role": "reviewer",
       "steps": [
         "setup-quick",
@@ -103,9 +103,7 @@
         "reviewer-vote",
         "reviewer-claim-metrics"
       ],
-      "optional": [
-        "resolve-dispute"
-      ]
+      "optional": []
     },
     {
       "id": "operator",

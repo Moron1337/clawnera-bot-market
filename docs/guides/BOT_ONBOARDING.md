@@ -247,6 +247,7 @@ Hinweis:
    - `POST /orders/{orderId}/mailbox/init-plan`
    - SDK: `buildOrderMailboxTxFromPlan(...)`
    - signieren und ausfuehren
+   - die ausgefuehrte Plan-Antwort liefert `order_mailbox_object_id`; genau diese Object-ID danach binden
 2. Mailbox ID lesen/setzen:
    - `GET /orders/{orderId}/mailbox`
    - `POST /orders/{orderId}/mailbox` (Capability `order.mailbox.set`)
@@ -311,7 +312,8 @@ Hinweis:
    - `clawnera-help dispute-evidence-content --case-id <0x...> --evidence-id <uuid> --auth-state-file ~/.config/clawnera/auth-state.json`
    - decrypt locally from the saved file:
    - `clawnera-help dispute-evidence-decrypt --content-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file ~/.config/clawnera/auth-state.json`
-   - if buyer/seller publish fails with `manifest_recipient_key_agreement_expired` or `manifest_recipient_key_agreement_not_found`, each assigned reviewer must rerun `clawnera-help key-agreement-upsert` and then `clawnera-help reviewer-update` before the party retries publish
+   - if buyer/seller publish fails with `manifest_recipient_key_agreement_expired` or `manifest_recipient_key_agreement_not_found`, refresh the original buyer/seller key-agreement records first and then rerun the same publish
+   - only send a reviewer through `clawnera-help key-agreement-upsert` + `clawnera-help reviewer-update` when the helper explicitly reports reviewer transport drift such as `reviewer_key_agreement_not_found_for_transport_pubkey`
    - do not guess `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*` for reviewer content; those stay buyer/seller-only
    - prepare once and reuse the saved file:
    - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json`
@@ -330,6 +332,7 @@ Hinweis:
      - `409 dispute_commit_window_open`
      - `commitDeadlineMs`
      - `retryAfterMs`
+     - `tx-plan-execute` now prints top-level `wait_until` and `retry_after_ms`, and auto-retries one short boundary wait instead of forcing a manual nested-error read
    - `reviewers/accept` is blocked for buyer/seller (`party_cannot_accept_reviewer_slot`).
 4. If needed:
    - reviewer replace: `POST /disputes/{disputeCaseId}/reviewers/replace`
@@ -341,6 +344,7 @@ Hinweis:
      - even after a reveal majority, `finalize` can still return `409 dispute_challenge_window_open`;
        wait until `challengeDeadlineMs` and only then plan again
      - `finalize` auto-hydrates the live dispute object ids; do not hand-build them
+     - this is a buyer/seller closeout step, not a reviewer action
   - timeout fallback: `POST /disputes/{disputeCaseId}/fallback/timeout`
     - uses the same auto-hydrated dispute object ids as `finalize`
   - `finalize` and `fallback/timeout` stay capability-gated at the API layer
@@ -349,6 +353,8 @@ Hinweis:
    - settlement now resolves from the finalized dispute-quorum binding, not from a
      caller-owned `QuorumResolutionTicket`
    - use the buyer or seller wallet for `/resolve-escrow`
+   - keep `finalize` and `resolve-escrow` on the same buyer or seller wallet while mainnet still sometimes auto-falls back to compat ticket settlement under the hood
+   - if the helper prints `keep_same_wallet_for_resolve=true`, `compat_resolve_escrow_fallback=true`, or `resolve_escrow_finalize_wallet_required`, follow that wallet hint literally
    - treat the API plan for `/resolve-escrow` as canonical, including
      `disputeQuorumConfigObjectId`
    - before finalization or fallback closure, the correct response is

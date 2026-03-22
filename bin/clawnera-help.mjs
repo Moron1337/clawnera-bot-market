@@ -110,6 +110,11 @@ import {
   classifyTxPlanExecutionError,
   normalizeTxPlanErrorMessage,
 } from "../lib/tx-plan-errors.mjs";
+import {
+  canonicalPackageIdFromObjectType,
+  isMissingResolveDisputeWithBindingFunctionError,
+  resolveQuorumTicketFromFinalizeTx,
+} from "../lib/dispute-ticket-compat.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -483,7 +488,8 @@ function compactRecipeCommand(recipe) {
     case "fund-order":
       return `clawnera-help request GET /orders/<orderId> ${auth}`;
     case "mailbox-handshake":
-      return `clawnera-help request POST /orders/<orderId>/mailbox/init-plan ${auth} --body '{}'`;
+      return `clawnera-help tx-plan-execute POST /orders/<orderId>/mailbox/init-plan ${auth} --body '{}' ; then bind POST /orders/<orderId>/mailbox with order_mailbox_object_id from the previous output`;
+    case "seller-deliver-encrypted":
     case "seller-deliver-encrypted-byo":
       return `clawnera-help deliverable-encrypt --order-id <orderId> --milestone-id <milestoneId> --plaintext-file ./deliverable.bin ${auth}`;
     case "buyer-accept-delivery":
@@ -524,6 +530,7 @@ function compactRecipeReadText(recipe) {
     case "creator-cancel-listing":
     case "creator-renew-listing":
       return "GET /listings for OFFER | GET /listings?listingMode=REQUEST for REQUEST";
+    case "seller-deliver-encrypted":
     case "seller-deliver-encrypted-byo":
       return "GET /orders/{orderId}/milestones/{milestoneId}/anchor | GET /events?scope=all&type=mailbox.signal_posted";
     case "reviewer-inspect-evidence":
@@ -544,6 +551,7 @@ function compactRecipeWriteText(recipe) {
       return "POST /orders/{orderId}/dispute-bond/fund | POST /orders/{orderId}/escrow/bind";
     case "mailbox-handshake":
       return "POST /orders/{orderId}/mailbox/init-plan | POST /orders/{orderId}/mailbox | POST /orders/{orderId}/mailbox/post-signal-plan";
+    case "seller-deliver-encrypted":
     case "seller-deliver-encrypted-byo":
       return "POST /storage/uploads/presign | POST /orders/{orderId}/milestones/{milestoneId}/submit | POST /orders/{orderId}/milestones/{milestoneId}/anchor";
     case "dispute-open":
@@ -551,7 +559,7 @@ function compactRecipeWriteText(recipe) {
     case "dispute-evidence-linked-deliverable":
       return "POST /disputes/{disputeCaseId}/evidence";
     case "reviewer-vote":
-      return "POST /disputes/{disputeCaseId}/votes/commit | POST /disputes/{disputeCaseId}/votes/reveal | POST /disputes/{disputeCaseId}/finalize";
+      return "POST /disputes/{disputeCaseId}/votes/commit | POST /disputes/{disputeCaseId}/votes/reveal";
     case "operator-shortlist-replacement":
       return "POST /admin/reviewer-selection/shortlist | POST /disputes/{disputeCaseId}/reviewers/replace";
     default: {
@@ -568,6 +576,8 @@ function compactRecipeNextText(recipe) {
       return "buyer-accept-bid[handoff] | fund-order[after_buyer_accept]";
     case "seller-answer-request":
       return "buyer-accept-request-bid[handoff] | fund-order[after_request_buyer_accept]";
+    case "reviewer-vote":
+      return "reviewer-claim-metrics[after_buyer_or_seller_closeout]";
     default:
       return nextRecipes.join(" | ");
   }
@@ -1806,10 +1816,15 @@ function buildMilestoneSubmitByoHintLines(result) {
   if (normalizeString(response.error) !== "order_mailbox_required") {
     return [];
   }
+  const orderId =
+    typeof result.orderId === "string" && result.orderId.trim() ? result.orderId.trim() : "<orderId>";
   return [
     "cause=order_mailbox_required",
     "detail=bind_the_order_mailbox_before_retrying_the_first_seller_submit",
     "next_hint=clawnera-help recipe mailbox-handshake",
+    `next_init=clawnera-help tx-plan-execute POST /orders/${orderId}/mailbox/init-plan --auth-state-file <file> --body '{}'`,
+    "bind_source=use order_mailbox_object_id from the previous tx-plan-execute output",
+    `next_bind=clawnera-help request POST /orders/${orderId}/mailbox --auth-state-file <file> --body '{\"mailboxObjectId\":\"<order_mailbox_object_id>\"}'`,
   ];
 }
 
@@ -4249,6 +4264,32 @@ async function callApiRouteWithTransientRetry({
   return lastCall;
 }
 
+function isTransientTxPlanRouteFailure(result) {
+  if (!result || typeof result !== "object") {
+    return false;
+  }
+  const code = summarizeApiFailure(result);
+  return code === "backend_timeout" || code === "http_timeout" || code === "auth_session_unavailable";
+}
+
+async function callTxPlanRouteWithRetry({
+  method,
+  rawPath,
+  options = {},
+  timeoutMs = 20_000,
+  maxAttempts = 3,
+} = {}) {
+  let lastCall = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    lastCall = await callApiRoute({ method, rawPath, options, timeoutMs });
+    if (lastCall.result.ok || attempt === maxAttempts || !isTransientTxPlanRouteFailure(lastCall.result)) {
+      return lastCall;
+    }
+    await sleep(250 * attempt);
+  }
+  return lastCall;
+}
+
 function detectTxPlanPayload(body) {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     return null;
@@ -5849,6 +5890,190 @@ function stripInlineRequestBodyOptions(options = {}) {
   return sanitized;
 }
 
+async function callIotaJsonRpcForHelper(options = {}, body) {
+  const { rpcUrl } = resolveIotaRpcUrl({
+    network: options.network,
+    rpcUrl: options["rpc-url"],
+  });
+  const response = await fetch(rpcUrl, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`iota_rpc_http_${response.status}`);
+  }
+  const payload = await response.json();
+  if (payload?.error) {
+    throw new Error(typeof payload.error?.message === "string" ? payload.error.message : "iota_rpc_error");
+  }
+  return payload?.result ?? null;
+}
+
+async function findResolveEscrowCompatTicket({ disputeCase, disputeCaseObjectId, options }) {
+  const canonicalPackageId = canonicalPackageIdFromObjectType(disputeCase?.type);
+  if (!canonicalPackageId) {
+    throw new Error("resolve_escrow_compat_package_unknown");
+  }
+  const resolvedEventType = `${canonicalPackageId}::dispute_quorum::DisputeQuorumResolved`;
+  let cursor = null;
+  for (let page = 0; page < 6; page += 1) {
+    const result = await callIotaJsonRpcForHelper(options, {
+      jsonrpc: "2.0",
+      id: `resolve-escrow-ticket-${page + 1}`,
+      method: "iotax_queryEvents",
+      params: [{ MoveEventType: resolvedEventType }, cursor, 20, true],
+    });
+    const events = Array.isArray(result?.data) ? result.data : [];
+    const matchingResolvedEvent = events.find(
+      (entry) => normalizeIotaAddress(entry?.parsedJson?.dispute_case_id || "") === disputeCaseObjectId,
+    );
+    if (matchingResolvedEvent) {
+      const txDigest =
+        typeof matchingResolvedEvent?.id?.txDigest === "string" ? matchingResolvedEvent.id.txDigest : "";
+      if (!txDigest) {
+        throw new Error("resolve_escrow_compat_finalize_tx_missing");
+      }
+      const transactionBlock = await callIotaJsonRpcForHelper(options, {
+        jsonrpc: "2.0",
+        id: "resolve-escrow-ticket-tx",
+        method: "iota_getTransactionBlock",
+        params: [txDigest, { showInput: true, showEvents: true }],
+      });
+      const resolved = resolveQuorumTicketFromFinalizeTx({
+        disputeCaseObjectId,
+        disputeCaseType: disputeCase?.type,
+        resolvedEvents: [matchingResolvedEvent],
+        transactionBlock,
+      });
+      if (!resolved) {
+        throw new Error("resolve_escrow_compat_ticket_not_found");
+      }
+      return resolved;
+    }
+    if (!result?.hasNextPage || !result?.nextCursor) {
+      break;
+    }
+    cursor = result.nextCursor;
+  }
+  throw new Error("resolve_escrow_compat_ticket_not_found");
+}
+
+async function maybeExecuteResolveEscrowCompatFallback({
+  errorMessage,
+  txPlan,
+  rawPath,
+  options,
+  timeoutMs,
+  signer,
+  autoHydratedReviewerContext,
+  autoRetriedExecutionCount,
+  txBytesOut,
+  planOut,
+}) {
+  if (txPlan?.txBuilder !== "orderEscrow.resolveDisputeWithBinding") {
+    return null;
+  }
+  if (!isMissingResolveDisputeWithBindingFunctionError(errorMessage)) {
+    return null;
+  }
+  const disputeCaseObjectId = resolveDisputeCaseIdFromTxPlanPath(rawPath);
+  if (!disputeCaseObjectId) {
+    return {
+      ok: false,
+      error: "resolve_escrow_compat_dispute_case_id_missing",
+      hint: "The current chain package still needs the dispute finalize ticket for resolve-escrow, but the disputeCaseId could not be recovered from the route.",
+    };
+  }
+  const disputeCall = await callApiRoute({
+    method: "GET",
+    rawPath: `/disputes/${disputeCaseObjectId}`,
+    options: stripInlineRequestBodyOptions(options),
+    timeoutMs,
+  });
+  if (!disputeCall.result.ok) {
+    return {
+      ok: false,
+      error: summarizeApiFailure(disputeCall.result),
+      status: disputeCall.result.status,
+      response: disputeCall.result.body,
+      disputeCaseObjectId,
+    };
+  }
+  const disputeCase = ensureDisputeCasePayload(disputeCall.result.body);
+  const compatTicket = await findResolveEscrowCompatTicket({
+    disputeCase,
+    disputeCaseObjectId,
+    options,
+  });
+  const signerAddress = normalizeIotaAddress(signer?.address || txPlan?.request?.sender || "");
+  if (compatTicket.finalizeSignerAddress && signerAddress && compatTicket.finalizeSignerAddress !== signerAddress) {
+    return {
+      ok: false,
+      error: "resolve_escrow_finalize_wallet_required",
+      disputeCaseObjectId,
+      hint:
+        `The current chain package still resolves escrow with the finalize ticket, and that ticket belongs to ${compatTicket.finalizeSignerAddress}. ` +
+        `Rerun the same resolve-escrow command with that wallet, or rerun finalize+resolve with the same buyer/seller wallet on a fresh case.`,
+      nextCommandHint: `clawnera-help tx-plan-execute POST '${rawPath}' --auth-state-file <finalize-wallet-auth-state-file>`,
+      compatResolveEscrowFallback: {
+        attempted: true,
+        finalizeTxDigest: compatTicket.txDigest,
+        finalizeSignerAddress: compatTicket.finalizeSignerAddress,
+      },
+    };
+  }
+  const compatTxPlan = {
+    ...txPlan,
+    txBuilder: "orderEscrow.resolveDisputeWithQuorumTicket",
+    request: {
+      ...txPlan.request,
+      quorumResolutionTicketObjectId: compatTicket.ticketObjectId,
+    },
+  };
+  const transaction = buildClawdexTxFromPlan(compatTxPlan);
+  const executed = await executeTransaction(transaction, {
+    alias: signer.alias,
+    address: signer.address,
+    keystorePath: signer.keystorePath,
+    network: options.network,
+    rpcUrl: options["rpc-url"],
+  });
+  if (txBytesOut) {
+    writeOptionalOutputFile(txBytesOut, `${executed.txBytesB64}\n`);
+  }
+  return {
+    ok: true,
+    mode: "execute",
+    rawPath,
+    apiBase: disputeCall.apiBase,
+    txBuilder: compatTxPlan.txBuilder,
+    signerAddress: executed.verifyResult?.signerAddress || signer.address || compatTxPlan.request.sender || null,
+    autoHydratedReviewerContext,
+    autoRetriedExecutionCount,
+    txDigest: resolveTxExecutionDigest(executed),
+    txBytesOut: txBytesOut || null,
+    planOut: planOut || null,
+    execution: executed.result,
+    createdObjects: extractCreatedObjects(executed),
+    disputeCaseObjectId,
+    postExecuteBinding: null,
+    mailboxSignalPosted: extractMailboxSignalPosted(executed),
+    mailboxSignalAcked: extractMailboxSignalAcked(executed),
+    disputeBondObjectId: null,
+    orderMailboxObjectId: null,
+    orderEscrowObjectId: extractCreatedObjectIdByTypeFragment(executed, "::order_escrow::OrderEscrow<") || null,
+    compatResolveEscrowFallback: {
+      used: true,
+      finalizeTxDigest: compatTicket.txDigest,
+      finalizeSignerAddress: compatTicket.finalizeSignerAddress,
+    },
+    orderStatusReadbackMayLag: true,
+  };
+}
+
 async function maybeClassifyLiveDisputeTxPlanExecutionError({
   errorMessage,
   txBuilder,
@@ -5888,6 +6113,78 @@ async function maybeClassifyLiveDisputeTxPlanExecutionError({
   } catch {
     return generic;
   }
+}
+
+function extractTxPlanRouteRetryAfterMs(result = {}) {
+  const bodyRetryAfterMs =
+    result?.body && typeof result.body === "object" && !Array.isArray(result.body)
+      ? parsePositiveDeadlineMs(result.body.retryAfterMs)
+      : null;
+  const headerRetryAfterMs = extractResponseTimingHints(result?.headers).retryAfterMs;
+  if (bodyRetryAfterMs && headerRetryAfterMs) {
+    return Math.min(bodyRetryAfterMs, headerRetryAfterMs);
+  }
+  return bodyRetryAfterMs || headerRetryAfterMs || null;
+}
+
+function classifyTxPlanRouteFailure({
+  method,
+  rawPath,
+  options = {},
+  result = {},
+}) {
+  const error = summarizeApiFailure(result);
+  const body =
+    result?.body && typeof result.body === "object" && !Array.isArray(result.body)
+      ? result.body
+      : {};
+  const retryAfterMs = extractTxPlanRouteRetryAfterMs(result);
+  const requestBody = loadApiRequestBody(options);
+  const nextCommandHint = buildTxPlanNextCommandHint(method, rawPath, requestBody);
+  let waitUntilMs = null;
+  let hint = "";
+  switch (error) {
+    case "dispute_commit_window_open":
+      waitUntilMs =
+        parsePositiveDeadlineMs(body.commitDeadlineMs) ||
+        (Number.isSafeInteger(retryAfterMs) && retryAfterMs >= 0 ? Date.now() + retryAfterMs : null);
+      hint =
+        "The reveal route is still inside the reviewer commit window. Wait until the printed commit deadline or retry-after hint before rerunning the exact same reveal command.";
+      break;
+    case "dispute_challenge_window_open":
+      waitUntilMs =
+        parsePositiveDeadlineMs(body.challengeDeadlineMs) ||
+        (Number.isSafeInteger(retryAfterMs) && retryAfterMs >= 0 ? Date.now() + retryAfterMs : null);
+      hint =
+        "The dispute still sits inside the post-reveal challenge window. Wait until the printed challenge deadline or retry-after hint before rerunning the same finalize command from the same buyer or seller wallet.";
+      break;
+    case "dispute_settlement_not_ready":
+      waitUntilMs =
+        parsePositiveDeadlineMs(body.settlementReadyAtMs) ||
+        parsePositiveDeadlineMs(body.challengeDeadlineMs) ||
+        (Number.isSafeInteger(retryAfterMs) && retryAfterMs >= 0 ? Date.now() + retryAfterMs : null);
+      hint =
+        "Settlement is not ready yet. Wait for the printed settlement-ready or challenge deadline hint, then rerun the same resolve-escrow command from the same buyer or seller wallet that finalized when compat fallback is still active.";
+      break;
+    case "reviewer_vote_commit_window_closed":
+      waitUntilMs =
+        parsePositiveDeadlineMs(body.revealDeadlineMs) ||
+        (Number.isSafeInteger(retryAfterMs) && retryAfterMs >= 0 ? Date.now() + retryAfterMs : null);
+      hint =
+        "The commit window is already closed for this reviewer round. Do not retry commit. Wait through the reveal deadline, then let buyer or seller decide whether a replacement round is needed.";
+      break;
+    default:
+      return null;
+  }
+  return {
+    code: error,
+    retryable: Number.isSafeInteger(retryAfterMs) && retryAfterMs >= 0 && retryAfterMs <= 15_000,
+    retryAfterMs,
+    waitUntilMs,
+    waitUntilIso: formatUtcDeadlineMs(waitUntilMs),
+    nextCommandHint,
+    hint,
+  };
 }
 
 function buildReplacementReadinessWarning(disputeCase) {
@@ -6854,6 +7151,7 @@ async function runTxPlanCommand(commandArgs, mode) {
   let apiCall;
   let requestOptions = options;
   let autoHydratedReviewerContext = null;
+  let autoRetriedRouteFetchCount = 0;
   try {
     const proactiveHydration = await hydrateReviewerSelfTxPlanRequest({
       method,
@@ -6877,43 +7175,63 @@ async function runTxPlanCommand(commandArgs, mode) {
       requestOptions = buildJsonBodyOverrideOptions(options, proactiveHydration.mergedBody);
       autoHydratedReviewerContext = proactiveHydration.autoHydrated;
     }
-    apiCall = await callApiRoute({ method, rawPath, options: requestOptions, timeoutMs });
+    while (true) {
+      apiCall = await callTxPlanRouteWithRetry({ method, rawPath, options: requestOptions, timeoutMs });
+      if (!apiCall.result.ok && !autoHydratedReviewerContext) {
+        const retried = await maybeRetryReviewerSelfTxPlanRequest({
+          method,
+          rawPath,
+          options: requestOptions,
+          timeoutMs,
+          apiCall,
+        });
+        if (retried && retried.ok) {
+          apiCall = retried.retriedCall;
+          autoHydratedReviewerContext = retried.autoHydrated;
+        } else if (retried && !retried.ok) {
+          return {
+            ok: false,
+            error: retried.error,
+            status: retried.status ?? apiCall.result.status,
+            response: retried.response ?? apiCall.result.body,
+            hint: retried.hint,
+            disputeCaseObjectIds: retried.disputeCaseObjectIds,
+          };
+        }
+      }
+      if (!apiCall.result.ok) {
+        const classifiedRouteFailure = classifyTxPlanRouteFailure({
+          method,
+          rawPath,
+          options: requestOptions,
+          result: apiCall.result,
+        });
+        if (classifiedRouteFailure?.retryable === true && autoRetriedRouteFetchCount < 1) {
+          autoRetriedRouteFetchCount += 1;
+          await sleep(Math.max(250, classifiedRouteFailure.retryAfterMs || 0));
+          continue;
+        }
+        return {
+          ok: false,
+          error: classifiedRouteFailure?.code || summarizeApiFailure(apiCall.result),
+          status: apiCall.result.status,
+          response: apiCall.result.body,
+          hint: classifiedRouteFailure?.hint || null,
+          retryAfterMs: classifiedRouteFailure?.retryAfterMs || null,
+          waitUntilMs: classifiedRouteFailure?.waitUntilMs || null,
+          waitUntilIso: classifiedRouteFailure?.waitUntilIso || null,
+          nextCommandHint: classifiedRouteFailure?.nextCommandHint || null,
+          autoHydratedReviewerContext,
+          autoRetriedRouteFetchCount,
+        };
+      }
+      break;
+    }
   } catch (error) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "tx_plan_fetch_failed",
       hint: "set --api-base, --env-file, or --auth-state-file",
-    };
-  }
-  if (!apiCall.result.ok && !autoHydratedReviewerContext) {
-    const retried = await maybeRetryReviewerSelfTxPlanRequest({
-      method,
-      rawPath,
-      options: requestOptions,
-      timeoutMs,
-      apiCall,
-    });
-    if (retried && retried.ok) {
-      apiCall = retried.retriedCall;
-      autoHydratedReviewerContext = retried.autoHydrated;
-    } else if (retried && !retried.ok) {
-      return {
-        ok: false,
-        error: retried.error,
-        status: retried.status ?? apiCall.result.status,
-        response: retried.response ?? apiCall.result.body,
-        hint: retried.hint,
-        disputeCaseObjectIds: retried.disputeCaseObjectIds,
-      };
-    }
-  }
-  if (!apiCall.result.ok) {
-    return {
-      ok: false,
-      error: summarizeApiFailure(apiCall.result),
-      status: apiCall.result.status,
-      response: apiCall.result.body,
-      autoHydratedReviewerContext,
     };
   }
 
@@ -7052,9 +7370,27 @@ async function runTxPlanCommand(commandArgs, mode) {
         extractCreatedObjectIdByTypeSuffix(executed, "::order_mailbox::OrderMailbox") || null,
       orderEscrowObjectId:
         extractCreatedObjectIdByTypeFragment(executed, "::order_escrow::OrderEscrow<") || null,
+      keepSameWalletForResolve:
+        txPlan.txBuilder === "disputeQuorum.finalizeCase" &&
+        Boolean(extractCreatedObjectIdByTypeSuffix(executed, "::dispute_quorum::QuorumResolutionTicket")),
     };
     } catch (error) {
       const rawError = normalizeTxPlanErrorMessage(error) || "tx_plan_execute_failed";
+      const compatFallback = await maybeExecuteResolveEscrowCompatFallback({
+        errorMessage: rawError,
+        txPlan,
+        rawPath,
+        options,
+        timeoutMs,
+        signer,
+        autoHydratedReviewerContext,
+        autoRetriedExecutionCount,
+        txBytesOut,
+        planOut,
+      });
+      if (compatFallback) {
+        return compatFallback;
+      }
       const classified =
         (await maybeClassifyLiveDisputeTxPlanExecutionError({
           errorMessage: rawError,
@@ -10384,15 +10720,27 @@ async function runMilestoneAnchor(commandArgs) {
         error: "missing_anchor_tx_digest",
       };
     }
-    const postCall = await callApiRoute({
-      method: "POST",
-      rawPath: `/orders/${orderId}/milestones/${milestoneId}/anchor`,
-      options: {
-        ...options,
-        body: JSON.stringify({ txDigest }),
-      },
-      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
-    });
+    const anchorTimeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+    let postCall = null;
+    for (let attempt = 1; attempt <= 12; attempt += 1) {
+      postCall = await callApiRoute({
+        method: "POST",
+        rawPath: `/orders/${orderId}/milestones/${milestoneId}/anchor`,
+        options: {
+          ...options,
+          body: JSON.stringify({ txDigest }),
+        },
+        timeoutMs: anchorTimeoutMs,
+      });
+      if (postCall.result.ok) {
+        break;
+      }
+      const errorCode = asRecord(postCall.result.body)?.error;
+      if (!["artifact_manifest_required", "auth_session_unavailable"].includes(errorCode) || attempt === 12) {
+        break;
+      }
+      await sleep(2_000);
+    }
     if (!postCall.result.ok) {
       return {
         ok: false,
@@ -10402,21 +10750,21 @@ async function runMilestoneAnchor(commandArgs) {
       };
     }
     let getCall = null;
-    for (let attempt = 1; attempt <= 4; attempt += 1) {
+    for (let attempt = 1; attempt <= 12; attempt += 1) {
       getCall = await callApiRoute({
         method: "GET",
         rawPath: `/orders/${orderId}/milestones/${milestoneId}/anchor`,
         options,
-        timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+        timeoutMs: anchorTimeoutMs,
       });
       if (getCall.result.ok) {
         break;
       }
       const errorCode = asRecord(getCall.result.body)?.error;
-      if (errorCode !== "anchor_not_found" || attempt === 4) {
+      if (!["anchor_not_found", "auth_session_unavailable"].includes(errorCode) || attempt === 12) {
         break;
       }
-      await sleep(1_000);
+      await sleep(2_000);
     }
     if (!getCall?.result.ok) {
       return {
@@ -11709,18 +12057,25 @@ function reviewerRegisterUsageLines() {
 
 function buildDisputeEvidencePublishHintLines(result = {}) {
   const error = normalizeString(result.error);
-  if (
-    error !== "manifest_recipient_key_agreement_expired" &&
-    error !== "manifest_recipient_key_agreement_not_found"
-  ) {
-    return [];
+  if (error === "reviewer_key_agreement_not_found_for_transport_pubkey") {
+    return [
+      "cause=assigned reviewer transport metadata is stale",
+      "next_hint=the affected reviewer should rerun clawnera-help key-agreement-upsert --auth-state-file <reviewer-auth-state-file>",
+      "next_hint=then rerun clawnera-help reviewer-update --auth-state-file <reviewer-auth-state-file>",
+      "next_hint=after the reviewer transport key is refreshed, rerun the same clawnera-help dispute-evidence-publish command from the buyer or seller wallet",
+    ];
   }
-  return [
-    "cause=assigned reviewer transport metadata or key-agreement readback is stale",
-    "next_hint=each assigned reviewer should rerun clawnera-help key-agreement-upsert --auth-state-file <reviewer-auth-state-file>",
-    "next_hint=then each assigned reviewer should rerun clawnera-help reviewer-update --auth-state-file <reviewer-auth-state-file>",
-    "next_hint=after all assigned reviewers update, rerun clawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state-file>",
-  ];
+  if (error === "manifest_recipient_key_agreement_expired" || error === "manifest_recipient_key_agreement_not_found") {
+    return [
+      "cause=one of the original manifest recipients is stale or missing on key-agreement readback",
+      "next_hint=refresh key-agreement for the original manifest participants, not the assigned reviewers",
+      "next_hint=the buyer wallet should rerun clawnera-help key-agreement-upsert --auth-state-file <buyer-auth-state-file> if its record is stale",
+      "next_hint=the seller wallet should rerun clawnera-help key-agreement-upsert --auth-state-file <seller-auth-state-file> if its record is stale",
+      "next_hint=only rerun reviewer-update when the helper explicitly reports reviewer_key_agreement_not_found_for_transport_pubkey",
+      "next_hint=after buyer/seller key-agreement readback is refreshed, rerun the same clawnera-help dispute-evidence-publish command",
+    ];
+  }
+  return [];
 }
 
 function reviewerUpdateUsageLines() {
@@ -11752,7 +12107,8 @@ function disputeEvidencePublishUsageLines() {
     "- Supplemental bundle mode: pass --kind supplemental-bundle --bundle-build-file <file> --manifest-cid ipfs://<cid>",
     "- Reads GET /disputes/{disputeCaseId}, GET /orders/{orderId}/milestones/{milestoneId}/artifact-manifest/content, reviewer transport metadata, and matching reviewer key-agreement records",
     "- Optional: --no-post to only build the request body, --body-out <file>, --key-file <local-key-agreement.json>, --max-reviewer-key-version <n>",
-    "- If publish fails with reviewer key-agreement drift, each assigned reviewer should rerun `clawnera-help key-agreement-upsert` and then `clawnera-help reviewer-update` before the seller/buyer retries publish",
+    "- If publish fails with reviewer_key_agreement_not_found_for_transport_pubkey, the affected reviewer should rerun `clawnera-help key-agreement-upsert` and then `clawnera-help reviewer-update` before the seller/buyer retries publish",
+    "- If publish fails with manifest_recipient_key_agreement_expired or manifest_recipient_key_agreement_not_found, refresh the original buyer/seller key-agreement records and rerun the same publish; that error is not fixed by reviewer-update",
     "- The normal two-party artifact routes stay buyer/seller-only; reviewers must use the dispute-scoped evidence routes afterwards"
   ];
 }
@@ -13256,6 +13612,18 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.disputeCaseObjectId) {
       console.log(`dispute_case_object_id=${result.disputeCaseObjectId}`);
     }
+    if (result.compatResolveEscrowFallback?.used === true) {
+      console.log("compat_resolve_escrow_fallback=true");
+      if (result.compatResolveEscrowFallback.finalizeTxDigest) {
+        console.log(`compat_finalize_tx_digest=${result.compatResolveEscrowFallback.finalizeTxDigest}`);
+      }
+      if (result.compatResolveEscrowFallback.finalizeSignerAddress) {
+        console.log(`compat_finalize_signer_address=${result.compatResolveEscrowFallback.finalizeSignerAddress}`);
+      }
+    }
+    if (result.keepSameWalletForResolve === true) {
+      console.log("keep_same_wallet_for_resolve=true");
+    }
     if (result.postExecuteBinding?.route) {
       console.log(`post_execute_binding_route=${result.postExecuteBinding.route}`);
       console.log(`post_execute_binding_ok=${result.postExecuteBinding.ok === true ? "true" : "false"}`);
@@ -13296,6 +13664,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.txBytesOut) {
       console.log(`tx_bytes_file=${result.txBytesOut}`);
     }
+    if (result.orderStatusReadbackMayLag === true) {
+      console.log("order_status_readback_may_lag=true");
+    }
   } else {
     console.error(`tx_plan_execute_error: ${result.error}`);
     if (result.rawError && result.rawError !== result.error) {
@@ -13321,6 +13692,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
     if (result.waitUntilIso) {
       console.error(`wait_until=${result.waitUntilIso}`);
+    }
+    if (Number.isInteger(result.retryAfterMs) && result.retryAfterMs >= 0) {
+      console.error(`retry_after_ms=${result.retryAfterMs}`);
     }
     if (result.nextCommandHint) {
       console.error(`next_command=${result.nextCommandHint}`);

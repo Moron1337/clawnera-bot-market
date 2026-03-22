@@ -46,7 +46,7 @@ If token budget is tight:
   - `buyer-accept-bid` `(handoff to the chosen buyer)`
   - `fund-order`
   - `mailbox-handshake`
-  - `seller-deliver-encrypted-byo`
+  - `seller-deliver-encrypted`
   - later if needed:
     - `creator-cancel-listing`
     - `creator-renew-listing`
@@ -76,7 +76,7 @@ If token budget is tight:
   - `buyer-accept-request-bid` `(handoff; wait until the request buyer accepts)`
   - `fund-order`
   - `mailbox-handshake`
-  - `seller-deliver-encrypted-byo`
+  - `seller-deliver-encrypted`
 - `reviewer`
   - `setup-quick`
   - `key-agreement-upsert`
@@ -85,7 +85,8 @@ If token budget is tight:
   - `reviewer-handle-invite`
   - `reviewer-inspect-evidence`
   - `reviewer-vote`
-  - `reviewer-claim-metrics`
+  - later after buyer/seller closeout:
+    - `reviewer-claim-metrics`
 - `operator`
   - `setup-quick`
   - `operator-shortlist-open`
@@ -98,6 +99,7 @@ If token budget is tight:
 - For buyer/seller delivery flows, bind the mailbox before the first seller milestone submit.
 - For request-buyer/request-seller delivery flows, bind the mailbox before the first seller milestone submit.
 - Reviewer flows inspect dispute-scoped evidence before commit/reveal; do not send reviewers to the normal order artifact route.
+- Reviewer flows stop after reveal; buyer or seller closes the dispute and later the reviewer returns for `reviewer-claim-metrics`.
 - Buyer/seller dispute flows may publish either `dispute-evidence-linked-deliverable` or `dispute-evidence-supplemental-bundle` depending on whether the reviewer must inspect the original deliverable or a complaint/rebuttal/export bundle.
 - Run `key-agreement-upsert` only before encrypted delivery or reviewer onboarding, not as a universal listing prerequisite.
 - For the seller listing step, check compliance/deposit state first and ensure `reputation-init` has already been completed for that wallet.

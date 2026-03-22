@@ -68,10 +68,12 @@ test("reviewer docs require dispute-scoped evidence before voting", () => {
   const mailbox = readRepoFile("docs/guides/MAILBOX_COMMUNICATION_FLOW.md");
   const readme = readRepoFile("README.md");
   const routeMatrix = readRepoFile("docs/guides/ROLE_ROUTE_MATRIX.md");
+  const reviewerFlow = readRepoFile("docs/guides/REVIEWER_SELECTOR_FLOW.md");
 
   assert.match(onboarding, /clawnera-help dispute-evidence-list/);
   assert.match(onboarding, /clawnera-help dispute-evidence-content/);
   assert.match(onboarding, /clawnera-help dispute-evidence-decrypt --content-file/);
+  assert.match(onboarding, /buyer\/seller closeout step|buyer or seller closes the dispute|buyer\/seller/i);
   assert.match(readme, /dispute-evidence-bundle-build/);
   assert.match(readme, /mailbox-evidence-export/);
   assert.match(readme, /checkpoint-evidence-export/);
@@ -79,6 +81,7 @@ test("reviewer docs require dispute-scoped evidence before voting", () => {
   assert.match(recipes, /reviewer-inspect-evidence/);
   assert.match(recipes, /dispute-evidence-linked-deliverable/);
   assert.match(recipes, /dispute-evidence-supplemental-bundle/);
+  assert.match(reviewerFlow, /stop after reveal; buyer or seller handles `finalize` \/ `fallback\/timeout`/);
   assert.match(mailbox, /nicht der kanonische Evidence-Pfad/);
   assert.match(mailbox, /mailbox-evidence-export/);
   assert.match(mailbox, /supplemental_bundle/);
@@ -89,9 +92,14 @@ test("active dispute guides avoid ticket-owner handoff language for escrow settl
   const manualFlow = readRepoFile("docs/guides/LIVE_MANUAL_ORDER_FLOW.md");
   const checklist = readRepoFile("docs/guides/CANONICAL_LIVE_RUN_CHECKLIST.md");
   const reviewerFlow = readRepoFile("docs/guides/REVIEWER_SELECTOR_FLOW.md");
+  const tasks = readRepoFile("docs/guides/TASK_RECIPES.md");
 
   for (const text of [manualFlow, checklist, reviewerFlow]) {
     assert.equal(text.includes("same wallet that received the `QuorumResolutionTicket`"), false);
     assert.equal(text.includes("quorum_resolution_ticket_owner_mismatch"), false);
   }
+  assert.match(manualFlow, /same buyer or seller wallet/i);
+  assert.match(checklist, /same buyer or seller wallet/i);
+  assert.match(tasks, /refresh the original buyer\/seller key-agreement records first/i);
+  assert.equal(tasks.includes("each assigned reviewer must rerun `key-agreement-upsert` and then `reviewer-update` before the buyer/seller retries publish"), false);
 });

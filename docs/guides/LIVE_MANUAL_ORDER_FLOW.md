@@ -164,6 +164,7 @@ If the buyer rejects a milestone:
   - storage submit/accept sequence is not complete yet
 - `409 dispute_commit_window_open`
   - all reviewer commits are not old enough yet; wait until `commitDeadlineMs`
+  - the helper now prints top-level `wait_until` / `retry_after_ms` and auto-retries one short boundary case
 - `501 not_implemented`
   - `POST /disputes/{caseId}/votes/challenge` is not a public live path today; do not
     branch into it
@@ -188,11 +189,13 @@ If the buyer rejects a milestone:
   - `evidenceHashHex` is audit-only
 - dispute finalize is not immediate after reveal; if quorum exists but the API returns
   `409 dispute_challenge_window_open`, wait for `challengeDeadlineMs`
+- reviewers stop after reveal; buyer or seller closes with finalize/fallback and then resolves escrow
 - `POST /disputes/{caseId}/finalize` and `POST /disputes/{caseId}/fallback/timeout`
   auto-hydrate the live dispute object ids; do not hand-build them
 - `POST /disputes/{caseId}/fallback/resolve` still requires `arbCapObjectId`
 - `/resolve-escrow` now derives settlement from the finalized dispute-quorum binding
 - call `/resolve-escrow` from the buyer or seller wallet for the disputed order
+- keep `finalize` and `/resolve-escrow` on the same buyer or seller wallet while mainnet still sometimes auto-falls back to compat ticket settlement
 - treat the `/resolve-escrow` tx-plan request as canonical, including
   `disputeQuorumConfigObjectId`
 - reviewer-majority payouts happen at `finalize`, not at `claim-metrics`

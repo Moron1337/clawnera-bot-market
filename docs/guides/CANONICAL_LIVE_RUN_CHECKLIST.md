@@ -179,7 +179,8 @@ For milestone disputes, trust the API plan sequence:
 2. accept reviewer slot
 3. inspect dispute-scoped evidence
    - buyer/seller publish reviewer-readable deliverable evidence with `clawnera-help dispute-evidence-publish --case-id <caseId> ...`
-     - if publish fails with `manifest_recipient_key_agreement_expired` or `manifest_recipient_key_agreement_not_found`, each assigned reviewer must rerun `clawnera-help key-agreement-upsert` and then `clawnera-help reviewer-update` before retry
+     - if publish fails with `manifest_recipient_key_agreement_expired` or `manifest_recipient_key_agreement_not_found`, refresh the original buyer/seller key-agreement records before retrying publish; that error is not fixed by reviewer-update
+     - only rerun `key-agreement-upsert` + `reviewer-update` for reviewers when the helper explicitly reports reviewer transport drift
    - buyer/seller build complaint, rebuttal, mailbox, checkpoint, or supporting evidence with `clawnera-help dispute-evidence-bundle-build --case-id <caseId> --evidence-class <class> --bundle-plaintext-file <file> ...`, upload the generated payload via managed storage, then publish it with `clawnera-help dispute-evidence-publish --kind supplemental-bundle ...`
    - for mailbox coordination, prefer `clawnera-help mailbox-evidence-export --case-id <caseId> ...` as the direct live path; it now retries with a smaller recent-event window before it asks you to fall back to a saved events snapshot
    - reviewers list with `clawnera-help dispute-evidence-list --case-id <caseId> ...`
@@ -192,8 +193,10 @@ For milestone disputes, trust the API plan sequence:
    - `vote=1` resolves to seller settlement
    - `vote=0` resolves to buyer settlement
    - optional `evidenceHashHex` is audit-only
+   - reviewer duty stops here; buyer or seller closes the dispute afterwards
 7. if finalize returns `409 dispute_challenge_window_open`, wait until
    `challengeDeadlineMs`
+   - the helper now prints top-level `wait_until` and `retry_after_ms`, and auto-retries one short boundary wait
 8. finalize or fallback
    - `POST /disputes/{caseId}/finalize` and `POST /disputes/{caseId}/fallback/timeout`
      auto-hydrate the live dispute object ids; do not hand-build them
@@ -201,6 +204,7 @@ For milestone disputes, trust the API plan sequence:
 9. resolve escrow
    - use the buyer or seller wallet for the disputed order
    - rely on the finalized dispute binding, not on a ticket handoff
+   - keep `finalize` and `resolve-escrow` on the same buyer or seller wallet while mainnet still sometimes auto-falls back to compat ticket settlement
 10. if reviewers were involved, each reviewer claims metrics from their own wallet
    - majority payouts already happened at `finalize`
    - `claim-metrics` is for score updates, slashes, and pending-outcome cleanup

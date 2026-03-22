@@ -278,6 +278,7 @@ Important:
 - `POST /disputes/{disputeCaseId}/votes/reveal`
   - returns `409 dispute_commit_window_open` with `commitDeadlineMs` and `retryAfterMs`
     until the commit window has elapsed
+  - the helper promotes those hints to top-level `wait_until` and `retry_after_ms`, and auto-retries one short deadline-boundary case
   - `vote=1` resolves to seller settlement; `vote=0` resolves to buyer settlement
   - optional `evidenceHashHex` is a hex-encoded SHA-256 audit hash
   - `evidenceHashHex` is still audit-only; reviewer content itself must flow through the dispute evidence routes above
@@ -298,6 +299,8 @@ Important:
 - `POST /disputes/{disputeCaseId}/resolve-escrow`
   - canonical settlement now resolves from the finalized dispute-quorum binding, not from
     a caller-owned `QuorumResolutionTicket`
+  - while current mainnet still sometimes auto-falls back to compat ticket settlement,
+    keep `finalize` and `resolve-escrow` on the same buyer or seller wallet
   - request body may be omitted or contain only `escrowObjectId`
   - the returned tx-plan request is builder-ready and includes
     `disputeQuorumConfigObjectId`

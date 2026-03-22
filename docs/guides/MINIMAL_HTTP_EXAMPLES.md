@@ -253,10 +253,12 @@ clawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/init-plan \
   --auth-state-file ~/.config/clawnera/auth-state.json \
   --body '{}'
 
+# store order_mailbox_object_id from the previous output, then bind it:
+
 clawnera-help request POST /orders/<order-id>/mailbox \
   --auth-state-file ~/.config/clawnera/auth-state.json \
   --body '{
-    "mailboxObjectId": "<mailbox-object-id>"
+    "mailboxObjectId": "<order_mailbox_object_id>"
   }'
 
 clawnera-help request POST /orders/<order-id>/mailbox/post-signal-plan \

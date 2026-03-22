@@ -4636,6 +4636,9 @@ test("milestone-submit-byo prints mailbox-handshake recovery for mailbox-gated s
     assert.match(result.stderr, /milestone_submit_byo_error: order_mailbox_required/);
     assert.match(result.stderr, /cause=order_mailbox_required/);
     assert.match(result.stderr, /next_hint=clawnera-help recipe mailbox-handshake/);
+    assert.match(result.stderr, /next_init=clawnera-help tx-plan-execute POST \/orders\/<orderId>\/mailbox\/init-plan/);
+    assert.match(result.stderr, /bind_source=use order_mailbox_object_id from the previous tx-plan-execute output/);
+    assert.match(result.stderr, /next_bind=clawnera-help request POST \/orders\/<orderId>\/mailbox/);
   } finally {
     await mock.close();
   }
@@ -5087,6 +5090,223 @@ test("tx-plan-execute pre-hydrates reviewer commit routes before the first POST"
     assert.equal(payload.autoHydratedReviewerContext.reviewerEntryObjectId, reviewerEntryObjectId);
     assert.equal(commitCalls, 1);
     assert.match(payload.response.error, /commit_window_closed/);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("tx-plan-execute retries one transient auth_session_unavailable on reviewer commit fetch", async () => {
+  const caseId = "0x3cb6d1df7a78eb63647728d7cdf7a5098dce8cb4f0693b20fee7641629068ac5";
+  const reviewerAddress = "0x8212e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
+  const reviewerEntryObjectId = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  let commitCalls = 0;
+  const mock = await startMockServer({
+    [`POST /disputes/${caseId}/votes/commit`]: (request) => {
+      commitCalls += 1;
+      assert.deepEqual(request.body, {
+        commitHashHex: "cc".repeat(32),
+        reviewerEntryObjectId
+      });
+      if (commitCalls === 1) {
+        return {
+          status: 503,
+          body: {
+            error: "auth_session_unavailable"
+          }
+        };
+      }
+      return {
+        status: 409,
+        body: {
+          error: "commit_window_closed"
+        }
+      };
+    },
+    "GET /reviewers/me/metrics": () => ({
+      status: 200,
+      body: {
+        registered: true,
+        reviewerAddress,
+        reviewer: {
+          objectId: reviewerEntryObjectId,
+          owner: reviewerAddress
+        },
+        runtime: {
+          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
+          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
+        }
+      }
+    })
+  });
+
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-commit-auth-session-"));
+  const bodyFile = path.join(tempDir, "reviewer-vote.json");
+  writeFileSync(
+    bodyFile,
+    JSON.stringify(
+      {
+        commitRequestBody: {
+          commitHashHex: "cc".repeat(32)
+        },
+        revealRequestBody: {
+          vote: 0,
+          nonceHex: "dd".repeat(16)
+        }
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "tx-plan-execute",
+      "POST",
+      `/disputes/${caseId}/votes/commit`,
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      buildJwtWithExp(4102444800),
+      "--body-file",
+      bodyFile,
+      "--body-select",
+      "commitRequestBody",
+      "--json"
+    ]);
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "commit_window_closed");
+    assert.equal(payload.status, 409);
+    assert.equal(payload.autoHydratedReviewerContext.route, "commit");
+    assert.equal(payload.autoHydratedReviewerContext.reviewerEntryObjectId, reviewerEntryObjectId);
+    assert.equal(commitCalls, 2);
+    assert.match(payload.response.error, /commit_window_closed/);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("tx-plan-execute surfaces top-level reveal wait hints and auto-retries one short route boundary", async () => {
+  const caseId = "0x4cb6d1df7a78eb63647728d7cdf7a5098dce8cb4f0693b20fee7641629068ac5";
+  const reviewerAddress = "0x8212e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
+  const reviewerEntryObjectId = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  const commitDeadlineMs = Date.now() + 60_000;
+  let revealCalls = 0;
+  const mock = await startMockServer({
+    [`POST /disputes/${caseId}/votes/reveal`]: (request) => {
+      revealCalls += 1;
+      assert.deepEqual(request.body, {
+        vote: 0,
+        nonceHex: "dd".repeat(16),
+        reviewerEntryObjectId,
+      });
+      return {
+        status: 409,
+        body: {
+          error: "dispute_commit_window_open",
+          commitDeadlineMs,
+          retryAfterMs: 25,
+        },
+      };
+    },
+    "GET /reviewers/me/metrics": () => ({
+      status: 200,
+      body: {
+        registered: true,
+        reviewerAddress,
+        reviewer: {
+          objectId: reviewerEntryObjectId,
+          owner: reviewerAddress,
+        },
+        runtime: {
+          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
+          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+        },
+      },
+    }),
+  });
+
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-reveal-window-"));
+  const bodyFile = path.join(tempDir, "reviewer-vote.json");
+  writeFileSync(
+    bodyFile,
+    JSON.stringify(
+      {
+        revealRequestBody: {
+          vote: 0,
+          nonceHex: "dd".repeat(16),
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  try {
+    const result = await runCli([
+      "tx-plan-execute",
+      "POST",
+      `/disputes/${caseId}/votes/reveal`,
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      buildJwtWithExp(4102444800),
+      "--body-file",
+      bodyFile,
+      "--body-select",
+      "revealRequestBody",
+      "--json",
+    ]);
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "dispute_commit_window_open");
+    assert.equal(payload.retryAfterMs, 25);
+    assert.equal(payload.autoRetriedRouteFetchCount, 1);
+    assert.equal(payload.autoHydratedReviewerContext.route, "reveal");
+    assert.equal(payload.autoHydratedReviewerContext.reviewerEntryObjectId, reviewerEntryObjectId);
+    assert.equal(payload.waitUntilMs, commitDeadlineMs);
+    assert.equal(payload.waitUntilIso, new Date(commitDeadlineMs).toISOString());
+    assert.match(payload.nextCommandHint, /tx-plan-execute POST '\/disputes\/.*\/votes\/reveal'/);
+    assert.equal(revealCalls, 2);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("tx-plan-execute prints top-level finalize wait hints in non-json mode", async () => {
+  const caseId = "0x5cb6d1df7a78eb63647728d7cdf7a5098dce8cb4f0693b20fee7641629068ac5";
+  const challengeDeadlineMs = Date.now() + 90_000;
+  let finalizeCalls = 0;
+  const mock = await startMockServer({
+    [`POST /disputes/${caseId}/finalize`]: () => {
+      finalizeCalls += 1;
+      return {
+        status: 409,
+        body: {
+          error: "dispute_challenge_window_open",
+          challengeDeadlineMs,
+          retryAfterMs: 30,
+        },
+      };
+    },
+  });
+
+  try {
+    const result = await runCli([
+      "tx-plan-execute",
+      "POST",
+      `/disputes/${caseId}/finalize`,
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      buildJwtWithExp(4102444800),
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /tx_plan_execute_error: dispute_challenge_window_open/);
+    assert.match(result.stderr, new RegExp(`wait_until=${new Date(challengeDeadlineMs).toISOString().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+    assert.match(result.stderr, /retry_after_ms=30/);
+    assert.match(result.stderr, /next_command=clawnera-help tx-plan-execute POST '\/disputes\/.*\/finalize'/);
+    assert.equal(finalizeCalls, 2);
   } finally {
     await mock.close();
   }

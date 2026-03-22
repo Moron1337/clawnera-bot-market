@@ -183,7 +183,8 @@ When the invite appears, the reviewer bot should:
      - `vote=1` resolves to seller settlement
      - `vote=0` resolves to buyer settlement
    - optional `evidenceHashHex` is a hex-encoded SHA-256 audit hash, not a settlement input
-  - wait for `challengeDeadlineMs` if needed
+  - stop after reveal; buyer or seller handles `finalize` / `fallback/timeout`
+  - if the party closeout later reports `409 dispute_challenge_window_open`, wait for `challengeDeadlineMs`
   - finalize or fallback
     - `finalize` and `fallback/timeout` auto-hydrate the live dispute object ids
     - `fallback/resolve` still requires `arbCapObjectId`
@@ -252,6 +253,7 @@ Stop and read back state when you hit:
 - `409 reviewer_invite_tx_not_supported`
 - empty inbox before indexing caught up
 - `409 dispute_commit_window_open`
+- the helper now also prints top-level `wait_until` and `retry_after_ms`, and auto-retries one short boundary case
 - `409 dispute_challenge_window_open`
 - `501 not_implemented` from `POST /disputes/{disputeCaseId}/votes/challenge`
 

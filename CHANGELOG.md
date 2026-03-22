@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.66] - 2026-03-22
+
+- Hardened the weak-bot dispute closeout path without reopening core API design:
+  - `tx-plan-execute` now promotes route-stage dispute timing errors like `dispute_commit_window_open` and `dispute_challenge_window_open` into top-level `wait_until`, `retry_after_ms`, and `next_command` hints
+  - `tx-plan-execute` now auto-retries one short deadline-boundary route fetch instead of forcing a maintainer to inspect nested 409 payloads by hand
+  - successful finalize output now prints `keep_same_wallet_for_resolve=true` when the live chain still emits a compat finalize ticket under the hood
+- Tightened the bot role boundary around reviewer voting:
+  - the canonical reviewer recipe now stops at commit + reveal instead of implying that reviewers should run `finalize`
+  - reviewer journeys and guides now say buyer/seller close the dispute and the reviewer returns later for `reviewer-claim-metrics`
+  - removed the misleading `reviewer-vote-finalize` alias
+- Corrected the live dispute-evidence recovery guidance:
+  - reviewer transport drift still routes through `key-agreement-upsert` + `reviewer-update`
+  - `manifest_recipient_key_agreement_expired` / `manifest_recipient_key_agreement_not_found` now correctly point bots back to refreshing the original buyer/seller key-agreement records instead of rotating reviewer state
+- Hid the remaining legacy delivery naming drift without breaking compatibility:
+  - the canonical recipe id is now `seller-deliver-encrypted`
+  - `seller-deliver-encrypted-byo` remains only as a backward-compatible alias
+- Added regression coverage for:
+  - route-stage reveal/finalize timing hints and short auto-retry behavior
+  - reviewer recipe boundaries after reveal
+  - managed-first seller delivery recipe aliasing
+  - docs drift around reviewer scope, same-wallet resolve guidance, and manifest-recipient key-agreement recovery
+
 ## [0.1.65] - 2026-03-22
 
 - Hardened the real stalled-reviewer dispute path so weak bots stop on the correct deadline instead of looping on raw Move aborts:

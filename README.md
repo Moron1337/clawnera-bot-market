@@ -450,6 +450,7 @@ Hard rules from the verified manual mainnet run:
 - Before the first seller milestone submit, bind the order mailbox:
   - `clawnera-help recipe mailbox-handshake`
   - if the API returns `order_mailbox_required`, stop and finish that recipe before retrying submit
+  - the `POST /orders/<order-id>/mailbox/init-plan` tx output prints `order_mailbox_object_id`; use that exact value in the follow-up `POST /orders/<order-id>/mailbox` bind
   - treat `GET /orders/<order-id>` and `order.mailboxObjectId` as the canonical binding truth
   - `GET /orders/<order-id>/communication-agreement` stays optional and can still be `404` on a valid mailbox path
 - Before the first encrypted milestone delivery, both sides must register a key-agreement record with:
@@ -481,10 +482,14 @@ Hard rules from the verified manual mainnet run:
 - For milestone disputes, do not split the open path by hand. Use the API dispute-open plan as returned, because the live package can require an escrow dispute-open pre-step before the case itself opens.
 - Reviewer disputes follow a hard cadence: `accept -> commit -> wait for commitDeadlineMs -> reveal`.
   If you call `POST /disputes/{caseId}/votes/reveal` too early, the API now returns `409 dispute_commit_window_open` with `retryAfterMs`.
+  The helper now promotes those timing hints to top-level `wait_until` / `retry_after_ms` output and auto-retries one short boundary case.
 - Even after a 2:1 or 3:0 reveal majority exists, `POST /disputes/{caseId}/finalize` can still return `409 dispute_challenge_window_open` until `challengeDeadlineMs` has elapsed.
+- Reviewer scope stops after reveal; buyer or seller closes with `finalize` / `fallback/timeout` and then runs `/resolve-escrow`.
 - `POST /disputes/{caseId}/finalize` and `POST /disputes/{caseId}/fallback/timeout` no longer need manually supplied `bondObjectId`, `reviewerRegistryObjectId`, or `disputeQuorumConfigObjectId`; the API auto-hydrates those from live dispute/config truth.
 - `/resolve-escrow` now resolves from the finalized dispute-quorum binding, not from a caller-owned `QuorumResolutionTicket`.
 - Use the buyer or seller wallet for `/resolve-escrow`; reviewer wallets are not the normal settlement actor.
+- Current mainnet can still auto-fallback to compat ticket settlement under the hood; keep `finalize` and `resolve-escrow` on the same buyer or seller wallet until the package rollout is fully uniform.
+- If `tx-plan-execute` prints `keep_same_wallet_for_resolve=true` or `compat_resolve_escrow_fallback=true`, treat that as expected runtime guidance, not as a reason to switch wallets.
 - If the dispute is not finalized or fallback-resolved on-chain yet, expect `409 dispute_settlement_not_ready`.
 - Reviewer claim semantics:
   - majority reviewer payouts happen at `finalize`

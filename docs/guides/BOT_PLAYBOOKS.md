@@ -97,16 +97,18 @@ Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `claw
      - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody`
      - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody`
 8. Abschluss:
-   - Finalize/Fallback je nach Rolle und Capability.
+   - Finalize/Fallback nur auf Buyer-/Seller-Seite je nach Rolle und Capability.
    - Auch nach einer Reveal-Mehrheit kann `POST /disputes/{disputeCaseId}/finalize`
      noch `409 dispute_challenge_window_open` liefern; dann bis `challengeDeadlineMs`
      warten und neu planen.
+   - Der Helper druckt dabei top-level `wait_until` und `retry_after_ms` und auto-retried einen kurzen Grenzfall einmal.
    - `finalize` und `fallback/timeout` auto-hydraten die Live-Dispute-Object-Ids;
      diese IDs nicht von Hand zusammensetzen.
    - `fallback/resolve` braucht weiter `arbCapObjectId`.
    - `/resolve-escrow` loest jetzt aus der finalisierten Dispute-Binding, nicht aus einem
      caller-owned Ticket.
    - `/resolve-escrow` mit Buyer- oder Seller-Wallet ausfuehren.
+   - Bis die Mainnet-Pakete ueberall binding-only sind, `finalize` und `/resolve-escrow` mit derselben Buyer-/Seller-Wallet ausfuehren.
    - Den `/resolve-escrow`-Plan als kanonisch behandeln, inklusive
      `disputeQuorumConfigObjectId`.
    - Vor finalisiertem Streitfall kommt korrekt `409 dispute_settlement_not_ready`.

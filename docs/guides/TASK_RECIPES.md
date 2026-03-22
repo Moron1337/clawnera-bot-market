@@ -88,7 +88,7 @@ Auth note:
 - `mailbox-handshake`
   - bind mailbox before the first seller milestone submit and use it only for signals/acks
   - common aliases: `mailbox-signal`, `mailbox-post-signal`, `mailbox-ack`
-- `seller-deliver-encrypted-byo`
+- `seller-deliver-encrypted`
   - encrypted delivery with managed-storage JSON by default, Pinata/IPFS only as fallback
 - `buyer-accept-delivery`
   - local verify -> accept milestone
@@ -143,7 +143,8 @@ Auth note:
 - Normal seller listing create now requires `reputation-init` plus the usual compliance/deposit preflight; do not confuse that with reviewer onboarding or `reviewer-register`.
 - Normal request listing create follows the same rule: run `reputation-init`, then the buyer-side compliance/deposit preflight, but do not send the wallet into reviewer setup just to publish a wanted request.
 - Treat `order_mailbox_required` as a hard stop: run `mailbox-handshake` before retrying seller submit.
-- If `dispute-evidence-publish` fails with `manifest_recipient_key_agreement_expired` or `manifest_recipient_key_agreement_not_found`, each assigned reviewer must rerun `key-agreement-upsert` and then `reviewer-update` before the buyer/seller retries publish.
+- If `dispute-evidence-publish` fails with `manifest_recipient_key_agreement_expired` or `manifest_recipient_key_agreement_not_found`, refresh the original buyer/seller key-agreement records first and then rerun the same publish.
+- Only send a reviewer through `key-agreement-upsert` + `reviewer-update` when the helper explicitly reports reviewer transport drift such as `reviewer_key_agreement_not_found_for_transport_pubkey`.
 - Listing cancel and renew are real public routes; do not guess `DELETE /listings/{id}` or PATCH-style status edits.
 - If the bot runs on the same machine as the wallet, it should self-auth with `ensure-auth` before actor-scoped calls and should not ask for a raw JWT.
 

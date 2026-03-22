@@ -282,7 +282,7 @@ Reviewer dispute cadence:
   `409 dispute_settlement_not_ready`
 - once the shared escrow is already resolved, `/resolve-escrow` returns
   `409 dispute_escrow_already_resolved`
-- once escrow resolution succeeds, the order is terminal `DISPUTED`; do not continue
+- once escrow resolution succeeds, the order is terminal `COMPLETED`; do not continue
   later milestones, and expect milestone submit/accept/reject to return
   `409 order_not_in_progress`
 

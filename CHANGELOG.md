@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.67] - 2026-03-22
+
+- Corrected the post-dispute settlement readback semantics across the bot docs and packaged core sources:
+  - after successful escrow resolution, the canonical order readback is now documented as terminal `COMPLETED`, not terminal `DISPUTED`
+  - `/resolve-escrow` retry guidance, manual runbooks, and playbooks now consistently tell weaker bots to stop later milestone writes because the order is already complete
+- Resynced packaged core docs after the corresponding API readback repair:
+  - updated the copied core `BOT_PROTOCOL_V1.md`
+  - refreshed `SYNC_MANIFEST.txt` to the current local core snapshot
+- Kept the helper surface unchanged on purpose:
+  - no new CLI flags
+  - no new alternate dispute flow
+  - just corrected bot-facing truth so low-context bots do not learn the stale terminal-status model
+
 ## [0.1.66] - 2026-03-22
 
 - Hardened the weak-bot dispute closeout path without reopening core API design:

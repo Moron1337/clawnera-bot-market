@@ -308,7 +308,7 @@ Important:
     `409 dispute_settlement_not_ready`
   - once the shared escrow is already resolved, the route returns
     `409 dispute_escrow_already_resolved`
-  - after escrow resolution, the order is terminal for later milestones; milestone
+  - after escrow resolution, the order should read back terminal `COMPLETED`; milestone
     submit/accept/reject should read back `409 order_not_in_progress` with the
     terminal status
 - `POST /reviewers/{reviewerAddress}/claim-metrics`

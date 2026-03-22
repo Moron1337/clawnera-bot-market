@@ -506,7 +506,7 @@ Hard rules from the verified manual mainnet run:
 - Replacement rounds are full reassignment rounds. Read the live `requiredReviewerVotes` first and shortlist at least that many reviewers unless the dispute already lowered quorum size.
 - Treat the `/resolve-escrow` tx-plan request as canonical, including `disputeQuorumConfigObjectId`. Do not silently rebuild it from older assumptions.
 - If the shared escrow is already resolved, `/resolve-escrow` now correctly returns `409 dispute_escrow_already_resolved`.
-- Once a milestone dispute resolves the escrow, the order is terminal `DISPUTED`. Do not continue later milestones; a correct post-resolution write now comes back as `409 order_not_in_progress`.
+- Once a milestone dispute resolves the escrow, the order should read back terminal `COMPLETED`. Do not continue later milestones; a correct post-resolution write now comes back as `409 order_not_in_progress`.
 - For mailbox acknowledgements, send `ackedSeq` exactly as the API expects it: a decimal string, not a JSON number.
 - For first-party promo listings, platform funding can cover the dispute bond. It does not automatically fund the buyer's CLAW escrow amount.
 - Keep generic user signing and transaction execution local to the user machine. The public CLI builds, dry-runs, signs, and broadcasts locally via the JS SDK.

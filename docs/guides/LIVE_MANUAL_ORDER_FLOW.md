@@ -169,8 +169,8 @@ If the buyer rejects a milestone:
   - `POST /disputes/{caseId}/votes/challenge` is not a public live path today; do not
     branch into it
 - `409 order_not_in_progress`
-  - expected after a milestone dispute already resolved the shared escrow; the order is
-    terminal `DISPUTED`, so later milestone writes must stop there
+  - expected after a milestone dispute already resolved the shared escrow; the order should
+    read back terminal `COMPLETED`, so later milestone writes must stop there
 - `409 dispute_escrow_already_resolved`
   - expected if someone tries to plan `/resolve-escrow` again after the shared escrow was
     already resolved

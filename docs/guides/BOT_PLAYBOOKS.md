@@ -116,7 +116,7 @@ Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `claw
      `409 dispute_escrow_already_resolved`.
 8. Immer state-first:
    - Vor Writes `GET /disputes/{disputeCaseId}` lesen.
-   - Nach erfolgreicher Escrow-Resolution ist der Order terminal `DISPUTED`; spaetere
+   - Nach erfolgreicher Escrow-Resolution sollte der Order terminal `COMPLETED` lesen; spaetere
      Milestone-Writes muessen dort mit `409 order_not_in_progress` stoppen.
 
 ## 4) Ops Bot Playbook

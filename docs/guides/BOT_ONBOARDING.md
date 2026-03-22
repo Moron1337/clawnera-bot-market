@@ -384,7 +384,7 @@ Important:
 - `POST /disputes/{disputeCaseId}/votes/challenge` is not a usable public flow right now and currently returns `501 not_implemented`.
 - `POST /orders/{orderId}/mailbox/ack-plan` expects `ackedSeq` as a decimal string,
   not as a JSON number.
-- After successful escrow resolution the order is terminal `DISPUTED`; later
+- After successful escrow resolution the order should read back terminal `COMPLETED`; later
   milestone submit/accept/reject writes should stop there with `409 order_not_in_progress`
   instead of trying to rebuild a new bond flow.
 - `clawnera-help reviewer-invites` surfaces `recommendedPollIntervalMs` when the

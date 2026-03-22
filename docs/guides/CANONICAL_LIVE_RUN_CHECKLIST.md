@@ -251,7 +251,7 @@ Treat the `/resolve-escrow` tx-plan request as canonical, including
 `disputeQuorumConfigObjectId`.
 If the shared escrow is already resolved, the expected response is
 `409 dispute_escrow_already_resolved`.
-After escrow resolution, the order is terminal `DISPUTED`, so later milestone writes
+After escrow resolution, the order should read back terminal `COMPLETED`, so later milestone writes
 must stop there.
 
 If you call reveal too early, the API now returns:

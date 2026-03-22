@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.68] - 2026-03-22
+
+- Hardened `ensure-auth` for real weak-bot reuse of saved auth-state files:
+  - when `--api-base` is provided, the helper now probes `/auth/session` before reusing a saved session
+  - if the saved bearer token is server-rejected, it refreshes once automatically
+  - if refresh is also rejected, it falls back to a fresh wallet-backed login instead of trapping the bot in repeated `auth_refresh_failed:401` loops
+- Added regression coverage for both recovery paths:
+  - auth-session rejection followed by a successful refresh
+  - auth-session rejection followed by refresh failure and wallet-backed re-login
+
 ## [0.1.67] - 2026-03-22
 
 - Corrected the post-dispute settlement readback semantics across the bot docs and packaged core sources:

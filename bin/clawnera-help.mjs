@@ -2795,7 +2795,8 @@ async function resolveLocalKeystoreAuthEntry({
 async function loadReusableAuthState({
   authStateFile,
   apiBase,
-  timeoutMs
+  timeoutMs,
+  verifyRemoteSession = false
 }) {
   if (!fs.existsSync(authStateFile)) {
     return {
@@ -2844,6 +2845,65 @@ async function loadReusableAuthState({
       ok: false,
       error: authValidation.issues[0] || "invalid_auth_state"
     };
+  }
+
+  if (
+    verifyRemoteSession &&
+    apiBaseForValidation &&
+    typeof authValidation.authState?.token === "string" &&
+    authValidation.authState.token.trim()
+  ) {
+    const probeSession = async (candidate) =>
+      requestJson(
+        new URL("/auth/session", apiBaseForValidation),
+        {
+          method: "GET",
+          headers: {
+            accept: "application/json",
+            authorization: `Bearer ${candidate.token}`
+          }
+        },
+        timeoutMs
+      );
+
+    let probe = await probeSession(authValidation.authState);
+    if (probe.status === 401) {
+      if (!authValidation.authState.refreshToken) {
+        return {
+          ok: false,
+          error: "auth_session_rejected"
+        };
+      }
+      authState = await refreshAuthState({
+        apiBase: apiBaseForValidation,
+        authState: authValidation.authState,
+        timeoutMs
+      });
+      await saveAuthState(authStateFile, authState);
+      authValidation = validateRuntimeAuthState(authState, {
+        apiBaseFallback: apiBaseForValidation,
+        requiredApiBase: apiBase || "",
+        refreshSkewMs: 60_000
+      });
+      if (!authValidation.ok) {
+        return {
+          ok: false,
+          error: authValidation.issues[0] || "invalid_auth_state"
+        };
+      }
+      probe = await probeSession(authValidation.authState);
+      if (probe.status === 401) {
+        return {
+          ok: false,
+          error: "auth_session_rejected"
+        };
+      }
+      return {
+        ok: true,
+        authState: authValidation.authState,
+        refreshed: true
+      };
+    }
   }
 
   return {
@@ -2908,7 +2968,8 @@ async function runEnsureAuth(commandArgs) {
     reusable = await loadReusableAuthState({
       authStateFile,
       apiBase,
-      timeoutMs
+      timeoutMs,
+      verifyRemoteSession: Boolean(apiBase)
     });
   } catch (error) {
     reusable = {

@@ -1738,6 +1738,94 @@ test("ensure-auth reuses an existing valid auth-state file", async () => {
   assert.equal(payload.alias, "bot");
 });
 
+test("ensure-auth refreshes a saved auth-state when auth/session rejects the current token", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-ensure-auth-refresh-"));
+  const keystoreFile = path.join(tempDir, "iota.keystore");
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const initResult = await runCli(["wallet-init", "--alias", "bot", "--keystore-path", keystoreFile, "--json"]);
+  assert.equal(initResult.status, 0);
+  const walletPayload = JSON.parse(initResult.stdout);
+  const address = walletPayload.address;
+  const refreshedToken = buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600);
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: "http://127.0.0.1:1",
+        address,
+        alias: "bot",
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        expiresAtMs: 4102444800 * 1000,
+        session: {
+          id: "session-1",
+          refreshAvailable: true,
+          refreshExpiresAtMs: 4102444800 * 1000
+        }
+      },
+      null,
+      2
+    )
+  );
+
+  const mock = await startMockServer({
+    "GET /auth/session": (request) => {
+      if (request.headers?.authorization === `Bearer ${refreshedToken}`) {
+        return {
+          status: 200,
+          body: {
+            session: {
+              id: "session-1",
+              address
+            }
+          }
+        };
+      }
+      return {
+        status: 401,
+        body: {
+          error: "invalid_token"
+        }
+      };
+    },
+    "POST /auth/refresh": (request) => {
+      assert.equal(request.body?.refreshToken, "refresh-token-1");
+      return {
+        status: 200,
+        body: {
+          token: refreshedToken,
+          refreshToken: "refresh-token-2",
+          expiresAtMs: Date.now() + 3600_000,
+          session: {
+            id: "session-1",
+            refreshAvailable: true,
+            refreshExpiresAtMs: Date.now() + 7200_000
+          }
+        }
+      };
+    }
+  });
+
+  try {
+    const saved = JSON.parse(readFileSync(authStateFile, "utf8"));
+    saved.apiBase = mock.baseUrl;
+    writeFileSync(authStateFile, JSON.stringify(saved, null, 2));
+    const result = await runCli(["ensure-auth", "--api-base", mock.baseUrl, "--auth-state-file", authStateFile, "--json"], {
+      HOME: tempDir
+    });
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.source, "refreshed_auth_state");
+    const refreshed = JSON.parse(readFileSync(authStateFile, "utf8"));
+    assert.equal(refreshed.refreshToken, "refresh-token-2");
+    assert.equal(refreshed.token, refreshedToken);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("ensure-auth falls back to the sole keystore entry and saves auth state", async () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-ensure-auth-sole-"));
   const keystoreFile = path.join(tempDir, "iota.keystore");
@@ -1811,6 +1899,102 @@ test("ensure-auth falls back to the sole keystore entry and saves auth state", a
     assert.equal(savedState.address, createdAddress);
     assert.equal(savedState.alias, "sdk-only");
     assert.equal(savedState.token, issuedToken);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("ensure-auth falls back to fresh login when auth/session and refresh are both rejected", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-ensure-auth-relogin-"));
+  const keystoreFile = path.join(tempDir, "iota.keystore");
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const initResult = await runCli(["wallet-init", "--alias", "bot", "--keystore-path", keystoreFile, "--json"]);
+  assert.equal(initResult.status, 0);
+  const walletPayload = JSON.parse(initResult.stdout);
+  const address = walletPayload.address;
+  const reloginToken = buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600);
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: "http://127.0.0.1:1",
+        address,
+        alias: "bot",
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        expiresAtMs: 4102444800 * 1000,
+        session: {
+          id: "session-1",
+          refreshAvailable: true,
+          refreshExpiresAtMs: 4102444800 * 1000
+        }
+      },
+      null,
+      2
+    )
+  );
+
+  const mock = await startMockServer({
+    "GET /auth/session": () => ({
+      status: 401,
+      body: {
+        error: "invalid_token"
+      }
+    }),
+    "POST /auth/refresh": () => ({
+      status: 401,
+      body: {
+        error: "invalid_refresh_token"
+      }
+    }),
+    "POST /auth/challenge": (request) => {
+      assert.equal(request.body?.address, address);
+      return {
+        status: 200,
+        body: {
+          messageToSign: "clawnera-auth-relogin",
+          nonce: "nonce-relogin"
+        }
+      };
+    },
+    "POST /auth/verify": (request) => {
+      assert.equal(request.body?.address, address);
+      assert.equal(request.body?.message, "clawnera-auth-relogin");
+      return {
+        status: 200,
+        body: {
+          token: reloginToken,
+          refreshToken: "refresh-token-2",
+          expiresAtMs: Date.now() + 3600_000,
+          session: {
+            id: "session-2",
+            refreshAvailable: true,
+            refreshExpiresAtMs: Date.now() + 7200_000
+          }
+        }
+      };
+    }
+  });
+
+  try {
+    const saved = JSON.parse(readFileSync(authStateFile, "utf8"));
+    saved.apiBase = mock.baseUrl;
+    writeFileSync(authStateFile, JSON.stringify(saved, null, 2));
+    const result = await runCli(
+      ["ensure-auth", "--api-base", mock.baseUrl, "--keystore-path", keystoreFile, "--auth-state-file", authStateFile, "--json"],
+      {
+        HOME: tempDir,
+        PATH: "/usr/bin:/bin"
+      }
+    );
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.source, "fresh_login");
+    const refreshed = JSON.parse(readFileSync(authStateFile, "utf8"));
+    assert.equal(refreshed.token, reloginToken);
+    assert.equal(refreshed.refreshToken, "refresh-token-2");
   } finally {
     await mock.close();
   }

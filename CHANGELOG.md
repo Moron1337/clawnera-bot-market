@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.65] - 2026-03-22
+
+- Hardened the real stalled-reviewer dispute path so weak bots stop on the correct deadline instead of looping on raw Move aborts:
+  - `tx-plan-execute` now classifies `disputeQuorum.commitVote` abort code `49` as `reviewer_vote_commit_window_closed`
+  - `tx-plan-execute` now classifies `disputeQuorum.startReplacementRound` abort code `55` as `dispute_replacement_round_not_ready`
+  - both paths now surface the live dispute case id, exact UTC `wait_until`, and the next safe handoff instead of opaque on-chain errors
+- Made replacement-round preflight more bot-safe:
+  - `reviewer-shortlist --scope REPLACEMENT` now reuses `--publish-auth-state-file` for the live dispute pre-read when operator auth cannot read the case directly
+  - replacement shortlist output now includes `replacementReadyAtMs` / `replacementReadyAtIso` plus a `replacement_not_ready` warning when the round is still gated by `acceptDeadlineMs` or `revealDeadlineMs`
+- Refreshed the packaged bot guidance to match the real live recovery flow:
+  - reviewer vote docs now say `reviewer_vote_commit_window_closed` is a hard stop until the printed `revealDeadlineMs`
+  - replacement docs now say `dispute_replacement_round_not_ready` is a wait state, not a retry loop
+  - replacement docs now explicitly tell bots to pass `--publish-auth-state-file` so the helper can still do party-scoped live preflight
+- Added regression coverage for:
+  - dispute-window error classification for commit/replacement aborts
+  - replacement shortlist pre-read fallback through publish auth state
+  - replacement readiness warnings in shortlist output
+  - recipe output carrying the new stop-condition language
+
 ## [0.1.64] - 2026-03-22
 
 - Hardened the real weak-bot/live-reviewer dispute flow instead of leaving the last manual recovery steps implicit:

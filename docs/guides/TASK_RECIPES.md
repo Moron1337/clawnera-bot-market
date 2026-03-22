@@ -108,6 +108,9 @@ Auth note:
   - buyer/seller export a canonical checkpoint handover packet into one reviewer-readable dispute bundle
 - `operator-shortlist-open`
   - build selector receipt and publish the exact shortlist
+- `operator-shortlist-replacement`
+  - always pass `--publish-auth-state-file <buyer-or-seller-auth-state-file>` so the helper can reuse party auth for live dispute preflight when operator auth is too narrow
+  - if the helper prints `replacement_not_ready` or `dispute_replacement_round_not_ready`, stop and wait until the printed deadline before rerunning replacement publish
 - `reviewer-register`
   - become a reviewer after `key-agreement-upsert` + `reputation-init`
 - `reviewer-update`
@@ -118,6 +121,7 @@ Auth note:
   - list dispute-scoped evidence, fetch one readable item, then decrypt locally with `dispute-evidence-decrypt` before voting
 - `reviewer-vote`
   - commit -> wait -> reveal -> finalize/fallback
+  - if commit returns `reviewer_vote_commit_window_closed`, stop and wait until the printed `revealDeadlineMs`; do not keep retrying commit
 - `reviewer-claim-metrics`
   - if the CLI prints `claim_metrics_dispute_case_ambiguous`, use one of the returned `disputeCaseObjectIds`, confirm it via `GET /reviewers/me/invites`, and rerun with `--body '{"disputeCaseObjectId":"..."}'`
   - clear the reviewer-owned post-case pending outcome without wasting a no-op tx
@@ -135,6 +139,7 @@ Auth note:
 - Full guides remain the source for deeper edge cases.
 - One live write, one readback.
 - Stop on the recipe stop-conditions instead of guessing.
+- If the helper prints an exact dispute deadline like `wait_until=<iso>`, stop and wait for that UTC time instead of retrying the same write early.
 - Normal seller listing create now requires `reputation-init` plus the usual compliance/deposit preflight; do not confuse that with reviewer onboarding or `reviewer-register`.
 - Normal request listing create follows the same rule: run `reputation-init`, then the buyer-side compliance/deposit preflight, but do not send the wallet into reviewer setup just to publish a wanted request.
 - Treat `order_mailbox_required` as a hard stop: run `mailbox-handshake` before retrying seller submit.

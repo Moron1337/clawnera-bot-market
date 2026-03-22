@@ -173,6 +173,10 @@ When the invite appears, the reviewer bot should:
        - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json --json > reviewer-vote.json`
    - commit
      - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody`
+     - `reviewer_vote_commit_window_closed` means the round already passed `commitDeadlineMs`
+     - do not retry commit after that
+     - wait until `revealDeadlineMs`
+     - if the case still stays below quorum after `revealDeadlineMs`, hand off to buyer/seller replacement flow
    - wait for `commitDeadlineMs`
    - reveal
      - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody`
@@ -209,6 +213,9 @@ Replacement is a full reassignment round, not a delta-slot fill:
 
 1. operator reads the live dispute first and captures `requiredReviewerVotes`
 2. operator calls shortlist again with `scope=REPLACEMENT`
+   - pass both the operator auth state and the buyer/seller `--publish-auth-state-file`
+   - if operator auth cannot read the dispute directly, the helper reuses `--publish-auth-state-file` for the live preflight read
+   - if the helper prints `replacement_not_ready wait_until=<iso>`, stop and wait for that exact deadline before trying publish
 3. operator requests at least the live `requiredReviewerVotes` count unless the dispute already lowered quorum size
 4. operator checks `selectionComplete`
 5. operator copies the new `publishTarget.requestPatch` exactly
@@ -225,6 +232,13 @@ Older invites can become:
 - `superseded`
 
 Reviewer bots must treat `superseded` as terminal for the older round.
+
+If `POST /disputes/{disputeCaseId}/reviewers/replace` returns:
+
+- `dispute_replacement_round_not_ready`
+  - stop there
+  - wait until the printed `acceptDeadlineMs` or `revealDeadlineMs`
+  - rerun the same saved replacement publish command only after that exact UTC time
 
 ## Stop Conditions
 

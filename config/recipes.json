@@ -1335,6 +1335,7 @@
         "Stop on dispute_commit_window_open and wait.",
         "Stop on dispute_challenge_window_open and wait.",
         "Stop on reviewer_vote_already_committed and keep the saved reviewer-vote.json for the later reveal step instead of regenerating a new nonce.",
+        "Stop on reviewer_vote_commit_window_closed. Do not retry commit; wait until the printed revealDeadlineMs and hand off to buyer/seller replacement flow if the round still lacks quorum after that.",
         "Stop if the prepared vote/nonce no longer match what you were about to reveal."
       ],
       "nextRecipes": [
@@ -1410,14 +1411,17 @@
       ],
       "steps": [
         "Read GET /disputes/{disputeCaseId} first and capture requiredReviewerVotes, assignmentRound, and acceptDeadlineMs or revealDeadlineMs.",
-        "Run clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <0x...> --auth-state-file <operator-auth-state-file>.",
+        "Run clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <0x...> --auth-state-file <operator-auth-state-file> --publish-auth-state-file <buyer-or-seller-auth-state-file>.",
         "Use at least the live requiredReviewerVotes count for reviewer-count. Replacement rounds fully reset reviewer assignment; do not request only the missing delta slots.",
+        "If operator auth cannot read the dispute directly, the helper reuses --publish-auth-state-file for the live dispute pre-read. Keep that file set.",
         "Inspect selectionComplete, receipt.id, and the saved publish body file.",
+        "If reviewer-shortlist printed replacement_not_ready with wait_until=<iso>, stop and wait for that exact deadline before publish.",
         "Publish the exact saved body with clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/reviewers/replace --auth-state-file <buyer-or-seller-auth-state-file> --body-file <saved-body.json>.",
         "Read back GET /disputes/{disputeCaseId} and then wait for the invited reviewers to see inbox entries."
       ],
       "stopConditions": [
         "Stop if the live dispute deadline does not allow a replacement round yet.",
+        "Stop on dispute_replacement_round_not_ready and wait until the printed acceptDeadlineMs or revealDeadlineMs before rerunning the same replacement publish command.",
         "Stop if reviewer-count is below the live requiredReviewerVotes floor.",
         "Stop on reviewer_invite_tx_not_supported and treat it as a real live package capability gap.",
         "Do not build raw ungated replacement tx calls around a failed invite-aware publish.",

@@ -7,7 +7,7 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { classifyTxPlanExecutionError } from "../lib/tx-plan-errors.mjs";
+import { classifyDisputeTxPlanExecutionError, classifyTxPlanExecutionError } from "../lib/tx-plan-errors.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -473,6 +473,52 @@ test("tx plan error classifier maps commit abort code 48 to already committed", 
   });
 });
 
+test("dispute tx plan error classifier maps commit abort code 49 to wait-until replacement guidance", () => {
+  const classified = classifyDisputeTxPlanExecutionError({
+    errorMessage:
+      "transaction_execution_failed: Move Runtime Abort. Location: bc32::dispute_quorum::commit_vote (function index 104) at offset 76, Abort Code: 49 in command 0",
+    txBuilder: "disputeQuorum.commitVote",
+    rawPath:
+      "/disputes/0x2cb6d1df7a78eb63647728d7cdf7a5098dce8cb4f0693b20fee7641629068ac5/votes/commit",
+    disputeCase: {
+      objectId: "0x2cb6d1df7a78eb63647728d7cdf7a5098dce8cb4f0693b20fee7641629068ac5",
+      state: 1,
+      commitDeadlineMs: 1774170457953,
+      revealDeadlineMs: 1774184857953,
+    },
+    nowMs: 1774171000000,
+  });
+  assert.equal(classified.code, "reviewer_vote_commit_window_closed");
+  assert.equal(classified.retryable, false);
+  assert.equal(classified.waitUntilMs, 1774184857953);
+  assert.match(classified.waitUntilIso, /^2026-03-22T13:07:37\.953Z$/);
+  assert.match(classified.hint, /commit window is already closed/i);
+  assert.match(classified.hint, /Wait until revealDeadlineMs=2026-03-22T13:07:37\.953Z/i);
+  assert.match(classified.nextCommandHint, /reviewer-shortlist --scope REPLACEMENT/);
+});
+
+test("dispute tx plan error classifier maps replacement abort code 55 to exact deadline wait", () => {
+  const classified = classifyDisputeTxPlanExecutionError({
+    errorMessage:
+      "transaction_execution_failed: Move Runtime Abort. Location: bc32::dispute_quorum::start_replacement_round (function index 112) at offset 11, Abort Code: 55 in command 0",
+    txBuilder: "disputeQuorum.startReplacementRound",
+    rawPath:
+      "/disputes/0x2cb6d1df7a78eb63647728d7cdf7a5098dce8cb4f0693b20fee7641629068ac5/reviewers/replace",
+    disputeCase: {
+      objectId: "0x2cb6d1df7a78eb63647728d7cdf7a5098dce8cb4f0693b20fee7641629068ac5",
+      state: 1,
+      revealDeadlineMs: 1774184857953,
+    },
+    nowMs: 1774172000000,
+  });
+  assert.equal(classified.code, "dispute_replacement_round_not_ready");
+  assert.equal(classified.retryable, false);
+  assert.equal(classified.waitUntilMs, 1774184857953);
+  assert.match(classified.waitUntilIso, /^2026-03-22T13:07:37\.953Z$/);
+  assert.match(classified.hint, /Replacement is not allowed yet/i);
+  assert.match(classified.hint, /rerun the same replacement publish command/i);
+});
+
 test("journey command prints a strict ordered role path", () => {
   const result = runCli(["journey", "buyer"]);
   assert.equal(result.status, 0);
@@ -745,6 +791,7 @@ test("recipe json output is parseable", () => {
   assert.ok(payload.recipe.steps.some((step) => /reviewer-vote-prepare/.test(step)));
   assert.ok(payload.recipe.steps.some((step) => /sequentially, not in parallel/.test(step)));
   assert.ok(payload.recipe.stopConditions.some((step) => /reviewer_vote_already_committed/.test(step)));
+  assert.ok(payload.recipe.stopConditions.some((step) => /reviewer_vote_commit_window_closed/.test(step)));
   assert.equal(payload.recipe.nextRecipes.includes("resolve-dispute"), false);
 });
 
@@ -781,6 +828,8 @@ test("replacement recipe explains full reassignment semantics", () => {
   assert.match(result.stdout, /full replacement round/);
   assert.match(result.stdout, /requiredReviewerVotes/);
   assert.match(result.stdout, /do not request only the missing delta slots/);
+  assert.match(result.stdout, /replacement_not_ready/);
+  assert.match(result.stdout, /dispute_replacement_round_not_ready/);
 });
 
 test("reviewer vote prepare json output matches contract semantics", () => {

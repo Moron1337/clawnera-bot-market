@@ -105,7 +105,11 @@ import {
   resolveNotificationEventTypes,
   resolveNotificationPreset
 } from "../lib/notifications.mjs";
-import { classifyTxPlanExecutionError, normalizeTxPlanErrorMessage } from "../lib/tx-plan-errors.mjs";
+import {
+  classifyDisputeTxPlanExecutionError,
+  classifyTxPlanExecutionError,
+  normalizeTxPlanErrorMessage,
+} from "../lib/tx-plan-errors.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -5788,6 +5792,133 @@ function ensureDisputeCasePayload(responseBody) {
   return disputeCase;
 }
 
+function parsePositiveDeadlineMs(value) {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
+    return value;
+  }
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
+}
+
+function formatUtcDeadlineMs(value) {
+  const deadlineMs = parsePositiveDeadlineMs(value);
+  if (!deadlineMs) {
+    return null;
+  }
+  return new Date(deadlineMs).toISOString();
+}
+
+function normalizeDisputeCaseStateLabel(value) {
+  const state = typeof value === "number" && Number.isFinite(value) ? value : Number.parseInt(String(value || ""), 10);
+  if (!Number.isFinite(state)) {
+    return "unknown";
+  }
+  switch (state) {
+    case 0:
+      return "awaiting_reviewers";
+    case 1:
+      return "commit_phase";
+    case 2:
+      return "reveal_phase";
+    case 3:
+      return "finalized";
+    case 4:
+      return "fallback_resolved";
+    default:
+      return "unknown";
+  }
+}
+
+function resolveDisputeCaseIdFromTxPlanPath(rawPath) {
+  const normalizedPath = typeof rawPath === "string" ? rawPath.trim() : "";
+  const match = normalizedPath.match(/^\/disputes\/([^/]+)/);
+  return normalizeIotaAddress(match?.[1] || "") || null;
+}
+
+function stripInlineRequestBodyOptions(options = {}) {
+  if (!options || typeof options !== "object" || Array.isArray(options)) {
+    return {};
+  }
+  const sanitized = { ...options };
+  delete sanitized.body;
+  delete sanitized["body-file"];
+  delete sanitized["body-select"];
+  return sanitized;
+}
+
+async function maybeClassifyLiveDisputeTxPlanExecutionError({
+  errorMessage,
+  txBuilder,
+  rawPath,
+  options,
+  timeoutMs,
+}) {
+  const generic = classifyDisputeTxPlanExecutionError({
+    errorMessage,
+    txBuilder,
+    rawPath,
+  });
+  const disputeCaseObjectId = resolveDisputeCaseIdFromTxPlanPath(rawPath);
+  if (!disputeCaseObjectId) {
+    return generic;
+  }
+  try {
+    const disputeCall = await callApiRoute({
+      method: "GET",
+      rawPath: `/disputes/${disputeCaseObjectId}`,
+      options: stripInlineRequestBodyOptions(options),
+      timeoutMs,
+    });
+    if (!disputeCall.result.ok) {
+      return generic;
+    }
+    const disputeCase = ensureDisputeCasePayload(disputeCall.result.body);
+    return (
+      classifyDisputeTxPlanExecutionError({
+        errorMessage,
+        txBuilder,
+        rawPath,
+        disputeCase,
+        nowMs: Date.now(),
+      }) || generic
+    );
+  } catch {
+    return generic;
+  }
+}
+
+function buildReplacementReadinessWarning(disputeCase) {
+  if (!disputeCase || typeof disputeCase !== "object" || Array.isArray(disputeCase)) {
+    return null;
+  }
+  const nowMs = Date.now();
+  const stateLabel = normalizeDisputeCaseStateLabel(disputeCase.state);
+  const acceptDeadlineMs = parsePositiveDeadlineMs(disputeCase.acceptDeadlineMs);
+  const revealDeadlineMs = parsePositiveDeadlineMs(disputeCase.revealDeadlineMs);
+  if ((stateLabel === "commit_phase" || stateLabel === "reveal_phase") && revealDeadlineMs && nowMs <= revealDeadlineMs) {
+    return {
+      waitUntilMs: revealDeadlineMs,
+      waitUntilIso: formatUtcDeadlineMs(revealDeadlineMs),
+      warning:
+        `replacement_not_ready state=${stateLabel} wait_until=${formatUtcDeadlineMs(revealDeadlineMs)}; ` +
+        "the current reviewer round must age past revealDeadlineMs before a replacement publish can succeed",
+    };
+  }
+  if (stateLabel === "awaiting_reviewers" && acceptDeadlineMs && nowMs <= acceptDeadlineMs) {
+    return {
+      waitUntilMs: acceptDeadlineMs,
+      waitUntilIso: formatUtcDeadlineMs(acceptDeadlineMs),
+      warning:
+        `replacement_not_ready state=${stateLabel} wait_until=${formatUtcDeadlineMs(acceptDeadlineMs)}; ` +
+        "the current reviewer accept window must close before a replacement publish can succeed",
+    };
+  }
+  return null;
+}
+
 function readOptionalTextFile(targetPath, errorCode = "invalid_text_file") {
   const resolvedPath =
     typeof targetPath === "string" && targetPath.trim() ? path.resolve(String(targetPath).trim()) : "";
@@ -6924,10 +7055,18 @@ async function runTxPlanCommand(commandArgs, mode) {
     };
     } catch (error) {
       const rawError = normalizeTxPlanErrorMessage(error) || "tx_plan_execute_failed";
-      const classified = classifyTxPlanExecutionError({
-        errorMessage: rawError,
-        txBuilder: txPlan.txBuilder,
-      });
+      const classified =
+        (await maybeClassifyLiveDisputeTxPlanExecutionError({
+          errorMessage: rawError,
+          txBuilder: txPlan.txBuilder,
+          rawPath,
+          options,
+          timeoutMs,
+        })) ||
+        classifyTxPlanExecutionError({
+          errorMessage: rawError,
+          txBuilder: txPlan.txBuilder,
+        });
       if (classified?.retryable === true && autoRetriedExecutionCount < 1) {
         autoRetriedExecutionCount += 1;
         continue;
@@ -6940,6 +7079,10 @@ async function runTxPlanCommand(commandArgs, mode) {
         retryable: classified?.retryable === true,
         autoRetriedExecutionCount,
         txBuilder: txPlan.txBuilder,
+        disputeCaseObjectId: classified?.disputeCaseObjectId || resolveDisputeCaseIdFromTxPlanPath(rawPath),
+        waitUntilMs: classified?.waitUntilMs || null,
+        waitUntilIso: classified?.waitUntilIso || null,
+        nextCommandHint: classified?.nextCommandHint || null,
       };
     }
   }
@@ -10693,6 +10836,10 @@ async function runReviewerShortlist(commandArgs) {
     typeof options["order-context-file"] === "string" && options["order-context-file"].trim()
       ? path.resolve(String(options["order-context-file"]).trim())
       : "";
+  const publishAuthStateFile =
+    typeof options["publish-auth-state-file"] === "string" && options["publish-auth-state-file"].trim()
+      ? path.resolve(String(options["publish-auth-state-file"]).trim())
+      : null;
   if (scope === "OPEN" && (!orderId || !milestoneId)) {
     return {
       ok: false,
@@ -10718,6 +10865,7 @@ async function runReviewerShortlist(commandArgs) {
         : { chainConfig: null };
     let replacementRequiredReviewerVotes = null;
     let replacementDisputePreReadWarning = null;
+    let replacementReadiness = null;
     if (scope === "REPLACEMENT") {
       const disputeCaseObjectId = normalizeIotaAddress(options["dispute-case-id"] || "");
       if (!disputeCaseObjectId) {
@@ -10726,12 +10874,30 @@ async function runReviewerShortlist(commandArgs) {
           error: "missing_dispute_case_id",
         };
       }
-      const disputeRead = await callApiRoute({
-        method: "GET",
-        rawPath: `/disputes/${disputeCaseObjectId}`,
-        options,
-        timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
-      });
+      const disputeReadTimeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+      const readReplacementDispute = async (readOptions) =>
+        callApiRoute({
+          method: "GET",
+          rawPath: `/disputes/${disputeCaseObjectId}`,
+          options: readOptions,
+          timeoutMs: disputeReadTimeoutMs,
+        });
+      let disputeRead = await readReplacementDispute(options);
+      if (!disputeRead.result.ok && publishAuthStateFile) {
+        const publishAuthRead = await readReplacementDispute({
+          ...options,
+          jwt: undefined,
+          "auth-state-file": publishAuthStateFile,
+        });
+        if (publishAuthRead.result.ok) {
+          disputeRead = publishAuthRead;
+          replacementDisputePreReadWarning = `replacement_dispute_pre_read_used_publish_auth_state auth_state_file=${publishAuthStateFile}`;
+        } else {
+          replacementDisputePreReadWarning =
+            `replacement_dispute_pre_read_failed status=${disputeRead.result.status} error=${summarizeApiFailure(disputeRead.result)}; ` +
+            `publish_auth_state_retry status=${publishAuthRead.result.status} error=${summarizeApiFailure(publishAuthRead.result)}; continuing without live requiredReviewerVotes auto-detection`;
+        }
+      }
       if (!disputeRead.result.ok) {
         replacementDisputePreReadWarning = `replacement_dispute_pre_read_failed status=${disputeRead.result.status} error=${summarizeApiFailure(
           disputeRead.result
@@ -10744,6 +10910,7 @@ async function runReviewerShortlist(commandArgs) {
         } else if (typeof requiredReviewerVotesRaw === "number" && Number.isFinite(requiredReviewerVotesRaw)) {
           replacementRequiredReviewerVotes = requiredReviewerVotesRaw;
         }
+        replacementReadiness = buildReplacementReadinessWarning(liveDispute);
       }
     }
     let buyerAddress = normalizeIotaAddress(options["buyer-address"] || "");
@@ -10927,10 +11094,6 @@ async function runReviewerShortlist(commandArgs) {
         response: payload,
       };
     }
-    const publishAuthStateFile =
-      typeof options["publish-auth-state-file"] === "string" && options["publish-auth-state-file"].trim()
-        ? path.resolve(String(options["publish-auth-state-file"]).trim())
-        : null;
     const publishAuthHint = publishAuthStateFile
       ? shellQuote(publishAuthStateFile)
       : "<buyer-or-seller-auth-state-file>";
@@ -10953,6 +11116,9 @@ async function runReviewerShortlist(commandArgs) {
     if (replacementDisputePreReadWarning) {
       warnings.push(replacementDisputePreReadWarning);
     }
+    if (replacementReadiness?.warning) {
+      warnings.push(replacementReadiness.warning);
+    }
 
     return {
       ok: true,
@@ -10974,6 +11140,8 @@ async function runReviewerShortlist(commandArgs) {
       warnings,
       response: payload,
       requiredReviewerVotes: replacementRequiredReviewerVotes,
+      replacementReadyAtMs: replacementReadiness?.waitUntilMs || null,
+      replacementReadyAtIso: replacementReadiness?.waitUntilIso || null,
       nextPublishHint:
         publishRoute && publishBodyOut
           ? `clawnera-help tx-plan-execute POST ${shellQuote(publishRoute)} --auth-state-file ${publishAuthHint} --body-file ${shellQuote(publishBodyOut)}`
@@ -13150,6 +13318,12 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
     if (result.hint) {
       console.error(`hint=${result.hint}`);
+    }
+    if (result.waitUntilIso) {
+      console.error(`wait_until=${result.waitUntilIso}`);
+    }
+    if (result.nextCommandHint) {
+      console.error(`next_command=${result.nextCommandHint}`);
     }
     process.exitCode = 1;
   }

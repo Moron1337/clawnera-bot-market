@@ -2647,6 +2647,323 @@ test("reviewer-shortlist replacement continues when dispute pre-read is forbidde
   }
 });
 
+test("reviewer-shortlist replacement retries dispute pre-read with publish auth state when operator auth is forbidden", async () => {
+  const disputeCaseObjectId = "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+  const publishJwt = buildJwtWithExp(4102444800);
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-shortlist-replacement-auth-"));
+  const publishAuthStateFile = path.join(tempDir, "seller-auth-state.json");
+
+  let disputeReadCount = 0;
+  const mock = await startMockServer({
+    "GET /policy/fees": () => ({
+      status: 200,
+      body: {
+        policy: {
+          chainConfig: {
+            marketplacePackageId: "0x1111111111111111111111111111111111111111111111111111111111111111",
+            escrowFeeConfigObjectId: "0x9999999999999999999999999999999999999999999999999999999999999999",
+            governanceConfigObjectId: "0x8888888888888888888888888888888888888888888888888888888888888888",
+            disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
+          }
+        }
+      }
+    }),
+    "GET /reviewers/me/metrics": () => ({
+      status: 200,
+      body: {
+        registered: true,
+        runtime: {
+          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
+          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
+        }
+      }
+    }),
+    [`GET /disputes/${disputeCaseObjectId}`]: (request) => {
+      disputeReadCount += 1;
+      if (request.headers.authorization === "Bearer test-jwt") {
+        return {
+          status: 403,
+          body: {
+            error: "forbidden"
+          }
+        };
+      }
+      assert.equal(request.headers.authorization, `Bearer ${publishJwt}`);
+      return {
+        status: 200,
+        body: {
+          disputeCase: {
+            objectId: disputeCaseObjectId,
+            state: 1,
+            requiredReviewerVotes: 3,
+            revealDeadlineMs: 4102444800000
+          }
+        }
+      };
+    },
+    "POST /rpc": (request) => {
+      const method = request.body?.method;
+      if (method === "iota_getLatestCheckpointSequenceNumber") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: "51"
+          }
+        };
+      }
+      if (method === "iota_getCheckpoint") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: {
+              digest: "checkpoint-replacement",
+              sequenceNumber: "51",
+              timestampMs: "1773917000000"
+            }
+          }
+        };
+      }
+      if (method === "iota_getObject") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: {
+              data: {
+                objectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+                previousTransaction: "init-reviewer-registry-1",
+                content: {
+                  fields: {
+                    default_required_reviewer_votes: "3",
+                    min_required_reviewer_votes: "3",
+                    min_dispute_bond_per_side_iota: "500000",
+                    reviewer_min_stake_iota: "500000"
+                  }
+                }
+              }
+            }
+          }
+        };
+      }
+      throw new Error(`unexpected_rpc_method:${String(method)}`);
+    },
+    "POST /admin/reviewer-selection/shortlist": () => ({
+      status: 200,
+      body: {
+        selectionComplete: true,
+        directoryScanTruncated: false,
+        receipt: {
+          id: "receipt-replacement-3",
+          shortlistedReviewerAddresses: [
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          ]
+        },
+        publishTarget: {
+          route: `/disputes/${disputeCaseObjectId}/reviewers/replace`,
+          requestPatch: {
+            invitedReviewerAddresses: [
+              "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            ],
+            reviewerSelectionReceiptId: "receipt-replacement-3"
+          }
+        }
+      }
+    })
+  });
+  writeFileSync(
+    publishAuthStateFile,
+    JSON.stringify({
+      jwt: publishJwt,
+      refreshToken: "refresh-token",
+      actorAddress: "0xa3679f3684bb2c74e50bf1ca8d1818a112f4e58a5418cbd7856e9d8300e79c1d",
+      apiBase: mock.baseUrl
+    }),
+    "utf8"
+  );
+
+  try {
+    const result = await runCli([
+      "reviewer-shortlist",
+      "--scope",
+      "REPLACEMENT",
+      "--dispute-case-id",
+      disputeCaseObjectId,
+      "--api-base",
+      mock.baseUrl,
+      "--rpc-url",
+      `${mock.baseUrl}/rpc`,
+      "--jwt",
+      "test-jwt",
+      "--publish-auth-state-file",
+      publishAuthStateFile,
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(disputeReadCount, 2);
+    assert.ok(payload.warnings.some((entry) => /replacement_dispute_pre_read_used_publish_auth_state/.test(entry)));
+    assert.ok(payload.warnings.some((entry) => /replacement_not_ready state=commit_phase/.test(entry)));
+    assert.equal(payload.replacementReadyAtIso, "2100-01-01T00:00:00.000Z");
+    assert.equal(payload.requiredReviewerVotes, 3);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("reviewer-shortlist replacement surfaces wait-until warning when the live round is still in commit phase", async () => {
+  const disputeCaseObjectId = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  const revealDeadlineMs = 4102444800000;
+  const mock = await startMockServer({
+    "GET /policy/fees": () => ({
+      status: 200,
+      body: {
+        policy: {
+          chainConfig: {
+            marketplacePackageId: "0x1111111111111111111111111111111111111111111111111111111111111111",
+            escrowFeeConfigObjectId: "0x9999999999999999999999999999999999999999999999999999999999999999",
+            governanceConfigObjectId: "0x8888888888888888888888888888888888888888888888888888888888888888",
+            disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
+          }
+        }
+      }
+    }),
+    "GET /reviewers/me/metrics": () => ({
+      status: 200,
+      body: {
+        registered: true,
+        runtime: {
+          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
+          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
+        }
+      }
+    }),
+    [`GET /disputes/${disputeCaseObjectId}`]: () => ({
+      status: 200,
+      body: {
+        disputeCase: {
+          objectId: disputeCaseObjectId,
+          state: 1,
+          requiredReviewerVotes: 3,
+          revealDeadlineMs
+        }
+      }
+    }),
+    "POST /rpc": (request) => {
+      const method = request.body?.method;
+      if (method === "iota_getLatestCheckpointSequenceNumber") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: "51"
+          }
+        };
+      }
+      if (method === "iota_getCheckpoint") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: {
+              digest: "checkpoint-replacement",
+              sequenceNumber: "51",
+              timestampMs: "1773917000000"
+            }
+          }
+        };
+      }
+      if (method === "iota_getObject") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: {
+              data: {
+                objectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+                previousTransaction: "init-reviewer-registry-1",
+                content: {
+                  fields: {
+                    default_required_reviewer_votes: "3",
+                    min_required_reviewer_votes: "3",
+                    min_dispute_bond_per_side_iota: "500000",
+                    reviewer_min_stake_iota: "500000"
+                  }
+                }
+              }
+            }
+          }
+        };
+      }
+      throw new Error(`unexpected_rpc_method:${String(method)}`);
+    },
+    "POST /admin/reviewer-selection/shortlist": () => ({
+      status: 200,
+      body: {
+        selectionComplete: true,
+        directoryScanTruncated: false,
+        receipt: {
+          id: "receipt-replacement-2",
+          shortlistedReviewerAddresses: [
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          ]
+        },
+        publishTarget: {
+          route: `/disputes/${disputeCaseObjectId}/reviewers/replace`,
+          requestPatch: {
+            invitedReviewerAddresses: [
+              "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            ],
+            reviewerSelectionReceiptId: "receipt-replacement-2"
+          }
+        }
+      }
+    })
+  });
+
+  try {
+    const result = await runCli([
+      "reviewer-shortlist",
+      "--scope",
+      "REPLACEMENT",
+      "--dispute-case-id",
+      disputeCaseObjectId,
+      "--api-base",
+      mock.baseUrl,
+      "--rpc-url",
+      `${mock.baseUrl}/rpc`,
+      "--jwt",
+      "test-jwt",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.replacementReadyAtMs, revealDeadlineMs);
+    assert.equal(payload.replacementReadyAtIso, "2100-01-01T00:00:00.000Z");
+    assert.ok(payload.warnings.some((entry) => /replacement_not_ready state=commit_phase/.test(entry)));
+    assert.ok(payload.warnings.some((entry) => /wait_until=2100-01-01T00:00:00.000Z/.test(entry)));
+  } finally {
+    await mock.close();
+  }
+});
+
 test("request refreshes one invalid_token response from saved auth state and retries", async () => {
   let protectedReads = 0;
   const mock = await startMockServer({

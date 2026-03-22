@@ -157,6 +157,8 @@ Notes:
 - `clawnera-help ensure-auth` is the canonical bot path when the bot runs on the same machine as the wallet; do not ask users to paste raw JWTs in chat if local wallet access exists
 - `clawnera-help request ...` retries once through `/auth/refresh` on `401 invalid_token` when the saved auth state still has a refresh token; if that still fails, rerun `ensure-auth`
 - if you are driving multiple reviewer wallets for the same dispute from one machine, submit reviewer commit/reveal writes sequentially; `tx-plan-execute` now retries one shared-object version race automatically and surfaces `reviewer_vote_already_committed` as a safe stop instead of a raw abort
+- `reviewer_vote_commit_window_closed` means the reviewer round already passed `commitDeadlineMs`; do not retry commit, wait until the printed `revealDeadlineMs`, then hand off to replacement flow if the case still lacks quorum
+- `dispute_replacement_round_not_ready` means replacement was attempted too early; wait until the printed `acceptDeadlineMs` or `revealDeadlineMs` before rerunning the same replacement publish command
 - reviewer content inspection is now dispute-scoped:
   - buyer/seller publish `linked_deliverable` reviewer evidence with `clawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state>`
   - buyer/seller build generic complaint, rebuttal, or supporting reviewer bundles locally with `clawnera-help dispute-evidence-bundle-build ...`, upload them through managed storage, then publish them with `clawnera-help dispute-evidence-publish --kind supplemental-bundle ...`

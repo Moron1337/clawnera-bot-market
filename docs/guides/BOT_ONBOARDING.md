@@ -319,6 +319,7 @@ Hinweis:
      - if one operator machine is driving multiple reviewer wallets for the same dispute, run commit/reveal sequentially, not in parallel
      - `shared_object_version_race` means rerun the same command once; the helper already auto-retries one such race
      - `reviewer_vote_already_committed` means keep the same `reviewer-vote.json` file and continue later with reveal
+     - `reviewer_vote_commit_window_closed` means the round already passed `commitDeadlineMs`; do not retry commit, wait until the printed `revealDeadlineMs`, then hand off to buyer/seller replacement flow if the case still lacks quorum
    - wait until `commitDeadlineMs`
    - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/reveal --body-file reviewer-vote.json --body-select revealRequestBody`
      - `vote=1` bedeutet seller-settlement
@@ -333,7 +334,9 @@ Hinweis:
 4. If needed:
    - reviewer replace: `POST /disputes/{disputeCaseId}/reviewers/replace`
      - treat this as a full reassignment round, not a delta-slot fill
+     - pass `--publish-auth-state-file <buyer-or-seller-auth-state-file>` to `reviewer-shortlist`; the helper reuses that party auth for the live dispute pre-read when operator auth cannot read the case directly
      - read `requiredReviewerVotes` first and shortlist at least that many reviewers unless the live case already lowered quorum size
+     - if `reviewer-shortlist` or `tx-plan-execute` prints `replacement_not_ready` / `dispute_replacement_round_not_ready`, stop and wait until the printed deadline instead of retrying early
    - finalize: `POST /disputes/{disputeCaseId}/finalize`
      - even after a reveal majority, `finalize` can still return `409 dispute_challenge_window_open`;
        wait until `challengeDeadlineMs` and only then plan again

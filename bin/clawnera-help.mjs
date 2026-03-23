@@ -4577,13 +4577,84 @@ function resolveClaimMetricsDisputeCaseCandidate(invitesBody, reviewerAddress) {
   };
 }
 
-function buildClaimMetricsDisputeCaseHint(rawPath, disputeCaseObjectIds = []) {
+function resolveClaimMetricsDisputeCaseCandidateFromMetricsContext(metricsBody) {
+  const claimContext = asRecord(metricsBody?.pendingMetricsClaimContext);
+  if (!claimContext) {
+    return {
+      present: false,
+    };
+  }
+  const status = typeof claimContext.status === "string" ? claimContext.status.trim().toLowerCase() : "";
+  const candidateIds = [...new Set(
+    (Array.isArray(claimContext.candidates) ? claimContext.candidates : [])
+      .map((entry) => normalizeIotaAddress(asRecord(entry)?.disputeCaseObjectId || ""))
+      .filter(Boolean)
+  )];
+  if (status === "ready") {
+    const disputeCaseObjectId =
+      normalizeIotaAddress(claimContext.disputeCaseObjectId || "") ||
+      (candidateIds.length === 1 ? candidateIds[0] : "");
+    if (!disputeCaseObjectId) {
+      return {
+        present: true,
+        ok: false,
+        error: "claim_metrics_context_unavailable",
+        disputeCaseObjectIds: candidateIds,
+      };
+    }
+    return {
+      present: true,
+      ok: true,
+      disputeCaseObjectId,
+    };
+  }
+  if (status === "ambiguous") {
+    return {
+      present: true,
+      ok: false,
+      error: "claim_metrics_dispute_case_ambiguous",
+      disputeCaseObjectIds: candidateIds,
+    };
+  }
+  if (status === "unavailable") {
+    return {
+      present: true,
+      ok: false,
+      error: "claim_metrics_context_unavailable",
+      disputeCaseObjectIds: candidateIds,
+    };
+  }
+  if (status === "not_required") {
+    return {
+      present: true,
+      ok: false,
+      error: "reviewer_metrics_claim_not_required",
+      disputeCaseObjectIds: candidateIds,
+    };
+  }
+  return {
+    present: true,
+    ok: false,
+    error: "claim_metrics_context_unavailable",
+    disputeCaseObjectIds: candidateIds,
+  };
+}
+
+function buildClaimMetricsContextUnavailableHint(rawPath) {
+  const normalizedPath = typeof rawPath === "string" && rawPath.trim() ? rawPath.trim() : "/reviewers/<reviewer-address>/claim-metrics";
+  return `Read GET /reviewers/me/metrics and inspect pendingMetricsClaimContext. If the server cannot prove the binding yet, rerun clawnera-help tx-plan-execute POST '${normalizedPath}' --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.`;
+}
+
+function buildClaimMetricsDisputeCaseHint(rawPath, disputeCaseObjectIds = [], source = "metrics") {
   const normalizedPath = typeof rawPath === "string" && rawPath.trim() ? rawPath.trim() : "/reviewers/<reviewer-address>/claim-metrics";
   const candidateSuffix =
     Array.isArray(disputeCaseObjectIds) && disputeCaseObjectIds.length > 0
       ? ` Candidate disputeCaseObjectIds: ${disputeCaseObjectIds.join(", ")}.`
       : "";
-  return `Read GET /reviewers/me/invites, choose the correct closed disputeCaseObjectId, then rerun clawnera-help tx-plan-execute POST '${normalizedPath}' --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.${candidateSuffix}`;
+  if (source === "invites") {
+    return `Read GET /reviewers/me/invites, choose the correct closed disputeCaseObjectId, then rerun clawnera-help tx-plan-execute POST '${normalizedPath}' --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.${candidateSuffix}`;
+  }
+  return `Read GET /reviewers/me/metrics and inspect pendingMetricsClaimContext, choose the correct closed disputeCaseObjectId, then rerun clawnera-help tx-plan-execute POST '${normalizedPath}' --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.${candidateSuffix}`;
 }
 
 function reviewerSelfRouteNeedsHydration(route, currentBody) {
@@ -4753,36 +4824,58 @@ async function hydrateReviewerSelfTxPlanRequest({ method, rawPath, options, time
       normalizeIotaAddress(mergedBody.disputeQuorumConfigObjectId || "") || disputeQuorumConfigObjectIdHint;
     mergedBody.disputeCaseObjectId = normalizeIotaAddress(mergedBody.disputeCaseObjectId || "");
     if (!mergedBody.disputeCaseObjectId) {
-      const invitesCall = await callApiRoute({
-        method: "GET",
-        rawPath: "/reviewers/me/invites",
-        options: helperOptions,
-        timeoutMs,
-      });
-      if (!invitesCall.result.ok) {
-        return {
-          ok: false,
-          error: "reviewer_invites_lookup_failed",
-          invitesStatus: invitesCall.result.status,
-          invitesResponse: invitesCall.result.body,
-        };
-      }
-      const resolvedClaimMetricsCase = resolveClaimMetricsDisputeCaseCandidate(
-        invitesCall.result.body,
-        reviewerOwnerAddress
+      const resolvedClaimMetricsCaseFromMetrics = resolveClaimMetricsDisputeCaseCandidateFromMetricsContext(
+        metricsCall.result.body
       );
-      if (!resolvedClaimMetricsCase.ok) {
-        return {
-          ok: false,
-          error:
-            resolvedClaimMetricsCase.disputeCaseObjectIds.length === 0
-              ? "claim_metrics_dispute_case_required"
-              : "claim_metrics_dispute_case_ambiguous",
-          disputeCaseObjectIds: resolvedClaimMetricsCase.disputeCaseObjectIds,
-          hint: buildClaimMetricsDisputeCaseHint(rawPath, resolvedClaimMetricsCase.disputeCaseObjectIds),
-        };
+      if (resolvedClaimMetricsCaseFromMetrics.present) {
+        if (!resolvedClaimMetricsCaseFromMetrics.ok) {
+          return {
+            ok: false,
+            error: resolvedClaimMetricsCaseFromMetrics.error,
+            disputeCaseObjectIds: resolvedClaimMetricsCaseFromMetrics.disputeCaseObjectIds,
+            hint:
+              resolvedClaimMetricsCaseFromMetrics.error === "claim_metrics_context_unavailable"
+                ? buildClaimMetricsContextUnavailableHint(rawPath)
+                : buildClaimMetricsDisputeCaseHint(
+                    rawPath,
+                    resolvedClaimMetricsCaseFromMetrics.disputeCaseObjectIds,
+                    "metrics"
+                  ),
+          };
+        }
+        mergedBody.disputeCaseObjectId = resolvedClaimMetricsCaseFromMetrics.disputeCaseObjectId;
+      } else {
+        const invitesCall = await callApiRoute({
+          method: "GET",
+          rawPath: "/reviewers/me/invites",
+          options: helperOptions,
+          timeoutMs,
+        });
+        if (!invitesCall.result.ok) {
+          return {
+            ok: false,
+            error: "reviewer_invites_lookup_failed",
+            invitesStatus: invitesCall.result.status,
+            invitesResponse: invitesCall.result.body,
+          };
+        }
+        const resolvedClaimMetricsCase = resolveClaimMetricsDisputeCaseCandidate(
+          invitesCall.result.body,
+          reviewerOwnerAddress
+        );
+        if (!resolvedClaimMetricsCase.ok) {
+          return {
+            ok: false,
+            error:
+              resolvedClaimMetricsCase.disputeCaseObjectIds.length === 0
+                ? "claim_metrics_dispute_case_required"
+                : "claim_metrics_dispute_case_ambiguous",
+            disputeCaseObjectIds: resolvedClaimMetricsCase.disputeCaseObjectIds,
+            hint: buildClaimMetricsDisputeCaseHint(rawPath, resolvedClaimMetricsCase.disputeCaseObjectIds, "invites"),
+          };
+        }
+        mergedBody.disputeCaseObjectId = resolvedClaimMetricsCase.disputeCaseObjectId;
       }
-      mergedBody.disputeCaseObjectId = resolvedClaimMetricsCase.disputeCaseObjectId;
     }
     if (
       !mergedBody.disputeCaseObjectId ||

@@ -5659,6 +5659,244 @@ test("tx-plan-execute prints top-level finalize wait hints in non-json mode", as
   }
 });
 
+test("tx-plan-execute pre-hydrates reviewer claim-metrics from pendingMetricsClaimContext without invites", async () => {
+  const reviewerAddress = "0x8212e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
+  const reviewerEntryObjectId = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  const reviewerRegistryObjectId = "0x2222222222222222222222222222222222222222222222222222222222222222";
+  const disputeQuorumConfigObjectId = "0x3333333333333333333333333333333333333333333333333333333333333333";
+  const disputeCaseObjectId = "0x2cb6d1df7a78eb63647728d7cdf7a5098dce8cb4f0693b20fee7641629068ac5";
+  let claimCalls = 0;
+  let inviteReads = 0;
+  const mock = await startMockServer({
+    [`POST /reviewers/${reviewerAddress}/claim-metrics`]: (request) => {
+      claimCalls += 1;
+      assert.deepEqual(request.body, {
+        disputeCaseObjectId,
+        reviewerRegistryObjectId,
+        reviewerEntryObjectId,
+        disputeQuorumConfigObjectId
+      });
+      return {
+        status: 409,
+        body: {
+          error: "reviewer_metrics_already_claimed"
+        }
+      };
+    },
+    "GET /reviewers/me/metrics": () => ({
+      status: 200,
+      body: {
+        registered: true,
+        reviewerAddress,
+        reviewer: {
+          objectId: reviewerEntryObjectId,
+          owner: reviewerAddress,
+          pendingDecisionMetricsClaimRequired: true
+        },
+        runtime: {
+          reviewerRegistryObjectId,
+          disputeQuorumConfigObjectId
+        },
+        pendingMetricsClaimContext: {
+          status: "ready",
+          disputeCaseObjectId,
+          candidates: [
+            {
+              disputeCaseObjectId,
+              orderId: "order-claim-ready-001",
+              milestoneId: "milestone-claim-ready-001",
+              closedAtMs: 1710000001000
+            }
+          ]
+        }
+      }
+    }),
+    "GET /reviewers/me/invites": () => {
+      inviteReads += 1;
+      return {
+        status: 200,
+        body: {
+          invites: []
+        }
+      };
+    }
+  });
+
+  try {
+    const result = await runCli([
+      "tx-plan-execute",
+      "POST",
+      `/reviewers/${reviewerAddress}/claim-metrics`,
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      buildJwtWithExp(4102444800),
+      "--body",
+      "{}",
+      "--json"
+    ]);
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "reviewer_metrics_already_claimed");
+    assert.equal(payload.status, 409);
+    assert.equal(payload.autoHydratedReviewerContext.route, "claim_metrics");
+    assert.equal(payload.autoHydratedReviewerContext.disputeCaseObjectId, disputeCaseObjectId);
+    assert.equal(claimCalls, 1);
+    assert.equal(inviteReads, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("tx-plan-execute surfaces pendingMetricsClaimContext ambiguity before invites", async () => {
+  const reviewerAddress = "0x4d77e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
+  const closedCaseA = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const closedCaseB = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  let claimCalls = 0;
+  let inviteReads = 0;
+  const mock = await startMockServer({
+    [`POST /reviewers/${reviewerAddress}/claim-metrics`]: () => {
+      claimCalls += 1;
+      return {
+        status: 400,
+        body: {
+          error: "dispute_case_object_id_required"
+        }
+      };
+    },
+    "GET /reviewers/me/metrics": () => ({
+      status: 200,
+      body: {
+        registered: true,
+        reviewerAddress,
+        reviewer: {
+          objectId: "0x1111111111111111111111111111111111111111111111111111111111111111",
+          owner: reviewerAddress,
+          pendingDecisionMetricsClaimRequired: true
+        },
+        runtime: {
+          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
+          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
+        },
+        pendingMetricsClaimContext: {
+          status: "ambiguous",
+          candidates: [
+            {
+              disputeCaseObjectId: closedCaseA,
+              closedAtMs: 1710000001000
+            },
+            {
+              disputeCaseObjectId: closedCaseB,
+              closedAtMs: 1710000003000
+            }
+          ]
+        }
+      }
+    }),
+    "GET /reviewers/me/invites": () => {
+      inviteReads += 1;
+      return {
+        status: 200,
+        body: {
+          invites: []
+        }
+      };
+    }
+  });
+
+  try {
+    const result = await runCli([
+      "tx-plan-execute",
+      "POST",
+      `/reviewers/${reviewerAddress}/claim-metrics`,
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      buildJwtWithExp(4102444800),
+      "--body",
+      "{}",
+      "--json"
+    ]);
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "claim_metrics_dispute_case_ambiguous");
+    assert.deepEqual(payload.disputeCaseObjectIds, [closedCaseA, closedCaseB]);
+    assert.match(payload.hint, /GET \/reviewers\/me\/metrics/);
+    assert.equal(claimCalls, 0);
+    assert.equal(inviteReads, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("tx-plan-execute stops when pendingMetricsClaimContext is unavailable", async () => {
+  const reviewerAddress = "0x4d77e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
+  let claimCalls = 0;
+  let inviteReads = 0;
+  const mock = await startMockServer({
+    [`POST /reviewers/${reviewerAddress}/claim-metrics`]: () => {
+      claimCalls += 1;
+      return {
+        status: 400,
+        body: {
+          error: "dispute_case_object_id_required"
+        }
+      };
+    },
+    "GET /reviewers/me/metrics": () => ({
+      status: 200,
+      body: {
+        registered: true,
+        reviewerAddress,
+        reviewer: {
+          objectId: "0x1111111111111111111111111111111111111111111111111111111111111111",
+          owner: reviewerAddress,
+          pendingDecisionMetricsClaimRequired: true
+        },
+        runtime: {
+          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
+          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
+        },
+        pendingMetricsClaimContext: {
+          status: "unavailable"
+        }
+      }
+    }),
+    "GET /reviewers/me/invites": () => {
+      inviteReads += 1;
+      return {
+        status: 200,
+        body: {
+          invites: []
+        }
+      };
+    }
+  });
+
+  try {
+    const result = await runCli([
+      "tx-plan-execute",
+      "POST",
+      `/reviewers/${reviewerAddress}/claim-metrics`,
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      buildJwtWithExp(4102444800),
+      "--body",
+      "{}",
+      "--json"
+    ]);
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "claim_metrics_context_unavailable");
+    assert.match(payload.hint, /GET \/reviewers\/me\/metrics/);
+    assert.equal(claimCalls, 0);
+    assert.equal(inviteReads, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("tx-plan-execute pre-hydrates reviewer claim-metrics with reviewer context and a single closed invite", async () => {
   const reviewerAddress = "0x8212e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
   const reviewerEntryObjectId = "0x1111111111111111111111111111111111111111111111111111111111111111";

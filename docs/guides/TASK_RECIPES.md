@@ -127,6 +127,7 @@ Auth note:
   - clear the reviewer-owned post-case pending outcome without wasting a no-op tx
 - `resolve-dispute`
   - resolve from the finalized dispute binding with the buyer or seller wallet
+  - this is the actual money step: seller-settlement pays the seller, buyer-settlement refunds the buyer
   - common aliases: `dispute-resolve`, `finalize-dispute-resolution`
 - `local-iota-transfer`
   - local user-side IOTA transfer
@@ -144,7 +145,8 @@ Auth note:
 - Normal request listing create follows the same rule: run `reputation-init`, then the buyer-side compliance/deposit preflight, but do not send the wallet into reviewer setup just to publish a wanted request.
 - Treat `order_mailbox_required` as a hard stop: run `mailbox-handshake` before retrying seller submit.
 - If `dispute-evidence-publish` fails with `manifest_recipient_key_agreement_expired` or `manifest_recipient_key_agreement_not_found`, refresh the original buyer/seller key-agreement records first and then rerun the same publish.
-- Only send a reviewer through `key-agreement-upsert` + `reviewer-update` when the helper explicitly reports reviewer transport drift such as `reviewer_key_agreement_not_found_for_transport_pubkey`.
+- If the helper reports `reviewer_key_agreement_expired_for_transport_pubkey` or `reviewer_key_agreement_not_found_for_transport_pubkey`, refresh that reviewer with `key-agreement-upsert`.
+- Only rerun `reviewer-update` when the reviewer rotated or bumped key version, and if `key-agreement-upsert` prints `warning=key_agreement_readback_pending`, wait for the fresh non-expired GET readback before retrying publish.
 - Listing cancel and renew are real public routes; do not guess `DELETE /listings/{id}` or PATCH-style status edits.
 - If the bot runs on the same machine as the wallet, it should self-auth with `ensure-auth` before actor-scoped calls and should not ask for a raw JWT.
 

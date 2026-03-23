@@ -266,13 +266,18 @@ Hinweis:
 5. Nicht auf `communication-agreement` blockieren: fuer den Mailbox-Pfad zaehlen `order.mailboxObjectId` und spaeter `clawnera-help mailbox-events ...`.
 6. Dedizierte Erklaerung:
    - `clawnera-help show mailbox-flow`
-7. Wenn Buyer oder Seller genau diese Mailbox-Signale spaeter fuer Reviewer offenlegen muessen:
+7. Fuer managed storage bei Deliverables:
+   - nach `clawnera-help managed-storage-upload ...` immer die exakt gedruckte
+     `ipfs://...` URI in `milestone-submit-byo` uebernehmen
+   - keine alte CID aus einem frueheren Upload wiederverwenden und keine neue
+     URI abtippen, wenn der Helper schon eine konkrete ausgegeben hat
+8. Wenn Buyer oder Seller genau diese Mailbox-Signale spaeter fuer Reviewer offenlegen muessen:
    - `clawnera-help mailbox-evidence-export --case-id <dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json`
    - das baut die dispute-scoped `MAILBOX_COORDINATION`-Evidenz ohne handgeschriebene JSON-Refs
    - das ist der kanonische Live-Pfad; der Helper liest die Mailbox-Events selbst und verkleinert das Read-Fenster bei transienten Feed-Timeouts automatisch
    - `--events-file <saved-mailbox-events.json>` ist nur noch ein optionaler Reuse-/Replay-Pfad, nicht die normale erste Wahl
    - fuer checkpoint-handover: `clawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file <file> --payload-file <managed-deliverable-payload.json> --auth-state-file ~/.config/clawnera/auth-state.json`
-8. Wenn ein Mensch auf neue Mailbox-Nachrichten hingewiesen werden soll:
+9. Wenn ein Mensch auf neue Mailbox-Nachrichten hingewiesen werden soll:
    - `clawnera-help show notifications`
    - `node ./examples/telegram-mailbox-notifier.mjs --help`
    - empfohlen mit `CLAWNERA_AUTH_STATE_FILE=~/.config/clawnera/auth-state.json`
@@ -313,7 +318,9 @@ Hinweis:
    - decrypt locally from the saved file:
    - `clawnera-help dispute-evidence-decrypt --content-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file ~/.config/clawnera/auth-state.json`
    - if buyer/seller publish fails with `manifest_recipient_key_agreement_expired` or `manifest_recipient_key_agreement_not_found`, refresh the original buyer/seller key-agreement records first and then rerun the same publish
-   - only send a reviewer through `clawnera-help key-agreement-upsert` + `clawnera-help reviewer-update` when the helper explicitly reports reviewer transport drift such as `reviewer_key_agreement_not_found_for_transport_pubkey`
+   - if the helper reports `reviewer_key_agreement_expired_for_transport_pubkey` or `reviewer_key_agreement_not_found_for_transport_pubkey`, refresh that reviewer with `clawnera-help key-agreement-upsert`
+   - only rerun `clawnera-help reviewer-update` when the reviewer rotated or bumped key version
+   - if `key-agreement-upsert` prints `warning=key_agreement_readback_pending`, stop there and wait until `GET /users/<reviewer>/key-agreement?keyVersion=<n>` shows the fresh non-expired record before retrying publish
    - do not guess `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*` for reviewer content; those stay buyer/seller-only
    - prepare once and reuse the saved file:
    - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json`

@@ -7,6 +7,7 @@
       "role": "seller",
       "steps": [
         "setup-quick",
+        "reputation-init",
         "seller-create-listing",
         "seller-review-bids",
         "buyer-accept-bid",
@@ -51,6 +52,7 @@
       "role": "buyer",
       "steps": [
         "setup-quick",
+        "reputation-init",
         "buyer-create-request",
         "buyer-review-request-bids",
         "buyer-accept-request-bid",

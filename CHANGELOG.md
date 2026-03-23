@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.71] - 2026-03-23
+
+- Hardened the low-IQ-bot live path for managed-storage delivery and dispute evidence:
+  - seller and request-buyer journeys now frontload `reputation-init` instead of assuming a pre-existing profile
+  - `--version` / `-v` now work as direct weak-bot sanity checks
+  - the canonical `resolve-dispute` recipe now states explicitly that `/resolve-escrow` is the actual payout/refund step
+- Fixed local recovery and output-path behavior for real live evidence flows:
+  - reviewer/buyer/seller key-agreement resolution now rejects expired records instead of silently reusing them
+  - `dispute-evidence-publish` now prints direct recovery hints for expired reviewer transport keys and tells bots to wait for fresh non-expired readback after key rotation
+  - `key-agreement-upsert` no longer treats a stale expired readback with the same public key as immediate success
+  - decrypt/build/export helpers now default generated files beside the related input artifacts instead of scattering them into `/tmp`
+- Improved weak-bot ergonomics for the first live order/dispute run:
+  - `deliverable-encrypt`, managed-storage helpers, milestone submit, dispute bundle build, mailbox evidence export, and checkpoint evidence export now choose predictable sibling output paths
+  - `deliverable-encrypt` no longer requires an unnecessary keystore entry hint for the canonical auth-state-driven path
+- Added regression coverage for:
+  - expired reviewer transport-key publish failures
+  - stale expired key-agreement readback after upsert
+  - default output placement for deliverable decrypt, dispute evidence decrypt, supplemental bundle build, mailbox export, and checkpoint export
+
 ## [0.1.70] - 2026-03-22
 
 - Corrected the notification/eventing surface so explicit bot selection matches the real runtime:

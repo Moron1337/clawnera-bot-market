@@ -536,13 +536,13 @@ test("journey compact output keeps only ids, handoffs, and next hints", () => {
   const result = runCli(["journey", "seller", "--compact"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^journey:seller/m);
-  assert.match(result.stdout, /steps:setup-quick > seller-create-listing > seller-review-bids > buyer-accept-bid\[handoff,wait_for_buyer_accept]/);
+  assert.match(result.stdout, /steps:setup-quick > reputation-init > seller-create-listing > seller-review-bids > buyer-accept-bid\[handoff,wait_for_buyer_accept]/);
   assert.match(
     result.stdout,
     /later:creator-cancel-listing \| creator-renew-listing \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
   );
   assert.match(result.stdout, /next_if_not_setup:setup-quick/);
-  assert.match(result.stdout, /next_if_setup:seller-create-listing/);
+  assert.match(result.stdout, /next_if_setup:reputation-init/);
   assert.doesNotMatch(result.stdout, /Do In This Order:/);
   assert.doesNotMatch(result.stdout, /Optional Later:/);
 });
@@ -560,7 +560,7 @@ test("request journeys separate buyer-created requests from offer flow", () => {
   assert.match(buyerResult.stdout, /^journey:request-buyer/m);
   assert.match(
     buyerResult.stdout,
-    /steps:setup-quick > buyer-create-request > buyer-review-request-bids > buyer-accept-request-bid > fund-order/
+    /steps:setup-quick > reputation-init > buyer-create-request > buyer-review-request-bids > buyer-accept-request-bid > fund-order/
   );
   assert.match(
     buyerResult.stdout,
@@ -600,7 +600,7 @@ test("next on a journey id returns setup and post-setup hints instead of unknown
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^journey_next:seller/m);
   assert.match(result.stdout, /^next_if_not_setup:setup-quick/m);
-  assert.match(result.stdout, /^next_if_setup:seller-create-listing/m);
+  assert.match(result.stdout, /^next_if_setup:reputation-init/m);
   assert.match(result.stdout, /hint:clawnera-help journey seller --compact/);
 });
 
@@ -2445,6 +2445,16 @@ test("version command matches package.json", () => {
   const result = runCli(["version"]);
   assert.equal(result.status, 0);
   assert.equal(result.stdout.trim(), packageJson.version);
+});
+
+test("version aliases match package.json", () => {
+  const longResult = runCli(["--version"]);
+  assert.equal(longResult.status, 0);
+  assert.equal(longResult.stdout.trim(), packageJson.version);
+
+  const shortResult = runCli(["-v"]);
+  assert.equal(shortResult.status, 0);
+  assert.equal(shortResult.stdout.trim(), packageJson.version);
 });
 
 test("first-steps command prints instructions by default", () => {

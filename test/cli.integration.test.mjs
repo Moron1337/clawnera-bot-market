@@ -24,6 +24,10 @@ const TEST_LISTING_DUE_AT_2 = "2026-04-27T12:00:00Z";
 const TEST_LISTING_DUE_AT_MS_1 = Date.parse(TEST_LISTING_DUE_AT_1);
 const TEST_LISTING_DUE_AT_MS_2 = Date.parse(TEST_LISTING_DUE_AT_2);
 
+function defaultArtifactsDir(tempHome) {
+  return path.join(tempHome, ".config", "clawnera", "artifacts");
+}
+
 function buildJwtWithExp(expSeconds) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
   return `${encode({ alg: "none", typ: "JWT" })}.${encode({ exp: expSeconds })}.signature`;
@@ -355,6 +359,153 @@ test("dispute-evidence-publish rewraps the current deliverable for assigned revi
     assert.equal(payload.evidenceItem.evidenceId, "2df79fb6-9a7d-4e1b-9f1d-08cfdb70e4b2");
     assert.equal(payload.assignedReviewers[0], reviewerAddress);
     assert.equal(payload.requestBody.reviewerGrants.length, 1);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("dispute-evidence-publish stops locally when a reviewer transport key points at an expired key-agreement record", async () => {
+  const sellerAddress = `0x${"3".repeat(64)}`;
+  const buyerAddress = `0x${"4".repeat(64)}`;
+  const reviewerAddress = `0x${"5".repeat(64)}`;
+  const caseId = `0x${"6".repeat(64)}`;
+  const orderId = "order-dispute-evidence-expired-reviewer";
+  const milestoneId = "milestone-a";
+  const sellerKeys = generateKeyAgreementKeypair("u");
+  const buyerKeys = generateKeyAgreementKeypair("u");
+  const reviewerKeys = generateKeyAgreementKeypair("u");
+  const encrypted = await createEncryptedDeliverable({
+    plaintext: Buffer.from("reviewer evidence payload", "utf8"),
+    recipients: [
+      {
+        recipientAddress: sellerAddress,
+        keyVersion: 7,
+        recipientPublicKeyMultibase: sellerKeys.publicKeyMultibase
+      },
+      {
+        recipientAddress: buyerAddress,
+        keyVersion: 3,
+        recipientPublicKeyMultibase: buyerKeys.publicKeyMultibase
+      }
+    ]
+  });
+  const deliverablePayload = buildManagedDeliverablePayload({
+    orderId,
+    milestoneId,
+    plaintextLabel: "deliverable.bin",
+    encrypted
+  });
+
+  const mock = await startMockServer({
+    [`GET /disputes/${caseId}`]: () => ({
+      status: 200,
+      body: {
+        disputeCase: {
+          objectId: caseId,
+          orderId,
+          milestoneId,
+          buyer: buyerAddress,
+          seller: sellerAddress,
+          assignedReviewers: [reviewerAddress],
+          assignmentRound: 0
+        }
+      }
+    }),
+    [`GET /orders/${orderId}/milestones/${milestoneId}/artifact-manifest/content`]: () => ({
+      status: 200,
+      body: {
+        artifactManifest: {
+          manifestCid: "ipfs://bafyreviewerevidence",
+          manifestSha256: "a".repeat(64)
+        },
+        resolvedManifest: {
+          payload: deliverablePayload
+        }
+      }
+    }),
+    [`GET /reviewers/${reviewerAddress}`]: () => ({
+      status: 200,
+      body: {
+        reviewer: {
+          ownerAddress: reviewerAddress,
+          transportPubkeyHex: Buffer.from(reviewerKeys.publicKeyMultibase.slice(1), "base64url").toString("hex")
+        }
+      }
+    }),
+    default: (request) => {
+      if (request.method === "GET" && request.url === `/users/${reviewerAddress}/key-agreement?keyVersion=1`) {
+        return {
+          status: 200,
+          body: {
+            keyAgreement: {
+              address: reviewerAddress,
+              keyVersion: 1,
+              publicKeyMultibase: reviewerKeys.publicKeyMultibase,
+              expiresAt: "2026-03-20T00:00:00.000Z",
+              isExpired: true
+            }
+          }
+        };
+      }
+      if (request.method === "GET" && request.url.startsWith(`/users/${reviewerAddress}/key-agreement?keyVersion=`)) {
+        return {
+          status: 404,
+          body: { error: "not_found" }
+        };
+      }
+      return {
+        status: 500,
+        body: { error: "unexpected_call" }
+      };
+    }
+  });
+
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-dispute-evidence-publish-expired-reviewer-"));
+  const authStateFile = path.join(tempHome, ".config", "clawnera", "auth-state.json");
+  const sellerKeyFile = path.join(tempHome, "seller-key-agreement.json");
+  mkdirSync(path.dirname(authStateFile), { recursive: true });
+  writeFileSync(
+    authStateFile,
+    JSON.stringify({
+      jwt: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+      refreshToken: "refresh-token",
+      actorAddress: sellerAddress,
+      apiBase: mock.baseUrl
+    }),
+    "utf8"
+  );
+  await saveKeyAgreementRecord({
+    address: sellerAddress,
+    keyVersion: 7,
+    publicKeyMultibase: sellerKeys.publicKeyMultibase,
+    privateKeyMultibase: sellerKeys.privateKeyMultibase,
+    expiresAtMs: Date.now() + 86_400_000,
+    filePath: sellerKeyFile
+  });
+
+  try {
+    const result = await runCli(
+      [
+        "dispute-evidence-publish",
+        "--case-id",
+        caseId,
+        "--auth-state-file",
+        authStateFile,
+        "--key-file",
+        sellerKeyFile,
+        "--json"
+      ],
+      { HOME: tempHome }
+    );
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "reviewer_key_agreement_expired_for_transport_pubkey");
+    assert.equal(payload.reviewerAddress, reviewerAddress);
+    assert.ok(Array.isArray(payload.hintLines));
+    assert.match(payload.hintLines.join("\n"), /key-agreement-upsert/);
+    assert.match(payload.hintLines.join("\n"), /reviewer-update/);
+    assert.match(payload.hintLines.join("\n"), new RegExp(`/users/${reviewerAddress}/key-agreement\\?keyVersion=1`));
+    assert.equal(mock.requests.some((request) => request.method === "POST" && request.url === `/disputes/${caseId}/evidence`), false);
   } finally {
     await mock.close();
   }
@@ -739,6 +890,8 @@ test("dispute-evidence-bundle-build creates supplemental bundle payloads and dis
     assert.equal(buildPayload.summary.mailboxSignalCount, 1);
     assert.equal(existsSync(buildPayload.payloadOut), true);
     assert.equal(existsSync(buildPayload.buildOut), true);
+    assert.equal(path.dirname(buildPayload.payloadOut), tempHome);
+    assert.equal(path.dirname(buildPayload.buildOut), tempHome);
 
     const payloadJson = JSON.parse(readFileSync(buildPayload.payloadOut, "utf8"));
     const reviewerWrap = payloadJson.encrypted.cekWraps.find((entry) => entry.recipientAddress === reviewerAddress);
@@ -780,6 +933,7 @@ test("dispute-evidence-bundle-build creates supplemental bundle payloads and dis
     const decryptPayload = JSON.parse(decryptResult.stdout);
     assert.equal(decryptPayload.ok, true);
     assert.equal(decryptPayload.kind, "supplemental_bundle");
+    assert.equal(path.dirname(decryptPayload.plaintextOut), path.dirname(contentFile));
     const decryptedJson = JSON.parse(readFileSync(decryptPayload.plaintextOut, "utf8"));
     assert.equal(decryptedJson.statement.title, "Buyer complaint");
     assert.equal(decryptedJson.items[0].itemType, "mailbox_signal_ref");
@@ -1071,6 +1225,9 @@ test("mailbox-evidence-export builds reviewer-readable mailbox coordination bund
     assert.equal(exportPayload.selectedAckedCount, 1);
     assert.equal(existsSync(exportPayload.bundlePlaintextOut), true);
     assert.equal(existsSync(exportPayload.payloadOut), true);
+    assert.equal(path.dirname(exportPayload.bundlePlaintextOut), defaultArtifactsDir(tempHome));
+    assert.equal(path.dirname(exportPayload.payloadOut), defaultArtifactsDir(tempHome));
+    assert.equal(path.dirname(exportPayload.buildOut), defaultArtifactsDir(tempHome));
     const plaintextBundle = JSON.parse(readFileSync(exportPayload.bundlePlaintextOut, "utf8"));
     assert.equal(plaintextBundle.items[0].itemType, "mailbox_signal_ref");
     assert.equal(plaintextBundle.items[1].itemType, "mailbox_ack_ref");
@@ -1113,6 +1270,7 @@ test("mailbox-evidence-export builds reviewer-readable mailbox coordination bund
     );
     assert.equal(decryptResult.status, 0);
     const decryptPayload = JSON.parse(decryptResult.stdout);
+    assert.equal(path.dirname(decryptPayload.plaintextOut), path.dirname(contentFile));
     const decryptedJson = JSON.parse(readFileSync(decryptPayload.plaintextOut, "utf8"));
     assert.equal(decryptedJson.items[0].itemType, "mailbox_signal_ref");
     assert.equal(decryptedJson.items[1].itemType, "mailbox_ack_ref");
@@ -1353,6 +1511,10 @@ test("checkpoint-evidence-export builds canonical checkpoint packets inside supp
     assert.equal(exportPayload.evidenceClass, "CHECKPOINT_HANDOVER");
     assert.equal(exportPayload.selectedSignalSeq, "9");
     assert.equal(existsSync(exportPayload.checkpointPacketOut), true);
+    assert.equal(path.dirname(exportPayload.checkpointPacketOut), tempHome);
+    assert.equal(path.dirname(exportPayload.bundlePlaintextOut), tempHome);
+    assert.equal(path.dirname(exportPayload.payloadOut), tempHome);
+    assert.equal(path.dirname(exportPayload.buildOut), tempHome);
     const checkpointPacket = JSON.parse(readFileSync(exportPayload.checkpointPacketOut, "utf8"));
     assert.equal(checkpointPacket.protocol, "clawdex.checkpoint-handover.v1");
     assert.match(checkpointPacket.packetHash, /^sha256:/);
@@ -1699,6 +1861,7 @@ test("deliverable-decrypt can use actorGrant from a dispute evidence content fil
   assert.equal(result.status, 0);
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, true);
+  assert.equal(path.dirname(payload.plaintextOut), path.dirname(inputFile));
   assert.equal(readFileSync(payload.plaintextOut, "utf8"), "reviewer proof");
 });
 
@@ -5993,6 +6156,116 @@ test("key-agreement-upsert succeeds with readbackPending when the PUT succeeded 
   }
 });
 
+test("key-agreement-upsert keeps readbackPending when GET still returns the same expired public key", async () => {
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-key-readback-expired-"));
+  const walletInit = await runCli(["wallet-init", "--alias", "bot", "--json"], { HOME: tempHome });
+  assert.equal(walletInit.status, 0);
+  const walletPayload = JSON.parse(walletInit.stdout);
+  const actorAddress = walletPayload.address;
+  const authStateFile = path.join(tempHome, ".config", "clawnera", "auth-state.json");
+  const keyFile = path.join(tempHome, "delivery-key.json");
+  mkdirSync(path.dirname(authStateFile), { recursive: true });
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: "http://127.0.0.1:1",
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: actorAddress,
+        alias: "bot"
+      },
+      null,
+      2
+    ),
+  );
+
+  const deliveryKeys = generateKeyAgreementKeypair("u");
+  await saveKeyAgreementRecord({
+    address: actorAddress,
+    keyVersion: 1,
+    publicKeyMultibase: deliveryKeys.publicKeyMultibase,
+    privateKeyMultibase: deliveryKeys.privateKeyMultibase,
+    expiresAtMs: Date.now() + 86_400_000,
+    filePath: keyFile
+  });
+
+  let readCount = 0;
+  const mock = await startMockServer({
+    [`GET /users/${actorAddress}/key-agreement?keyVersion=1`]: () => {
+      readCount += 1;
+      if (readCount === 1) {
+        return {
+          status: 404,
+          body: { error: "not_found" }
+        };
+      }
+      return {
+        status: 200,
+        body: {
+          keyAgreement: {
+            address: actorAddress,
+            publicKeyMultibase: deliveryKeys.publicKeyMultibase,
+            keyVersion: 1,
+            expiresAt: "2026-03-20T00:00:00.000Z",
+            createdAt: "2026-03-19T00:00:00.000Z",
+            updatedAt: "2026-03-20T00:00:00.000Z",
+            isExpired: true
+          }
+        }
+      };
+    },
+    "PUT /users/me/key-agreement": (request) => ({
+      status: 200,
+      body: {
+        keyAgreement: {
+          address: actorAddress,
+          publicKeyMultibase: request.body?.publicKeyMultibase,
+          keyVersion: request.body?.keyVersion,
+          expiresAt: new Date(request.body?.expiresAtMs || Date.now() + 86_400_000).toISOString(),
+          updatedAt: "2099-01-01T00:00:00.000Z",
+          isExpired: false
+        }
+      }
+    })
+  });
+
+  try {
+    writeFileSync(
+      authStateFile,
+      JSON.stringify(
+        {
+          apiBase: mock.baseUrl,
+          token: buildJwtWithExp(4102444800),
+          refreshToken: "refresh-token-1",
+          address: actorAddress,
+          alias: "bot"
+        },
+        null,
+        2
+      ),
+    );
+    const result = await runCli([
+      "key-agreement-upsert",
+      "--auth-state-file",
+      authStateFile,
+      "--key-file",
+      keyFile,
+      "--json"
+    ], { HOME: tempHome });
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.readbackPending, true);
+    assert.equal(payload.warning, "key_agreement_readback_pending");
+    assert.equal(payload.readback?.isExpired, true);
+    assert.equal(payload.writeResponseKeyAgreement?.isExpired, false);
+    assert.match(payload.verifyHint, new RegExp(`/users/${actorAddress}/key-agreement\\?keyVersion=1`));
+  } finally {
+    await mock.close();
+  }
+});
+
 test("key-agreement-upsert fails clearly when the remote version exists but no matching local private key file is available", async () => {
   const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-key-conflict-"));
   const walletInit = await runCli(["wallet-init", "--alias", "bot", "--json"], { HOME: tempHome });
@@ -6063,6 +6336,167 @@ test("key-agreement-upsert fails clearly when the remote version exists but no m
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.error, "existing_remote_key_requires_local_key_file");
     assert.equal(putCount, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("deliverable-encrypt retries transient reads and writes the payload beside the plaintext file by default", async () => {
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-deliverable-encrypt-"));
+  const plaintextDir = path.join(tempHome, "artifacts");
+  mkdirSync(plaintextDir, { recursive: true });
+  const plaintextFile = path.join(plaintextDir, "deliverable.txt");
+  writeFileSync(plaintextFile, "hello managed world", "utf8");
+
+  const sellerKeys = generateKeyAgreementKeypair("u");
+  const buyerKeys = generateKeyAgreementKeypair("u");
+  const sellerAddress = `0x${"8".repeat(64)}`;
+  const buyerAddress = `0x${"9".repeat(64)}`;
+  const orderId = "11111111-2222-4333-8444-555555555555";
+  const milestoneId = "66666666-7777-4888-8999-aaaaaaaaaaaa";
+
+  const authStateFile = path.join(tempHome, ".config", "clawnera", "auth-state.json");
+  mkdirSync(path.dirname(authStateFile), { recursive: true });
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        jwt: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+        refreshToken: "refresh-token",
+        actorAddress: sellerAddress,
+        apiBase: "http://127.0.0.1:1"
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
+
+  const sellerKeyFile = path.join(tempHome, "seller-key-agreement.json");
+  await saveKeyAgreementRecord({
+    address: sellerAddress,
+    keyVersion: 1,
+    publicKeyMultibase: sellerKeys.publicKeyMultibase,
+    privateKeyMultibase: sellerKeys.privateKeyMultibase,
+    expiresAtMs: Date.now() + 86_400_000,
+    filePath: sellerKeyFile
+  });
+
+  let orderReads = 0;
+  let sellerKeyReads = 0;
+  const mock = await startMockServer({
+    [`GET /orders/${orderId}`]: () => {
+      orderReads += 1;
+      if (orderReads === 1) {
+        return {
+          status: 504,
+          body: { error: "backend_timeout" }
+        };
+      }
+      return {
+        status: 200,
+        body: {
+          order: {
+            orderId,
+            sellerAddress,
+            buyerAddress
+          }
+        }
+      };
+    },
+    [`GET /users/${sellerAddress}/key-agreement?keyVersion=1`]: () => {
+      sellerKeyReads += 1;
+      if (sellerKeyReads === 1) {
+        return {
+          status: 504,
+          body: { error: "backend_timeout" }
+        };
+      }
+      return {
+        status: 200,
+        body: {
+          keyAgreement: {
+            address: sellerAddress,
+            publicKeyMultibase: sellerKeys.publicKeyMultibase,
+            keyVersion: 1,
+            expiresAt: "2099-01-01T00:00:00.000Z",
+            createdAt: "2099-01-01T00:00:00.000Z",
+            updatedAt: "2099-01-01T00:00:00.000Z",
+            isExpired: false
+          }
+        }
+      };
+    },
+    [`GET /users/${buyerAddress}/key-agreement?keyVersion=1`]: () => ({
+      status: 200,
+      body: {
+        keyAgreement: {
+          address: buyerAddress,
+          publicKeyMultibase: buyerKeys.publicKeyMultibase,
+          keyVersion: 1,
+          expiresAt: "2099-01-01T00:00:00.000Z",
+          createdAt: "2099-01-01T00:00:00.000Z",
+          updatedAt: "2099-01-01T00:00:00.000Z",
+          isExpired: false
+        }
+      }
+    }),
+    "GET /policy/storage": () => ({
+      status: 200,
+      body: {
+        policy: {
+          modes: {
+            managed: {
+              enabled: true,
+              allowedMimeTypes: ["application/json"]
+            }
+          }
+        }
+      }
+    })
+  });
+
+  try {
+    writeFileSync(
+      authStateFile,
+      JSON.stringify(
+        {
+          jwt: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+          refreshToken: "refresh-token",
+          actorAddress: sellerAddress,
+          apiBase: mock.baseUrl
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+
+    const result = await runCli(
+      [
+        "deliverable-encrypt",
+        "--order-id",
+        orderId,
+        "--milestone-id",
+        milestoneId,
+        "--plaintext-file",
+        plaintextFile,
+        "--auth-state-file",
+        authStateFile,
+        "--seller-key-file",
+        sellerKeyFile,
+        "--json"
+      ],
+      { HOME: tempHome }
+    );
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(path.dirname(payload.payloadOut), plaintextDir);
+    assert.ok(existsSync(payload.payloadOut));
+    assert.equal(orderReads, 2);
+    assert.equal(sellerKeyReads, 2);
+    assert.match(payload.nextUploadHint, /managed-storage-fee-pay/);
   } finally {
     await mock.close();
   }

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { execSync, spawnSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -1853,18 +1854,6 @@ function computeFileMetadata(targetPath, explicitMimeType = "") {
   };
 }
 
-function defaultManagedStorageFeeProofPath(orderId, milestoneId) {
-  return path.resolve(process.cwd(), `clawnera-managed-storage-fee-${orderId}-${milestoneId}.json`);
-}
-
-function defaultManagedStoragePresignPath(orderId, milestoneId) {
-  return path.resolve(process.cwd(), `clawnera-managed-storage-presign-${orderId}-${milestoneId}.json`);
-}
-
-function defaultManagedStorageUploadPath(orderId, milestoneId) {
-  return path.resolve(process.cwd(), `clawnera-managed-storage-upload-${orderId}-${milestoneId}.json`);
-}
-
 function normalizeManagedStoragePaymentProof(input) {
   const candidate =
     input && typeof input === "object" && !Array.isArray(input) && input.paymentProof && typeof input.paymentProof === "object"
@@ -3513,6 +3502,26 @@ function inferHomeDirFromAuthStatePath(authStateFile) {
     return "";
   }
   return path.resolve(normalized.slice(0, markerIndex));
+}
+
+function defaultGeneratedOutputDir({ relatedFile = "", authStateFile = "" } = {}) {
+  const resolvedRelatedFile = resolveOptionalPathOption(relatedFile);
+  if (resolvedRelatedFile) {
+    return path.dirname(resolvedRelatedFile);
+  }
+  const resolvedAuthStateFile = resolveOptionalPathOption(authStateFile);
+  const inferredHome = inferHomeDirFromAuthStatePath(resolvedAuthStateFile);
+  if (inferredHome) {
+    return path.join(inferredHome, ".config", "clawnera", "artifacts");
+  }
+  if (resolvedAuthStateFile) {
+    return path.join(path.dirname(resolvedAuthStateFile), "artifacts");
+  }
+  return path.join(os.tmpdir(), "clawnera-help");
+}
+
+function defaultGeneratedOutputPath(fileName, context = {}) {
+  return path.resolve(defaultGeneratedOutputDir(context), String(fileName || "").trim());
 }
 
 function resolvePreferredKeystorePath(options = {}, context = {}) {
@@ -6740,10 +6749,15 @@ async function buildDisputeSupplementalBundleForCli(options, {
   const manifestSha256 = sha256Hex(built.canonicalPayloadJson);
   const resolvedPayloadOut =
     payloadOut || resolveOptionalPathOption(options["payload-out"]) ||
-    path.resolve(process.cwd(), `clawnera-dispute-supplemental-payload-${orderId}-${milestoneId}.json`);
+    defaultGeneratedOutputPath(`clawnera-dispute-supplemental-payload-${orderId}-${milestoneId}.json`, {
+      authStateFile: effectiveRuntimeContext.authStateFile,
+    });
   const resolvedBuildOut =
     buildOut || resolveOptionalPathOption(options["build-out"]) ||
-    path.resolve(process.cwd(), `clawnera-dispute-supplemental-build-${orderId}-${milestoneId}.json`);
+    defaultGeneratedOutputPath(`clawnera-dispute-supplemental-build-${orderId}-${milestoneId}.json`, {
+      relatedFile: resolvedPayloadOut,
+      authStateFile: effectiveRuntimeContext.authStateFile,
+    });
   writeOptionalOutputFile(resolvedPayloadOut, `${JSON.stringify(built.payload, null, 2)}\n`);
   const buildArtifact = {
     kind: "supplemental_bundle",
@@ -6912,6 +6926,7 @@ function resolveCheckpointAnchorFromFile(anchorFile) {
 async function resolveLatestUserKeyAgreement(options, address, timeoutMs, maxKeyVersion = 8) {
   const perKeyTimeoutMs = Math.min(timeoutMs, 8_000);
   let matched = null;
+  let latestExpired = null;
   for (let keyVersion = 1; keyVersion <= maxKeyVersion; keyVersion += 1) {
     const keyAgreementCall = await callApiRouteWithTransientRetry({
       method: "GET",
@@ -6939,13 +6954,33 @@ async function resolveLatestUserKeyAgreement(options, address, timeoutMs, maxKey
     if (!publicKeyMultibase) {
       continue;
     }
-    matched = {
+    const expiresAt = typeof keyAgreement?.expiresAt === "string" ? keyAgreement.expiresAt.trim() : "";
+    const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+    const isExpired =
+      keyAgreement?.isExpired === true || (Number.isFinite(expiresAtMs) ? expiresAtMs <= Date.now() : false);
+    const candidate = {
       address,
       keyVersion,
       publicKeyMultibase,
+      expiresAt: expiresAt || null,
+      isExpired,
     };
+    if (isExpired) {
+      latestExpired = candidate;
+      continue;
+    }
+    matched = candidate;
   }
   if (!matched) {
+    if (latestExpired) {
+      return {
+        ok: false,
+        error: "key_agreement_expired",
+        address,
+        keyAgreement: latestExpired,
+        maxKeyVersion,
+      };
+    }
     return {
       ok: false,
       error: "key_agreement_not_found",
@@ -6987,6 +7022,7 @@ async function resolveReviewerEvidenceKeyAgreement(options, reviewerAddress, tim
   }
 
   let matchedKeyAgreement = null;
+  let expiredMatchedKeyAgreement = null;
   for (let keyVersion = 1; keyVersion <= maxKeyVersion; keyVersion += 1) {
     const keyAgreementCall = await callApiRouteWithTransientRetry({
       method: "GET",
@@ -7016,15 +7052,36 @@ async function resolveReviewerEvidenceKeyAgreement(options, reviewerAddress, tim
     }
     const publicKeyHex = keyAgreementPublicKeyHex(publicKeyMultibase).toLowerCase();
     if (publicKeyHex === expectedTransportPubkeyHex) {
-      matchedKeyAgreement = {
+      const expiresAt = typeof keyAgreement?.expiresAt === "string" ? keyAgreement.expiresAt.trim() : "";
+      const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+      const isExpired =
+        keyAgreement?.isExpired === true || (Number.isFinite(expiresAtMs) ? expiresAtMs <= Date.now() : false);
+      const candidate = {
         reviewerAddress,
         keyVersion,
         publicKeyMultibase,
+        expiresAt: expiresAt || null,
+        isExpired,
       };
+      if (isExpired) {
+        expiredMatchedKeyAgreement = candidate;
+        continue;
+      }
+      matchedKeyAgreement = candidate;
     }
   }
 
   if (!matchedKeyAgreement) {
+    if (expiredMatchedKeyAgreement) {
+      return {
+        ok: false,
+        error: "reviewer_key_agreement_expired_for_transport_pubkey",
+        reviewerAddress,
+        expectedTransportPubkeyHex,
+        keyAgreement: expiredMatchedKeyAgreement,
+        maxKeyVersion,
+      };
+    }
     return {
       ok: false,
       error: "reviewer_key_agreement_not_found_for_transport_pubkey",
@@ -7972,6 +8029,10 @@ async function runKeyAgreementUpsert(commandArgs) {
         response: putCall.result.body,
       };
     }
+    const putResponseKeyAgreement =
+      putCall.result.body?.keyAgreement && typeof putCall.result.body.keyAgreement === "object"
+        ? putCall.result.body.keyAgreement
+        : null;
     let readCall = null;
     for (const retryDelayMs of [0, 500, 1500, 3000, 5000]) {
       if (retryDelayMs > 0) {
@@ -7984,7 +8045,19 @@ async function runKeyAgreementUpsert(commandArgs) {
         timeoutMs,
       });
       const storedCandidate = readCall.result.body?.keyAgreement;
-      if (readCall.result.ok && storedCandidate?.publicKeyMultibase === keyRecord.publicKeyMultibase) {
+      const storedExpiresAtMs =
+        storedCandidate && typeof storedCandidate.expiresAt === "string"
+          ? Date.parse(storedCandidate.expiresAt)
+          : Number.NaN;
+      const storedIsExpired =
+        storedCandidate?.isExpired === true ||
+        (Number.isFinite(storedExpiresAtMs) ? storedExpiresAtMs <= Date.now() : false);
+      if (
+        readCall.result.ok &&
+        storedCandidate?.publicKeyMultibase === keyRecord.publicKeyMultibase &&
+        storedCandidate?.keyVersion === keyVersion &&
+        !storedIsExpired
+      ) {
         break;
       }
     }
@@ -8000,6 +8073,7 @@ async function runKeyAgreementUpsert(commandArgs) {
         walletBindingMessage,
         requestBody,
         readback: null,
+        writeResponseKeyAgreement: putResponseKeyAgreement,
         readbackPending: true,
         warning: "key_agreement_readback_pending",
         verifyHint: `clawnera-help request GET '/users/${actorAddress}/key-agreement?keyVersion=${keyVersion}' --auth-state-file ${shellQuote(putCall.context.authStateFile || "~/.config/clawnera/auth-state.json")}`,
@@ -8010,7 +8084,16 @@ async function runKeyAgreementUpsert(commandArgs) {
       };
     }
     const stored = readCall.result.body?.keyAgreement;
-    if (!stored || stored.publicKeyMultibase !== keyRecord.publicKeyMultibase) {
+    const storedExpiresAtMs =
+      stored && typeof stored.expiresAt === "string" ? Date.parse(stored.expiresAt) : Number.NaN;
+    const storedIsExpired =
+      stored?.isExpired === true || (Number.isFinite(storedExpiresAtMs) ? storedExpiresAtMs <= Date.now() : false);
+    if (
+      !stored ||
+      stored.publicKeyMultibase !== keyRecord.publicKeyMultibase ||
+      stored.keyVersion !== keyVersion ||
+      storedIsExpired
+    ) {
       return {
         ok: true,
         apiBase: putCall.apiBase,
@@ -8022,6 +8105,7 @@ async function runKeyAgreementUpsert(commandArgs) {
         walletBindingMessage,
         requestBody,
         readback: stored || null,
+        writeResponseKeyAgreement: putResponseKeyAgreement,
         readbackPending: true,
         warning: "key_agreement_readback_pending",
         verifyHint: `clawnera-help request GET '/users/${actorAddress}/key-agreement?keyVersion=${keyVersion}' --auth-state-file ${shellQuote(putCall.context.authStateFile || "~/.config/clawnera/auth-state.json")}`,
@@ -8643,15 +8727,16 @@ async function runDeliverableEncrypt(commandArgs) {
 
   try {
     const runtimeContext = await resolveApiRuntimeContext(options);
-    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const signer = resolveRuntimeSigner(options, runtimeContext);
+    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
     const actorAddress =
       normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
-      normalizeIotaAddress(signer.entry.address || "");
-    const orderCall = await callApiRoute({
+      normalizeIotaAddress(signer.address || "");
+    const orderCall = await callApiRouteWithTransientRetry({
       method: "GET",
       rawPath: `/orders/${orderId}`,
       options,
-      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+      timeoutMs,
     });
     if (!orderCall.result.ok) {
       return {
@@ -8684,11 +8769,11 @@ async function runDeliverableEncrypt(commandArgs) {
       options["seller-key-file"],
       runtimeContext.authStateFile,
     );
-    const sellerKeyRead = await callApiRoute({
+    const sellerKeyRead = await callApiRouteWithTransientRetry({
       method: "GET",
       rawPath: `/users/${sellerAddress}/key-agreement?keyVersion=${sellerKeyVersion}`,
       options,
-      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+      timeoutMs,
     });
     if (!sellerKeyRead.result.ok) {
       return {
@@ -8726,11 +8811,11 @@ async function runDeliverableEncrypt(commandArgs) {
     }
 
     const buyerKeyVersion = parsePositiveIntOption(options["buyer-key-version"], "buyer_key_version", 1);
-    const buyerKeyRead = await callApiRoute({
+    const buyerKeyRead = await callApiRouteWithTransientRetry({
       method: "GET",
       rawPath: `/users/${buyerAddress}/key-agreement?keyVersion=${buyerKeyVersion}`,
       options,
-      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+      timeoutMs,
     });
     if (!buyerKeyRead.result.ok) {
       return {
@@ -8776,13 +8861,16 @@ async function runDeliverableEncrypt(commandArgs) {
     });
     const payloadOut =
       resolveOptionalPathOption(options["payload-out"]) ||
-      path.resolve(process.cwd(), `clawnera-deliverable-${orderId}-${milestoneId}.json`);
+      defaultGeneratedOutputPath(`clawnera-deliverable-${orderId}-${milestoneId}.json`, {
+        relatedFile: plaintextFile,
+        authStateFile: runtimeContext.authStateFile,
+      });
     await writeManagedDeliverablePayload(payloadOut, payload);
-    const storagePolicyCall = await callApiRoute({
+    const storagePolicyCall = await callApiRouteWithTransientRetry({
       method: "GET",
       rawPath: "/policy/storage",
       options,
-      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+      timeoutMs,
     });
     const managedJsonAllowed = Boolean(
       storagePolicyCall.result.ok &&
@@ -9020,7 +9108,10 @@ async function runDisputeEvidencePublish(commandArgs) {
           maxReviewerKeyVersion,
         );
         if (!keyAgreement.ok) {
-          return keyAgreement;
+          return {
+            ...keyAgreement,
+            hintLines: buildDisputeEvidencePublishHintLines(keyAgreement),
+          };
         }
         reviewerKeyAgreements.push(keyAgreement.keyAgreement);
       }
@@ -9203,6 +9294,24 @@ async function runDisputeEvidenceBundleBuild(commandArgs) {
       evidenceClass,
       plaintextBundle,
       replyToEvidenceId,
+      payloadOut:
+        resolveOptionalPathOption(options["payload-out"]) ||
+        defaultGeneratedOutputPath(
+          `clawnera-dispute-supplemental-payload-${disputeCaseId.slice(2, 10)}-${evidenceClass.toLowerCase()}.json`,
+          {
+            relatedFile: bundlePlaintextFile,
+            authStateFile: runtimeContext.authStateFile,
+          },
+        ),
+      buildOut:
+        resolveOptionalPathOption(options["build-out"]) ||
+        defaultGeneratedOutputPath(
+          `clawnera-dispute-supplemental-build-${disputeCaseId.slice(2, 10)}-${evidenceClass.toLowerCase()}.json`,
+          {
+            relatedFile: bundlePlaintextFile,
+            authStateFile: runtimeContext.authStateFile,
+          },
+        ),
     });
   } catch (error) {
     return {
@@ -9332,7 +9441,13 @@ async function runMailboxEvidenceExport(commandArgs) {
     };
     const bundlePlaintextOut =
       resolveOptionalPathOption(options["bundle-plaintext-out"]) ||
-      path.resolve(process.cwd(), `clawnera-dispute-mailbox-evidence-${contextResult.orderId}-${contextResult.milestoneId}.json`);
+      defaultGeneratedOutputPath(
+        `clawnera-dispute-mailbox-evidence-${contextResult.orderId}-${contextResult.milestoneId}.json`,
+        {
+          relatedFile: snapshot.eventsOut || "",
+          authStateFile: runtimeContext.authStateFile,
+        },
+      );
     writeOptionalOutputFile(bundlePlaintextOut, `${JSON.stringify(bundlePlaintext, null, 2)}\n`);
     const replyToEvidenceId = normalizeUuidOption(options["reply-to-evidence-id"], "reply_to_evidence_id") || undefined;
     const built = await buildDisputeSupplementalBundleForCli(options, {
@@ -9342,6 +9457,24 @@ async function runMailboxEvidenceExport(commandArgs) {
       evidenceClass: "MAILBOX_COORDINATION",
       plaintextBundle: bundlePlaintext,
       replyToEvidenceId,
+      payloadOut:
+        resolveOptionalPathOption(options["payload-out"]) ||
+        defaultGeneratedOutputPath(
+          `clawnera-dispute-supplemental-payload-${contextResult.orderId}-${contextResult.milestoneId}.json`,
+          {
+            relatedFile: bundlePlaintextOut,
+            authStateFile: runtimeContext.authStateFile,
+          },
+        ),
+      buildOut:
+        resolveOptionalPathOption(options["build-out"]) ||
+        defaultGeneratedOutputPath(
+          `clawnera-dispute-supplemental-build-${contextResult.orderId}-${contextResult.milestoneId}.json`,
+          {
+            relatedFile: bundlePlaintextOut,
+            authStateFile: runtimeContext.authStateFile,
+          },
+        ),
     });
     if (!built.ok) {
       return built;
@@ -9604,7 +9737,10 @@ async function runCheckpointEvidenceExport(commandArgs) {
     });
     const checkpointPacketOut =
       resolveOptionalPathOption(options["checkpoint-packet-out"]) ||
-      path.resolve(process.cwd(), `clawnera-checkpoint-packet-${contextResult.orderId}-${contextResult.milestoneId}.json`);
+      defaultGeneratedOutputPath(`clawnera-checkpoint-packet-${contextResult.orderId}-${contextResult.milestoneId}.json`, {
+        relatedFile: payloadFile || submitBodyFile,
+        authStateFile: runtimeContext.authStateFile,
+      });
     writeOptionalOutputFile(checkpointPacketOut, `${JSON.stringify(checkpointPacket, null, 2)}\n`);
     const statement = resolveDisputeEvidenceStatement(options, "Checkpoint handover evidence");
     const bundlePlaintext = {
@@ -9632,7 +9768,13 @@ async function runCheckpointEvidenceExport(commandArgs) {
     };
     const bundlePlaintextOut =
       resolveOptionalPathOption(options["bundle-plaintext-out"]) ||
-      path.resolve(process.cwd(), `clawnera-dispute-checkpoint-evidence-${contextResult.orderId}-${contextResult.milestoneId}.json`);
+      defaultGeneratedOutputPath(
+        `clawnera-dispute-checkpoint-evidence-${contextResult.orderId}-${contextResult.milestoneId}.json`,
+        {
+          relatedFile: checkpointPacketOut,
+          authStateFile: runtimeContext.authStateFile,
+        },
+      );
     writeOptionalOutputFile(bundlePlaintextOut, `${JSON.stringify(bundlePlaintext, null, 2)}\n`);
     const replyToEvidenceId = normalizeUuidOption(options["reply-to-evidence-id"], "reply_to_evidence_id") || undefined;
     const built = await buildDisputeSupplementalBundleForCli(options, {
@@ -9642,6 +9784,24 @@ async function runCheckpointEvidenceExport(commandArgs) {
       evidenceClass: "CHECKPOINT_HANDOVER",
       plaintextBundle: bundlePlaintext,
       replyToEvidenceId,
+      payloadOut:
+        resolveOptionalPathOption(options["payload-out"]) ||
+        defaultGeneratedOutputPath(
+          `clawnera-dispute-supplemental-payload-${contextResult.orderId}-${contextResult.milestoneId}.json`,
+          {
+            relatedFile: bundlePlaintextOut,
+            authStateFile: runtimeContext.authStateFile,
+          },
+        ),
+      buildOut:
+        resolveOptionalPathOption(options["build-out"]) ||
+        defaultGeneratedOutputPath(
+          `clawnera-dispute-supplemental-build-${contextResult.orderId}-${contextResult.milestoneId}.json`,
+          {
+            relatedFile: bundlePlaintextOut,
+            authStateFile: runtimeContext.authStateFile,
+          },
+        ),
     });
     if (!built.ok) {
       return built;
@@ -9930,7 +10090,10 @@ async function runDisputeEvidenceDecrypt(commandArgs) {
         : `${normalizedPayload.orderId}-${normalizedPayload.milestoneId}`;
     const plaintextOut =
       resolveOptionalPathOption(options["plaintext-out"]) ||
-      path.resolve(process.cwd(), `clawnera-dispute-evidence-${evidenceId}.decrypted.json`);
+      defaultGeneratedOutputPath(`clawnera-dispute-evidence-${evidenceId}.decrypted.json`, {
+        relatedFile: contentFile,
+        authStateFile: runtimeContext.authStateFile,
+      });
     writeOptionalOutputFile(plaintextOut, `${JSON.stringify(decrypted.plaintextJson, null, 2)}\n`);
     return {
       ok: true,
@@ -10118,7 +10281,11 @@ async function runManagedStorageFeePay(commandArgs) {
       asset: "IOTA",
       recipientAddress,
     };
-    const proofOut = resolveOptionalPathOption(options["proof-out"]) || defaultManagedStorageFeeProofPath(orderId, milestoneId);
+    const proofOut =
+      resolveOptionalPathOption(options["proof-out"]) ||
+      defaultGeneratedOutputPath(`clawnera-managed-storage-fee-${orderId}-${milestoneId}.json`, {
+        authStateFile: runtimeContext.authStateFile,
+      });
     writeOptionalOutputFile(
       proofOut,
       `${JSON.stringify(
@@ -10254,7 +10421,12 @@ async function runManagedStoragePresign(commandArgs) {
         response: lastCall.result.body,
       };
     }
-    const presignOut = resolveOptionalPathOption(options["presign-out"]) || defaultManagedStoragePresignPath(orderId, milestoneId);
+    const presignOut =
+      resolveOptionalPathOption(options["presign-out"]) ||
+      defaultGeneratedOutputPath(`clawnera-managed-storage-presign-${orderId}-${milestoneId}.json`, {
+        relatedFile: filePath,
+        authStateFile: runtimeContext.authStateFile,
+      });
     const presignBundle = {
       orderId,
       milestoneId,
@@ -10406,7 +10578,11 @@ async function runManagedStorageUpload(commandArgs) {
     const uploadParsed = parseSignedUploadPayload(parsed);
     const uploadOut =
       resolveOptionalPathOption(options["upload-out"]) ||
-      (presign.orderId && presign.milestoneId ? defaultManagedStorageUploadPath(presign.orderId, presign.milestoneId) : "");
+      (presign.orderId && presign.milestoneId
+        ? defaultGeneratedOutputPath(`clawnera-managed-storage-upload-${presign.orderId}-${presign.milestoneId}.json`, {
+            relatedFile: filePath,
+          })
+        : "");
     if (uploadOut) {
       writeOptionalOutputFile(
         uploadOut,
@@ -10631,7 +10807,10 @@ async function runMilestoneSubmitByo(commandArgs) {
     const submitBody = buildSignedMilestoneSubmitPayload(prepared, signed.signature);
     const bodyOut =
       resolveOptionalPathOption(options["body-out"]) ||
-      path.resolve(process.cwd(), `clawnera-milestone-submit-${orderId}-${milestoneId}.json`);
+      defaultGeneratedOutputPath(`clawnera-milestone-submit-${orderId}-${milestoneId}.json`, {
+        relatedFile: payloadFile,
+        authStateFile: runtimeContext.authStateFile,
+      });
     writeOptionalOutputFile(bodyOut, `${JSON.stringify(submitBody, null, 2)}\n`);
 
     const submitCall = await callApiRoute({
@@ -10956,7 +11135,13 @@ async function runDeliverableDecrypt(commandArgs) {
     });
     const plaintextOut =
       resolveOptionalPathOption(options["plaintext-out"]) ||
-      path.resolve(process.cwd(), `clawnera-deliverable-${payload.orderId}-${payload.milestoneId}-${actorAddress.slice(2, 10)}.bin`);
+      defaultGeneratedOutputPath(
+        `clawnera-deliverable-${payload.orderId}-${payload.milestoneId}-${actorAddress.slice(2, 10)}.bin`,
+        {
+          relatedFile: inputFile,
+          authStateFile: runtimeContext.authStateFile,
+        },
+      );
     fs.mkdirSync(path.dirname(plaintextOut), { recursive: true });
     fs.writeFileSync(plaintextOut, Buffer.from(plaintext), { mode: 0o600 });
     fs.chmodSync(plaintextOut, 0o600);
@@ -12118,12 +12303,29 @@ function reviewerRegisterUsageLines() {
 
 function buildDisputeEvidencePublishHintLines(result = {}) {
   const error = normalizeString(result.error);
-  if (error === "reviewer_key_agreement_not_found_for_transport_pubkey") {
+  if (
+    error === "reviewer_key_agreement_not_found_for_transport_pubkey" ||
+    error === "reviewer_key_agreement_expired_for_transport_pubkey"
+  ) {
+    const reviewerAddress = normalizeString(result.reviewerAddress);
+    const keyVersion =
+      result.keyAgreement && Number.isSafeInteger(result.keyAgreement.keyVersion) ? result.keyAgreement.keyVersion : null;
+    const verifyPath =
+      reviewerAddress && keyVersion
+        ? `/users/${reviewerAddress}/key-agreement?keyVersion=${keyVersion}`
+        : reviewerAddress
+          ? `/users/${reviewerAddress}/key-agreement?keyVersion=<new>`
+          : "";
     return [
-      "cause=assigned reviewer transport metadata is stale",
+      error === "reviewer_key_agreement_expired_for_transport_pubkey"
+        ? "cause=assigned reviewer transport metadata points at an expired key-agreement record"
+        : "cause=assigned reviewer transport metadata is stale",
       "next_hint=the affected reviewer should rerun clawnera-help key-agreement-upsert --auth-state-file <reviewer-auth-state-file>",
-      "next_hint=then rerun clawnera-help reviewer-update --auth-state-file <reviewer-auth-state-file>",
-      "next_hint=after the reviewer transport key is refreshed, rerun the same clawnera-help dispute-evidence-publish command from the buyer or seller wallet",
+      "next_hint=if the reviewer rotated or bumped key version, rerun clawnera-help reviewer-update --auth-state-file <reviewer-auth-state-file>",
+      verifyPath
+        ? `next_hint=if key-agreement-upsert prints warning=key_agreement_readback_pending, wait until GET ${verifyPath} returns 200 with a non-expired record before retrying publish`
+        : "next_hint=if key-agreement-upsert prints warning=key_agreement_readback_pending, wait for the reviewer key-agreement readback to turn non-expired before retrying publish",
+      "next_hint=after reviewer key-agreement readback is fresh, rerun the same clawnera-help dispute-evidence-publish command from the buyer or seller wallet",
     ];
   }
   if (error === "manifest_recipient_key_agreement_expired" || error === "manifest_recipient_key_agreement_not_found") {
@@ -12132,7 +12334,7 @@ function buildDisputeEvidencePublishHintLines(result = {}) {
       "next_hint=refresh key-agreement for the original manifest participants, not the assigned reviewers",
       "next_hint=the buyer wallet should rerun clawnera-help key-agreement-upsert --auth-state-file <buyer-auth-state-file> if its record is stale",
       "next_hint=the seller wallet should rerun clawnera-help key-agreement-upsert --auth-state-file <seller-auth-state-file> if its record is stale",
-      "next_hint=only rerun reviewer-update when the helper explicitly reports reviewer_key_agreement_not_found_for_transport_pubkey",
+      "next_hint=only rerun reviewer-update when the helper explicitly reports reviewer_key_agreement_not_found_for_transport_pubkey or reviewer_key_agreement_expired_for_transport_pubkey",
       "next_hint=after buyer/seller key-agreement readback is refreshed, rerun the same clawnera-help dispute-evidence-publish command",
     ];
   }
@@ -12168,7 +12370,8 @@ function disputeEvidencePublishUsageLines() {
     "- Supplemental bundle mode: pass --kind supplemental-bundle --bundle-build-file <file> --manifest-cid ipfs://<cid>",
     "- Reads GET /disputes/{disputeCaseId}, GET /orders/{orderId}/milestones/{milestoneId}/artifact-manifest/content, reviewer transport metadata, and matching reviewer key-agreement records",
     "- Optional: --no-post to only build the request body, --body-out <file>, --key-file <local-key-agreement.json>, --max-reviewer-key-version <n>",
-    "- If publish fails with reviewer_key_agreement_not_found_for_transport_pubkey, the affected reviewer should rerun `clawnera-help key-agreement-upsert` and then `clawnera-help reviewer-update` before the seller/buyer retries publish",
+    "- If publish fails with reviewer_key_agreement_not_found_for_transport_pubkey or reviewer_key_agreement_expired_for_transport_pubkey, refresh that reviewer key-agreement first; rerun `reviewer-update` only when the reviewer rotated or bumped key version",
+    "- If `key-agreement-upsert` prints `warning=key_agreement_readback_pending`, do not continue with reviewer evidence until `GET /users/<reviewer>/key-agreement?keyVersion=<n>` shows the fresh non-expired record",
     "- If publish fails with manifest_recipient_key_agreement_expired or manifest_recipient_key_agreement_not_found, refresh the original buyer/seller key-agreement records and rerun the same publish; that error is not fixed by reviewer-update",
     "- The normal two-party artifact routes stay buyer/seller-only; reviewers must use the dispute-scoped evidence routes afterwards"
   ];
@@ -12826,6 +13029,8 @@ const topics = loadTopics();
 const recipes = loadRecipes();
 const journeys = loadJourneys();
 const aliasCommands = new Map([
+  ["--version", "version"],
+  ["-v", "version"],
   ["list", "topics"],
   ["flows", "journeys"],
   ["flow-list", "journeys"],

@@ -180,7 +180,8 @@ For milestone disputes, trust the API plan sequence:
 3. inspect dispute-scoped evidence
    - buyer/seller publish reviewer-readable deliverable evidence with `clawnera-help dispute-evidence-publish --case-id <caseId> ...`
      - if publish fails with `manifest_recipient_key_agreement_expired` or `manifest_recipient_key_agreement_not_found`, refresh the original buyer/seller key-agreement records before retrying publish; that error is not fixed by reviewer-update
-     - only rerun `key-agreement-upsert` + `reviewer-update` for reviewers when the helper explicitly reports reviewer transport drift
+     - if the helper reports `reviewer_key_agreement_expired_for_transport_pubkey` or `reviewer_key_agreement_not_found_for_transport_pubkey`, refresh that reviewer with `key-agreement-upsert`
+     - only rerun `reviewer-update` when the reviewer rotated or bumped key version, and wait for the fresh non-expired reviewer key-agreement GET readback before retrying publish
    - buyer/seller build complaint, rebuttal, mailbox, checkpoint, or supporting evidence with `clawnera-help dispute-evidence-bundle-build --case-id <caseId> --evidence-class <class> --bundle-plaintext-file <file> ...`, upload the generated payload via managed storage, then publish it with `clawnera-help dispute-evidence-publish --kind supplemental-bundle ...`
    - for mailbox coordination, prefer `clawnera-help mailbox-evidence-export --case-id <caseId> ...` as the direct live path; it now retries with a smaller recent-event window before it asks you to fall back to a saved events snapshot
    - reviewers list with `clawnera-help dispute-evidence-list --case-id <caseId> ...`

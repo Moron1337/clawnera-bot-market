@@ -770,6 +770,7 @@
         "Encrypt locally for seller and buyer with clawnera-help deliverable-encrypt.",
         "If managed storage allows application/json, use managed-storage-fee-pay -> managed-storage-presign -> managed-storage-upload as the default live path.",
         "If managed storage for application/json is not allowed, fall back to BYO JSON storage such as Pinata/IPFS.",
+        "Use the exact ipfs:// URI printed by managed-storage-upload for milestone-submit-byo; do not reuse an older CID or type it by hand if the helper already printed one.",
         "Submit the signed manifest with clawnera-help milestone-submit-byo and then anchor it with clawnera-help milestone-anchor.",
         "Signal DELIVERABLE_READY through the mailbox if communication is active, store mailbox_signal_posted_seq from tx-plan-execute output, then confirm it later with clawnera-help mailbox-events.",
         "Read back manifest and anchor state before asking the buyer to accept."
@@ -778,6 +779,7 @@
         "Register seller and buyer delivery keys once per wallet:\\nclawnera-help key-agreement-upsert --auth-state-file ~/.config/clawnera/auth-state.json",
         "Encrypt the final binary deliverable locally:\\nclawnera-help deliverable-encrypt --order-id <order-id> --milestone-id <milestone-id> --plaintext-file ./deliverable.jpg --auth-state-file ~/.config/clawnera/auth-state.json",
         "Preferred managed path for the encrypted JSON payload:\\nclawnera-help managed-storage-fee-pay --order-id <order-id> --milestone-id <milestone-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help managed-storage-presign --order-id <order-id> --milestone-id <milestone-id> --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --payment-proof-file ./clawnera-managed-storage-fee-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help managed-storage-upload --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --presign-file ./clawnera-managed-storage-presign-<order-id>-<milestone-id>.json",
+        "After managed-storage-upload, copy the exact ipfs:// URI it printed into milestone-submit-byo. Do not reuse a stale CID from an older upload.",
         "BYO fallback only when managed application/json is unavailable:\\nclawnera-help pinata-upload-json --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --jwt-env PINATA_JWT",
         "Submit the signed manifest and save the exact body for anchoring:\\nclawnera-help milestone-submit-byo --order-id <order-id> --milestone-id <milestone-id> --payload-file ./clawnera-deliverable-<order-id>-<milestone-id>.json --manifest-cid ipfs://<cid> --auth-state-file ~/.config/clawnera/auth-state.json",
         "Anchor the manifest on-chain and bind it back through the API:\\nclawnera-help milestone-anchor --order-id <order-id> --milestone-id <milestone-id> --submit-body-file ./clawnera-milestone-submit-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json",
@@ -950,7 +952,8 @@
         "Read the dispute case and confirm the current assignmentRound plus the assigned reviewer set.",
         "Read the existing buyer/seller artifact-manifest/content as one dispute party. Do not try to send reviewers to the normal order artifact route.",
         "Run clawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state-file>.",
-        "If publish fails with reviewer key-agreement drift, tell each assigned reviewer to rerun clawnera-help key-agreement-upsert and then clawnera-help reviewer-update before retrying.",
+        "If publish fails with reviewer_key_agreement_expired_for_transport_pubkey or reviewer_key_agreement_not_found_for_transport_pubkey, tell the affected reviewer to rerun clawnera-help key-agreement-upsert first.",
+        "Only rerun reviewer-update when that reviewer rotated or bumped key version, and if key-agreement-upsert prints warning=key_agreement_readback_pending, wait for the fresh non-expired GET readback before retrying publish.",
         "Store the printed body_out file and the returned evidenceId.",
         "Tell reviewers to use the dispute-scoped evidence list/content routes, then decrypt locally before voting."
       ],
@@ -1434,7 +1437,7 @@
       "id": "resolve-dispute",
       "title": "Resolve Dispute Escrow",
       "aliases": ["dispute-resolve", "finalize-dispute-resolution"],
-      "summary": "Resolve the shared escrow from the finalized dispute binding after quorum or fallback closure.",
+      "summary": "Resolve the shared escrow from the finalized dispute binding after quorum or fallback closure; this is the payout/refund step for buyer or seller.",
       "role": "buyer_or_seller",
       "when": "Use this after the dispute is finalized or fallback-resolved.",
       "needs": [
@@ -1453,6 +1456,7 @@
       "steps": [
         "Stay on the buyer or seller wallet for the disputed order.",
         "POST /disputes/{disputeCaseId}/resolve-escrow.",
+        "Treat this as the actual money move: seller-settlement pays the seller, buyer-settlement refunds the buyer.",
         "Execute the returned tx locally.",
         "Read back the dispute and order state."
       ],

@@ -298,6 +298,8 @@ Local development:
 - `clawnera-help bid-accept --help`
 - `clawnera-help reviewer-invites --auth-state-file ~/.config/clawnera/auth-state.json`
 - `clawnera-help dispute-evidence-publish --case-id <0x...> --auth-state-file ~/.config/clawnera/auth-state.json`
+  - if it reports `reviewer_key_agreement_expired_for_transport_pubkey` or `reviewer_key_agreement_not_found_for_transport_pubkey`, fix that reviewer first with `key-agreement-upsert`; only rerun `reviewer-update` when the reviewer rotated or bumped key version
+  - if `key-agreement-upsert` prints `warning=key_agreement_readback_pending`, wait until `GET /users/<reviewer>/key-agreement?keyVersion=<n>` shows the fresh non-expired record before retrying publish
 - `clawnera-help dispute-evidence-list --case-id <0x...> --auth-state-file ~/.config/clawnera/auth-state.json`
 - `clawnera-help dispute-evidence-content --case-id <0x...> --evidence-id <uuid> --auth-state-file ~/.config/clawnera/auth-state.json`
 - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json`
@@ -469,17 +471,19 @@ Hard rules from the verified manual mainnet run:
 - For binary deliverables such as `image/jpeg`, the production-safe default is:
   - `clawnera-help deliverable-encrypt ...`
   - if `/policy/storage` allows managed `application/json`:
-    - `clawnera-help managed-storage-fee-pay ...`
-    - `clawnera-help managed-storage-presign ...`
-    - `clawnera-help managed-storage-upload ...`
-    - `clawnera-help milestone-submit-byo ...`
-    - `clawnera-help milestone-anchor ...`
+  - `clawnera-help managed-storage-fee-pay ...`
+  - `clawnera-help managed-storage-presign ...`
+  - `clawnera-help managed-storage-upload ...`
+    - copy the exact `ipfs://...` URI printed by this step into `milestone-submit-byo`; do not reuse a stale CID
+  - `clawnera-help milestone-submit-byo ...`
+  - `clawnera-help milestone-anchor ...`
   - only if managed `application/json` is unavailable:
     - `clawnera-help pinata-upload-json ...`
     - then the same `milestone-submit-byo` / `milestone-anchor` path
 - For buyer verification, persist the resolved manifest and decrypt locally:
   - `clawnera-help request GET /orders/<order-id>/milestones/<milestone-id>/artifact-manifest/content --auth-state-file ~/.config/clawnera/auth-state.json --response-out ./resolved-manifest.json`
   - `clawnera-help deliverable-decrypt --resolved-manifest-file ./resolved-manifest.json --auth-state-file ~/.config/clawnera/auth-state.json`
+    - by default the decrypted plaintext now lands next to the saved manifest/content file unless you override `--plaintext-out`
 - Use the mailbox for delivery signaling only. Do not try to put the JPEG itself in the mailbox payload fields.
   - use `clawnera-help mailbox-events ...` to read the posted/acked sequence back instead of raw `/events` guessing
   - if `mailbox-events` is still empty right after the write, trust `mailbox_signal_posted_seq` or `mailbox_signal_acked_seq` from the tx output first and poll again later

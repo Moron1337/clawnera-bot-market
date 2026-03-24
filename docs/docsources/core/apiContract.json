@@ -2418,48 +2418,25 @@
           "201": {
             "status": "201",
             "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/Order",
-            "schemaName": "Order",
-            "requiredFields": [],
-            "optionalFields": [
-              "id",
-              "listingId",
-              "buyerAddress",
-              "sellerAddress",
-              "amount",
-              "currency",
-              "communicationAgreement",
-              "mailboxObjectId",
-              "escrowObjectId",
-              "disputeBondObjectId",
-              "disputeBondPolicy",
+            "schemaRef": "#/components/schemas/AcceptBidResponse",
+            "schemaName": "AcceptBidResponse",
+            "requiredFields": [
+              "order",
+              "disputeBondRequired",
               "disputeBondState",
-              "disputeBondActivatedAt",
-              "marketingCampaignId",
-              "deadlineMs",
-              "status",
-              "createdAt",
-              "updatedAt"
+              "disputeBondPolicy",
+              "disputeBondGuidance"
+            ],
+            "optionalFields": [
+              "operationalWarnings"
             ],
             "propertyNames": [
-              "id",
-              "listingId",
-              "buyerAddress",
-              "sellerAddress",
-              "amount",
-              "currency",
-              "communicationAgreement",
-              "mailboxObjectId",
-              "escrowObjectId",
-              "disputeBondObjectId",
-              "disputeBondPolicy",
+              "order",
+              "disputeBondRequired",
               "disputeBondState",
-              "disputeBondActivatedAt",
-              "marketingCampaignId",
-              "deadlineMs",
-              "status",
-              "createdAt",
-              "updatedAt"
+              "disputeBondPolicy",
+              "disputeBondGuidance",
+              "operationalWarnings"
             ]
           },
           "400": {
@@ -3129,48 +3106,16 @@
           "200": {
             "status": "200",
             "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/Order",
-            "schemaName": "Order",
-            "requiredFields": [],
-            "optionalFields": [
-              "id",
-              "listingId",
-              "buyerAddress",
-              "sellerAddress",
-              "amount",
-              "currency",
-              "communicationAgreement",
-              "mailboxObjectId",
-              "escrowObjectId",
-              "disputeBondObjectId",
-              "disputeBondPolicy",
-              "disputeBondState",
-              "disputeBondActivatedAt",
-              "marketingCampaignId",
-              "deadlineMs",
-              "status",
-              "createdAt",
-              "updatedAt"
+            "schemaRef": "#/components/schemas/OrderReadResponse",
+            "schemaName": "OrderReadResponse",
+            "requiredFields": [
+              "order",
+              "disputeBondGuidance"
             ],
+            "optionalFields": [],
             "propertyNames": [
-              "id",
-              "listingId",
-              "buyerAddress",
-              "sellerAddress",
-              "amount",
-              "currency",
-              "communicationAgreement",
-              "mailboxObjectId",
-              "escrowObjectId",
-              "disputeBondObjectId",
-              "disputeBondPolicy",
-              "disputeBondState",
-              "disputeBondActivatedAt",
-              "marketingCampaignId",
-              "deadlineMs",
-              "status",
-              "createdAt",
-              "updatedAt"
+              "order",
+              "disputeBondGuidance"
             ]
           },
           "401": {
@@ -7035,6 +6980,7 @@
               "disputeQuorumConfigObjectId",
               "reviewerRegistryObjectId",
               "runtime",
+              "pendingMetricsClaimContext",
               "metrics"
             ],
             "propertyNames": [
@@ -7045,6 +6991,7 @@
               "disputeQuorumConfigObjectId",
               "reviewerRegistryObjectId",
               "runtime",
+              "pendingMetricsClaimContext",
               "metrics"
             ]
           },
@@ -14524,48 +14471,25 @@
         "201": {
           "status": "201",
           "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/Order",
-          "schemaName": "Order",
-          "requiredFields": [],
-          "optionalFields": [
-            "id",
-            "listingId",
-            "buyerAddress",
-            "sellerAddress",
-            "amount",
-            "currency",
-            "communicationAgreement",
-            "mailboxObjectId",
-            "escrowObjectId",
-            "disputeBondObjectId",
-            "disputeBondPolicy",
+          "schemaRef": "#/components/schemas/AcceptBidResponse",
+          "schemaName": "AcceptBidResponse",
+          "requiredFields": [
+            "order",
+            "disputeBondRequired",
             "disputeBondState",
-            "disputeBondActivatedAt",
-            "marketingCampaignId",
-            "deadlineMs",
-            "status",
-            "createdAt",
-            "updatedAt"
+            "disputeBondPolicy",
+            "disputeBondGuidance"
+          ],
+          "optionalFields": [
+            "operationalWarnings"
           ],
           "propertyNames": [
-            "id",
-            "listingId",
-            "buyerAddress",
-            "sellerAddress",
-            "amount",
-            "currency",
-            "communicationAgreement",
-            "mailboxObjectId",
-            "escrowObjectId",
-            "disputeBondObjectId",
-            "disputeBondPolicy",
+            "order",
+            "disputeBondRequired",
             "disputeBondState",
-            "disputeBondActivatedAt",
-            "marketingCampaignId",
-            "deadlineMs",
-            "status",
-            "createdAt",
-            "updatedAt"
+            "disputeBondPolicy",
+            "disputeBondGuidance",
+            "operationalWarnings"
           ]
         },
         "400": {
@@ -15213,48 +15137,16 @@
         "200": {
           "status": "200",
           "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/Order",
-          "schemaName": "Order",
-          "requiredFields": [],
-          "optionalFields": [
-            "id",
-            "listingId",
-            "buyerAddress",
-            "sellerAddress",
-            "amount",
-            "currency",
-            "communicationAgreement",
-            "mailboxObjectId",
-            "escrowObjectId",
-            "disputeBondObjectId",
-            "disputeBondPolicy",
-            "disputeBondState",
-            "disputeBondActivatedAt",
-            "marketingCampaignId",
-            "deadlineMs",
-            "status",
-            "createdAt",
-            "updatedAt"
+          "schemaRef": "#/components/schemas/OrderReadResponse",
+          "schemaName": "OrderReadResponse",
+          "requiredFields": [
+            "order",
+            "disputeBondGuidance"
           ],
+          "optionalFields": [],
           "propertyNames": [
-            "id",
-            "listingId",
-            "buyerAddress",
-            "sellerAddress",
-            "amount",
-            "currency",
-            "communicationAgreement",
-            "mailboxObjectId",
-            "escrowObjectId",
-            "disputeBondObjectId",
-            "disputeBondPolicy",
-            "disputeBondState",
-            "disputeBondActivatedAt",
-            "marketingCampaignId",
-            "deadlineMs",
-            "status",
-            "createdAt",
-            "updatedAt"
+            "order",
+            "disputeBondGuidance"
           ]
         },
         "401": {
@@ -19029,6 +18921,7 @@
             "disputeQuorumConfigObjectId",
             "reviewerRegistryObjectId",
             "runtime",
+            "pendingMetricsClaimContext",
             "metrics"
           ],
           "propertyNames": [
@@ -19039,6 +18932,7 @@
             "disputeQuorumConfigObjectId",
             "reviewerRegistryObjectId",
             "runtime",
+            "pendingMetricsClaimContext",
             "metrics"
           ]
         },
@@ -26026,6 +25920,7 @@
         "disputeQuorumConfigObjectId",
         "reviewerRegistryObjectId",
         "runtime",
+        "pendingMetricsClaimContext",
         "metrics"
       ],
       "requiredFields": [
@@ -26038,6 +25933,7 @@
         "disputeQuorumConfigObjectId",
         "reviewerRegistryObjectId",
         "runtime",
+        "pendingMetricsClaimContext",
         "metrics"
       ]
     },
@@ -26055,6 +25951,38 @@
         "disputeQuorumConfigObjectId",
         "reviewerRegistryObjectId",
         "reviewerMinStakeIota"
+      ]
+    },
+    "ReviewerPendingMetricsClaimCandidate": {
+      "name": "ReviewerPendingMetricsClaimCandidate",
+      "propertyNames": [
+        "disputeCaseObjectId",
+        "orderId",
+        "milestoneId",
+        "closedAtMs"
+      ],
+      "requiredFields": [
+        "disputeCaseObjectId"
+      ],
+      "optionalFields": [
+        "orderId",
+        "milestoneId",
+        "closedAtMs"
+      ]
+    },
+    "ReviewerPendingMetricsClaimContext": {
+      "name": "ReviewerPendingMetricsClaimContext",
+      "propertyNames": [
+        "status",
+        "disputeCaseObjectId",
+        "candidates"
+      ],
+      "requiredFields": [
+        "status"
+      ],
+      "optionalFields": [
+        "disputeCaseObjectId",
+        "candidates"
       ]
     },
     "ReviewerPendingMetricsClaimRequiredResponse": {
@@ -26856,6 +26784,42 @@
       "requiredFields": [],
       "optionalFields": []
     },
+    "DisputeBondSelectionMode": {
+      "name": "DisputeBondSelectionMode",
+      "propertyNames": [],
+      "requiredFields": [],
+      "optionalFields": []
+    },
+    "DisputeBondGuidance": {
+      "name": "DisputeBondGuidance",
+      "propertyNames": [
+        "policy",
+        "selectionMode",
+        "userAmountChoiceRequired",
+        "platformOperatorFunding",
+        "currentMinPerSideAmount",
+        "currentMaxPerSideAmount",
+        "defaultRequiredReviewerVotes",
+        "minRequiredReviewerVotes",
+        "maxRequiredReviewerVotes",
+        "selectedRequiredReviewerVotes",
+        "selectedRequiredReviewerVotesFloor"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "policy",
+        "selectionMode",
+        "userAmountChoiceRequired",
+        "platformOperatorFunding",
+        "currentMinPerSideAmount",
+        "currentMaxPerSideAmount",
+        "defaultRequiredReviewerVotes",
+        "minRequiredReviewerVotes",
+        "maxRequiredReviewerVotes",
+        "selectedRequiredReviewerVotes",
+        "selectedRequiredReviewerVotesFloor"
+      ]
+    },
     "Order": {
       "name": "Order",
       "propertyNames": [
@@ -26909,6 +26873,39 @@
       "requiredFields": [
         "items",
         "nextCursor"
+      ],
+      "optionalFields": []
+    },
+    "AcceptBidResponse": {
+      "name": "AcceptBidResponse",
+      "propertyNames": [
+        "order",
+        "disputeBondRequired",
+        "disputeBondState",
+        "disputeBondPolicy",
+        "disputeBondGuidance",
+        "operationalWarnings"
+      ],
+      "requiredFields": [
+        "order",
+        "disputeBondRequired",
+        "disputeBondState",
+        "disputeBondPolicy",
+        "disputeBondGuidance"
+      ],
+      "optionalFields": [
+        "operationalWarnings"
+      ]
+    },
+    "OrderReadResponse": {
+      "name": "OrderReadResponse",
+      "propertyNames": [
+        "order",
+        "disputeBondGuidance"
+      ],
+      "requiredFields": [
+        "order",
+        "disputeBondGuidance"
       ],
       "optionalFields": []
     },

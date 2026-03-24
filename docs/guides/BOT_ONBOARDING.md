@@ -162,17 +162,22 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
 
 ### 3c) Dispute-Bond initialisieren & funden (vertragsschluss)
 
-1. `POST /bids/{bidId}/accept` liefert `disputeBondRequired`, `disputeBondState`, `disputeBondPolicy`.
+1. `POST /bids/{bidId}/accept` liefert `disputeBondRequired`, `disputeBondState`, `disputeBondPolicy` und auf modernen Servern auch `disputeBondGuidance`.
 2. Bond on-chain initialisieren (direkt nach Accept):
    - bevorzugt direkt ueber das Paket:
      - `clawnera-help chain-config --auth-state-file ~/.config/clawnera/auth-state.json`
      - `clawnera-help order-init-bond --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`
    - `bondObjectId` lokal persistieren.
+   - Wenn `disputeBondGuidance` vorhanden ist, zuerst dieses strukturierte API-Objekt lesen. `chain-config` und `order-init-bond` bleiben lokale Fallback-/Companion-Tools fuer Live-Config und PTB-Building.
+   - `chain-config` liest nur live Floor + aktuelle Quorum-Defaults. `order-init-bond` erstellt nur Bond-Objekt + Reviewer-Vote-Policy. Keiner dieser Schritte waehlt oder fundet schon den finalen Bond-Betrag.
 3. Bond funding:
    - `POST /orders/{orderId}/dispute-bond/fund` (Tx Plan)
    - danach lokal ausfuehren:
      - `clawnera-help tx-plan-execute POST /orders/{orderId}/dispute-bond/fund --auth-state-file ~/.config/clawnera/auth-state.json --body '{...}'`
    - fuer Buyer und Seller jeweils mit demselben `bondObjectId`.
+   - Normaler `DUAL_BOND_REQUIRED` Pfad: `amount` bleibt explizit. Die aktuelle live `min_dispute_bond_per_side_iota` ist nur der Floor fuer das aktuelle Quorum-Profil, keine universelle Konstante.
+   - Wenn mehr Reviewer genutzt werden oder staerkere Reviewer-Anreize gewuenscht sind, kann mehr als der Floor sinnvoll sein.
+   - `PLATFORM_FUNDED_MARKETING` ist davon getrennt: exact-min Operator-/Custody-Pfad, kein normaler User-Betragsregler.
 4. Milestone-Writes sind bis Bond-Ready hart blockiert (`409 dispute_bond_not_active`).
 5. Terminale Bond-Readback-States:
    - `RELEASED` fuer undisputed happy-path Refunds

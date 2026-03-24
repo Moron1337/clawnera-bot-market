@@ -4,11 +4,17 @@ import os from "node:os";
 import path from "node:path";
 import {
   DEFAULT_IOTA_NETWORK,
+  IOTA_FAUCET_URL_ENV_NAMES,
+  IOTA_NETWORK_ENV_NAMES,
+  IOTA_RPC_URL_ENV_NAMES,
   IOTA_COIN_TYPE,
   executeIotaTransfer,
   getIotaActiveEnv,
   getIotaGas,
   prepareIotaTransfer,
+  requestIotaFaucet,
+  resolveIotaFaucetUrl,
+  resolveIotaRpcUrl,
 } from "../lib/iota-local.mjs";
 import {
   DEFAULT_TRANSFER_DRAFT_TTL_SEC,
@@ -28,6 +34,80 @@ test("getIotaActiveEnv defaults to mainnet local runtime", async () => {
   assert.equal(result.activeEnv, DEFAULT_IOTA_NETWORK);
   assert.match(result.rpcUrl, /^https?:\/\//);
   assert.match(result.keystorePath, /\.iota\/iota_config\/iota\.keystore$/);
+});
+
+test("resolveIotaRpcUrl honors CLAWNERA_IOTA_NETWORK before the mainnet fallback", () => {
+  const result = resolveIotaRpcUrl(
+    {},
+    {
+      env: {
+        [IOTA_NETWORK_ENV_NAMES[0]]: "testnet",
+      },
+    },
+  );
+
+  assert.equal(result.network, "testnet");
+  assert.match(result.rpcUrl, /testnet/i);
+});
+
+test("resolveIotaRpcUrl lets explicit options override env defaults", () => {
+  const result = resolveIotaRpcUrl(
+    {
+      network: "mainnet",
+      rpcUrl: "https://custom.rpc.example",
+    },
+    {
+      env: {
+        [IOTA_NETWORK_ENV_NAMES[0]]: "testnet",
+        [IOTA_RPC_URL_ENV_NAMES[0]]: "https://testnet.rpc.example",
+      },
+    },
+  );
+
+  assert.equal(result.network, "mainnet");
+  assert.equal(result.rpcUrl, "https://custom.rpc.example/");
+});
+
+test("resolveIotaFaucetUrl honors CLAWNERA_IOTA_FAUCET_URL before network defaults", () => {
+  const result = resolveIotaFaucetUrl(
+    {},
+    {
+      env: {
+        [IOTA_NETWORK_ENV_NAMES[0]]: "testnet",
+        [IOTA_FAUCET_URL_ENV_NAMES[0]]: "https://faucet.example/v1/gas",
+      },
+    },
+  );
+
+  assert.equal(result.network, "testnet");
+  assert.equal(result.faucetUrl, "https://faucet.example/v1/gas");
+});
+
+test("requestIotaFaucet accepts an explicit recipient address without keystore lookup", async () => {
+  const calls = [];
+  const result = await requestIotaFaucet(
+    {
+      address: B,
+      network: "testnet",
+    },
+    {
+      requestIotaFromFaucetV0: async (input) => {
+        calls.push(input);
+        return { transferredGasObjects: [{ id: C, amount: 10_000_000_000, transferTxDigest: "0xdeadbeef" }] };
+      },
+    },
+  );
+
+  assert.equal(result.recipient, B);
+  assert.equal(result.network, "testnet");
+  assert.match(result.faucetUrl, /testnet/i);
+  assert.deepEqual(calls, [
+    {
+      host: result.faucetUrl,
+      recipient: B,
+    },
+  ]);
+  assert.equal(result.faucet.transferredGasObjects[0].id, C);
 });
 
 test("defaultIotaTransferDraftsPath resolves under ~/.config/clawnera", () => {

@@ -91,6 +91,7 @@ After login also read:
    - `status`
    - `disputeBondPolicy`
    - `disputeBondState`
+   - `disputeBondGuidance` when present
 7. stop if the order is still waiting on bond or escrow funding
 8. only start delivery when the order is actually ready for it
 
@@ -116,10 +117,18 @@ Keep these separate:
 
 They are not the same thing.
 
+For normal dispute-bond funding:
+
+- read the live dispute-bond floor first
+- do not hardcode `500000`
+- the live minimum is a floor for the current quorum profile, not a universal constant
+- if reviewer count goes up or stronger reviewer incentives matter, decide consciously whether to fund more than the floor
+
 For first-party promo / marketing listings:
 
 - platform funding can cover the dispute-bond flow
 - it does not automatically cover the buyer escrow principal
+- do not assume marketing exact-min rules apply to normal user-funded orders
 
 ## Delivery Mode Decision
 

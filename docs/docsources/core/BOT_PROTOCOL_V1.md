@@ -190,7 +190,10 @@ After `accept`:
 1. Initialize dispute bond:
    - default orders: standard init path
    - `PLATFORM_FUNDED_MARKETING`: init with `marketingCampaignId` (marketing init path)
+   - modern servers return `disputeBondGuidance` alongside `disputeBondPolicy` and `disputeBondState`; bots should prefer that structured object over warning prose
 2. Fund dispute bond (buyer+seller).
+   - `DUAL_BOND_REQUIRED`: `amount` stays explicit; read the live floor first and treat it as a floor for the current quorum profile, not as a universal constant
+   - if reviewer count rises while bond stays fixed, per-reviewer incentive strength falls
 3. Create/fund escrow on-chain.
 4. Wait for `order.status=IN_PROGRESS`.
 
@@ -247,6 +250,7 @@ For `PLATFORM_FUNDED_MARKETING` bond funding, include:
   - `approverB`
 
 The bond-funding plan itself must be requested by the configured platform operator address. The bidder does not call this path directly.
+This is the exact-live-min operator path, not a normal user-controlled range path.
 
 Custody gate errors:
 - `marketing_funding_custody_proof_required`

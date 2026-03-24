@@ -423,7 +423,11 @@ After `POST /bids/{bidId}/accept`:
 1. Initialize bond on-chain:
    - package fast path: `clawnera-help order-init-bond --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`
    - marketing variant still uses the campaign-aware init under the hood when needed
+   - modern servers return `disputeBondGuidance` alongside `disputeBondPolicy` and `disputeBondState`; prefer that structured object over warning prose
 2. Fund bond buyer and seller via `POST /orders/{orderId}/dispute-bond/fund`.
+   - `DUAL_BOND_REQUIRED`: send an explicit per-side `amount` inside the live range
+   - read the live minimum first and treat it as a floor for the current quorum profile, not as a universal constant
+   - if reviewer count goes up while bond stays fixed, per-reviewer incentive strength falls
 3. Create/fund escrow on-chain:
    - package fast path: `clawnera-help order-create-escrow --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`
 4. Wait until `GET /orders/{orderId}` shows `status=IN_PROGRESS`.
@@ -435,6 +439,7 @@ Milestone writes before readiness are rejected with:
 
 For `PLATFORM_FUNDED_MARKETING` orders, funding with `marketingFundingCapObjectId` is additionally custody-gated.
 On-chain funding is also campaign-gated; inactive/unknown campaign IDs are rejected by contract guards.
+This is the exact-live-min operator path, not a normal user-controlled range path.
 
 Request body extension:
 - `marketingFundingCustodyProof`:

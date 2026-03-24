@@ -85,6 +85,8 @@ Auth note:
   - request creator accepts the chosen seller bid and inspects the created order
 - `fund-order`
   - separate sponsor gas, bond, and escrow principal
+  - read the live dispute-bond floor first; normal funding still needs an explicit amount choice
+  - keep `PLATFORM_FUNDED_MARKETING` separate as the exact-min operator path
 - `mailbox-handshake`
   - bind mailbox before the first seller milestone submit and use it only for signals/acks
   - common aliases: `mailbox-signal`, `mailbox-post-signal`, `mailbox-ack`

@@ -1280,29 +1280,13 @@ paths:
               $ref: '#/components/schemas/AcceptBidRequest'
       responses:
         '201':
-          description: Order created from accepted bid.
+          description: >-
+            Order created from accepted bid. The accept response exposes dispute-bond policy/state, structured
+            disputeBondGuidance, and operational warnings, but it does not choose the final bond-funding amount.
           content:
             application/json:
               schema:
-                properties:
-                  order:
-                    $ref: '#/components/schemas/Order'
-                  disputeBondRequired:
-                    type: boolean
-                  disputeBondState:
-                    $ref: '#/components/schemas/OrderDisputeBondState'
-                  disputeBondPolicy:
-                    $ref: '#/components/schemas/OrderDisputeBondPolicy'
-                  operationalWarnings:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/OperationalWarning'
-                type: object
-                required:
-                  - order
-                  - disputeBondRequired
-                  - disputeBondState
-                  - disputeBondPolicy
+                $ref: '#/components/schemas/AcceptBidResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1569,12 +1553,7 @@ paths:
           content:
             application/json:
               schema:
-                properties:
-                  order:
-                    $ref: '#/components/schemas/Order'
-                type: object
-                required:
-                  - order
+                $ref: '#/components/schemas/OrderReadResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -5648,6 +5627,11 @@ components:
         amount:
           type: string
           pattern: ^[0-9]+$
+          description: >-
+            Per-side bond amount in atomic IOTA. For `DUAL_BOND_REQUIRED` orders this remains an explicit client choice
+            inside the live on-chain min/max range, so read the current floor first and do not hardcode one universal
+            value. For `PLATFORM_FUNDED_MARKETING` orders, the configured platform operator must supply the exact live
+            minimum on the operator/custody path.
         paymentCoinObjectId:
           type: string
         marketingFundingCapObjectId:
@@ -5752,6 +5736,8 @@ components:
           type: string
         runtime:
           $ref: '#/components/schemas/ReviewerRuntimeSummary'
+        pendingMetricsClaimContext:
+          $ref: '#/components/schemas/ReviewerPendingMetricsClaimContext'
         metrics:
           $ref: '#/components/schemas/ReviewerSelfMetrics'
       type: object
@@ -5789,6 +5775,38 @@ components:
           type: integer
           format: int64
       type: object
+    ReviewerPendingMetricsClaimContext:
+      properties:
+        status:
+          type: string
+          enum:
+            - not_required
+            - ready
+            - ambiguous
+            - unavailable
+        disputeCaseObjectId:
+          type: string
+        candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReviewerPendingMetricsClaimCandidate'
+      type: object
+      required:
+        - status
+    ReviewerPendingMetricsClaimCandidate:
+      properties:
+        disputeCaseObjectId:
+          type: string
+        orderId:
+          type: string
+        milestoneId:
+          type: string
+        closedAtMs:
+          type: integer
+          format: int64
+      type: object
+      required:
+        - disputeCaseObjectId
     ReviewerRuntimeSummary:
       properties:
         marketplacePackageId:
@@ -6714,6 +6732,81 @@ components:
       additionalProperties: false
       required:
         - escrowObjectId
+    Order:
+      properties:
+        id:
+          type: string
+        listingId:
+          type: string
+        buyerAddress:
+          type: string
+        sellerAddress:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+          enum:
+            - IOTA
+            - CLAW
+        communicationAgreement:
+          $ref: '#/components/schemas/OrderCommunicationAgreement'
+        mailboxObjectId:
+          type: string
+        escrowObjectId:
+          type: string
+        disputeBondObjectId:
+          type: string
+        disputeBondPolicy:
+          $ref: '#/components/schemas/OrderDisputeBondPolicy'
+        disputeBondState:
+          $ref: '#/components/schemas/OrderDisputeBondState'
+        disputeBondActivatedAt:
+          type: string
+          format: date-time
+        marketingCampaignId:
+          type: string
+        deadlineMs:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum:
+            - AWAITING_DEPOSITS
+            - IN_PROGRESS
+            - DISPUTED
+            - COMPLETED
+            - CANCELLED
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      type: object
+      required:
+        - id
+        - listingId
+        - buyerAddress
+        - sellerAddress
+        - amount
+        - currency
+        - disputeBondPolicy
+        - disputeBondState
+        - status
+        - createdAt
+        - updatedAt
+    OrderDisputeBondState:
+      type: string
+      enum:
+        - PENDING
+        - ACTIVE
+        - CANCELED
+    OrderDisputeBondPolicy:
+      type: string
+      enum:
+        - DUAL_BOND_REQUIRED
+        - PLATFORM_FUNDED_MARKETING
     OrderEscrowBindRequest:
       properties:
         escrowObjectId:
@@ -6724,6 +6817,77 @@ components:
       additionalProperties: false
       required:
         - escrowObjectId
+    OrderReadResponse:
+      properties:
+        order:
+          $ref: '#/components/schemas/Order'
+        disputeBondGuidance:
+          $ref: '#/components/schemas/DisputeBondGuidance'
+      type: object
+      required:
+        - order
+        - disputeBondGuidance
+    DisputeBondGuidance:
+      properties:
+        policy:
+          $ref: '#/components/schemas/OrderDisputeBondPolicy'
+        selectionMode:
+          $ref: '#/components/schemas/DisputeBondSelectionMode'
+        userAmountChoiceRequired:
+          type: boolean
+          description: >-
+            True when the normal user path must still choose and submit an explicit amount on
+            `/orders/{orderId}/dispute-bond/fund`.
+        platformOperatorFunding:
+          type: boolean
+          description: >-
+            True when the order uses the separate platform-funded marketing path instead of a normal user-selected
+            amount.
+        currentMinPerSideAmount:
+          type: string
+          nullable: true
+          description: Current live minimum per-side bond amount, if the API could resolve the dispute-quorum config.
+        currentMaxPerSideAmount:
+          type: string
+          nullable: true
+          description: >-
+            Current live maximum per-side bond amount for explicit-range funding, if known. Stays null on the exact-min
+            marketing path.
+        defaultRequiredReviewerVotes:
+          type: integer
+          nullable: true
+        minRequiredReviewerVotes:
+          type: integer
+          nullable: true
+        maxRequiredReviewerVotes:
+          type: integer
+          nullable: true
+        selectedRequiredReviewerVotes:
+          type: integer
+          nullable: true
+          description: Selected reviewer-vote threshold read from the bound on-chain dispute bond, if available.
+        selectedRequiredReviewerVotesFloor:
+          type: integer
+          nullable: true
+          description: Selected reviewer-vote floor read from the bound on-chain dispute bond, if available.
+      type: object
+      required:
+        - policy
+        - selectionMode
+        - userAmountChoiceRequired
+        - platformOperatorFunding
+        - currentMinPerSideAmount
+        - currentMaxPerSideAmount
+        - defaultRequiredReviewerVotes
+        - minRequiredReviewerVotes
+        - maxRequiredReviewerVotes
+        - selectedRequiredReviewerVotes
+        - selectedRequiredReviewerVotesFloor
+    DisputeBondSelectionMode:
+      type: string
+      enum:
+        - EXPLICIT_RANGE
+        - EXACT_MIN_PLATFORM_FUNDED
     WebhookDeliveryListResponse:
       properties:
         items:
@@ -6951,81 +7115,65 @@ components:
       required:
         - items
         - nextCursor
-    Order:
+    AcceptBidResponse:
       properties:
-        id:
-          type: string
-        listingId:
-          type: string
-        buyerAddress:
-          type: string
-        sellerAddress:
-          type: string
-        amount:
-          type: string
-        currency:
-          type: string
-          enum:
-            - IOTA
-            - CLAW
-        communicationAgreement:
-          $ref: '#/components/schemas/OrderCommunicationAgreement'
-        mailboxObjectId:
-          type: string
-        escrowObjectId:
-          type: string
-        disputeBondObjectId:
-          type: string
-        disputeBondPolicy:
-          $ref: '#/components/schemas/OrderDisputeBondPolicy'
+        order:
+          $ref: '#/components/schemas/Order'
+        disputeBondRequired:
+          type: boolean
+          description: >-
+            True for normal dual-bond orders that still need buyer and seller bond principal funding before execution
+            can start.
         disputeBondState:
-          $ref: '#/components/schemas/OrderDisputeBondState'
-        disputeBondActivatedAt:
-          type: string
-          format: date-time
-        marketingCampaignId:
-          type: string
-        deadlineMs:
-          type: integer
-          format: int64
-        status:
-          type: string
-          enum:
-            - AWAITING_DEPOSITS
-            - IN_PROGRESS
-            - DISPUTED
-            - COMPLETED
-            - CANCELLED
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
+          allOf:
+            - $ref: '#/components/schemas/OrderDisputeBondState'
+          description: Current dispute-bond lifecycle state. Accept-time readback does not itself initialize or fund the bond.
+        disputeBondPolicy:
+          allOf:
+            - $ref: '#/components/schemas/OrderDisputeBondPolicy'
+          description: >-
+            Funding policy selected for the order. This tells clients whether the later funding step is explicit-range
+            or exact-min platform-funded; it does not select the final amount by itself.
+        disputeBondGuidance:
+          $ref: '#/components/schemas/DisputeBondGuidance'
+        operationalWarnings:
+          type: array
+          description: >-
+            May include warning codes such as `order_requires_dual_bond_funding`,
+            `dispute_bond_amount_explicit_choice_required`, `platform_funded_marketing_operator_handoff_required`, and
+            `platform_marketing_dispute_bond_exact_min`.
+          items:
+            $ref: '#/components/schemas/OperationalWarning'
       type: object
       required:
-        - id
-        - listingId
-        - buyerAddress
-        - sellerAddress
-        - amount
-        - currency
-        - disputeBondPolicy
+        - order
+        - disputeBondRequired
         - disputeBondState
-        - status
-        - createdAt
-        - updatedAt
-    OrderDisputeBondState:
-      type: string
-      enum:
-        - PENDING
-        - ACTIVE
-        - CANCELED
-    OrderDisputeBondPolicy:
-      type: string
-      enum:
-        - DUAL_BOND_REQUIRED
-        - PLATFORM_FUNDED_MARKETING
+        - disputeBondPolicy
+        - disputeBondGuidance
+    OperationalWarning:
+      properties:
+        code:
+          type: string
+        severity:
+          type: string
+          enum:
+            - warning
+        actorAddress:
+          type: string
+        relevantEventTypes:
+          type: array
+          items:
+            type: string
+        message:
+          type: string
+      type: object
+      required:
+        - code
+        - severity
+        - actorAddress
+        - relevantEventTypes
+        - message
     AcceptBidRequest:
       oneOf:
         - $ref: '#/components/schemas/AcceptBidByListingRequest'
@@ -7260,29 +7408,6 @@ components:
         - ops
         - security
         - other
-    OperationalWarning:
-      properties:
-        code:
-          type: string
-        severity:
-          type: string
-          enum:
-            - warning
-        actorAddress:
-          type: string
-        relevantEventTypes:
-          type: array
-          items:
-            type: string
-        message:
-          type: string
-      type: object
-      required:
-        - code
-        - severity
-        - actorAddress
-        - relevantEventTypes
-        - message
     Listing:
       properties:
         id:

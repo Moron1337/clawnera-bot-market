@@ -166,6 +166,7 @@ Store:
 - `orderId`
 - `disputeBondPolicy`
 - `disputeBondState`
+- `disputeBondGuidance` when present
 
 ## Request Buyer Accepts Seller Bid
 
@@ -183,10 +184,12 @@ Store:
 - `orderId`
 - `disputeBondPolicy`
 - `disputeBondState`
+- `disputeBondGuidance` when present
 
 ## Fund Existing Bond
 
 Use the exact sequence below. Do not guess any object id.
+Read the live floor first. For normal `DUAL_BOND_REQUIRED` orders, the amount is still an explicit per-side choice; the floor is not a universal hardcoded constant.
 
 ```bash
 clawnera-help chain-config --auth-state-file ~/.config/clawnera/auth-state.json
@@ -201,7 +204,7 @@ clawnera-help request POST /orders/<order-id>/dispute-bond/fund \
     "bondObjectId": "<bond-object-id>",
     "disputeQuorumConfigObjectId": "<dispute-quorum-config-object-id>",
     "side": "buyer",
-    "amount": "500000"
+    "amount": "<chosen-per-side-bond-amount>"
   }'
 
 clawnera-help tx-plan-execute POST /orders/<order-id>/dispute-bond/fund \
@@ -210,7 +213,7 @@ clawnera-help tx-plan-execute POST /orders/<order-id>/dispute-bond/fund \
     "bondObjectId": "<bond-object-id>",
     "disputeQuorumConfigObjectId": "<dispute-quorum-config-object-id>",
     "side": "buyer",
-    "amount": "500000"
+    "amount": "<chosen-per-side-bond-amount>"
   }'
 ```
 

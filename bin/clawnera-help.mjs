@@ -21,6 +21,7 @@ import {
 } from "../lib/runtime-auth.mjs";
 import {
   DEFAULT_ORDER_ESCROW_DEADLINE_DELTA_MS,
+  buildCreateListingDepositTx,
   buildCreateReputationProfileTx,
   buildManagedStorageFeeTx,
   buildMilestoneAnchorTx,
@@ -66,12 +67,16 @@ import {
 } from "../lib/e2ee-local.mjs";
 import {
   DEFAULT_IOTA_NETWORK,
+  IOTA_FAUCET_URL_ENV_NAMES,
+  IOTA_NETWORK_ENV_NAMES,
+  IOTA_RPC_URL_ENV_NAMES,
   IOTA_COIN_TYPE,
   executeIotaTransfer,
   getIotaActiveEnv,
   getIotaBalance,
   getIotaGas,
   normalizeIotaAddress,
+  requestIotaFaucet,
   resolveIotaRpcUrl,
   prepareIotaTransfer,
   dryRunIotaTransfer
@@ -134,6 +139,7 @@ const ASSET_UNIT_HINTS = Object.freeze(
 );
 const DEFAULT_LISTING_EXPIRY_DAYS = 30;
 const MAX_LISTING_EXPIRY_DAYS = 30;
+const LISTING_DEPOSIT_BINDING_VERSION = "clawdex.listing.deposit.ref.v1";
 const LISTING_CATEGORY_SLUGS = Object.freeze([
   "dev",
   "design",
@@ -147,6 +153,8 @@ const LISTING_PROMOTION_POLICIES = Object.freeze([
   "STANDARD",
   "PLATFORM_FUNDED_MARKETING",
 ]);
+const DEFAULT_TX_PLAN_WAIT_UNTIL_READY_MAX_MS = 60 * 60 * 1000;
+const DEFAULT_TX_PLAN_WAIT_UNTIL_READY_BUFFER_MS = 250;
 const SUPPLEMENTAL_EVIDENCE_CLASSES = Object.freeze([
   "BUYER_COMPLAINT",
   "SELLER_REBUTTAL",
@@ -364,6 +372,7 @@ function printUsage() {
   console.log("  clawnera-help units [options]             Show IOTA/CLAW decimals and atomic-unit examples");
   console.log("  clawnera-help request <METHOD> <path>     Call Clawnera API with auth/env shortcuts");
   console.log("  clawnera-help listing-categories          Show the canonical listing category slugs");
+  console.log("  clawnera-help listing-deposit-create [options]  Build and execute the listing deposit locally");
   console.log("  clawnera-help listing-create [options]    Thin helper for the first POST /listings write");
   console.log("  clawnera-help listing-cancel [options]    Thin helper for POST /listings/{listingId}/cancel");
   console.log("  clawnera-help listing-renew [options]     Thin helper for POST /listings/{listingId}/renew");
@@ -401,7 +410,8 @@ function printUsage() {
   console.log("  clawnera-help iota-active-env [options]   Show local IOTA RPC/keystore runtime config");
   console.log("  clawnera-help iota-get-balance [options]  Read local wallet balances via the IOTA SDK");
   console.log("  clawnera-help iota-get-gas [options]      Read local IOTA gas coins via the IOTA SDK");
-  console.log("  clawnera-help iota-prepare-transfer [options]  Build a local IOTA mainnet transfer draft");
+  console.log("  clawnera-help iota-request-faucet [options]  Request Testnet/Devnet faucet gas for a local wallet");
+  console.log("  clawnera-help iota-prepare-transfer [options]  Build a local IOTA transfer draft");
   console.log("  clawnera-help iota-dry-run-transfer [options]  Dry-run a prepared local IOTA transfer");
   console.log("  clawnera-help iota-execute-transfer [options]  Sign and broadcast a prepared local IOTA transfer");
   console.log("  clawnera-help notifications [options]     Scaffold and check Telegram event notifications");
@@ -2392,7 +2402,7 @@ function walletInitUsageLines() {
 function iotaActiveEnvUsageLines() {
   return [
     "IOTA active env helper:",
-    `- Defaults to --network ${DEFAULT_IOTA_NETWORK}`,
+    `- Defaults to --network from $${IOTA_NETWORK_ENV_NAMES[0]} / $${IOTA_NETWORK_ENV_NAMES[1]}, otherwise ${DEFAULT_IOTA_NETWORK}`,
     "- Optional: --rpc-url <url> to use a custom fullnode",
     `- Default keystore path: ${defaultIotaKeystorePath()}`,
     "- This is local-only and does not ask the Clawnera worker to execute anything",
@@ -2402,7 +2412,8 @@ function iotaActiveEnvUsageLines() {
 function iotaGetBalanceUsageLines() {
   return [
     "IOTA balance helper:",
-    `- Defaults to --network ${DEFAULT_IOTA_NETWORK}`,
+    `- Defaults to --network from $${IOTA_NETWORK_ENV_NAMES[0]} / $${IOTA_NETWORK_ENV_NAMES[1]}, otherwise ${DEFAULT_IOTA_NETWORK}`,
+    `- Optional default custom RPC from $${IOTA_RPC_URL_ENV_NAMES[0]} / $${IOTA_RPC_URL_ENV_NAMES[1]}`,
     `- Defaults to local keystore path ${defaultIotaKeystorePath()}`,
     "- Optional selector: --alias <wallet-alias> or --address <wallet-address>",
     "- Optional: --coin-type <type> --with-coins",
@@ -2413,7 +2424,8 @@ function iotaGetBalanceUsageLines() {
 function iotaGetGasUsageLines() {
   return [
     "IOTA gas helper:",
-    `- Defaults to --network ${DEFAULT_IOTA_NETWORK}`,
+    `- Defaults to --network from $${IOTA_NETWORK_ENV_NAMES[0]} / $${IOTA_NETWORK_ENV_NAMES[1]}, otherwise ${DEFAULT_IOTA_NETWORK}`,
+    `- Optional default custom RPC from $${IOTA_RPC_URL_ENV_NAMES[0]} / $${IOTA_RPC_URL_ENV_NAMES[1]}`,
     `- Defaults to local keystore path ${defaultIotaKeystorePath()}`,
     "- Optional selector: --alias <wallet-alias> or --address <wallet-address>",
     `- Returns coin objects for ${IOTA_COIN_TYPE}`,
@@ -2424,11 +2436,24 @@ function iotaPrepareTransferUsageLines() {
   return [
     "IOTA prepare transfer helper:",
     "- Required: --recipient <0x...> --amount-nanos <int> --input-coins <coinId[,coinId...]>",
-    `- Defaults to --network ${DEFAULT_IOTA_NETWORK}`,
+    `- Defaults to --network from $${IOTA_NETWORK_ENV_NAMES[0]} / $${IOTA_NETWORK_ENV_NAMES[1]}, otherwise ${DEFAULT_IOTA_NETWORK}`,
+    `- Optional default custom RPC from $${IOTA_RPC_URL_ENV_NAMES[0]} / $${IOTA_RPC_URL_ENV_NAMES[1]}`,
     `- Draft file default: ${defaultIotaTransferDraftsPath()}`,
     "- Optional selector: --alias <wallet-alias> or --address <wallet-address>",
     "- Optional: --gas-budget <int> --ttl-sec <int> --drafts-file <file> --rpc-url <url>",
     "- Builds tx bytes locally on the user machine and stores a reusable draft for dry-run/execute",
+  ];
+}
+
+function iotaRequestFaucetUsageLines() {
+  return [
+    "IOTA faucet helper:",
+    `- Defaults to --network from $${IOTA_NETWORK_ENV_NAMES[0]} / $${IOTA_NETWORK_ENV_NAMES[1]}, otherwise ${DEFAULT_IOTA_NETWORK}`,
+    `- Optional default custom faucet URL from $${IOTA_FAUCET_URL_ENV_NAMES[0]} / $${IOTA_FAUCET_URL_ENV_NAMES[1]}`,
+    `- Defaults to local keystore path ${defaultIotaKeystorePath()}`,
+    "- Optional selector: --alias <wallet-alias> or --address <wallet-address>",
+    "- If --address is passed, the helper does not require a local keystore lookup",
+    "- On plain defaults the faucet helper only works on networks that actually expose a faucet host (for example testnet/devnet)",
   ];
 }
 
@@ -3284,6 +3309,45 @@ async function runIotaPrepareTransfer(commandArgs) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "iota_prepare_transfer_failed",
+    };
+  }
+}
+
+async function runIotaRequestFaucet(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: iotaRequestFaucetUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals,
+    };
+  }
+
+  try {
+    return {
+      ok: true,
+      ...(await requestIotaFaucet({
+        network: options.network,
+        faucetUrl: options["faucet-url"],
+        keystorePath:
+          typeof options["keystore-path"] === "string" && options["keystore-path"].trim()
+            ? path.resolve(String(options["keystore-path"]).trim())
+            : defaultIotaKeystorePath(),
+        alias: typeof options.alias === "string" ? options.alias.trim() : "",
+        address: typeof options.address === "string" ? options.address.trim() : "",
+      })),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "iota_request_faucet_failed",
     };
   }
 }
@@ -5071,6 +5135,62 @@ function extractReputationInitFeePolicy(responseBody) {
   };
 }
 
+function extractListingDepositPolicy(responseBody) {
+  const policy = asRecord(responseBody?.policy);
+  const listingDeposit = asRecord(policy?.listingDeposit);
+  const chainConfig = asRecord(policy?.chainConfig || policy?.chain);
+  const enabled = listingDeposit?.enabled === true;
+  const amount =
+    typeof listingDeposit?.amount === "string" && /^[0-9]+$/.test(listingDeposit.amount.trim())
+      ? listingDeposit.amount.trim()
+      : "";
+  const configObjectId = normalizeIotaAddress(
+    listingDeposit?.configObjectId || chainConfig?.listingDepositConfigObjectId || "",
+  );
+  const bindingRefFormat = normalizeString(listingDeposit?.bindingRefFormat) || null;
+  return {
+    enabled,
+    amount,
+    configObjectId,
+    enforceRefBinding: listingDeposit?.enforceRefBinding !== false,
+    bindingRefFormat,
+  };
+}
+
+function normalizeListingDepositBindingAmountString(value) {
+  try {
+    return BigInt(value).toString();
+  } catch {
+    return String(value ?? "").trim();
+  }
+}
+
+function buildListingDepositBindingPreimage(input) {
+  const payload = {
+    version: LISTING_DEPOSIT_BINDING_VERSION,
+    creatorAddress: input.creatorAddress,
+    listingMode: input.listingMode ?? "OFFER",
+    title: input.title,
+    description: input.description,
+    category: input.category ?? "",
+    promotionPolicy: input.promotionPolicy ?? "",
+    currency: input.currency,
+    budgetAmount: normalizeListingDepositBindingAmountString(input.budgetAmount),
+    milestones: input.milestones.map((milestone) => ({
+      title: milestone.title,
+      amount: normalizeListingDepositBindingAmountString(milestone.amount),
+      dueAtMs: milestone.dueAtMs ?? null,
+      reviewWindowHours: milestone.reviewWindowHours ?? null,
+      acceptanceRulesHash: milestone.acceptanceRulesHash ?? "",
+    })),
+  };
+  return JSON.stringify(payload);
+}
+
+function computeListingDepositBindingDigestHex(input) {
+  return createHash("sha256").update(buildListingDepositBindingPreimage(input)).digest("hex");
+}
+
 function formatDryRunGasSummary(result) {
   const gasUsed = result?.effects?.gasUsed;
   if (!gasUsed || typeof gasUsed !== "object") {
@@ -5188,6 +5308,85 @@ async function resolveRuntimeContextForHelper(options = {}) {
   return resolveApiRuntimeContext(options);
 }
 
+function prepareListingDraftOptions(options = {}, runtimeContext = {}) {
+  const creatorAddress =
+    normalizeIotaAddress(options["creator-address"] || "") || resolveActorAddressForSignedRun(options, runtimeContext);
+  if (!creatorAddress) {
+    throw new Error("missing_creator_address");
+  }
+  const title = normalizeString(options.title);
+  const description = normalizeString(options.description);
+  const rawCategory = normalizeString(options.category);
+  const category = normalizeListingCategorySlug(rawCategory);
+  const currency = normalizeString(options.currency).toUpperCase();
+  const listingModeRaw = normalizeString(options["listing-mode"]).toUpperCase();
+  const listingMode = ["OFFER", "REQUEST"].includes(listingModeRaw) ? listingModeRaw : "";
+  const promotionPolicyRaw = normalizeString(options["promotion-policy"]).toUpperCase();
+  const promotionPolicy = !promotionPolicyRaw
+    ? "STANDARD"
+    : LISTING_PROMOTION_POLICIES.includes(promotionPolicyRaw)
+      ? promotionPolicyRaw
+      : "";
+  const displayValues = isDisplayValueModeEnabled(options);
+  if (!title || !description || !rawCategory || !currency) {
+    throw new Error("missing_required_listing_fields");
+  }
+  if (!listingModeRaw) {
+    throw new Error("missing_listing_mode");
+  }
+  if (!listingMode) {
+    throw new Error("invalid_listing_mode");
+  }
+  if (!promotionPolicy) {
+    throw new Error("invalid_promotion_policy");
+  }
+  if (displayValues && !ASSET_DISPLAY_DECIMALS[currency]) {
+    throw new Error("display_values_require_single_currency");
+  }
+  if (!category) {
+    throw new Error("invalid_listing_category");
+  }
+  const milestones = parseListingMilestonesOptions(options, { displayValues, currency });
+  const budgetAmount =
+    options["budget-amount"] !== undefined
+      ? (
+          displayValues
+            ? parseDisplayAmountOption(options["budget-amount"], "budget_amount", currency)
+            : parsePositiveBigIntOption(options["budget-amount"], "budget_amount")
+        ).toString()
+      : sumMilestoneAmounts(milestones).toString();
+  const warnings = buildAtomicAmountWarnings(
+    [
+      { field: "budgetAmount", atomicAmount: budgetAmount },
+      ...milestones.map((milestone, index) => ({
+        field: `milestones[${index}].amount`,
+        atomicAmount: milestone.amount,
+      })),
+    ],
+    currency,
+    displayValues,
+  );
+  return {
+    creatorAddress,
+    listingMode,
+    promotionPolicy,
+    budgetAmount,
+    warnings,
+    milestones,
+    createBody: {
+      creatorAddress,
+      title,
+      description,
+      category,
+      listingMode,
+      promotionPolicy,
+      currency,
+      budgetAmount,
+      milestones,
+    },
+  };
+}
+
 function listingCreateUsageLines() {
   return [
     "Listing create helper:",
@@ -5199,6 +5398,7 @@ function listingCreateUsageLines() {
     "- Required bot choice: send --listing-mode OFFER when the creator wants to be paid, or --listing-mode REQUEST when the creator wants to pay someone else.",
     "- Required milestone timing: use --milestone-due-dates with shorthand milestones, or include dueAtMs on every milestone in --milestones-json / --milestones-file.",
     "- Optional: --budget-amount <atomic-int> (defaults to the milestone sum), --creator-address <0x...>, --milestones-json <json>, --milestones-file <file>",
+    "- Optional live deposit binding: --listing-deposit-object-id <0x...> [--listing-deposit-tx-digest <digest>]",
     "- Optional promotion: --promotion-policy STANDARD|PLATFORM_FUNDED_MARKETING (default STANDARD)",
     "- Optional human mode: add --display-values to interpret milestone and budget numbers in whole-user units for the selected currency (examples: --currency IOTA --display-values --milestones 'file1.txt:1;file2.txt:1' or 'file1.txt:1 IOTA;file2.txt:1 IOTA')",
     ...buildCurrencyUnitLines("IOTA"),
@@ -5209,7 +5409,21 @@ function listingCreateUsageLines() {
     "- The helper does not silently guess listing expiry: choose an explicit expiry or pass --use-default-expiry to acknowledge the legacy 30-day runtime default",
     "- REQUEST means the listing creator is the future buyer and later accepts the chosen seller bid",
     "- Public listing create should be treated as: explicit listingMode + reputation-init + compliance/deposit preflight",
+    "- If /policy/fees shows listingDeposit.enabled=true, run clawnera-help listing-deposit-create first and pass its object id into listing-create",
     "- Sponsored / marketing listing is not the default public path; verify allowlist/campaign state first instead of guessing",
+  ];
+}
+
+function listingDepositCreateUsageLines() {
+  return [
+    "Listing deposit helper:",
+    "- Usage: clawnera-help listing-deposit-create --listing-mode <OFFER|REQUEST> --title <text> --description <text> --category <slug> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' [auth options]",
+    "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
+    "- Reads /policy/fees, resolves the live listing-deposit config, computes the canonical listingRef digest locally, then builds `listing_deposit::create_listing_deposit_iota_entry` locally",
+    "- Optional explicit ref: --listing-ref-digest-hex <64-hex> if you already computed the exact canonical binding digest",
+    "- Optional payment override: --payment-coin-object-id <0x...>",
+    "- Optional outputs: --proof-out <file> --dry-run --shared",
+    "- Use the returned listingDepositObjectId as listingDepositObjectId on the later clawnera-help listing-create call",
   ];
 }
 
@@ -5327,6 +5541,8 @@ async function runListingCreate(commandArgs) {
     "display-values",
     "promotion-policy",
     "milestone-due-dates",
+    "listing-deposit-object-id",
+    "listing-deposit-tx-digest",
   ]);
   if (unexpectedOptions.length > 0) {
     return {
@@ -5370,40 +5586,28 @@ async function runListingCreate(commandArgs) {
       return { ok: false, error: "invalid_promotion_policy" };
     }
     if (displayValues && !ASSET_DISPLAY_DECIMALS[currency]) {
-      return { ok: false, error: "display_values_require_single_currency", supportedCurrencies: Object.keys(ASSET_DISPLAY_DECIMALS) };
+      return {
+        ok: false,
+        error: "display_values_require_single_currency",
+        supportedCurrencies: Object.keys(ASSET_DISPLAY_DECIMALS),
+      };
     }
     if (!category) {
       return { ok: false, error: "invalid_listing_category", validCategories: LISTING_CATEGORY_SLUGS };
     }
     const expiry = resolveListingExpiryChoice(options, Date.now());
-    const milestones = parseListingMilestonesOptions(options, { displayValues, currency });
-    const budgetAmount = options["budget-amount"] !== undefined
-      ? (displayValues
-          ? parseDisplayAmountOption(options["budget-amount"], "budget_amount", currency)
-          : parsePositiveBigIntOption(options["budget-amount"], "budget_amount")).toString()
-      : sumMilestoneAmounts(milestones).toString();
-    const warnings = buildAtomicAmountWarnings(
-      [
-        { field: "budgetAmount", atomicAmount: budgetAmount },
-        ...milestones.map((milestone, index) => ({
-          field: `milestones[${index}].amount`,
-          atomicAmount: milestone.amount,
-        })),
-      ],
-      currency,
-      displayValues
-    );
+    const prepared = prepareListingDraftOptions(options, runtimeContext);
+    const listingDepositObjectIdRaw = normalizeString(options["listing-deposit-object-id"]);
+    const listingDepositObjectId = normalizeIotaAddress(listingDepositObjectIdRaw || "");
+    if (listingDepositObjectIdRaw && !listingDepositObjectId) {
+      return { ok: false, error: "invalid_listing_deposit_object_id" };
+    }
+    const listingDepositTxDigest = normalizeString(options["listing-deposit-tx-digest"]) || "";
     const createBody = {
-      creatorAddress,
-      title,
-      description,
-      category,
-      listingMode,
-      promotionPolicy,
-      currency,
-      budgetAmount,
+      ...prepared.createBody,
       ...(expiry.expiresAtMs !== null ? { expiresAtMs: expiry.expiresAtMs } : {}),
-      milestones,
+      ...(listingDepositObjectId ? { listingDepositObjectId } : {}),
+      ...(listingDepositTxDigest ? { listingDepositTxDigest } : {}),
     };
     const result = await runApiRequest(
       buildForwardedRequestArgs("POST", "/listings", options, createBody),
@@ -5414,12 +5618,12 @@ async function runListingCreate(commandArgs) {
       null;
     return {
       ...result,
-      creatorAddress,
-      listingMode,
-      promotionPolicy,
+      creatorAddress: prepared.creatorAddress,
+      listingMode: prepared.listingMode,
+      promotionPolicy: prepared.promotionPolicy,
       listingId: extractCommonCreatedId(result.response, [["listingId"], ["item", "id"], ["listing", "id"], ["id"]]) || null,
-      budgetAmount,
-      warnings,
+      budgetAmount: prepared.budgetAmount,
+      warnings: prepared.warnings,
       expiresAtMs: expiry.expiresAtMs,
       expiresAt: responseExpiresAt,
       explicitExpiry: expiry.explicit,
@@ -5427,17 +5631,202 @@ async function runListingCreate(commandArgs) {
         normalizeString(result.response?.item?.creatorReputationStatus) ||
         normalizeString(result.response?.listing?.creatorReputationStatus) ||
         null,
-      milestones,
-      hintLines: buildListingCreateHintLines(result, listingMode),
+      milestones: prepared.milestones,
+      hintLines: buildListingCreateHintLines(result, prepared.listingMode),
     };
   } catch (error) {
     const errorCode = error instanceof Error ? error.message : "listing_create_failed";
     const listingModeRaw = normalizeString(options["listing-mode"]).toUpperCase();
     const listingMode = ["OFFER", "REQUEST"].includes(listingModeRaw) ? listingModeRaw : "";
-    return {
+    const response = {
       ok: false,
       error: errorCode,
       hintLines: buildListingCreateHintLines({ error: errorCode }, listingMode)
+    };
+    if (errorCode === "display_values_require_single_currency") {
+      response.supportedCurrencies = Object.keys(ASSET_DISPLAY_DECIMALS);
+    }
+    if (errorCode === "invalid_listing_category") {
+      response.validCategories = LISTING_CATEGORY_SLUGS;
+    }
+    return response;
+  }
+}
+
+async function runListingDepositCreate(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return { ok: true, help: true, usage: listingDepositCreateUsageLines() };
+  }
+  if (positionals.length > 0) {
+    return { ok: false, error: "unexpected_positional_arguments", details: positionals };
+  }
+  const unexpectedOptions = findUnexpectedOptions(options, [
+    ...FORWARDED_REQUEST_OPTION_NAMES,
+    "alias",
+    "address",
+    "keystore-path",
+    "creator-address",
+    "title",
+    "description",
+    "category",
+    "currency",
+    "listing-mode",
+    "milestones",
+    "milestones-json",
+    "milestones-file",
+    "budget-amount",
+    "display-values",
+    "promotion-policy",
+    "milestone-due-dates",
+    "listing-ref-digest-hex",
+    "payment-coin-object-id",
+    "proof-out",
+    "dry-run",
+    "shared",
+    "expires-at",
+    "expires-at-ms",
+    "expires-in-days",
+    "use-default-expiry",
+  ]);
+  if (unexpectedOptions.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_options",
+      unexpectedOptions,
+      hintLines: buildUnexpectedOptionHintLines("listing-deposit-create", { unexpectedOptions }),
+    };
+  }
+  try {
+    const runtimeContext = await resolveApiRuntimeContext(options);
+    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const prepared = prepareListingDraftOptions(options, runtimeContext);
+    const actorAddress =
+      normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
+      normalizeIotaAddress(signer.entry.address || "");
+    if (!actorAddress) {
+      return {
+        ok: false,
+        error: "missing_actor_address",
+      };
+    }
+    if (prepared.creatorAddress !== normalizeIotaAddress(signer.entry.address) || actorAddress !== prepared.creatorAddress) {
+      return {
+        ok: false,
+        error: "signer_actor_mismatch",
+      };
+    }
+
+    const { feesCall, packageId, chainConfig } = await fetchPolicyAndChainConfig(options, {
+      requireDisputeQuorumConfig: false,
+      requireEscrowFeeConfig: false,
+      requireGovernanceConfig: false,
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+    const listingDepositPolicy = extractListingDepositPolicy(feesCall.result.body);
+    if (!listingDepositPolicy.enabled) {
+      return {
+        ok: false,
+        error: "listing_deposit_not_enabled",
+      };
+    }
+    if (!listingDepositPolicy.configObjectId || !listingDepositPolicy.amount) {
+      return {
+        ok: false,
+        error: "listing_deposit_policy_missing",
+      };
+    }
+    const explicitListingRefDigestHex =
+      typeof options["listing-ref-digest-hex"] === "string" && options["listing-ref-digest-hex"].trim()
+        ? assertLowerHex64(options["listing-ref-digest-hex"].trim().replace(/^0x/i, ""), "listing_ref_digest_hex")
+        : "";
+    const listingRefDigestHex =
+      explicitListingRefDigestHex ||
+      computeListingDepositBindingDigestHex({
+        creatorAddress: prepared.creatorAddress,
+        listingMode: prepared.createBody.listingMode,
+        title: prepared.createBody.title,
+        description: prepared.createBody.description,
+        category: prepared.createBody.category,
+        promotionPolicy: prepared.createBody.promotionPolicy,
+        currency: prepared.createBody.currency,
+        budgetAmount: prepared.createBody.budgetAmount,
+        milestones: prepared.createBody.milestones,
+      });
+    const paymentCoinObjectId =
+      typeof options["payment-coin-object-id"] === "string" && options["payment-coin-object-id"].trim()
+        ? options["payment-coin-object-id"].trim()
+        : undefined;
+    const shared = parseBooleanOption(options.shared, false);
+    const proofOut = resolveOptionalPathOption(options["proof-out"]);
+    const request = {
+      packageId,
+      sender: prepared.creatorAddress,
+      owner: prepared.creatorAddress,
+      listingDepositConfigObjectId: listingDepositPolicy.configObjectId,
+      depositAmount: BigInt(listingDepositPolicy.amount),
+      listingRefDigestHex,
+      shared,
+      ...(paymentCoinObjectId ? { paymentCoinObjectId } : {}),
+    };
+    const transaction = buildCreateListingDepositTx(request);
+    if (parseBooleanOption(options["dry-run"], false)) {
+      const result = await dryRunTransaction(transaction, {
+        network: options.network,
+        rpcUrl: options["rpc-url"],
+      });
+      const payload = {
+        ok: true,
+        mode: "dry_run",
+        actorAddress: prepared.creatorAddress,
+        packageId,
+        chainConfig,
+        listingDepositPolicy,
+        listingRefDigestHex,
+        listingDraft: prepared.createBody,
+        warnings: prepared.warnings,
+        gasSummary: formatDryRunGasSummary(result.result),
+        dryRun: result.result,
+      };
+      if (proofOut) {
+        writeOptionalOutputFile(proofOut, `${stringifyJson(payload)}\n`);
+      }
+      return payload;
+    }
+
+    const executed = await executeTransaction(transaction, {
+      alias: signer.alias,
+      address: signer.address,
+      keystorePath: signer.keystorePath,
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+    const payload = {
+      ok: true,
+      mode: "execute",
+      actorAddress: prepared.creatorAddress,
+      packageId,
+      chainConfig,
+      listingDepositPolicy,
+      listingRefDigestHex,
+      listingDraft: prepared.createBody,
+      warnings: prepared.warnings,
+      listingDepositObjectId:
+        extractCreatedObjectIdByTypeSuffix(executed, "::listing_deposit::ListingDeposit") || null,
+      txDigest: executed.result?.digest || null,
+      createdObjects: extractCreatedObjects(executed),
+      execution: executed.result,
+      proofOut: proofOut || null,
+    };
+    if (proofOut) {
+      writeOptionalOutputFile(proofOut, `${stringifyJson(payload)}\n`);
+    }
+    return payload;
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "listing_deposit_create_failed",
     };
   }
 }
@@ -5649,6 +6038,7 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
         "detail=public_listing_create_requires_reputation_init_plus_any_live_deposit_policy_preflight",
         `next_hint=clawnera-help reputation-init --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
         `next_hint=clawnera-help request GET /policy/fees --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
+        `next_hint=clawnera-help listing-deposit-create --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file> --listing-mode ${listingMode || "<OFFER|REQUEST>"} --title '<title>' --description '<description>' --category <slug> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'`,
         `next_hint=clawnera-help recipe ${listingMode === "REQUEST" ? "buyer-create-request" : "seller-create-listing"} --compact`,
       ];
     case "missing_listing_expiry_choice":
@@ -5902,6 +6292,7 @@ async function runBidAccept(commandArgs) {
       ...result,
       bidId,
       orderId: extractCommonCreatedId(result.response, [["orderId"], ["order", "id"], ["id"]]) || null,
+      guidance: resolveBidAcceptGuidance(result.response),
       hintLines: buildBidAcceptHintLines(result),
     };
   } catch (error) {
@@ -6347,6 +6738,35 @@ function classifyTxPlanRouteFailure({
     waitUntilIso: formatUtcDeadlineMs(waitUntilMs),
     nextCommandHint,
     hint,
+  };
+}
+
+function buildTxPlanWaitUntilReadyPlan({
+  classifiedFailure,
+  waitUntilReadyEnabled,
+  waitUntilReadyDeadlineMs,
+  nowMs = Date.now(),
+}) {
+  if (!waitUntilReadyEnabled || !classifiedFailure) {
+    return null;
+  }
+  const waitUntilMs = parsePositiveDeadlineMs(classifiedFailure.waitUntilMs);
+  if (!waitUntilMs || waitUntilMs <= nowMs) {
+    return null;
+  }
+  const sleepUntilMs = waitUntilMs + DEFAULT_TX_PLAN_WAIT_UNTIL_READY_BUFFER_MS;
+  if (Number.isSafeInteger(waitUntilReadyDeadlineMs) && sleepUntilMs > waitUntilReadyDeadlineMs) {
+    return {
+      allowed: false,
+      waitUntilMs,
+      sleepUntilMs,
+    };
+  }
+  return {
+    allowed: true,
+    waitUntilMs,
+    sleepUntilMs,
+    sleepMs: Math.max(DEFAULT_TX_PLAN_WAIT_UNTIL_READY_BUFFER_MS, sleepUntilMs - nowMs),
   };
 }
 
@@ -7328,6 +7748,7 @@ async function runChainConfig(commandArgs) {
       authStateFile: feesCall.context.authStateFile,
       envFile: feesCall.context.envFile,
       chainConfig,
+      guidance: buildChainConfigGuidance(chainConfig),
     };
   } catch (error) {
     return {
@@ -7359,10 +7780,20 @@ async function runTxPlanCommand(commandArgs, mode) {
   }
 
   const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+  const waitUntilReady = parseBooleanOption(options["wait-until-ready"], false);
+  const maxReadyWaitMs = waitUntilReady
+    ? parsePositiveIntOption(
+        options["max-ready-wait-ms"],
+        "max_ready_wait_ms",
+        DEFAULT_TX_PLAN_WAIT_UNTIL_READY_MAX_MS,
+      )
+    : 0;
+  const waitUntilReadyDeadlineMs = waitUntilReady ? Date.now() + maxReadyWaitMs : null;
   let apiCall;
   let requestOptions = options;
   let autoHydratedReviewerContext = null;
   let autoRetriedRouteFetchCount = 0;
+  let autoWaitUntilReadyCount = 0;
   try {
     const proactiveHydration = await hydrateReviewerSelfTxPlanRequest({
       method,
@@ -7422,6 +7853,16 @@ async function runTxPlanCommand(commandArgs, mode) {
           await sleep(Math.max(250, classifiedRouteFailure.retryAfterMs || 0));
           continue;
         }
+        const waitUntilReadyPlan = buildTxPlanWaitUntilReadyPlan({
+          classifiedFailure: classifiedRouteFailure,
+          waitUntilReadyEnabled: waitUntilReady,
+          waitUntilReadyDeadlineMs,
+        });
+        if (waitUntilReadyPlan?.allowed === true) {
+          autoWaitUntilReadyCount += 1;
+          await sleep(waitUntilReadyPlan.sleepMs);
+          continue;
+        }
         return {
           ok: false,
           error: classifiedRouteFailure?.code || summarizeApiFailure(apiCall.result),
@@ -7434,6 +7875,7 @@ async function runTxPlanCommand(commandArgs, mode) {
           nextCommandHint: classifiedRouteFailure?.nextCommandHint || null,
           autoHydratedReviewerContext,
           autoRetriedRouteFetchCount,
+          autoWaitUntilReadyCount,
         };
       }
       break;
@@ -7485,6 +7927,7 @@ async function runTxPlanCommand(commandArgs, mode) {
         signerAddress: txPlan.request.sender || null,
         autoHydratedReviewerContext,
         autoRetriedExecutionCount,
+        autoWaitUntilReadyCount,
         txBytesOut: txBytesOut || null,
         planOut: planOut || null,
         dryRun: dryRun.result,
@@ -7503,6 +7946,10 @@ async function runTxPlanCommand(commandArgs, mode) {
       writeOptionalOutputFile(txBytesOut, `${executed.txBytesB64}\n`);
     }
     const disputeCaseObjectId = resolveDisputeCaseObjectIdForInviteBinding(txPlan, executed);
+    const executedSignerAddress =
+      normalizeIotaAddress(executed.verifyResult?.signerAddress || "") ||
+      normalizeIotaAddress(signer.address || "") ||
+      normalizeIotaAddress(txPlan.request.sender || "");
     let postExecuteBinding = null;
     const inviteBinding = txPlan.inviteBinding;
     if (
@@ -7561,9 +8008,10 @@ async function runTxPlanCommand(commandArgs, mode) {
       rawPath,
       apiBase: apiCall.apiBase,
       txBuilder: txPlan.txBuilder,
-      signerAddress: executed.verifyResult?.signerAddress || signer.address || txPlan.request.sender || null,
+      signerAddress: executedSignerAddress || null,
       autoHydratedReviewerContext,
       autoRetriedExecutionCount,
+      autoWaitUntilReadyCount,
       txDigest: resolveTxExecutionDigest(executed),
       txBytesOut: txBytesOut || null,
       planOut: planOut || null,
@@ -7618,6 +8066,16 @@ async function runTxPlanCommand(commandArgs, mode) {
         autoRetriedExecutionCount += 1;
         continue;
       }
+      const waitUntilReadyPlan = buildTxPlanWaitUntilReadyPlan({
+        classifiedFailure: classified,
+        waitUntilReadyEnabled: waitUntilReady,
+        waitUntilReadyDeadlineMs,
+      });
+      if (waitUntilReadyPlan?.allowed === true) {
+        autoWaitUntilReadyCount += 1;
+        await sleep(waitUntilReadyPlan.sleepMs);
+        continue;
+      }
       return {
         ok: false,
         error: classified?.code || rawError,
@@ -7625,6 +8083,7 @@ async function runTxPlanCommand(commandArgs, mode) {
         hint: classified?.hint,
         retryable: classified?.retryable === true,
         autoRetriedExecutionCount,
+        autoWaitUntilReadyCount,
         txBuilder: txPlan.txBuilder,
         disputeCaseObjectId: classified?.disputeCaseObjectId || resolveDisputeCaseIdFromTxPlanPath(rawPath),
         waitUntilMs: classified?.waitUntilMs || null,
@@ -7736,6 +8195,12 @@ async function runOrderInitBond(commandArgs) {
         packageId,
         actorAddress,
         chainConfig,
+        guidance: buildOrderInitBondGuidance({
+          policy: order.disputeBondPolicy,
+          chainConfig,
+          selectedRequiredReviewerVotes: requiredReviewerVotes,
+          selectedRequiredReviewerVotesFloor: requiredReviewerVotesFloor,
+        }),
         gasSummary: formatDryRunGasSummary(result.result),
         dryRun: result.result,
       };
@@ -7754,6 +8219,12 @@ async function runOrderInitBond(commandArgs) {
       packageId,
       actorAddress,
       chainConfig,
+      guidance: buildOrderInitBondGuidance({
+        policy: order.disputeBondPolicy,
+        chainConfig,
+        selectedRequiredReviewerVotes: requiredReviewerVotes,
+        selectedRequiredReviewerVotesFloor: requiredReviewerVotesFloor,
+      }),
       txDigest: executed.result?.digest || null,
       disputeBondObjectId: extractCreatedObjectIdByTypeSuffix(executed, "::dispute_quorum::OrderDisputeBond") || null,
       createdObjects: extractCreatedObjects(executed),
@@ -12306,6 +12777,9 @@ function chainConfigUsageLines() {
     "- Usage: clawnera-help chain-config [--api-base <url>] [--auth-state-file <file>]",
     "- Reads /policy/fees to resolve packageId, then looks up governance/dispute-quorum/escrow config ids on-chain",
     "- Optional IOTA runtime overrides: --network <name> --rpc-url <url>",
+    "- Reads the live dispute-bond floor and current quorum defaults; it does not choose or fund the final bond amount",
+    "- Normal DUAL_BOND_REQUIRED funding still needs an explicit amount later on POST /orders/{orderId}/dispute-bond/fund",
+    "- PLATFORM_FUNDED_MARKETING is a separate exact-min operator path, not a normal user amount choice",
     "- Use this when a bot must build local bond/escrow PTBs without guessing object ids"
   ];
 }
@@ -12325,6 +12799,7 @@ function txPlanUsageLines(mode) {
     "- Optional nested body selection: --body-file ./vote-prepare.json --body-select commitRequestBody",
     "- Optional signer overrides: --alias <wallet-alias> --address <0x...> --keystore-path <file>",
     "- Optional outputs: --plan-out <file> --tx-bytes-out <file>",
+    "- Optional timer-aware retry: --wait-until-ready [--max-ready-wait-ms <ms>] waits through known commit/challenge/settlement windows before rerunning the same command",
     `- The package never sends a generic user PTB through the Clawnera worker; it ${verb} locally`
   ];
 }
@@ -12338,8 +12813,146 @@ function orderInitBondUsageLines() {
     "- Optional marketing: --marketing-campaign-id <id>",
     "- Optional execution mode: --dry-run",
     "- Optional signer overrides: --alias <wallet-alias> --address <0x...> --keystore-path <file>",
+    "- This creates the shared dispute-bond object and reviewer-vote policy only; it does not fund the amount",
+    "- Normal DUAL_BOND_REQUIRED funding still needs an explicit amount later on POST /orders/{orderId}/dispute-bond/fund",
+    "- PLATFORM_FUNDED_MARKETING remains a separate exact-min operator path",
     "- Use this before `tx-plan-execute POST /orders/{orderId}/dispute-bond/fund ...`"
   ];
+}
+
+function normalizeDisputeBondSelectionMode(policy) {
+  return policy === "PLATFORM_FUNDED_MARKETING" ? "EXACT_MIN_PLATFORM_FUNDED" : "EXPLICIT_RANGE";
+}
+
+function buildFallbackApiDisputeBondGuidance(response) {
+  const policy = normalizeString(response?.disputeBondPolicy || response?.order?.disputeBondPolicy);
+  if (!policy) {
+    return null;
+  }
+  const platformOperatorFunding = policy === "PLATFORM_FUNDED_MARKETING";
+  return {
+    policy,
+    selectionMode: normalizeDisputeBondSelectionMode(policy),
+    userAmountChoiceRequired: !platformOperatorFunding,
+    platformOperatorFunding,
+    currentMinPerSideAmount: null,
+    currentMaxPerSideAmount: null,
+    defaultRequiredReviewerVotes: null,
+    minRequiredReviewerVotes: null,
+    maxRequiredReviewerVotes: null,
+    selectedRequiredReviewerVotes: null,
+    selectedRequiredReviewerVotesFloor: null,
+  };
+}
+
+function resolveBidAcceptGuidance(response) {
+  if (response?.disputeBondGuidance && typeof response.disputeBondGuidance === "object") {
+    return response.disputeBondGuidance;
+  }
+  return buildFallbackApiDisputeBondGuidance(response);
+}
+
+function buildChainConfigGuidance(chainConfig) {
+  return {
+    policy: "DUAL_BOND_REQUIRED",
+    selectionMode: normalizeDisputeBondSelectionMode("DUAL_BOND_REQUIRED"),
+    userAmountChoiceRequired: true,
+    platformOperatorFunding: false,
+    currentMinPerSideAmount: chainConfig.minDisputeBondPerSideIota,
+    currentMaxPerSideAmount: chainConfig.maxDisputeBondPerSideIota,
+    defaultRequiredReviewerVotes: chainConfig.defaultRequiredReviewerVotes,
+    minRequiredReviewerVotes: chainConfig.minRequiredReviewerVotes,
+    maxRequiredReviewerVotes: chainConfig.maxRequiredReviewerVotes,
+    notes: [
+      "On modern servers, prefer response.disputeBondGuidance from bid-accept or GET /orders/{orderId} when it is present.",
+      "chain-config reads the live floor and current quorum defaults only; it does not choose or fund the final dispute-bond amount.",
+      "For normal DUAL_BOND_REQUIRED orders, POST /orders/{orderId}/dispute-bond/fund still requires an explicit per-side amount inside the live range.",
+      "Treat the live minimum as a floor for the current quorum profile, not as a universal hardcoded constant.",
+      "If the order uses more reviewers or wants stronger reviewer incentives, choosing more than the floor may be appropriate.",
+      "PLATFORM_FUNDED_MARKETING stays separate: exact-min operator funding, not a normal user amount choice."
+    ]
+  };
+}
+
+function buildOrderInitBondGuidance({
+  policy,
+  chainConfig,
+  selectedRequiredReviewerVotes,
+  selectedRequiredReviewerVotesFloor
+}) {
+  const normalizedPolicy = policy === "PLATFORM_FUNDED_MARKETING" ? "PLATFORM_FUNDED_MARKETING" : "DUAL_BOND_REQUIRED";
+  const notes =
+    normalizedPolicy === "PLATFORM_FUNDED_MARKETING"
+      ? [
+          "order-init-bond created the shared bond object and reviewer-vote policy only; it did not fund the amount.",
+          "PLATFORM_FUNDED_MARKETING uses the exact live minimum on the operator/custody path; the bidder does not choose a normal bond amount here.",
+          "The buyer still has to fund and bind the order escrow principal from the buyer wallet."
+        ]
+      : [
+          "order-init-bond created the shared bond object and reviewer-vote policy only; it did not fund the amount.",
+          "POST /orders/{orderId}/dispute-bond/fund still requires an explicit per-side amount for the normal DUAL_BOND_REQUIRED path.",
+          "Treat the live minimum as a floor for the selected quorum profile, not as a universal hardcoded constant.",
+          "If the order uses more reviewers or wants stronger reviewer incentives, choosing more than the floor may be appropriate."
+        ];
+  return {
+    policy: normalizedPolicy,
+    selectionMode: normalizeDisputeBondSelectionMode(normalizedPolicy),
+    userAmountChoiceRequired: normalizedPolicy !== "PLATFORM_FUNDED_MARKETING",
+    platformOperatorFunding: normalizedPolicy === "PLATFORM_FUNDED_MARKETING",
+    currentMinPerSideAmount: chainConfig.minDisputeBondPerSideIota,
+    currentMaxPerSideAmount:
+      normalizedPolicy === "PLATFORM_FUNDED_MARKETING" ? null : chainConfig.maxDisputeBondPerSideIota,
+    defaultRequiredReviewerVotes: chainConfig.defaultRequiredReviewerVotes,
+    minRequiredReviewerVotes: chainConfig.minRequiredReviewerVotes,
+    maxRequiredReviewerVotes: chainConfig.maxRequiredReviewerVotes,
+    selectedRequiredReviewerVotes,
+    selectedRequiredReviewerVotesFloor,
+    notes
+  };
+}
+
+function printDisputeBondGuidanceLines(guidance) {
+  if (!guidance || typeof guidance !== "object") {
+    return;
+  }
+  if (guidance.policy) {
+    console.log(`dispute_bond_policy=${guidance.policy}`);
+  }
+  if (guidance.selectionMode) {
+    console.log(`bond_amount_selection_mode=${guidance.selectionMode}`);
+  }
+  if (guidance.userAmountChoiceRequired !== undefined && guidance.userAmountChoiceRequired !== null) {
+    console.log(`user_amount_choice_required=${guidance.userAmountChoiceRequired}`);
+  }
+  if (guidance.platformOperatorFunding !== undefined && guidance.platformOperatorFunding !== null) {
+    console.log(`platform_operator_funding=${guidance.platformOperatorFunding}`);
+  }
+  if (guidance.currentMinPerSideAmount !== undefined && guidance.currentMinPerSideAmount !== null) {
+    console.log(`guidance_current_min_dispute_bond_per_side_iota=${guidance.currentMinPerSideAmount}`);
+  }
+  if (guidance.currentMaxPerSideAmount !== undefined && guidance.currentMaxPerSideAmount !== null) {
+    console.log(`guidance_current_max_dispute_bond_per_side_iota=${guidance.currentMaxPerSideAmount}`);
+  }
+  if (guidance.defaultRequiredReviewerVotes !== undefined && guidance.defaultRequiredReviewerVotes !== null) {
+    console.log(`guidance_default_required_reviewer_votes=${guidance.defaultRequiredReviewerVotes}`);
+  }
+  if (guidance.minRequiredReviewerVotes !== undefined && guidance.minRequiredReviewerVotes !== null) {
+    console.log(`guidance_min_required_reviewer_votes=${guidance.minRequiredReviewerVotes}`);
+  }
+  if (guidance.maxRequiredReviewerVotes !== undefined && guidance.maxRequiredReviewerVotes !== null) {
+    console.log(`guidance_max_required_reviewer_votes=${guidance.maxRequiredReviewerVotes}`);
+  }
+  if (guidance.selectedRequiredReviewerVotes !== undefined && guidance.selectedRequiredReviewerVotes !== null) {
+    console.log(`selected_required_reviewer_votes=${guidance.selectedRequiredReviewerVotes}`);
+  }
+  if (guidance.selectedRequiredReviewerVotesFloor !== undefined && guidance.selectedRequiredReviewerVotesFloor !== null) {
+    console.log(`selected_required_reviewer_votes_floor=${guidance.selectedRequiredReviewerVotesFloor}`);
+  }
+  if (Array.isArray(guidance.notes)) {
+    for (const note of guidance.notes) {
+      console.log(`guidance_note=${note}`);
+    }
+  }
 }
 
 function orderCreateEscrowUsageLines() {
@@ -13108,12 +13721,14 @@ function parseArgs(argv) {
 }
 
 function printJson(payload) {
-  process.stdout.write(
-    `${JSON.stringify(
-      payload,
-      (_key, value) => (typeof value === "bigint" ? value.toString() : value),
-      2,
-    )}\n`,
+  process.stdout.write(`${stringifyJson(payload)}\n`);
+}
+
+function stringifyJson(payload) {
+  return JSON.stringify(
+    payload,
+    (_key, value) => (typeof value === "bigint" ? value.toString() : value),
+    2,
   );
 }
 
@@ -13152,6 +13767,9 @@ const aliasCommands = new Map([
   ["wallet-ls", "wallet-list"],
   ["categories", "listing-categories"],
   ["listing-cats", "listing-categories"],
+  ["listing-deposit", "listing-deposit-create"],
+  ["create-listing-deposit", "listing-deposit-create"],
+  ["deposit-create", "listing-deposit-create"],
   ["create-listing", "listing-create"],
   ["cancel-listing", "listing-cancel"],
   ["delete-listing", "listing-cancel"],
@@ -13206,6 +13824,7 @@ const aliasCommands = new Map([
   ["http", "request"],
   ["iota-balance", "iota-get-balance"],
   ["iota-gas", "iota-get-gas"],
+  ["iota-faucet", "iota-request-faucet"],
   ["iota-transfer-prepare", "iota-prepare-transfer"],
   ["iota-transfer-dry-run", "iota-dry-run-transfer"],
   ["iota-transfer-execute", "iota-execute-transfer"]
@@ -13232,6 +13851,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         ],
         thinHelpers: [
           "listing-categories",
+          "listing-deposit-create",
           "listing-create",
           "listing-cancel",
           "listing-renew",
@@ -13263,6 +13883,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "units",
         "request",
         "listing-categories",
+        "listing-deposit-create",
         "listing-create",
         "listing-cancel",
         "listing-renew",
@@ -13300,6 +13921,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         "iota-active-env",
         "iota-get-balance",
         "iota-get-gas",
+        "iota-request-faucet",
         "iota-prepare-transfer",
         "iota-dry-run-transfer",
         "iota-execute-transfer",
@@ -13729,6 +14351,45 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   if (!result.ok && !result.help) {
     process.exitCode = 1;
   }
+} else if (effectiveCommand === "listing-deposit-create") {
+  const result = await runListingDepositCreate(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`listing_deposit_create_ok actor_address=${result.actorAddress}`);
+    console.log(`listing_ref_digest_hex=${result.listingRefDigestHex}`);
+    if (result.listingDepositPolicy?.amount) {
+      console.log(`listing_deposit_amount=${result.listingDepositPolicy.amount}`);
+    }
+    if (result.listingDepositPolicy?.configObjectId) {
+      console.log(`listing_deposit_config_object_id=${result.listingDepositPolicy.configObjectId}`);
+    }
+    if (result.listingDepositObjectId) {
+      console.log(`listing_deposit_object_id=${result.listingDepositObjectId}`);
+    }
+    if (result.txDigest) {
+      console.log(`listing_deposit_tx_digest=${result.txDigest}`);
+    }
+    if (result.proofOut) {
+      console.log(`proof_file=${result.proofOut}`);
+    }
+    console.log("next_create_field=use listing_deposit_object_id as listingDepositObjectId on clawnera-help listing-create");
+  } else {
+    console.error(`listing_deposit_create_error: ${result.error}`);
+    if (Array.isArray(result.hintLines)) {
+      for (const line of result.hintLines) {
+        console.error(line);
+      }
+    }
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
 } else if (effectiveCommand === "listing-create") {
   const result = await runListingCreate(commandArgs);
   if (flags.json) {
@@ -13884,6 +14545,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   } else if (result.ok) {
     console.log(`bid_accept_ok bid_id=${result.bidId}`);
     console.log(`order_id=${result.orderId || "unknown"}`);
+    printDisputeBondGuidanceLines(result.guidance);
     console.log("next_readback=clawnera-help request GET /orders/<order-id> --auth-state-file <buyer-auth-state-file>");
   } else {
     console.error(`bid_accept_error: ${result.error}`);
@@ -13911,9 +14573,12 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`dispute_quorum_config_object_id=${result.chainConfig.disputeQuorumConfigObjectId}`);
     console.log(`escrow_fee_config_object_id=${result.chainConfig.escrowFeeConfigObjectId}`);
     console.log(`default_required_reviewer_votes=${result.chainConfig.defaultRequiredReviewerVotes}`);
+    console.log(`max_required_reviewer_votes=${result.chainConfig.maxRequiredReviewerVotes}`);
     console.log(`min_required_reviewer_votes=${result.chainConfig.minRequiredReviewerVotes}`);
     console.log(`min_dispute_bond_per_side_iota=${result.chainConfig.minDisputeBondPerSideIota}`);
+    console.log(`max_dispute_bond_per_side_iota=${result.chainConfig.maxDisputeBondPerSideIota}`);
     console.log(`reviewer_min_stake_iota=${result.chainConfig.reviewerMinStakeIota}`);
+    printDisputeBondGuidanceLines(result.guidance);
   } else {
     console.error(`chain_config_error: ${result.error}`);
     process.exitCode = 1;
@@ -13964,6 +14629,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`tx_digest=${result.txDigest || "unknown"}`);
     if (Number.isInteger(result.autoRetriedExecutionCount) && result.autoRetriedExecutionCount > 0) {
       console.log(`auto_retry_count=${result.autoRetriedExecutionCount}`);
+    }
+    if (Number.isInteger(result.autoWaitUntilReadyCount) && result.autoWaitUntilReadyCount > 0) {
+      console.log(`auto_wait_until_ready_count=${result.autoWaitUntilReadyCount}`);
     }
     if (result.signerAddress) {
       console.log(`signer_address=${result.signerAddress}`);
@@ -14037,6 +14705,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (Number.isInteger(result.autoRetriedExecutionCount) && result.autoRetriedExecutionCount > 0) {
       console.error(`auto_retry_count=${result.autoRetriedExecutionCount}`);
     }
+    if (Number.isInteger(result.autoWaitUntilReadyCount) && result.autoWaitUntilReadyCount > 0) {
+      console.error(`auto_wait_until_ready_count=${result.autoWaitUntilReadyCount}`);
+    }
     if (result.txDigest) {
       console.error(`tx_digest=${result.txDigest}`);
     }
@@ -14080,7 +14751,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
       console.log(`dispute_bond_object_id=${result.disputeBondObjectId}`);
     }
     console.log(`default_required_reviewer_votes=${result.chainConfig.defaultRequiredReviewerVotes}`);
+    console.log(`max_required_reviewer_votes=${result.chainConfig.maxRequiredReviewerVotes}`);
     console.log(`min_dispute_bond_per_side_iota=${result.chainConfig.minDisputeBondPerSideIota}`);
+    console.log(`max_dispute_bond_per_side_iota=${result.chainConfig.maxDisputeBondPerSideIota}`);
+    printDisputeBondGuidanceLines(result.guidance);
   } else {
     console.error(`order_init_bond_error: ${result.error}`);
     process.exitCode = 1;
@@ -14900,6 +15574,28 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`gas_coin_objects=${Array.isArray(result.gasCoins?.data) ? result.gasCoins.data.length : 0}`);
   } else {
     console.error(`iota_get_gas_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "iota-request-faucet") {
+  const result = await runIotaRequestFaucet(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`iota_request_faucet_ok recipient=${result.recipient}`);
+    console.log(`network=${result.network}`);
+    console.log(`faucet_url=${result.faucetUrl}`);
+    console.log(
+      `transferred_gas_objects=${Array.isArray(result.faucet?.transferredGasObjects) ? result.faucet.transferredGasObjects.length : 0}`,
+    );
+  } else {
+    console.error(`iota_request_faucet_error: ${result.error}`);
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {

@@ -219,6 +219,89 @@ test("request accepts --auth-state as a shorthand alias for --auth-state-file", 
   }
 });
 
+test("chain-config output explains that the live minimum is a floor and amount choice stays explicit", async () => {
+  const mock = await startMockServer({
+    "GET /policy/fees": () => ({
+      status: 200,
+      body: {
+        policy: {
+          chainConfig: {
+            marketplacePackageId: "0x1111111111111111111111111111111111111111111111111111111111111111",
+            escrowFeeConfigObjectId: "0x9999999999999999999999999999999999999999999999999999999999999999",
+            governanceConfigObjectId: "0x8888888888888888888888888888888888888888888888888888888888888888",
+            disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
+          }
+        }
+      }
+    }),
+    "GET /reviewers/me/metrics": (request) => {
+      assert.equal(request.headers.authorization, "Bearer test-jwt");
+      return {
+        status: 200,
+        body: {
+          registered: true,
+          runtime: {
+            reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
+            disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
+          }
+        }
+      };
+    },
+    "POST /rpc": (request) => {
+      const method = request.body?.method;
+      if (method === "iota_getObject") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: {
+              data: {
+                objectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+                previousTransaction: "init-reviewer-registry-1",
+                content: {
+                  fields: {
+                    default_required_reviewer_votes: "3",
+                    min_required_reviewer_votes: "3",
+                    max_required_reviewer_votes: "7",
+                    min_dispute_bond_per_side_iota: "500000",
+                    max_dispute_bond_per_side_iota: "5000000",
+                    reviewer_min_stake_iota: "1000000"
+                  }
+                }
+              }
+            }
+          }
+        };
+      }
+      throw new Error(`unexpected_rpc_method:${String(method)}`);
+    }
+  });
+
+  try {
+    const result = await runCli([
+      "chain-config",
+      "--api-base",
+      mock.baseUrl,
+      "--rpc-url",
+      `${mock.baseUrl}/rpc`,
+      "--jwt",
+      "test-jwt"
+    ]);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /chain_config_ok/);
+    assert.match(result.stdout, /bond_amount_selection_mode=EXPLICIT_RANGE/);
+    assert.match(result.stdout, /user_amount_choice_required=true/);
+    assert.match(result.stdout, /guidance_current_max_dispute_bond_per_side_iota=5000000/);
+    assert.match(result.stdout, /guidance_max_required_reviewer_votes=7/);
+    assert.match(result.stdout, /guidance_note=chain-config reads the live floor and current quorum defaults only/);
+    assert.match(result.stdout, /guidance_note=Treat the live minimum as a floor/);
+    assert.match(result.stdout, /guidance_note=PLATFORM_FUNDED_MARKETING stays separate: exact-min operator funding/);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("dispute-evidence-publish rewraps the current deliverable for assigned reviewers", async () => {
   const sellerAddress = `0x${"3".repeat(64)}`;
   const buyerAddress = `0x${"4".repeat(64)}`;
@@ -3584,6 +3667,76 @@ test("listing-create infers creator address and posts a canonical body", async (
   }
 });
 
+test("listing-create forwards listing deposit binding fields when provided", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-deposit-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const creatorAddress = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  const listingDepositObjectId = "0x2222222222222222222222222222222222222222222222222222222222222222";
+  const listingDepositTxDigest = "5fW43PjLzWkVhQyWn1H1zFRNctbq2b4pV6x4Up6gYgHk";
+  const mock = await startMockServer({
+    "POST /listings": (request) => ({
+      status: 200,
+      body: {
+        listing: {
+          id: "listing-with-deposit-1"
+        },
+        seen: request.body
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: creatorAddress,
+        alias: "seller"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-create",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-mode",
+      "OFFER",
+      "--title",
+      "Deposit-bound listing",
+      "--description",
+      "Listing create should forward the on-chain deposit binding.",
+      "--category",
+      "ops",
+      "--currency",
+      "IOTA",
+      "--expires-at-ms",
+      "1893456000000",
+      "--listing-deposit-object-id",
+      listingDepositObjectId,
+      "--listing-deposit-tx-digest",
+      listingDepositTxDigest,
+      "--milestones",
+      "Milestone 1:500000000;Milestone 2:500000000",
+      "--milestone-due-dates",
+      `${TEST_LISTING_DUE_AT_1};${TEST_LISTING_DUE_AT_2}`,
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.response.seen.listingDepositObjectId, listingDepositObjectId);
+    assert.equal(payload.response.seen.listingDepositTxDigest, listingDepositTxDigest);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("listing-categories reads canonical category slugs", async () => {
   const mock = await startMockServer({
     "GET /listings/categories": () => ({
@@ -5272,6 +5425,56 @@ test("bid-accept works unchanged for REQUEST-mode buyer acceptance and preserves
   }
 });
 
+test("bid-accept prints structured dispute bond guidance when the API returns it", async () => {
+  const mock = await startMockServer({
+    "POST /bids/bid-guidance/accept": () => ({
+      status: 200,
+      body: {
+        order: {
+          id: "order-guidance-1",
+          disputeBondPolicy: "DUAL_BOND_REQUIRED"
+        },
+        disputeBondGuidance: {
+          policy: "DUAL_BOND_REQUIRED",
+          selectionMode: "EXPLICIT_RANGE",
+          userAmountChoiceRequired: true,
+          platformOperatorFunding: false,
+          currentMinPerSideAmount: "500000",
+          currentMaxPerSideAmount: "5000000",
+          defaultRequiredReviewerVotes: 3,
+          minRequiredReviewerVotes: 3,
+          maxRequiredReviewerVotes: 7,
+          selectedRequiredReviewerVotes: null,
+          selectedRequiredReviewerVotesFloor: null
+        }
+      }
+    })
+  });
+
+  try {
+    const result = await runCli([
+      "bid-accept",
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      "test-jwt",
+      "--bid-id",
+      "bid-guidance"
+    ]);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /bid_accept_ok bid_id=bid-guidance/);
+    assert.match(result.stdout, /order_id=order-guidance-1/);
+    assert.match(result.stdout, /bond_amount_selection_mode=EXPLICIT_RANGE/);
+    assert.match(result.stdout, /user_amount_choice_required=true/);
+    assert.match(result.stdout, /platform_operator_funding=false/);
+    assert.match(result.stdout, /guidance_current_min_dispute_bond_per_side_iota=500000/);
+    assert.match(result.stdout, /guidance_current_max_dispute_bond_per_side_iota=5000000/);
+    assert.match(result.stdout, /guidance_max_required_reviewer_votes=7/);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("request can select a nested body payload from a body file", async () => {
   const mock = await startMockServer({
     "POST /echo": (request) => ({
@@ -5653,6 +5856,60 @@ test("tx-plan-execute prints top-level finalize wait hints in non-json mode", as
     assert.match(result.stderr, new RegExp(`wait_until=${new Date(challengeDeadlineMs).toISOString().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
     assert.match(result.stderr, /retry_after_ms=30/);
     assert.match(result.stderr, /next_command=clawnera-help tx-plan-execute POST '\/disputes\/.*\/finalize'/);
+    assert.equal(finalizeCalls, 2);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("tx-plan-execute can wait through a known finalize challenge window when asked", async () => {
+  const caseId = "0x6cb6d1df7a78eb63647728d7cdf7a5098dce8cb4f0693b20fee7641629068ac5";
+  const challengeDeadlineMs = Date.now() + 800;
+  let finalizeCalls = 0;
+  const mock = await startMockServer({
+    [`POST /disputes/${caseId}/finalize`]: () => {
+      finalizeCalls += 1;
+      if (Date.now() < challengeDeadlineMs) {
+        return {
+          status: 409,
+          body: {
+            error: "dispute_challenge_window_open",
+            challengeDeadlineMs,
+            retryAfterMs: 30_000,
+          },
+        };
+      }
+      return {
+        status: 409,
+        body: {
+          error: "dispute_not_finalizable",
+        },
+      };
+    },
+  });
+
+  const startedAtMs = Date.now();
+  try {
+    const result = await runCli([
+      "tx-plan-execute",
+      "POST",
+      `/disputes/${caseId}/finalize`,
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      buildJwtWithExp(4102444800),
+      "--wait-until-ready",
+      "--max-ready-wait-ms",
+      "1000",
+      "--json",
+    ]);
+    const elapsedMs = Date.now() - startedAtMs;
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "dispute_not_finalizable");
+    assert.equal(payload.autoWaitUntilReadyCount, 1);
+    assert.equal(payload.autoRetriedRouteFetchCount, 0);
+    assert.ok(elapsedMs >= 500, `expected the helper to wait for the challenge window, elapsed=${elapsedMs}`);
     assert.equal(finalizeCalls, 2);
   } finally {
     await mock.close();

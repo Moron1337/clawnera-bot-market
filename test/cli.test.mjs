@@ -85,6 +85,7 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /clawnera-help units/);
   assert.match(result.stdout, /clawnera-help request <METHOD> <path>/);
   assert.match(result.stdout, /clawnera-help listing-categories/);
+  assert.match(result.stdout, /clawnera-help listing-deposit-create/);
   assert.match(result.stdout, /clawnera-help listing-create/);
   assert.match(result.stdout, /clawnera-help listing-cancel/);
   assert.match(result.stdout, /clawnera-help listing-renew/);
@@ -110,6 +111,7 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /clawnera-help deliverable-decrypt/);
   assert.match(result.stdout, /clawnera-help reviewer-vote-prepare/);
   assert.match(result.stdout, /clawnera-help iota-get-balance/);
+  assert.match(result.stdout, /clawnera-help iota-request-faucet/);
   assert.match(result.stdout, /clawnera-help iota-prepare-transfer/);
   assert.match(result.stdout, /clawnera-help iota-execute-transfer/);
   assert.match(result.stdout, /clawnera-help notifications/);
@@ -146,6 +148,7 @@ test("help json output includes auth-login command", () => {
   assert.ok(payload.commands.includes("units"));
   assert.ok(payload.commands.includes("request"));
   assert.ok(payload.commands.includes("listing-categories"));
+  assert.ok(payload.commands.includes("listing-deposit-create"));
   assert.ok(payload.commands.includes("listing-create"));
   assert.ok(payload.commands.includes("listing-cancel"));
   assert.ok(payload.commands.includes("listing-renew"));
@@ -170,6 +173,7 @@ test("help json output includes auth-login command", () => {
   assert.ok(payload.commands.includes("milestone-reject"));
   assert.ok(payload.commands.includes("deliverable-decrypt"));
   assert.ok(payload.commands.includes("reviewer-vote-prepare"));
+  assert.ok(payload.commands.includes("iota-request-faucet"));
   assert.ok(payload.commands.includes("iota-prepare-transfer"));
   assert.ok(payload.commands.includes("iota-execute-transfer"));
 });
@@ -206,10 +210,29 @@ test("request help prints usage", () => {
   assert.match(result.stdout, /Use API paths like \/health or \/orders\/<order-id>/);
 });
 
+test("chain-config help explains live floor semantics", () => {
+  const result = runCli(["chain-config", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Live chain config helper/);
+  assert.match(result.stdout, /does not choose or fund the final bond amount/);
+  assert.match(result.stdout, /Normal DUAL_BOND_REQUIRED funding still needs an explicit amount later/);
+  assert.match(result.stdout, /PLATFORM_FUNDED_MARKETING is a separate exact-min operator path/);
+});
+
+test("order-init-bond help explains init versus funding semantics", () => {
+  const result = runCli(["order-init-bond", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Local order bond init helper/);
+  assert.match(result.stdout, /does not fund the amount/);
+  assert.match(result.stdout, /DUAL_BOND_REQUIRED funding still needs an explicit amount later/);
+  assert.match(result.stdout, /exact-min operator path/);
+});
+
 test("encrypted delivery helpers print usage", () => {
   const commands = [
     ["key-agreement-upsert", /Key agreement upsert helper/],
     ["reputation-init", /Reputation profile init helper/],
+    ["listing-deposit-create", /Listing deposit helper/],
     ["reviewer-register", /Reviewer register helper/],
     ["reviewer-update", /Reviewer update helper/],
     ["deliverable-encrypt", /Deliverable encrypt helper/],
@@ -353,6 +376,14 @@ test("iota prepare transfer help prints usage", () => {
   assert.match(result.stdout, /IOTA prepare transfer helper/);
   assert.match(result.stdout, /--recipient <0x\.\.\.>/);
   assert.match(result.stdout, /Builds tx bytes locally on the user machine/);
+});
+
+test("iota request faucet help prints usage", () => {
+  const result = runCli(["iota-request-faucet", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /IOTA faucet helper/);
+  assert.match(result.stdout, /--alias <wallet-alias> or --address <wallet-address>/);
+  assert.match(result.stdout, /testnet\/devnet/i);
 });
 
 test("iota execute transfer help prints usage", () => {
@@ -987,6 +1018,11 @@ test("fund-order recipe clarifies seller identity for REQUEST mode", () => {
   const result = runCli(["recipe", "fund-order"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /In REQUEST mode the seller is the accepted bidder, not the request creator/);
+  assert.match(result.stdout, /normal DUAL_BOND_REQUIRED path still needs an explicit per-side amount later/);
+  assert.match(result.stdout, /Treat it as a floor for the current quorum profile/);
+  assert.match(result.stdout, /PLATFORM_FUNDED_MARKETING/);
+  assert.match(result.stdout, /exact-min operator funding flow/);
+  assert.doesNotMatch(result.stdout, /"amount": "500000"/);
   assert.match(result.stdout, /Trust the bind response first/);
   assert.match(result.stdout, /immediate reads can lag briefly after escrow bind/);
 });
@@ -1085,6 +1121,25 @@ test("curated docs do not contain stale reviewer vote redirection examples", () 
     for (const match of matches) {
       assert.match(match[0], /--json/, `${relativePath} contains a stale reviewer-vote redirect example without --json`);
     }
+  }
+});
+
+test("bot-first dispute-bond docs no longer teach literal 500000 funding bodies", () => {
+  const files = [
+    "config/recipes.json",
+    "docs/guides/BOT_ONBOARDING.md",
+    "docs/guides/TASK_RECIPES.md",
+    "docs/guides/API_REFERENCE.md",
+    "docs/guides/CANONICAL_LIVE_RUN_CHECKLIST.md",
+    "docs/guides/MINIMAL_HTTP_EXAMPLES.md",
+  ];
+  for (const relativePath of files) {
+    const text = readFileSync(path.join(repoRoot, relativePath), "utf8");
+    assert.doesNotMatch(
+      text,
+      /POST \/orders\/<order-id>\/dispute-bond\/fund[\s\S]{0,260}"amount": "500000"/,
+      relativePath
+    );
   }
 });
 

@@ -114,15 +114,12 @@ paths:
                                 enum:
                                   - wallet_auth
                                   - bot_only
-                              additionalAuthorizationRequired:
-                                type: boolean
                               policy:
                                 $ref: '#/components/schemas/SponsorPolicySnapshot'
                             type: object
                             required:
                               - enabled
                               - mode
-                              - additionalAuthorizationRequired
                               - policy
                         type: object
                         required:
@@ -884,10 +881,10 @@ paths:
         - Listings
       operationId: createListing
       description: >-
-        Create a public OFFER or REQUEST listing. Send `listingMode` explicitly even though the legacy runtime still
-        defaults omitted values to `OFFER`. Live runtimes with on-chain reputation config may reject missing creator
-        reputation profiles with `409 reputation_profile_required`. `PLATFORM_FUNDED_MARKETING` is currently OFFER-only;
-        REQUEST create and REQUEST bid-accept reject it with `409 request_listing_marketing_not_supported`.
+        Create a public OFFER or REQUEST listing. `listingMode` is required and must be sent explicitly. Live runtimes
+        with on-chain reputation config may reject missing creator reputation profiles with `409
+        reputation_profile_required`. `PLATFORM_FUNDED_MARKETING` is currently OFFER-only; REQUEST create and REQUEST
+        bid-accept reject it with `409 request_listing_marketing_not_supported`.
       parameters:
         - name: idempotency-key
           in: header
@@ -3829,13 +3826,10 @@ components:
                   type: string
                   enum:
                     - capability
-                additionalAuthorizationRequired:
-                  type: boolean
               type: object
               additionalProperties: false
               required:
                 - mode
-                - additionalAuthorizationRequired
           type: object
           additionalProperties: false
           required:
@@ -5403,9 +5397,7 @@ components:
         - relevantEventTypes
         - message
     AcceptBidRequest:
-      oneOf:
-        - $ref: '#/components/schemas/AcceptBidByListingRequest'
-        - $ref: '#/components/schemas/AcceptStoredBidRequest'
+      $ref: '#/components/schemas/AcceptStoredBidRequest'
     AcceptStoredBidRequest:
       properties:
         buyerAddress:
@@ -5482,32 +5474,6 @@ components:
         - publicKeyMultibase
         - walletBindingMessage
         - walletBindingSignature
-    AcceptBidByListingRequest:
-      properties:
-        buyerAddress:
-          type: string
-        sellerAddress:
-          type: string
-        amount:
-          type: string
-          pattern: ^[0-9]+$
-        currency:
-          type: string
-          enum:
-            - IOTA
-            - CLAW
-        orderId:
-          type: string
-          format: uuid
-        communicationProposal:
-          $ref: '#/components/schemas/OrderCommunicationProposalRequest'
-      type: object
-      additionalProperties: false
-      required:
-        - buyerAddress
-        - sellerAddress
-        - amount
-        - currency
     Bid:
       properties:
         id:
@@ -5865,9 +5831,7 @@ components:
           type: string
         listingMode:
           $ref: '#/components/schemas/ListingMode'
-          description: >-
-            Send this explicitly. The legacy runtime still defaults omitted values to `OFFER`, but bot-facing helpers
-            should always choose `OFFER` or `REQUEST` intentionally.
+          description: Required. Choose `OFFER` or `REQUEST` explicitly.
         title:
           type: string
           minLength: 4
@@ -5915,6 +5879,7 @@ components:
       additionalProperties: false
       required:
         - creatorAddress
+        - listingMode
         - title
         - currency
         - budgetAmount

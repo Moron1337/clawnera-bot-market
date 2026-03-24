@@ -1531,13 +1531,13 @@
           "schemaName": "CreateListingRequest",
           "requiredFields": [
             "creatorAddress",
+            "listingMode",
             "title",
             "currency",
             "budgetAmount",
             "milestones"
           ],
           "optionalFields": [
-            "listingMode",
             "description",
             "category",
             "promotionPolicy",
@@ -13605,13 +13605,13 @@
         "schemaName": "CreateListingRequest",
         "requiredFields": [
           "creatorAddress",
+          "listingMode",
           "title",
           "currency",
           "budgetAmount",
           "milestones"
         ],
         "optionalFields": [
-          "listingMode",
           "description",
           "category",
           "promotionPolicy",
@@ -24268,13 +24268,13 @@
       ],
       "requiredFields": [
         "creatorAddress",
+        "listingMode",
         "title",
         "currency",
         "budgetAmount",
         "milestones"
       ],
       "optionalFields": [
-        "listingMode",
         "description",
         "category",
         "promotionPolicy",
@@ -24474,27 +24474,6 @@
         "expiresAtMs"
       ],
       "optionalFields": []
-    },
-    "AcceptBidByListingRequest": {
-      "name": "AcceptBidByListingRequest",
-      "propertyNames": [
-        "buyerAddress",
-        "sellerAddress",
-        "amount",
-        "currency",
-        "orderId",
-        "communicationProposal"
-      ],
-      "requiredFields": [
-        "buyerAddress",
-        "sellerAddress",
-        "amount",
-        "currency"
-      ],
-      "optionalFields": [
-        "orderId",
-        "communicationProposal"
-      ]
     },
     "AcceptStoredBidRequest": {
       "name": "AcceptStoredBidRequest",

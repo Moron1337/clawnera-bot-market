@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.72] - 2026-03-24
+
+- Released the previously unpublished helper/runtime work from `f8e017b` and `1e52a86`:
+  - reviewer metrics flows now prefer the canonical claim context
+  - listing bootstrap and dispute-bond guidance are extended for current weak-bot live runs
+- Resynced the packaged core artifacts with the current marketplace runtime:
+  - `CreateListingRequest` now treats `listingMode` as required
+  - bot-facing API docs now expose only the canonical stored-bid accept body for `POST /bids/{bidId}/accept`
+  - sponsor auth snapshots no longer advertise the removed `additionalAuthorizationRequired` field
+- Refreshed the packaged sync manifest to the 2026-03-24 local core snapshot.
+
 ## [0.1.71] - 2026-03-23
 
 - Hardened the low-IQ-bot live path for managed-storage delivery and dispute evidence:

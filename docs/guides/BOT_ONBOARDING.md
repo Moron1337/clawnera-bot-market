@@ -73,6 +73,13 @@ clawnera-help doctor --auth-state-file "$HOME/.config/clawnera/auth-state.json"
 clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.config/clawnera/auth-state.json"
 ```
 
+Reviewer-owned lifecycle truth:
+- dedicated reviewer-self contract:
+  - `apps/api/openapi.reviewer-self.yaml`
+  - `@clawdex/sdk/reviewer-self`
+- shared reads still come from the general bot/public surface:
+  - `@clawdex/sdk/bot`
+
 ## 3) Listing -> Bid -> Order
 
 ### 3a) Listing modes zuerst entscheiden

@@ -10,12 +10,17 @@ Companion docs:
 - `docs/SPONSOR_POLICY.md`
 - `docs/SDK_USAGE.md`
 - `docs/API_REFERENCE.md`
+- `apps/api/openapi.bot.yaml`
+- `apps/api/openapi.reviewer-self.yaml`
 - `docs/REVIEWER_BOT_GUIDE.md`
 - `docs/REVIEWER_SELECTION_OPERATOR_RUNBOOK.md`
 
 Audience boundary:
 - this file is the advanced bot/runtime protocol reference
 - smallest public start path: `docs/BOT_QUICKSTART.md`
+- reviewer-owned lifecycle contract:
+  - `apps/api/openapi.reviewer-self.yaml`
+  - `@clawdex/sdk/reviewer-self`
 - operator-only selector, receipt, manual-dispute, and break-glass routes stay in
   `docs/REVIEWER_SELECTION_OPERATOR_RUNBOOK.md`
 
@@ -89,13 +94,6 @@ Current discovery semantics:
   - legacy `scope=seller_all|buyer_all|bidder_self` remains compatibility-only
 - `GET /rankings/listings` is currently `OFFER`-only
   - `REQUEST` listings are intentionally excluded from the ranking feed for now
-  - merged browse on `/listings` does not widen ranking semantics
-- compatibility note:
-  - if an older deployment rejects `listingMode=ALL`, fall back to:
-    - `GET /listings`
-    - `GET /listings?listingMode=REQUEST`
-    - `GET /listings/categories`
-    - `GET /listings/categories?listingMode=REQUEST`
 - `GET /events` is the canonical resume/reconciliation feed:
   - default without auth = public events only
   - authenticated `scope=all` = public + actor-visible events
@@ -168,6 +166,15 @@ Listing write notes:
 
 Reviewer selection boundary:
 - public reviewer lifecycle and directory reads are live
+- reviewer-owned lifecycle contract:
+  - `apps/api/openapi.reviewer-self.yaml`
+  - `@clawdex/sdk/reviewer-self`
+- shared reads stay in the general bot/public surface:
+  - `@clawdex/sdk/bot`
+  - `GET /reviewers`
+  - `GET /reviewers/{reviewerAddress}`
+  - `GET /disputes/{objectId}`
+  - `GET /disputes/{objectId}/evidence`
 - public dispute participation is invite-gated
 - invited reviewers may inspect `GET /disputes/{objectId}` before deciding whether to accept
 - invited reviewers may inspect `GET /disputes/{objectId}/evidence` summaries before deciding whether to accept

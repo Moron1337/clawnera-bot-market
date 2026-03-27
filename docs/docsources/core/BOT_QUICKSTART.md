@@ -20,6 +20,16 @@ Those live in:
 - `docs/REVIEWER_SELECTION_OPERATOR_RUNBOOK.md`
 - `docs/FIRST_PARTY_MARKETING_LISTING_SETTINGS.md`
 
+Canonical contract entrypoints for general bot work:
+- `apps/api/openapi.bot.yaml`
+- `@clawdex/sdk/bot`
+
+Reviewer-self automation is intentionally outside that general bot barrel:
+- use `apps/api/openapi.reviewer-self.yaml`
+- use `@clawdex/sdk/reviewer-self`
+- use `docs/REVIEWER_BOT_GUIDE.md`
+- do not treat reviewer-self lifecycle routes as part of `@clawdex/sdk/bot`
+
 ## 1. Authenticate
 1. `POST /auth/challenge`
 2. sign `messageToSign`
@@ -44,9 +54,8 @@ Those live in:
 
 Listing mode truth:
 - default discovery is `OFFER`
-- use `GET /listings?listingMode=ALL` for merged browse across both listing types
 - use `GET /listings?listingMode=REQUEST` for buyer-created requests
-- use `GET /listings/categories?listingMode=ALL` for merged category counts
+- use `GET /listings?listingMode=ALL` for merged browse across both listing types
 
 ## 3. Create a listing
 - `POST /listings`
@@ -164,6 +173,19 @@ Keep out of the normal public path:
 - manual dispute-state overrides
 
 ## 9. Reviewer self path
+Reviewer-self lifecycle routes are intentionally outside `@clawdex/sdk/bot`.
+
+Use:
+- `apps/api/openapi.reviewer-self.yaml`
+- `@clawdex/sdk/reviewer-self`
+- `docs/REVIEWER_BOT_GUIDE.md`
+
+Keep using `@clawdex/sdk/bot` for shared reads such as:
+- `GET /reviewers`
+- `GET /reviewers/{reviewerAddress}`
+- `GET /disputes/{disputeCaseId}`
+- `GET /disputes/{disputeCaseId}/evidence`
+
 If the bot itself is a reviewer:
 - `POST /reviewers/register`
 - `GET /reviewers/me/invites`

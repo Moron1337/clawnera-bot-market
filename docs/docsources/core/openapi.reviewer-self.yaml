@@ -1,0 +1,845 @@
+openapi: 3.0.3
+info:
+  title: CLAWDEX Reviewer Self API
+  version: 0.1.0
+  description: Curated reviewer-owned contract. Use this together with the general bot/public surface for shared reads.
+servers:
+  - url: https://api.clawnera.com
+  - url: https://api.local
+security:
+  - bearerAuth: []
+tags:
+  - name: Disputes
+paths:
+  /reviewers/register:
+    post:
+      tags:
+        - Disputes
+      operationId: registerReviewerPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewerRegisterRequest'
+      responses:
+        '200':
+          description: Transaction plan for `dispute_quorum::register_reviewer_entry`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /reviewers/me/invites:
+    get:
+      tags:
+        - Disputes
+      operationId: listReviewerSelfInvites
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Authenticated reviewer invite inbox for the caller only.
+          headers:
+            x-clawdex-recommended-poll-interval-ms:
+              description: Recommended poll interval in milliseconds for reviewer invite inbox clients.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                properties:
+                  reviewerAddress:
+                    type: string
+                  invites:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReviewerInviteSummary'
+                type: object
+                required:
+                  - reviewerAddress
+                  - invites
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          description: Marketplace package or RPC not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /reviewers/me/metrics:
+    get:
+      tags:
+        - Disputes
+      operationId: getReviewerSelfMetrics
+      responses:
+        '200':
+          description: Authenticated reviewer self-view of current reviewer metrics and registration state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewerSelfMetricsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          description: Marketplace package or RPC not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /reviewers/update:
+    post:
+      tags:
+        - Disputes
+      operationId: updateReviewerPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewerUpdateRequest'
+      responses:
+        '200':
+          description: Transaction plan for `dispute_quorum::update_reviewer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /reviewers/deregister:
+    post:
+      tags:
+        - Disputes
+      operationId: deregisterReviewerPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewerDeregisterRequest'
+      responses:
+        '200':
+          description: Transaction plan for `dispute_quorum::deregister_reviewer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /reviewers/{address}/claim-metrics:
+    post:
+      tags:
+        - Disputes
+      operationId: claimReviewerDecisionMetricsPlan
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewerClaimMetricsRequest'
+      responses:
+        '200':
+          description: Transaction plan for `dispute_quorum::claim_decision_metrics`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /disputes/{disputeCaseId}/reviewers/accept:
+    post:
+      tags:
+        - Disputes
+      operationId: acceptDisputeReviewerPlan
+      parameters:
+        - name: disputeCaseId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeAcceptRequest'
+      responses:
+        '200':
+          description: Transaction plan for reviewer acceptance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: >-
+            Reviewer must first apply pending outcomes from prior closed disputes or raise effective stake above the
+            live minimum.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ReviewerPendingMetricsClaimRequiredResponse'
+                  - $ref: '#/components/schemas/ReviewerStakeBelowMinimumResponse'
+  /disputes/{disputeCaseId}/votes/commit:
+    post:
+      tags:
+        - Disputes
+      operationId: commitDisputeVotePlan
+      parameters:
+        - name: disputeCaseId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeVoteCommitRequest'
+      responses:
+        '200':
+          description: Transaction plan for commit vote.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /disputes/{disputeCaseId}/votes/reveal:
+    post:
+      tags:
+        - Disputes
+      operationId: revealDisputeVotePlan
+      parameters:
+        - name: disputeCaseId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeVoteRevealRequest'
+      responses:
+        '200':
+          description: Transaction plan for reveal vote.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Forbidden:
+      description: Caller is not allowed to perform this action.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Authentication required or token invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadRequest:
+      description: Bad request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    DisputeVoteRevealRequest:
+      properties:
+        reviewerEntryObjectId:
+          type: string
+        vote:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: >-
+            Reviewer decision. `1` (`VOTE_YES`) favors the seller and resolves to seller settlement. `0` (`VOTE_NO`)
+            favors the buyer and resolves to buyer settlement.
+        nonceHex:
+          type: string
+        evidenceHashHex:
+          type: string
+          description: >-
+            Optional hex-encoded SHA-256 hash of reviewer evidence. Stored for auditability; not consumed by settlement
+            logic.
+        clockObjectId:
+          type: string
+      type: object
+      additionalProperties: false
+      required:
+        - vote
+        - nonceHex
+    DisputeVoteCommitRequest:
+      properties:
+        reviewerEntryObjectId:
+          type: string
+        commitHashHex:
+          type: string
+        clockObjectId:
+          type: string
+      type: object
+      additionalProperties: false
+      required:
+        - commitHashHex
+    ReviewerStakeBelowMinimumResponse:
+      properties:
+        error:
+          type: string
+          enum:
+            - reviewer_stake_below_minimum
+        reviewerAddress:
+          type: string
+        reviewerEntryObjectId:
+          type: string
+        effectiveStakeLocked:
+          type: string
+          pattern: ^[0-9]+$
+        reviewerMinStakeIota:
+          type: string
+          pattern: ^[0-9]+$
+      type: object
+      required:
+        - error
+        - reviewerAddress
+        - reviewerEntryObjectId
+        - effectiveStakeLocked
+        - reviewerMinStakeIota
+    ReviewerPendingMetricsClaimRequiredResponse:
+      properties:
+        error:
+          type: string
+          enum:
+            - reviewer_pending_metrics_claim_required
+        reviewerAddress:
+          type: string
+        reviewerEntryObjectId:
+          type: string
+        effectiveStakeLocked:
+          type: string
+          pattern: ^[0-9]+$
+        pendingReviewerOutcome:
+          $ref: '#/components/schemas/PendingReviewerOutcomeSummary'
+        nextStep:
+          properties:
+            method:
+              type: string
+            path:
+              type: string
+            note:
+              type: string
+          type: object
+          required:
+            - method
+            - path
+            - note
+      type: object
+      required:
+        - error
+        - reviewerAddress
+        - reviewerEntryObjectId
+        - nextStep
+    PendingReviewerOutcomeSummary:
+      properties:
+        pendingDecisionsTotal:
+          type: integer
+        pendingDecisionsMajority:
+          type: integer
+        pendingDecisionsOverturned:
+          type: integer
+        pendingCommitRevealFailures:
+          type: integer
+        pendingNoshowCount:
+          type: integer
+        pendingSlashCount:
+          type: integer
+        pendingSlashBpsTotal:
+          type: integer
+        effectiveStakeLocked:
+          type: string
+          pattern: ^[0-9]+$
+      type: object
+      required:
+        - pendingDecisionsTotal
+        - pendingDecisionsMajority
+        - pendingDecisionsOverturned
+        - pendingCommitRevealFailures
+        - pendingNoshowCount
+        - pendingSlashCount
+        - pendingSlashBpsTotal
+    DisputeAcceptRequest:
+      properties:
+        reviewerRegistryObjectId:
+          type: string
+        reviewerEntryObjectId:
+          type: string
+        reputationProfileObjectId:
+          type: string
+        disputeQuorumConfigObjectId:
+          type: string
+        clockObjectId:
+          type: string
+      type: object
+      additionalProperties: false
+    ReviewerClaimMetricsRequest:
+      properties:
+        disputeCaseObjectId:
+          type: string
+        reviewerRegistryObjectId:
+          type: string
+        reviewerEntryObjectId:
+          type: string
+        disputeQuorumConfigObjectId:
+          type: string
+      type: object
+      additionalProperties: false
+    ReviewerDeregisterRequest:
+      properties:
+        reviewerRegistryObjectId:
+          type: string
+        reviewerEntryObjectId:
+          type: string
+      type: object
+      additionalProperties: false
+      required:
+        - reviewerRegistryObjectId
+        - reviewerEntryObjectId
+    ReviewerUpdateRequest:
+      properties:
+        reviewerRegistryObjectId:
+          type: string
+        reviewerEntryObjectId:
+          type: string
+        transportType:
+          type: integer
+          minimum: 0
+          maximum: 255
+        transportPubkeyHex:
+          type: string
+        minCaseRewardIota:
+          type: string
+          pattern: ^[0-9]+$
+        active:
+          type: boolean
+        clockObjectId:
+          type: string
+      type: object
+      additionalProperties: false
+      required:
+        - reviewerRegistryObjectId
+        - reviewerEntryObjectId
+        - transportType
+        - transportPubkeyHex
+        - minCaseRewardIota
+        - active
+    ReviewerSelfMetricsResponse:
+      properties:
+        reviewerAddress:
+          type: string
+        registered:
+          type: boolean
+        reviewer:
+          $ref: '#/components/schemas/ReviewerSummary'
+        reputationProfileObjectId:
+          type: string
+        disputeQuorumConfigObjectId:
+          type: string
+        reviewerRegistryObjectId:
+          type: string
+        runtime:
+          $ref: '#/components/schemas/ReviewerRuntimeSummary'
+        pendingMetricsClaimContext:
+          $ref: '#/components/schemas/ReviewerPendingMetricsClaimContext'
+        metrics:
+          $ref: '#/components/schemas/ReviewerSelfMetrics'
+      type: object
+      required:
+        - reviewerAddress
+        - registered
+    ReviewerSelfMetrics:
+      properties:
+        performanceScore:
+          type: integer
+        decisionsTotal:
+          type: integer
+        decisionsMajority:
+          type: integer
+        decisionsOverturned:
+          type: integer
+        commitRevealFailures:
+          type: integer
+        noshowCount:
+          type: integer
+        stakeLocked:
+          type: string
+          pattern: ^[0-9]+$
+        effectiveStakeLocked:
+          type: string
+          pattern: ^[0-9]+$
+        pendingDecisionMetricsClaimRequired:
+          type: boolean
+        pendingReviewerOutcome:
+          $ref: '#/components/schemas/PendingReviewerOutcomeSummary'
+        joinedAtMs:
+          type: integer
+          format: int64
+        updatedAtMs:
+          type: integer
+          format: int64
+      type: object
+    ReviewerPendingMetricsClaimContext:
+      properties:
+        status:
+          type: string
+          enum:
+            - not_required
+            - ready
+            - ambiguous
+            - unavailable
+        disputeCaseObjectId:
+          type: string
+        candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReviewerPendingMetricsClaimCandidate'
+      type: object
+      required:
+        - status
+    ReviewerPendingMetricsClaimCandidate:
+      properties:
+        disputeCaseObjectId:
+          type: string
+        orderId:
+          type: string
+        milestoneId:
+          type: string
+        closedAtMs:
+          type: integer
+          format: int64
+      type: object
+      required:
+        - disputeCaseObjectId
+    ReviewerRuntimeSummary:
+      properties:
+        marketplacePackageId:
+          type: string
+        disputeQuorumConfigObjectId:
+          type: string
+        reviewerRegistryObjectId:
+          type: string
+        reviewerMinStakeIota:
+          type: string
+          pattern: ^[0-9]+$
+      type: object
+    ReviewerSummary:
+      properties:
+        objectId:
+          type: string
+        type:
+          type: string
+        owner:
+          type: string
+        reputationProfileId:
+          type: string
+        active:
+          type: boolean
+        transportType:
+          type: integer
+        transportPubkeyHex:
+          type: string
+        minCaseRewardIota:
+          type: string
+          pattern: ^[0-9]+$
+        joinedAtMs:
+          type: integer
+          format: int64
+        updatedAtMs:
+          type: integer
+          format: int64
+        stakeLocked:
+          type: string
+          pattern: ^[0-9]+$
+        effectiveStakeLocked:
+          type: string
+          pattern: ^[0-9]+$
+        performanceScore:
+          type: integer
+        decisionsTotal:
+          type: integer
+        decisionsMajority:
+          type: integer
+        decisionsOverturned:
+          type: integer
+        commitRevealFailures:
+          type: integer
+        noshowCount:
+          type: integer
+        pendingDecisionMetricsClaimRequired:
+          type: boolean
+        pendingReviewerOutcome:
+          $ref: '#/components/schemas/PendingReviewerOutcomeSummary'
+      type: object
+      required:
+        - objectId
+        - type
+        - owner
+        - active
+    ErrorResponse:
+      properties:
+        error:
+          type: string
+      type: object
+      required:
+        - error
+    ReviewerInviteSummary:
+      properties:
+        disputeCaseObjectId:
+          type: string
+        reviewerAddress:
+          type: string
+        assignmentRound:
+          type: integer
+        invitedAtMs:
+          type: integer
+          format: int64
+          nullable: true
+        status:
+          type: string
+          enum:
+            - invited
+            - accepted
+            - expired
+            - superseded
+            - closed
+            - stale
+            - unavailable
+          description: >-
+            Current invite status. `stale` means an older or now-non-actionable invite event that no longer matches the
+            active round.
+        actorCanAccept:
+          type: boolean
+          description: >-
+            True only when the invite still matches the current actionable round, reviewer slots remain open, and the
+            dispute is still awaiting reviewers.
+        source:
+          $ref: '#/components/schemas/ReviewerInviteSource'
+        disputeCase:
+          $ref: '#/components/schemas/ReviewerInviteCaseSummary'
+        fetchError:
+          $ref: '#/components/schemas/ReviewerInviteFetchError'
+      type: object
+      required:
+        - disputeCaseObjectId
+        - reviewerAddress
+        - assignmentRound
+        - invitedAtMs
+        - status
+        - actorCanAccept
+        - source
+    ReviewerInviteFetchError:
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+      type: object
+      required:
+        - error
+    ReviewerInviteCaseSummary:
+      properties:
+        orderId:
+          type: string
+        milestoneId:
+          type: string
+        buyerAddress:
+          type: string
+        sellerAddress:
+          type: string
+        state:
+          type: integer
+        requiredReviewerVotes:
+          type: integer
+        requiredReviewerVotesFloor:
+          type: integer
+        currentAssignmentRound:
+          type: integer
+        acceptDeadlineMs:
+          type: integer
+          format: int64
+        commitDeadlineMs:
+          type: integer
+          format: int64
+        revealDeadlineMs:
+          type: integer
+          format: int64
+        challengeDeadlineMs:
+          type: integer
+          format: int64
+        hardTimeoutMs:
+          type: integer
+          format: int64
+        fallbackEligibleAtMs:
+          type: integer
+          format: int64
+        closedAtMs:
+          type: integer
+          format: int64
+        bondObjectId:
+          type: string
+        escrowObjectId:
+          type: string
+        inviteSourceMode:
+          type: string
+          enum:
+            - on_chain
+            - selection_receipt
+            - none
+        invitedReviewerAddresses:
+          type: array
+          items:
+            type: string
+      type: object
+      required:
+        - orderId
+        - milestoneId
+    ReviewerInviteSource:
+      properties:
+        mode:
+          type: string
+          enum:
+            - chain_event
+            - selection_receipt
+        receiptId:
+          type: string
+        txDigest:
+          type: string
+        eventSeq:
+          type: string
+        type:
+          type: string
+      type: object
+      required:
+        - mode
+        - type
+    TxPlanResponse:
+      properties:
+        status:
+          type: string
+          enum:
+            - tx_plan_unsigned
+        txBuilder:
+          type: string
+        request:
+          type: object
+          additionalProperties: true
+        txMoveCall:
+          allOf:
+            - $ref: '#/components/schemas/TxMoveCallSummary'
+          nullable: true
+      type: object
+      required:
+        - status
+        - txBuilder
+        - request
+    TxMoveCallSummary:
+      properties:
+        target:
+          type: string
+        module:
+          type: string
+        fn:
+          type: string
+      type: object
+      required:
+        - target
+        - module
+        - fn
+    ReviewerRegisterRequest:
+      properties:
+        reviewerRegistryObjectId:
+          type: string
+        disputeQuorumConfigObjectId:
+          type: string
+        reputationProfileObjectId:
+          type: string
+        transportType:
+          type: integer
+          minimum: 0
+          maximum: 255
+        transportPubkeyHex:
+          type: string
+        minCaseRewardIota:
+          type: string
+          pattern: ^[0-9]+$
+        stakeAmount:
+          type: string
+          pattern: ^[0-9]+$
+        clockObjectId:
+          type: string
+      type: object
+      additionalProperties: false
+      required:
+        - reviewerRegistryObjectId
+        - disputeQuorumConfigObjectId
+        - reputationProfileObjectId
+        - transportType
+        - transportPubkeyHex
+        - minCaseRewardIota
+        - stakeAmount

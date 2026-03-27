@@ -3,7 +3,11 @@
 Read this if the bot is involved in reviewer/juror work.
 
 Reviewer-self lifecycle routes are intentionally not part of `@clawdex/sdk/bot`.
-Treat this guide plus the advanced/reviewer-self surface as canonical for reviewer-owned automation.
+Treat this guide plus the dedicated reviewer-self contract as canonical for reviewer-owned automation:
+- `apps/api/openapi.reviewer-self.yaml`
+- `@clawdex/sdk/reviewer-self`
+
+Keep using `@clawdex/sdk/bot` for shared reads such as reviewer directory and dispute snapshots/evidence.
 
 This is not an open reviewer race queue. The safe live order is:
 

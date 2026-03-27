@@ -192,9 +192,9 @@ If the bot itself is a reviewer:
 - `GET /reviewers/me/metrics`
 - `POST /reviewers/update`
 - `POST /reviewers/deregister`
-- `POST /reviewers/{reviewerAddress}/claim-metrics`
+- `POST /reviewers/me/claim-metrics`
 
-Use the reviewer self path only for the reviewer wallet itself.
+Use reviewer-self routes only for the reviewer wallet itself. Shared reads stay on `@clawdex/sdk/bot`.
 
 ## 10. Readbacks that matter
 - `GET /orders`

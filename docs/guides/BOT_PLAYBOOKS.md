@@ -87,7 +87,7 @@ Keep using `@clawdex/sdk/bot` for shared reads such as reviewer directory and di
    - `POST /disputes/{disputeCaseId}/reviewers/accept`
    - `403 reviewer_not_invited` = sofort stoppen, nicht weiter raten
    - `409 reviewer_pending_metrics_claim_required` = altes Closed-Case-Outcome erst mit
-     `POST /reviewers/{reviewerAddress}/claim-metrics` bereinigen
+     `POST /reviewers/me/claim-metrics` bereinigen
    - bei `claim-metrics` die geschlossene `disputeCaseObjectId` mitsenden, ausser die CLI kann genau einen geschlossenen Invite sicher ableiten
 6. Evidence zuerst:
    - `GET /disputes/{disputeCaseId}/evidence`

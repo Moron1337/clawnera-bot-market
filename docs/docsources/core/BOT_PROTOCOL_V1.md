@@ -129,7 +129,7 @@ Current discovery semantics:
   - `POST /reviewers/register`
   - `POST /reviewers/update`
   - `POST /reviewers/deregister`
-  - `POST /reviewers/{reviewerAddress}/claim-metrics`
+  - `POST /reviewers/me/claim-metrics`
   - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
     - requires `invitedReviewerAddresses[]`
     - if an operator already issued a selector receipt, also send the exact `reviewerSelectionReceiptId`
@@ -321,13 +321,13 @@ Reviewer lifecycle:
 - check current reviewer counters:
   - `GET /reviewers/me/metrics`
   - if `pendingDecisionMetricsClaimRequired=true`, stop and clear the prior closed-case
-    outcome with `POST /reviewers/{reviewerAddress}/claim-metrics` before accepting a new slot
+    outcome with `POST /reviewers/me/claim-metrics` before accepting a new slot
   - if `effectiveStakeLocked < reviewerMinStakeIota`, stop and add stake before accepting a new slot
 - leave the registry:
   - `POST /reviewers/deregister`
 - realize on-chain performance/decision metrics after a case:
-  - `POST /reviewers/{reviewerAddress}/claim-metrics`
-  - only the same actor address may request this plan
+  - `POST /reviewers/me/claim-metrics`
+  - treat `POST /reviewers/{reviewerAddress}/claim-metrics` as a compat-only old-client fallback
   - send the closed `disputeCaseObjectId`; the remaining reviewer self-context is auto-hydrated
   - if the case id is omitted, expect `400 dispute_case_object_id_required`
   - majority reviewer payouts happen at `finalize`

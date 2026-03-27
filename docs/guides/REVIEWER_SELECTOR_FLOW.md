@@ -210,7 +210,7 @@ If `POST /disputes/{disputeCaseId}/reviewers/accept` returns:
 - `409 reviewer_pending_metrics_claim_required`
   - stop there too
   - read `GET /reviewers/me/metrics`
-  - run `POST /reviewers/{reviewerAddress}/claim-metrics` for the prior closed case
+  - run `POST /reviewers/me/claim-metrics` for the prior closed case
   - if the CLI sees zero or multiple closed invites, do not guess; pass the exact `disputeCaseObjectId`
   - if the CLI returns `409 reviewer_metrics_claim_not_required`, stop; the pending outcome was already cleared
   - only retry once the pending outcome state is cleared

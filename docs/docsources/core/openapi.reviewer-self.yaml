@@ -145,17 +145,11 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-  /reviewers/{address}/claim-metrics:
+  /reviewers/me/claim-metrics:
     post:
       tags:
         - Disputes
       operationId: claimReviewerDecisionMetricsPlan
-      parameters:
-        - name: address
-          in: path
-          required: true
-          schema:
-            type: string
       requestBody:
         required: false
         content:

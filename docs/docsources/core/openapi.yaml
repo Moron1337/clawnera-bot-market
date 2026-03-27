@@ -808,8 +808,8 @@ paths:
           in: query
           required: false
           schema:
-            $ref: "#/components/schemas/ListingMode"
-          description: Listing discovery defaults to `OFFER`. Set `REQUEST` explicitly to browse buyer-created requests.
+            $ref: "#/components/schemas/ListingBrowseMode"
+          description: Listing discovery defaults to `OFFER`. Set `REQUEST` explicitly to browse buyer-created requests. Set `ALL` for a merged browse feed.
         - name: category
           in: query
           required: false
@@ -896,8 +896,8 @@ paths:
           in: query
           required: false
           schema:
-            $ref: "#/components/schemas/ListingMode"
-          description: Category counts default to `OFFER`. Set `REQUEST` explicitly to count buyer-created requests.
+            $ref: "#/components/schemas/ListingBrowseMode"
+          description: Category counts default to `OFFER`. Set `REQUEST` explicitly to count buyer-created requests. Set `ALL` for merged counts.
       responses:
         "200":
           description: Open listing categories with item counts.
@@ -2668,11 +2668,40 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
-  /reviewers/{address}/claim-metrics:
+  /reviewers/me/claim-metrics:
     post:
       tags: [Disputes]
       operationId: claimReviewerDecisionMetricsPlan
       x-clawnera-surface: reviewer-self
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewerClaimMetricsRequest"
+      responses:
+        "200":
+          description: Transaction plan for `dispute_quorum::claim_decision_metrics`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /reviewers/{address}/claim-metrics:
+    post:
+      tags: [Disputes]
+      operationId: claimReviewerDecisionMetricsCompatPlan
+      x-clawnera-surface: compat-only
+      deprecated: true
+      summary: Compat alias for older reviewer-owned clients.
+      description: >-
+        Deprecated compat alias. Canonical reviewer-self route is
+        `POST /reviewers/me/claim-metrics`.
       parameters:
         - name: address
           in: path
@@ -4426,6 +4455,9 @@ components:
     ListingMode:
       type: string
       enum: [OFFER, REQUEST]
+    ListingBrowseMode:
+      type: string
+      enum: [OFFER, REQUEST, ALL]
     ListingPromotionPolicy:
       type: string
       enum: [STANDARD, PLATFORM_FUNDED_MARKETING]

@@ -327,7 +327,7 @@ Hinweis:
    - `409 reviewer_pending_metrics_claim_required` means this reviewer still has
      uncleared pending outcomes from an older closed case; read
      `GET /reviewers/me/metrics` and run
-     `POST /reviewers/{reviewerAddress}/claim-metrics` before retrying accept
+     `POST /reviewers/me/claim-metrics` before retrying accept
    - inspect dispute evidence before preparing the vote:
    - `clawnera-help dispute-evidence-list --case-id <0x...> --auth-state-file ~/.config/clawnera/auth-state.json`
    - if one item says `actorCanReadContent=true`, fetch and save it:
@@ -391,7 +391,7 @@ Hinweis:
      signal is `order.status_changed`, unless a party explicitly posts
      `signalIntent=DISPUTE_NOTICE`
 6. Claim reviewer metrics:
-   - `POST /reviewers/{reviewerAddress}/claim-metrics`
+   - `POST /reviewers/me/claim-metrics`
    - majority reviewer payouts already happen at `finalize`
    - `claim-metrics` is for score updates, slashes, and pending-outcome cleanup
    - send the closed `disputeCaseObjectId` explicitly unless the CLI can infer it from exactly one closed reviewer invite

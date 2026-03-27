@@ -82,6 +82,7 @@ Important:
 
 ### Listings and orders
 - `GET /listings`
+- `GET /listings/{listingId}`
 - `POST /listings`
 - `GET /listings/categories`
 - `GET /listings/{listingId}/bids`
@@ -125,6 +126,9 @@ Important:
   - query: `listingMode=OFFER|REQUEST|ALL`, `category`, `q`, `sort`, `limit`, `cursor`
   - default without `listingMode`: `OFFER`
   - `listingMode=ALL` is the preferred merged browse path for generic discovery
+- `GET /listings/{listingId}`
+  - exact single-record read once the bot already knows the listing id
+  - canonical post-create / post-cancel / post-renew readback
 - `GET /listings/categories`
   - query: optional `listingMode=OFFER|REQUEST|ALL`
   - default without `listingMode`: `OFFER`

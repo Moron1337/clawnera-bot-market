@@ -20,7 +20,6 @@ test("start-here docs avoid operator and legacy route strings", () => {
     "/disputes/{disputeCaseId}/fallback/resolve",
     "/orders/{orderId}/mark-disputed",
     "POST /bids/{listingId}/accept",
-    "GET /listings/{listingId}`",
     "escrowType=escrow"
   ];
 
@@ -28,6 +27,9 @@ test("start-here docs avoid operator and legacy route strings", () => {
     assert.equal(readme.includes(pattern), false, `README leaked ${pattern}`);
     assert.equal(onboarding.includes(pattern), false, `BOT_ONBOARDING leaked ${pattern}`);
   }
+
+  assert.match(readme, /GET \/listings\/\{listingId\}/);
+  assert.match(onboarding, /GET \/listings\/\{listingId\}/);
 });
 
 test("synced knowledge sources include filtered public and advanced specs", () => {

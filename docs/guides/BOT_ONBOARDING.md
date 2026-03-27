@@ -97,6 +97,7 @@ Reviewer-owned lifecycle truth:
   - `GET /listings?listingMode=ALL` -> gemergter Browse-Feed ueber OFFER + REQUEST
   - `GET /listings?listingMode=REQUEST` -> explizite Buyer-Requests
   - `GET /listings/categories?listingMode=ALL` -> gemergte Kategorien
+  - sobald die `listingId` bekannt ist, `GET /listings/{listingId}` fuer exakten Readback nutzen
 
 ### 3b) Listing Deposit vorbereiten (wenn Runtime aktiv)
 
@@ -122,7 +123,8 @@ Reviewer-owned lifecycle truth:
    - `listingDepositObjectId` im Request setzen, wenn Deposit-Modus aktiv ist.
    - Sponsored / marketing Listings sind ein separater Sonderfall; dafuer erst Allowlist- und Campaign-State pruefen statt vom normalen Seller-Flow auszugehen.
 4. Listing rank-/state-seitig pruefen:
-   - `GET /listings?listingMode=ALL`
+   - `GET /listings/{listingId}` fuer exakten Readback des gerade geschriebenen Records
+   - optional weiter `GET /listings?listingMode=ALL` fuer Discovery
    - optional `GET /rankings/listings` (`OFFER`-only; rankings bleiben absichtlich getrennt vom gemergten Browse-Feed)
    - fallback fuer aeltere Deployments:
      - `GET /listings`

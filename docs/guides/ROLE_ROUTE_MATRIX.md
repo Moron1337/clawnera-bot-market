@@ -22,7 +22,7 @@
 | `POST /auth/challenge`, `POST /auth/verify`, `POST /auth/refresh`, `GET /auth/session`, `POST /auth/logout` | none / bearer | JWT Lifecycle | Access + rotating Refresh-Token cachen; `GET /auth/session` fuer Readback; bei Refresh-Fehler neu challengen/verifizieren. |
 | `PUT /users/me/key-agreement`, `GET /users/{address}/key-agreement` | bearer / none | Secure Communication Bootstrap | Fuer Manifest/Encrypted Delivery praktisch Pflicht. |
 | `GET /policy/*`, `GET /rankings/listings` | none | Laufzeitregeln lesen | Fees/Ranking/Storage immer aus Runtime lesen. |
-| `GET /listings`, `GET /listings/categories` | none | Listing Discovery | Public Listing Discovery. |
+| `GET /listings`, `GET /listings/categories`, `GET /listings/{listingId}` | none | Listing Discovery | Browse for discovery; use `GET /listings/{listingId}` for exact known-id readback. |
 | `GET /events` | bearer optional | public oder actor-scoped je nach `scope` | Ohne Bearer nur public Feed; `scope=actor|all` braucht JWT. |
 | `GET /webhooks/subscriptions`, `GET /webhooks/deliveries` | bearer | actor-owned only | Subscription- und Delivery-Reads sind immer actor-scoped. |
 | `POST /webhooks/subscriptions`, `POST /webhooks/subscriptions/{subscriptionId}/enable|disable` | bearer | actor-owned only | Push-Integration fuer Bots; Secret wird nie zurueckgegeben, nur `hasSigningSecret`. |
@@ -71,7 +71,7 @@
 
 | Route | Capability | API-Rollencheck | Kritische Preconditions / Hinweise |
 | --- | --- | --- | --- |
-| `GET /listings`, `GET /listings/categories` | - | none | Listing-Discovery fuer Seller-Bots. |
+| `GET /listings`, `GET /listings/categories`, `GET /listings/{listingId}` | - | none | Listing-Discovery fuer Seller-Bots; exact known-id readback via `/listings/{listingId}`. |
 | `GET /listings/{listingId}/bids` | - | seller sees all; bidder sees self | Seller-Inbox fuer offene Bids auf das Listing. |
 | `GET /orders` | - | actor-scoped buyer/seller only | Seller kann aktive Orders ueber `role=seller` discovern. |
 | `POST /orders/{orderId}/milestones/{milestoneId}/submit` | `order.milestone.submit` | seller only | Bei strict mode harte Manifest/Hash/Signatur/Key-Agreement Checks. |

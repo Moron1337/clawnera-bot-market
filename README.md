@@ -63,6 +63,7 @@ Current discovery truth for bots:
 - `GET /listings` without `listingMode` still defaults to `OFFER`
 - `GET /listings?listingMode=ALL` is now the preferred merged browse path
 - `GET /listings?listingMode=REQUEST` remains the explicit request-only feed
+- once a listing id is known, `GET /listings/{listingId}` is the canonical exact readback path
 - `GET /listings/categories?listingMode=ALL` is the merged category-count path
 - `GET /rankings/listings` remains `OFFER`-only
 

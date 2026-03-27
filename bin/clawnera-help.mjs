@@ -5941,14 +5941,17 @@ async function runListingRenew(commandArgs) {
   }
 }
 
-function buildListingFeedReadbackHint(listingMode, authPlaceholder = "<creator-auth-state-file>") {
+function buildListingExactReadbackHint(listingId, authPlaceholder = "<creator-auth-state-file>", listingMode = null) {
+  if (normalizeString(listingId)) {
+    return `next_readback=clawnera-help request GET /listings/${listingId} --auth-state-file ${authPlaceholder}`;
+  }
   if (listingMode === "REQUEST") {
     return `next_readback=clawnera-help request GET '/listings?listingMode=REQUEST' --auth-state-file ${authPlaceholder}`;
   }
   if (listingMode === "OFFER") {
     return `next_readback=clawnera-help request GET /listings --auth-state-file ${authPlaceholder}`;
   }
-  return `next_readback=re-read the feed matching the original listing mode: GET /listings for OFFER or GET '/listings?listingMode=REQUEST' for REQUEST --auth-state-file ${authPlaceholder}`;
+  return `next_readback=once the listing id is known, prefer clawnera-help request GET /listings/<listing-id> --auth-state-file ${authPlaceholder}`;
 }
 
 function buildUnexpectedOptionHintLines(commandName, result = {}) {
@@ -14430,13 +14433,13 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
       console.log(`creator_reputation_status=${result.creatorReputationStatus}`);
     }
     console.log(`milestone_count=${Array.isArray(result.milestones) ? result.milestones.length : 0}`);
-    if (result.listingMode === "REQUEST") {
-      console.log(
-        "next_readback=clawnera-help request GET '/listings?listingMode=REQUEST' --auth-state-file <request-buyer-auth-state-file>"
-      );
-    } else {
-      console.log("next_readback=clawnera-help request GET /listings --auth-state-file <seller-auth-state-file>");
-    }
+    console.log(
+      buildListingExactReadbackHint(
+        result.listingId,
+        result.listingMode === "REQUEST" ? "<request-buyer-auth-state-file>" : "<seller-auth-state-file>",
+        result.listingMode
+      )
+    );
   } else {
     console.error(`listing_create_error: ${result.error}`);
     if (Array.isArray(result.validCategories) && result.validCategories.length > 0) {
@@ -14469,7 +14472,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.listingStatus) {
       console.log(`status=${result.listingStatus}`);
     }
-    console.log(buildListingFeedReadbackHint(result.listingMode, "<creator-auth-state-file>"));
+    console.log(buildListingExactReadbackHint(result.listingId, "<creator-auth-state-file>", result.listingMode));
   } else {
     console.error(`listing_cancel_error: ${result.error}`);
     console.error("next_hint=use POST /listings/{listingId}/cancel, not DELETE or PATCH");
@@ -14501,7 +14504,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     } else {
       console.log(`expires_at_ms=${result.expiresAtMs}`);
     }
-    console.log(buildListingFeedReadbackHint(result.listingMode, "<creator-auth-state-file>"));
+    console.log(buildListingExactReadbackHint(result.listingId, "<creator-auth-state-file>", result.listingMode));
   } else {
     console.error(`listing_renew_error: ${result.error}`);
     console.error("next_hint=use POST /listings/{listingId}/renew with --expires-at or --expires-at-ms");

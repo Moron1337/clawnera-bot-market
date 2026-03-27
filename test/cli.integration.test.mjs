@@ -4433,7 +4433,7 @@ test("listing-renew rejects unexpected flags before posting", async () => {
   }
 });
 
-test("listing-cancel prints request feed readback for request listings", async () => {
+test("listing-cancel prints exact readback for request listings", async () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-cancel-request-readback-"));
   const authStateFile = path.join(tempDir, "auth-state.json");
   const mock = await startMockServer({
@@ -4474,13 +4474,13 @@ test("listing-cancel prints request feed readback for request listings", async (
     ]);
     assert.equal(result.status, 0);
     assert.match(result.stdout, /listing_cancel_ok listing_id=listing-1/);
-    assert.match(result.stdout, /GET '\/listings\?listingMode=REQUEST'/);
+    assert.match(result.stdout, /GET \/listings\/listing-1/);
   } finally {
     await mock.close();
   }
 });
 
-test("listing-renew prints request feed readback for request listings", async () => {
+test("listing-renew prints exact readback for request listings", async () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-renew-request-readback-"));
   const authStateFile = path.join(tempDir, "auth-state.json");
   const renewIso = "2026-04-20T12:00:00Z";
@@ -4525,7 +4525,69 @@ test("listing-renew prints request feed readback for request listings", async ()
     ]);
     assert.equal(result.status, 0);
     assert.match(result.stdout, /listing_renew_ok listing_id=listing-1/);
-    assert.match(result.stdout, /GET '\/listings\?listingMode=REQUEST'/);
+    assert.match(result.stdout, /GET \/listings\/listing-1/);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("listing-create prints exact readback once the listing id is known", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-readback-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const creatorAddress = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  const expiresAtMs = 1893456000000;
+  const mock = await startMockServer({
+    "POST /listings": () => ({
+      status: 200,
+      body: {
+        listing: {
+          id: "listing-1",
+          listingMode: "REQUEST"
+        }
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: creatorAddress,
+        alias: "buyer"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-create",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-mode",
+      "REQUEST",
+      "--title",
+      "Need exact readback",
+      "--description",
+      "desc",
+      "--category",
+      "ops",
+      "--currency",
+      "IOTA",
+      "--expires-at-ms",
+      String(expiresAtMs),
+      "--milestones",
+      "Milestone 1:500000000;Milestone 2:500000000",
+      "--milestone-due-dates",
+      `${TEST_LISTING_DUE_AT_1};${TEST_LISTING_DUE_AT_2}`
+    ]);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /listing_create_ok listing_id=listing-1/);
+    assert.match(result.stdout, /GET \/listings\/listing-1/);
   } finally {
     await mock.close();
   }

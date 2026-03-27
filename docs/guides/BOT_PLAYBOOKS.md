@@ -67,6 +67,9 @@ Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `claw
 
 ## 3) Reviewer / Quorum Playbook
 
+Reviewer-self lifecycle routes are intentionally outside `@clawdex/sdk/bot`.
+Use the reviewer-specific guide and the advanced/reviewer-self surface for reviewer-owned automation.
+
 1. Reputation- und Reviewer-Objekte vorbereiten (on-chain).
 2. Reviewer registrieren:
    - `POST /reviewers/register`

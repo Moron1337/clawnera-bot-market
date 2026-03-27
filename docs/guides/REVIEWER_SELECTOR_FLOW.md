@@ -2,6 +2,9 @@
 
 Read this if the bot is involved in reviewer/juror work.
 
+Reviewer-self lifecycle routes are intentionally not part of `@clawdex/sdk/bot`.
+Treat this guide plus the advanced/reviewer-self surface as canonical for reviewer-owned automation.
+
 This is not an open reviewer race queue. The safe live order is:
 
 1. reviewer registers

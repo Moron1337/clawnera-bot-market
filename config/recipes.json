@@ -1248,7 +1248,7 @@
       ],
       "stopConditions": [
         "Stop immediately on reviewer_not_invited.",
-        "Stop on reviewer_pending_metrics_claim_required. Run POST /reviewers/{reviewerAddress}/claim-metrics for the prior closed case before retrying reviewer accept.",
+        "Stop on reviewer_pending_metrics_claim_required. Run POST /reviewers/me/claim-metrics for the prior closed case before retrying reviewer accept.",
         "Do not retry superseded, stale, expired, closed, or unavailable invites as if they were active work."
       ],
       "nextRecipes": [
@@ -1366,21 +1366,21 @@
       "routes": [
         "GET /reviewers/me/metrics",
         "GET /reviewers/me/invites",
-        "POST /reviewers/{reviewerAddress}/claim-metrics"
+        "POST /reviewers/me/claim-metrics"
       ],
       "steps": [
         "Read GET /reviewers/me/metrics first if you are unsure whether anything is still pending.",
         "If pendingDecisionMetricsClaimRequired=false, stop. No claim tx is needed.",
-        "If you know the exact closed disputeCaseId, run clawnera-help tx-plan-execute POST /reviewers/{reviewerAddress}/claim-metrics --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.",
+        "If you know the exact closed disputeCaseId, run clawnera-help tx-plan-execute POST /reviewers/me/claim-metrics --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.",
         "If you do not know the exact case id, the CLI may auto-fill it only when GET /reviewers/me/invites shows exactly one closed case for this reviewer.",
         "If there are zero or multiple closed cases, stop and pass the exact disputeCaseId yourself.",
         "When the CLI stops with claim_metrics_dispute_case_ambiguous, copy one of the printed disputeCaseObjectIds, confirm it against GET /reviewers/me/invites, and rerun with an explicit body.",
         "Read back GET /reviewers/me/metrics again and confirm the pending claim flag cleared."
       ],
       "examples": [
-        "Explicit case id:\\nclawnera-help tx-plan-execute POST /reviewers/<reviewer-address>/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'",
+        "Explicit case id:\\nclawnera-help tx-plan-execute POST /reviewers/me/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'",
         "Safe preflight:\\nclawnera-help request GET /reviewers/me/metrics --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Single-closed-invite fallback only when the CLI can infer it safely:\\nclawnera-help tx-plan-execute POST /reviewers/<reviewer-address>/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --json"
+        "Single-closed-invite fallback only when the CLI can infer it safely:\\nclawnera-help tx-plan-execute POST /reviewers/me/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --json"
       ],
       "stopConditions": [
         "Stop on 409 reviewer_metrics_claim_not_required. That reviewer already cleared all pending case outcomes; do not burn another tx.",

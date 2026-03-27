@@ -5925,7 +5925,7 @@ test("tx-plan-execute pre-hydrates reviewer claim-metrics from pendingMetricsCla
   let claimCalls = 0;
   let inviteReads = 0;
   const mock = await startMockServer({
-    [`POST /reviewers/${reviewerAddress}/claim-metrics`]: (request) => {
+    ["POST /reviewers/me/claim-metrics"]: (request) => {
       claimCalls += 1;
       assert.deepEqual(request.body, {
         disputeCaseObjectId,
@@ -5983,7 +5983,7 @@ test("tx-plan-execute pre-hydrates reviewer claim-metrics from pendingMetricsCla
     const result = await runCli([
       "tx-plan-execute",
       "POST",
-      `/reviewers/${reviewerAddress}/claim-metrics`,
+      "/reviewers/me/claim-metrics",
       "--api-base",
       mock.baseUrl,
       "--jwt",
@@ -6012,7 +6012,7 @@ test("tx-plan-execute surfaces pendingMetricsClaimContext ambiguity before invit
   let claimCalls = 0;
   let inviteReads = 0;
   const mock = await startMockServer({
-    [`POST /reviewers/${reviewerAddress}/claim-metrics`]: () => {
+    ["POST /reviewers/me/claim-metrics"]: () => {
       claimCalls += 1;
       return {
         status: 400,
@@ -6065,7 +6065,7 @@ test("tx-plan-execute surfaces pendingMetricsClaimContext ambiguity before invit
     const result = await runCli([
       "tx-plan-execute",
       "POST",
-      `/reviewers/${reviewerAddress}/claim-metrics`,
+      "/reviewers/me/claim-metrics",
       "--api-base",
       mock.baseUrl,
       "--jwt",
@@ -6091,7 +6091,7 @@ test("tx-plan-execute stops when pendingMetricsClaimContext is unavailable", asy
   let claimCalls = 0;
   let inviteReads = 0;
   const mock = await startMockServer({
-    [`POST /reviewers/${reviewerAddress}/claim-metrics`]: () => {
+    ["POST /reviewers/me/claim-metrics"]: () => {
       claimCalls += 1;
       return {
         status: 400,
@@ -6134,7 +6134,7 @@ test("tx-plan-execute stops when pendingMetricsClaimContext is unavailable", asy
     const result = await runCli([
       "tx-plan-execute",
       "POST",
-      `/reviewers/${reviewerAddress}/claim-metrics`,
+      "/reviewers/me/claim-metrics",
       "--api-base",
       mock.baseUrl,
       "--jwt",
@@ -6162,7 +6162,7 @@ test("tx-plan-execute pre-hydrates reviewer claim-metrics with reviewer context 
   const disputeCaseObjectId = "0x2cb6d1df7a78eb63647728d7cdf7a5098dce8cb4f0693b20fee7641629068ac5";
   let claimCalls = 0;
   const mock = await startMockServer({
-    [`POST /reviewers/${reviewerAddress}/claim-metrics`]: (request) => {
+    ["POST /reviewers/me/claim-metrics"]: (request) => {
       claimCalls += 1;
       assert.deepEqual(request.body, {
         disputeCaseObjectId,
@@ -6215,7 +6215,7 @@ test("tx-plan-execute pre-hydrates reviewer claim-metrics with reviewer context 
     const result = await runCli([
       "tx-plan-execute",
       "POST",
-      `/reviewers/${reviewerAddress}/claim-metrics`,
+      "/reviewers/me/claim-metrics",
       "--api-base",
       mock.baseUrl,
       "--jwt",
@@ -6244,7 +6244,7 @@ test("tx-plan-execute does not infer claim-metrics from stale reviewer invites",
   const reviewerAddress = "0x8212e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
   let claimCalls = 0;
   const mock = await startMockServer({
-    [`POST /reviewers/${reviewerAddress}/claim-metrics`]: () => {
+    ["POST /reviewers/me/claim-metrics"]: () => {
       claimCalls += 1;
       return {
         status: 400,
@@ -6291,7 +6291,7 @@ test("tx-plan-execute does not infer claim-metrics from stale reviewer invites",
     const result = await runCli([
       "tx-plan-execute",
       "POST",
-      `/reviewers/${reviewerAddress}/claim-metrics`,
+      "/reviewers/me/claim-metrics",
       "--api-base",
       mock.baseUrl,
       "--jwt",
@@ -6315,7 +6315,7 @@ test("tx-plan-execute surfaces closed dispute case candidates when claim-metrics
   const closedCaseA = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
   const closedCaseB = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
   const mock = await startMockServer({
-    [`POST /reviewers/${reviewerAddress}/claim-metrics`]: () => {
+    ["POST /reviewers/me/claim-metrics"]: () => {
       claimCalls += 1;
       return {
         status: 400,
@@ -6371,7 +6371,7 @@ test("tx-plan-execute surfaces closed dispute case candidates when claim-metrics
     const result = await runCli([
       "tx-plan-execute",
       "POST",
-      `/reviewers/${reviewerAddress}/claim-metrics`,
+      "/reviewers/me/claim-metrics",
       "--api-base",
       mock.baseUrl,
       "--jwt",
@@ -6398,7 +6398,7 @@ test("tx-plan-execute stops claim-metrics retries when reviewer metrics are alre
   let claimCalls = 0;
   let inviteReads = 0;
   const mock = await startMockServer({
-    [`POST /reviewers/${reviewerAddress}/claim-metrics`]: () => {
+    ["POST /reviewers/me/claim-metrics"]: () => {
       claimCalls += 1;
       return {
         status: 400,
@@ -6438,7 +6438,7 @@ test("tx-plan-execute stops claim-metrics retries when reviewer metrics are alre
     const result = await runCli([
       "tx-plan-execute",
       "POST",
-      `/reviewers/${reviewerAddress}/claim-metrics`,
+      "/reviewers/me/claim-metrics",
       "--api-base",
       mock.baseUrl,
       "--jwt",
@@ -6464,7 +6464,7 @@ test("tx-plan-execute stops explicit claim-metrics bodies when reviewer metrics 
   let claimCalls = 0;
   let inviteReads = 0;
   const mock = await startMockServer({
-    [`POST /reviewers/${reviewerAddress}/claim-metrics`]: () => {
+    ["POST /reviewers/me/claim-metrics"]: () => {
       claimCalls += 1;
       return {
         status: 200,
@@ -6505,7 +6505,7 @@ test("tx-plan-execute stops explicit claim-metrics bodies when reviewer metrics 
     const result = await runCli([
       "tx-plan-execute",
       "POST",
-      `/reviewers/${reviewerAddress}/claim-metrics`,
+      "/reviewers/me/claim-metrics",
       "--api-base",
       mock.baseUrl,
       "--jwt",
@@ -6521,6 +6521,68 @@ test("tx-plan-execute stops explicit claim-metrics bodies when reviewer metrics 
     assert.equal(payload.response.error, "reviewer_metrics_claim_not_required");
     assert.equal(claimCalls, 0);
     assert.equal(inviteReads, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("tx-plan-execute still accepts compat reviewer address claim-metrics path", async () => {
+  const reviewerAddress = "0x8212e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
+  const disputeCaseObjectId = "0x2cb6d1df7a78eb63647728d7cdf7a5098dce8cb4f0693b20fee7641629068ac5";
+  let claimCalls = 0;
+  const mock = await startMockServer({
+    [`POST /reviewers/${reviewerAddress}/claim-metrics`]: () => {
+      claimCalls += 1;
+      return {
+        status: 409,
+        body: {
+          error: "reviewer_metrics_already_claimed"
+        }
+      };
+    },
+    "GET /reviewers/me/metrics": () => ({
+      status: 200,
+      body: {
+        registered: true,
+        reviewerAddress,
+        reviewer: {
+          objectId: "0x1111111111111111111111111111111111111111111111111111111111111111",
+          owner: reviewerAddress,
+          pendingDecisionMetricsClaimRequired: true
+        },
+        runtime: {
+          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
+          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
+        },
+        pendingMetricsClaimContext: {
+          status: "ready",
+          disputeCaseObjectId,
+          candidates: [{ disputeCaseObjectId }]
+        }
+      }
+    })
+  });
+
+  try {
+    const result = await runCli([
+      "tx-plan-execute",
+      "POST",
+      `/reviewers/${reviewerAddress}/claim-metrics`,
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      buildJwtWithExp(4102444800),
+      "--body",
+      "{}",
+      "--json"
+    ]);
+
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "reviewer_metrics_already_claimed");
+    assert.equal(payload.autoHydratedReviewerContext.route, "claim_metrics");
+    assert.equal(payload.autoHydratedReviewerContext.disputeCaseObjectId, disputeCaseObjectId);
+    assert.equal(claimCalls, 1);
   } finally {
     await mock.close();
   }

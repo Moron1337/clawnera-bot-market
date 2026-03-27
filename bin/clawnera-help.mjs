@@ -522,7 +522,7 @@ function compactRecipeCommand(recipe) {
     case "reviewer-vote":
       return "clawnera-help reviewer-vote-prepare --case-id <disputeCaseId> --address <reviewerAddress> --vote seller|buyer --out reviewer-vote.json";
     case "reviewer-claim-metrics":
-      return `clawnera-help tx-plan-execute POST /reviewers/<reviewerAddress>/claim-metrics ${auth} --body-file claim-metrics.json`;
+      return `clawnera-help tx-plan-execute POST /reviewers/me/claim-metrics ${auth} --body-file claim-metrics.json`;
     case "operator-shortlist-replacement":
       return `clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <disputeCaseId> ${auth}`;
     case "resolve-dispute":
@@ -4584,14 +4584,28 @@ function classifyReviewerSelfTxPlanRoute(method, rawPath, apiBase = "") {
       disputeCaseId: normalizeIotaAddress(revealMatch[1] || ""),
     };
   }
+  if (pathname === "/reviewers/me/claim-metrics") {
+    return {
+      kind: "claim_metrics",
+      reviewerAddress: "",
+      canonicalPath: "/reviewers/me/claim-metrics",
+      compatAddressPath: false,
+    };
+  }
   const claimMetricsMatch = pathname.match(/^\/reviewers\/(0x[a-f0-9]+)\/claim-metrics$/i);
   if (claimMetricsMatch) {
     return {
       kind: "claim_metrics",
       reviewerAddress: normalizeIotaAddress(claimMetricsMatch[1] || ""),
+      canonicalPath: "/reviewers/me/claim-metrics",
+      compatAddressPath: true,
     };
   }
   return null;
+}
+
+function canonicalClaimMetricsDisplayPath() {
+  return "/reviewers/me/claim-metrics";
 }
 
 function resolveClaimMetricsDisputeCaseCandidate(invitesBody, reviewerAddress) {
@@ -4705,12 +4719,12 @@ function resolveClaimMetricsDisputeCaseCandidateFromMetricsContext(metricsBody) 
 }
 
 function buildClaimMetricsContextUnavailableHint(rawPath) {
-  const normalizedPath = typeof rawPath === "string" && rawPath.trim() ? rawPath.trim() : "/reviewers/<reviewer-address>/claim-metrics";
+  const normalizedPath = canonicalClaimMetricsDisplayPath();
   return `Read GET /reviewers/me/metrics and inspect pendingMetricsClaimContext. If the server cannot prove the binding yet, rerun clawnera-help tx-plan-execute POST '${normalizedPath}' --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.`;
 }
 
 function buildClaimMetricsDisputeCaseHint(rawPath, disputeCaseObjectIds = [], source = "metrics") {
-  const normalizedPath = typeof rawPath === "string" && rawPath.trim() ? rawPath.trim() : "/reviewers/<reviewer-address>/claim-metrics";
+  const normalizedPath = canonicalClaimMetricsDisplayPath();
   const candidateSuffix =
     Array.isArray(disputeCaseObjectIds) && disputeCaseObjectIds.length > 0
       ? ` Candidate disputeCaseObjectIds: ${disputeCaseObjectIds.join(", ")}.`
@@ -15325,7 +15339,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         console.log(`next_accept=clawnera-help tx-plan-execute POST /disputes/${disputeCaseObjectId}/reviewers/accept --auth-state-file <reviewer-auth-state-file> --body '{}'`);
       }
       if (status === "closed") {
-        console.log(`next_claim_metrics=clawnera-help tx-plan-execute POST /reviewers/<reviewer-address>/claim-metrics --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"${disputeCaseObjectId}\"}'`);
+        console.log(`next_claim_metrics=clawnera-help tx-plan-execute POST /reviewers/me/claim-metrics --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"${disputeCaseObjectId}\"}'`);
       }
     }
   } else {

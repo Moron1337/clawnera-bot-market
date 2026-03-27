@@ -269,7 +269,7 @@ Important:
 
 ### Dispute quorum
 - `POST /reviewers/register`
-- `POST /reviewers/{reviewerAddress}/claim-metrics`
+- `POST /reviewers/me/claim-metrics`
 - `POST /orders/{orderId}/dispute-bond/fund`
 - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
   - `invitedReviewerAddresses[]` sind Pflicht
@@ -335,7 +335,7 @@ Important:
   - dispute closeout does not auto-post a mailbox message; rely on `order.status_changed`
     as the actor-visible terminal signal unless a party intentionally posts
     `signalIntent=DISPUTE_NOTICE`
-- `POST /reviewers/{reviewerAddress}/claim-metrics`
+- `POST /reviewers/me/claim-metrics`
   - reviewer-owned tx-plan route
   - majority reviewer payouts happen at `finalize`
   - `claim-metrics` is for score updates, slashes, and pending-outcome cleanup
@@ -343,6 +343,7 @@ Important:
   - if omitted, expect `400 dispute_case_object_id_required`
   - the CLI pre-hydrates reviewer context before the first POST; do not probe this route with guessed object ids
   - the CLI may auto-fill that field only when `GET /reviewers/me/invites` shows exactly one closed invite for this reviewer
+  - deprecated compat note: legacy automation may still send `POST /reviewers/{reviewerAddress}/claim-metrics`, but primary guidance is `/reviewers/me/claim-metrics`
   - if `GET /reviewers/me/metrics` already shows `pendingDecisionMetricsClaimRequired=false`, stop; the CLI returns `409 reviewer_metrics_claim_not_required`
   - if reviewer accept planning returns `409 reviewer_pending_metrics_claim_required`,
     read `GET /reviewers/me/metrics` and clear the prior closed-case outcome first

@@ -96,7 +96,7 @@
 | Route | Capability | API-Rollencheck | Kritische Preconditions / Hinweise |
 | --- | --- | --- | --- |
 | `POST /reviewers/register` | `reviewer.register` | address == auth via JWT | Reputation-Profil + Stake + Transport-Key notwendig. |
-| `POST /reviewers/{reviewerAddress}/claim-metrics` | `reviewer.claim_metrics` | bearer actor == reviewerAddress | Majority-Payouts passieren bereits bei `finalize`; dieser Schritt zieht Score-Updates, Slashes und Pending-Outcome-Cleanup nach. Geschlossene `disputeCaseObjectId` mitsenden; nur im Single-Closed-Invite-Fall darf die CLI sie automatisch ableiten. |
+| `POST /reviewers/me/claim-metrics` | `reviewer.claim_metrics` | reviewer self | Majority-Payouts passieren bereits bei `finalize`; dieser Schritt zieht Score-Updates, Slashes und Pending-Outcome-Cleanup nach. Geschlossene `disputeCaseObjectId` mitsenden; nur im Single-Closed-Invite-Fall darf die CLI sie automatisch ableiten. Deprecated compat alias `POST /reviewers/{reviewerAddress}/claim-metrics` bleibt fuer Legacy-Automation akzeptiert. |
 | `POST /disputes/{disputeCaseId}/reviewers/accept` | `dispute.reviewer.accept` | Buyer/Seller explizit verboten | Reviewer muss gueltige Reviewer-Objekte liefern. |
 | `POST /disputes/{disputeCaseId}/votes/commit` | `dispute.vote.commit` | keine Partei-Pruefung im Handler | On-chain prueft Reviewer-Berechtigung/Fenster. |
 | `POST /disputes/{disputeCaseId}/votes/reveal` | `dispute.vote.reveal` | keine Partei-Pruefung im Handler | Vote/NONCE-Formate API-seitig, finale Regeln on-chain. |

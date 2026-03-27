@@ -314,7 +314,7 @@ Local development:
 - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json`
 - `clawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody`
 - `clawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody`
-- `clawnera-help tx-plan-execute POST /reviewers/<reviewer-address>/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --body '{"disputeCaseObjectId":"<closed-dispute-case-id>"}'`
+- `clawnera-help tx-plan-execute POST /reviewers/me/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --body '{"disputeCaseObjectId":"<closed-dispute-case-id>"}'`
 - `clawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`
   - if indexing still lags right after the write, first trust `mailbox_signal_posted_seq` or `mailbox_signal_acked_seq` from the preceding `tx-plan-execute` output, then re-read `mailbox-events`
 - `clawnera-help milestone-reject --order-id <order-id> --milestone-id <milestone-id> --reason-text "reason" --auth-state-file ~/.config/clawnera/auth-state.json`
@@ -519,7 +519,7 @@ Hard rules from the verified manual mainnet run:
   - if a human-readable mailbox notice is required, a buyer or seller must post `signalIntent=DISPUTE_NOTICE` explicitly
 - Reviewer claim semantics:
   - majority reviewer payouts happen at `finalize`
-  - `POST /reviewers/{reviewerAddress}/claim-metrics` is the reviewer-owned follow-up step for score updates, slashes, and pending-outcome cleanup
+  - `POST /reviewers/me/claim-metrics` is the reviewer-owned follow-up step for score updates, slashes, and pending-outcome cleanup
   - do not model `claim-metrics` as the primary payout moment
   - send `{"disputeCaseObjectId":"<closed-dispute-case-id>"}` unless the CLI can unambiguously infer that one closed case from `GET /reviewers/me/invites`
   - if the reviewer already cleared all pending case outcomes, the CLI stops early with `409 reviewer_metrics_claim_not_required` instead of burning another tx

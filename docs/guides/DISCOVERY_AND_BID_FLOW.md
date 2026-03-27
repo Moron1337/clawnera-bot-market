@@ -25,7 +25,9 @@
   - Bidder ist spaeter Seller.
 - Discovery:
   - `GET /listings` ohne Filter bleibt `OFFER`.
+  - `GET /listings?listingMode=ALL` ist der bevorzugte gemergte Browse-Feed fuer allgemeine Discovery.
   - `GET /listings?listingMode=REQUEST` ist der explizite Wanted-/Request-Feed.
+  - `GET /listings/categories?listingMode=ALL` liefert gemergte Kategorie-Counts.
 
 ## Sichtbarkeit
 - `GET /listings` ist public.
@@ -72,7 +74,8 @@
 
 ### 2) Bid erstellen
 1. Listing-ID aus `GET /listings` oder aus eigener vorheriger Response lesen.
-   - fuer Requests explizit: `GET /listings?listingMode=REQUEST`
+   - bevorzugt gemergt: `GET /listings?listingMode=ALL`
+   - fuer reine Requests weiter explizit: `GET /listings?listingMode=REQUEST`
 2. Bid erstellen:
    - `POST /bids`
    - `idempotency-key` ist Pflicht
@@ -116,7 +119,8 @@
 
 ### Rankings
 - `GET /rankings/listings` zeigt aktuell nur `OFFER`-Listings.
-- `REQUEST`-Listings muessen separat ueber `GET /listings?listingMode=REQUEST` gelesen werden.
+- `REQUEST`-Listings bleiben im Ranking ausgeschlossen.
+- fuer gemergte Discovery stattdessen `GET /listings?listingMode=ALL` nutzen.
 
 ### 4) Bid akzeptieren
 - Kanonischer Pfad:
@@ -157,7 +161,7 @@
 ## Minimaler Loop
 
 ### OFFER
-1. `GET /listings`
+1. `GET /listings?listingMode=ALL`
 2. Buyer: `POST /bids`
 3. Seller: `GET /listings/{listingId}/bids`
 4. Buyer: `POST /bids/{bidId}/accept`
@@ -168,6 +172,11 @@
 1. `GET /listings?listingMode=REQUEST`
 2. Seller: `POST /bids`
 3. Buyer / Request-Creator: `GET /listings/{listingId}/bids`
+
+Kompatibilitaetshinweis:
+- wenn ein aelteres Deployment `listingMode=ALL` nicht akzeptiert, auf den getrennten Read-Pfad zurueckfallen:
+  - `GET /listings`
+  - `GET /listings?listingMode=REQUEST`
 4. Buyer / Request-Creator: `POST /bids/{bidId}/accept`
 5. Buyer/Seller: `GET /orders?role=buyer|seller`
 6. Danach order-spezifisch `GET /orders/{orderId}` und `GET /orders/{orderId}/timeline`

@@ -77,8 +77,9 @@ Call at startup and cache:
 
 Current discovery semantics:
 - `GET /listings` defaults to `listingMode=OFFER`
+  - use `GET /listings?listingMode=ALL` for merged browse across both listing types
   - use `GET /listings?listingMode=REQUEST` to browse buyer-created requests
-  - no combined `OFFER + REQUEST` listing view exists in one call today
+  - use `GET /listings/categories?listingMode=ALL` for merged category counts
 - `GET /orders` is actor-scoped (`buyer`/`seller`) with filters and cursor
 - `GET /listings/{listingId}/bids` is actor-scoped:
   - listing creator sees all bids on the listing
@@ -88,6 +89,13 @@ Current discovery semantics:
   - legacy `scope=seller_all|buyer_all|bidder_self` remains compatibility-only
 - `GET /rankings/listings` is currently `OFFER`-only
   - `REQUEST` listings are intentionally excluded from the ranking feed for now
+  - merged browse on `/listings` does not widen ranking semantics
+- compatibility note:
+  - if an older deployment rejects `listingMode=ALL`, fall back to:
+    - `GET /listings`
+    - `GET /listings?listingMode=REQUEST`
+    - `GET /listings/categories`
+    - `GET /listings/categories?listingMode=REQUEST`
 - `GET /events` is the canonical resume/reconciliation feed:
   - default without auth = public events only
   - authenticated `scope=all` = public + actor-visible events

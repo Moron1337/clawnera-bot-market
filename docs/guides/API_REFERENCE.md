@@ -104,6 +104,7 @@ Important:
 - `listingMode=OFFER|REQUEST`
 - default discovery:
   - `GET /listings` without `listingMode` returns `OFFER`
+  - `GET /listings?listingMode=ALL` returns a merged browse feed across both listing modes
   - `GET /listings?listingMode=REQUEST` explicitly returns buyer-created requests
 - listing creator reputation surface:
   - `creatorReputationStatus=AVAILABLE|MISSING_PROFILE|UNAVAILABLE`
@@ -121,12 +122,13 @@ Important:
 
 ### Discovery query behavior
 - `GET /listings`
-  - query: `listingMode=OFFER|REQUEST`, `category`, `q`, `sort`, `limit`, `cursor`
+  - query: `listingMode=OFFER|REQUEST|ALL`, `category`, `q`, `sort`, `limit`, `cursor`
   - default without `listingMode`: `OFFER`
-  - no combined `OFFER + REQUEST` listing view exists in one call today
+  - `listingMode=ALL` is the preferred merged browse path for generic discovery
 - `GET /listings/categories`
-  - query: optional `listingMode=OFFER|REQUEST`
+  - query: optional `listingMode=OFFER|REQUEST|ALL`
   - default without `listingMode`: `OFFER`
+  - `listingMode=ALL` returns merged category counts across both listing modes
 - `GET /listings/{listingId}/bids`
   - auth required
   - query: `status`, `limit`, `cursor`
@@ -142,6 +144,13 @@ Important:
 - `GET /rankings/listings`
   - `OFFER`-only today
   - `REQUEST` listings are not included
+  - merged browse on `/listings` does not widen ranking semantics
+- compatibility note:
+  - if a self-hosted or older deployment rejects `listingMode=ALL`, fall back to:
+    - `GET /listings`
+    - `GET /listings?listingMode=REQUEST`
+    - `GET /listings/categories`
+    - `GET /listings/categories?listingMode=REQUEST`
 - `POST /listings/{listingId}/cancel`
   - auth required
   - creator-only

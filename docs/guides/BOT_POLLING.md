@@ -21,7 +21,7 @@
 | `GET /orders/{orderId}/mailbox` | Mailbox object mapping | 15-30s bei aktiver Kommunikation |
 | `GET /webhooks/deliveries` | Diagnose fuer fehlgeschlagene Push-Zustellung | nur bei Incident oder Health-Check |
 | `GET /orders/{orderId}/communication-agreement` | Optional negotiated communication snapshot | nur nach bewusstem Accept+Proposal-Handshake, sonst ueberspringen |
-| `GET /listings` | Open listing discovery | 30-90s (rollenabhaengig) |
+| `GET /listings?listingMode=ALL` | Gemergte offene Listing-Discovery | 30-90s (rollenabhaengig) |
 
 ## Backoff-Regeln
 - `429` / `503`: Exponential Backoff mit Jitter.
@@ -51,6 +51,12 @@
 6. Dispute lane: bekannte aktive `disputeCaseId`s pollen.
 7. Mailbox lane: nur fuer Orders mit aktivem Kommunikations-Flow.
 8. State lokal persistieren (durable store) und Deltas verarbeiten.
+
+Discovery-Hinweis:
+- `GET /listings?listingMode=ALL` ist jetzt der bevorzugte allgemeine Discovery-Read.
+- `GET /listings` ohne Param bleibt der OFFER-Default.
+- `GET /listings?listingMode=REQUEST` bleibt der explizite Request-Feed.
+- `GET /rankings/listings` bleibt `OFFER`-only.
 
 ## Wenn Webhooks aktiv sind
 - Webhooks als Beschleuniger nutzen, Feed als Replay-Quelle behalten.

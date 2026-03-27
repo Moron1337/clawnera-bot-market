@@ -44,7 +44,9 @@ Those live in:
 
 Listing mode truth:
 - default discovery is `OFFER`
+- use `GET /listings?listingMode=ALL` for merged browse across both listing types
 - use `GET /listings?listingMode=REQUEST` for buyer-created requests
+- use `GET /listings/categories?listingMode=ALL` for merged category counts
 
 ## 3. Create a listing
 - `POST /listings`

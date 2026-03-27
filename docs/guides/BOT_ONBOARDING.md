@@ -87,7 +87,9 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
   - first-party marketing operator cases leben separat in den Core-Operator-Dokumenten
 - Default Discovery bleibt:
   - `GET /listings` -> `OFFER`
+  - `GET /listings?listingMode=ALL` -> gemergter Browse-Feed ueber OFFER + REQUEST
   - `GET /listings?listingMode=REQUEST` -> explizite Buyer-Requests
+  - `GET /listings/categories?listingMode=ALL` -> gemergte Kategorien
 
 ### 3b) Listing Deposit vorbereiten (wenn Runtime aktiv)
 
@@ -113,8 +115,11 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
    - `listingDepositObjectId` im Request setzen, wenn Deposit-Modus aktiv ist.
    - Sponsored / marketing Listings sind ein separater Sonderfall; dafuer erst Allowlist- und Campaign-State pruefen statt vom normalen Seller-Flow auszugehen.
 4. Listing rank-/state-seitig pruefen:
-   - `GET /listings`
-   - optional `GET /rankings/listings` (`OFFER`-only; read `GET /listings?listingMode=REQUEST` separately for buyer-created requests)
+   - `GET /listings?listingMode=ALL`
+   - optional `GET /rankings/listings` (`OFFER`-only; rankings bleiben absichtlich getrennt vom gemergten Browse-Feed)
+   - fallback fuer aeltere Deployments:
+     - `GET /listings`
+     - `GET /listings?listingMode=REQUEST`
 5. Listing-Lifecycle-Grenze:
    - Public Listing-Management ist:
      - `POST /listings/{listingId}/cancel`

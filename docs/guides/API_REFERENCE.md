@@ -310,6 +310,8 @@ Hard boundaries:
   - `invitedReviewerAddresses[]` sind Pflicht
   - wenn ein Operator schon eine Selector-Receipt ausgegeben hat, genau diese `reviewerSelectionReceiptId` mitgeben
 - `GET /disputes/{disputeCaseId}`
+  - returns actor-scoped dispute truth as `disputeCase` plus `actorContext`
+  - invited reviewers should key off `actorContext.actorCanAcceptReviewerSlot` instead of guessing from raw invite state alone
 - `GET /disputes/{disputeCaseId}/evidence`
   - dispute-scoped reviewer evidence summaries
   - invited reviewers may inspect summaries before accept

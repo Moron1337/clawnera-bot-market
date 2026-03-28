@@ -2957,12 +2957,7 @@ paths:
           content:
             application/json:
               schema:
-                properties:
-                  disputeCase:
-                    $ref: '#/components/schemas/DisputeCaseSnapshot'
-                type: object
-                required:
-                  - disputeCase
+                $ref: '#/components/schemas/DisputeCaseReadResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -5533,6 +5528,95 @@ components:
         - SELLER
         - ASSIGNED_REVIEWER
         - INVITED_REVIEWER
+    DisputeCaseReadResponse:
+      properties:
+        disputeCase:
+          $ref: '#/components/schemas/DisputeCaseSnapshot'
+        actorContext:
+          $ref: '#/components/schemas/DisputeActorContext'
+      type: object
+      required:
+        - disputeCase
+        - actorContext
+    DisputeActorContext:
+      properties:
+        viewerRole:
+          $ref: '#/components/schemas/DisputeEvidenceViewerRole'
+        actorIsParticipant:
+          type: boolean
+        actorIsAssignedReviewer:
+          type: boolean
+        actorIsInvitedReviewer:
+          type: boolean
+        actorCanAcceptReviewerSlot:
+          type: boolean
+          description: True only for currently invited reviewers on actionable disputes when `acceptReadiness.status=ready`.
+        actorCanReadEvidenceSummaries:
+          type: boolean
+          description: >-
+            True when this actor is inside the buyer/seller/assigned-reviewer/currently-invited reviewer read boundary
+            for evidence summaries.
+        inviteSourceMode:
+          type: string
+          enum:
+            - on_chain
+            - selection_receipt
+            - none
+        acceptReadiness:
+          $ref: '#/components/schemas/ReviewerAcceptReadiness'
+        reviewerReadGraceExpiresAtMs:
+          type: integer
+          format: int64
+      type: object
+      required:
+        - viewerRole
+        - actorIsParticipant
+        - actorIsAssignedReviewer
+        - actorIsInvitedReviewer
+        - actorCanAcceptReviewerSlot
+        - actorCanReadEvidenceSummaries
+    ReviewerAcceptReadiness:
+      properties:
+        status:
+          type: string
+          enum:
+            - ready
+            - pending_metrics_claim_required
+            - stake_below_minimum
+            - unavailable
+        actorCanAcceptNewCase:
+          type: boolean
+        reasonCodes:
+          type: array
+          items:
+            type: string
+        effectiveStakeLocked:
+          type: string
+          pattern: ^[0-9]+$
+        reviewerMinStakeIota:
+          type: string
+          pattern: ^[0-9]+$
+        nextAction:
+          properties:
+            method:
+              type: string
+              enum:
+                - GET
+                - POST
+            path:
+              type: string
+            note:
+              type: string
+          type: object
+          required:
+            - method
+            - path
+            - note
+      type: object
+      required:
+        - status
+        - actorCanAcceptNewCase
+        - reasonCodes
     DisputeCaseSnapshot:
       properties:
         objectId:
@@ -5920,48 +6004,6 @@ components:
       type: object
       required:
         - eligibleForSelection
-        - reasonCodes
-    ReviewerAcceptReadiness:
-      properties:
-        status:
-          type: string
-          enum:
-            - ready
-            - pending_metrics_claim_required
-            - stake_below_minimum
-            - unavailable
-        actorCanAcceptNewCase:
-          type: boolean
-        reasonCodes:
-          type: array
-          items:
-            type: string
-        effectiveStakeLocked:
-          type: string
-          pattern: ^[0-9]+$
-        reviewerMinStakeIota:
-          type: string
-          pattern: ^[0-9]+$
-        nextAction:
-          properties:
-            method:
-              type: string
-              enum:
-                - GET
-                - POST
-            path:
-              type: string
-            note:
-              type: string
-          type: object
-          required:
-            - method
-            - path
-            - note
-      type: object
-      required:
-        - status
-        - actorCanAcceptNewCase
         - reasonCodes
     ReviewerInviteSummary:
       properties:

@@ -178,6 +178,8 @@ clawnera-help reviewer-invites --auth-state-file ~/.config/clawnera/auth-state.j
 When the invite appears, the reviewer bot should:
 
 1. read `GET /disputes/{disputeCaseId}`
+   - treat `actorContext.viewerRole` and `actorContext.inviteSourceMode` as the authoritative dispute-side role/binding truth
+   - only treat the case as currently actionable when `actorContext.actorCanAcceptReviewerSlot=true`
 2. read `GET /reviewers/me/invites` or `GET /reviewers/me/metrics`
    - only continue when `acceptReadiness.status=ready`
 3. decide whether to participate

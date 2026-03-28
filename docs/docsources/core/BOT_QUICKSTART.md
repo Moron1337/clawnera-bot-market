@@ -193,6 +193,10 @@ When a milestone is rejected:
 
 Reviewer participation is invite-gated:
 - reviewers read `GET /reviewers/me/invites`
+- reviewers may read `GET /disputes/{disputeCaseId}` and inspect `actorContext` before accepting
+  - `actorContext.viewerRole` is the current actor-scoped role on this case
+  - `actorContext.inviteSourceMode` shows whether the active invite binding is on-chain, receipt-backed, or absent
+  - `actorContext.actorCanAcceptReviewerSlot=true` is the coarse actionable signal for an invited reviewer on this dispute read
 - reviewers may inspect `GET /disputes/{disputeCaseId}/evidence` summaries before accepting
 - reviewers accept with `POST /disputes/{disputeCaseId}/reviewers/accept`
 - then:

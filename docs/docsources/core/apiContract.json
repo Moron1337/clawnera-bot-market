@@ -7942,67 +7942,16 @@
           "200": {
             "status": "200",
             "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/DisputeCaseSnapshot",
-            "schemaName": "DisputeCaseSnapshot",
+            "schemaRef": "#/components/schemas/DisputeCaseReadResponse",
+            "schemaName": "DisputeCaseReadResponse",
             "requiredFields": [
-              "objectId",
-              "type",
-              "orderId",
-              "milestoneId"
+              "disputeCase",
+              "actorContext"
             ],
-            "optionalFields": [
-              "owner",
-              "buyer",
-              "seller",
-              "bondObjectId",
-              "escrowObjectId",
-              "state",
-              "resolvedPath",
-              "requiredReviewerVotes",
-              "requiredReviewerVotesFloor",
-              "assignmentRound",
-              "invitedReviewers",
-              "assignedReviewers",
-              "blockedReviewers",
-              "votesYes",
-              "votesNo",
-              "openedAtMs",
-              "acceptDeadlineMs",
-              "commitDeadlineMs",
-              "revealDeadlineMs",
-              "challengeDeadlineMs",
-              "hardTimeoutMs",
-              "fallbackEligibleAtMs",
-              "closedAtMs"
-            ],
+            "optionalFields": [],
             "propertyNames": [
-              "objectId",
-              "type",
-              "owner",
-              "orderId",
-              "milestoneId",
-              "buyer",
-              "seller",
-              "bondObjectId",
-              "escrowObjectId",
-              "state",
-              "resolvedPath",
-              "requiredReviewerVotes",
-              "requiredReviewerVotesFloor",
-              "assignmentRound",
-              "invitedReviewers",
-              "assignedReviewers",
-              "blockedReviewers",
-              "votesYes",
-              "votesNo",
-              "openedAtMs",
-              "acceptDeadlineMs",
-              "commitDeadlineMs",
-              "revealDeadlineMs",
-              "challengeDeadlineMs",
-              "hardTimeoutMs",
-              "fallbackEligibleAtMs",
-              "closedAtMs"
+              "disputeCase",
+              "actorContext"
             ]
           },
           "400": {
@@ -20020,67 +19969,16 @@
         "200": {
           "status": "200",
           "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/DisputeCaseSnapshot",
-          "schemaName": "DisputeCaseSnapshot",
+          "schemaRef": "#/components/schemas/DisputeCaseReadResponse",
+          "schemaName": "DisputeCaseReadResponse",
           "requiredFields": [
-            "objectId",
-            "type",
-            "orderId",
-            "milestoneId"
+            "disputeCase",
+            "actorContext"
           ],
-          "optionalFields": [
-            "owner",
-            "buyer",
-            "seller",
-            "bondObjectId",
-            "escrowObjectId",
-            "state",
-            "resolvedPath",
-            "requiredReviewerVotes",
-            "requiredReviewerVotesFloor",
-            "assignmentRound",
-            "invitedReviewers",
-            "assignedReviewers",
-            "blockedReviewers",
-            "votesYes",
-            "votesNo",
-            "openedAtMs",
-            "acceptDeadlineMs",
-            "commitDeadlineMs",
-            "revealDeadlineMs",
-            "challengeDeadlineMs",
-            "hardTimeoutMs",
-            "fallbackEligibleAtMs",
-            "closedAtMs"
-          ],
+          "optionalFields": [],
           "propertyNames": [
-            "objectId",
-            "type",
-            "owner",
-            "orderId",
-            "milestoneId",
-            "buyer",
-            "seller",
-            "bondObjectId",
-            "escrowObjectId",
-            "state",
-            "resolvedPath",
-            "requiredReviewerVotes",
-            "requiredReviewerVotesFloor",
-            "assignmentRound",
-            "invitedReviewers",
-            "assignedReviewers",
-            "blockedReviewers",
-            "votesYes",
-            "votesNo",
-            "openedAtMs",
-            "acceptDeadlineMs",
-            "commitDeadlineMs",
-            "revealDeadlineMs",
-            "challengeDeadlineMs",
-            "hardTimeoutMs",
-            "fallbackEligibleAtMs",
-            "closedAtMs"
+            "disputeCase",
+            "actorContext"
           ]
         },
         "400": {
@@ -25560,6 +25458,44 @@
       "name": "DisputeEvidenceViewerRole",
       "propertyNames": [],
       "requiredFields": [],
+      "optionalFields": []
+    },
+    "DisputeActorContext": {
+      "name": "DisputeActorContext",
+      "propertyNames": [
+        "viewerRole",
+        "actorIsParticipant",
+        "actorIsAssignedReviewer",
+        "actorIsInvitedReviewer",
+        "actorCanAcceptReviewerSlot",
+        "actorCanReadEvidenceSummaries",
+        "inviteSourceMode",
+        "acceptReadiness",
+        "reviewerReadGraceExpiresAtMs"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "viewerRole",
+        "actorIsParticipant",
+        "actorIsAssignedReviewer",
+        "actorIsInvitedReviewer",
+        "actorCanAcceptReviewerSlot",
+        "actorCanReadEvidenceSummaries",
+        "inviteSourceMode",
+        "acceptReadiness",
+        "reviewerReadGraceExpiresAtMs"
+      ]
+    },
+    "DisputeCaseReadResponse": {
+      "name": "DisputeCaseReadResponse",
+      "propertyNames": [
+        "disputeCase",
+        "actorContext"
+      ],
+      "requiredFields": [
+        "disputeCase",
+        "actorContext"
+      ],
       "optionalFields": []
     },
     "DisputeEvidenceStatus": {

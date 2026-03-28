@@ -2841,11 +2841,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [disputeCase]
-                properties:
-                  disputeCase:
-                    $ref: "#/components/schemas/DisputeCaseSnapshot"
+                $ref: "#/components/schemas/DisputeCaseReadResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -5839,6 +5835,48 @@ components:
     DisputeEvidenceViewerRole:
       type: string
       enum: [BUYER, SELLER, ASSIGNED_REVIEWER, INVITED_REVIEWER]
+    DisputeActorContext:
+      type: object
+      required:
+        [
+          viewerRole,
+          actorIsParticipant,
+          actorIsAssignedReviewer,
+          actorIsInvitedReviewer,
+          actorCanAcceptReviewerSlot,
+          actorCanReadEvidenceSummaries
+        ]
+      properties:
+        viewerRole:
+          $ref: "#/components/schemas/DisputeEvidenceViewerRole"
+        actorIsParticipant:
+          type: boolean
+        actorIsAssignedReviewer:
+          type: boolean
+        actorIsInvitedReviewer:
+          type: boolean
+        actorCanAcceptReviewerSlot:
+          type: boolean
+          description: "True only for currently invited reviewers on actionable disputes when `acceptReadiness.status=ready`."
+        actorCanReadEvidenceSummaries:
+          type: boolean
+          description: "True when this actor is inside the buyer/seller/assigned-reviewer/currently-invited reviewer read boundary for evidence summaries."
+        inviteSourceMode:
+          type: string
+          enum: [on_chain, selection_receipt, none]
+        acceptReadiness:
+          $ref: "#/components/schemas/ReviewerAcceptReadiness"
+        reviewerReadGraceExpiresAtMs:
+          type: integer
+          format: int64
+    DisputeCaseReadResponse:
+      type: object
+      required: [disputeCase, actorContext]
+      properties:
+        disputeCase:
+          $ref: "#/components/schemas/DisputeCaseSnapshot"
+        actorContext:
+          $ref: "#/components/schemas/DisputeActorContext"
     DisputeEvidenceStatus:
       type: string
       enum: [ACTIVE, CLOSED, SUPERSEDED, EXPIRED]

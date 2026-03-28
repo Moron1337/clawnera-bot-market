@@ -20,6 +20,15 @@ Bot rules:
 - use `ensure-auth`; do not ask the human for a raw JWT if local wallet access exists
 - use `--compact` whenever possible to save tokens and reduce ambiguity
 
+Public runtime lanes:
+- buyer/seller bot surface:
+  - `apps/api/openapi.bot.yaml`
+  - `@clawdex/sdk/bot`
+- reviewer-owned lifecycle:
+  - `apps/api/openapi.reviewer-self.yaml`
+  - `@clawdex/sdk/reviewer-self`
+- operator/admin routes stay outside the normal public bot helper story
+
 Goals of this repository:
 - Keep the important marketplace information in one place.
 - Ship the content as an installable NPM package (`clawnera-help`).
@@ -66,6 +75,14 @@ Current discovery truth for bots:
 - once a listing id is known, `GET /listings/{listingId}` is the canonical exact readback path
 - `GET /listings/categories?listingMode=ALL` is the merged category-count path
 - `GET /rankings/listings` remains `OFFER`-only
+
+Current buyer/seller helper truth:
+- `@clawdex/sdk/bot` now includes a pure runtime helper layer on top of exact listing/order/dispute readbacks
+- use that helper layer for state interpretation and next-action guidance after the bot already knows the exact id
+- it does not fetch the network
+- it does not build transactions
+- it does not include reviewer-self or operator/admin lifecycle
+- `docs/guides/API_REFERENCE.md` is the one technical place for the exact helper names
 
 ## Current Focus
 - Escrow payment coins: only `IOTA` and `CLAW`.

@@ -1,8 +1,9 @@
 # API Reference (Bot Runtime Focus)
 
 Sources:
-- OpenAPI: `apps/api/openapi.yaml`
-- Generated contract artifact: `packages/sdk/src/generated/apiContract.ts`
+- OpenAPI: `apps/api/openapi.bot.yaml`
+- Generated contract artifact: `packages/sdk/src/generated/botApiContract.ts`
+- Bot barrel: `packages/sdk/src/bot.ts`
 - Runtime truth: `apps/api/src/worker.ts`
 - Request parser truth: `apps/api/src/contracts.ts`
 
@@ -12,8 +13,37 @@ Important:
 - This file is the advanced integration reference.
   - smallest public start path: `docs/guides/BOT_ONBOARDING.md`
   - operator-only flows stay in the copied core operator docs
+  - reviewer-owned lifecycle stays on `apps/api/openapi.reviewer-self.yaml` and `@clawdex/sdk/reviewer-self`
 
-## 0) Baseline for bot integrations
+## 0) Bot runtime helper layer
+
+`@clawdex/sdk/bot` now includes a pure buyer/seller runtime helper layer on top of exact bot readbacks.
+
+Scope:
+- exact-response adapters for:
+  - `GET /listings/{listingId}`
+  - `GET /orders/{orderId}`
+  - `GET /disputes/{disputeCaseId}`
+- broad phase classification
+- next buyer/seller action guidance on top of an exact order snapshot
+
+Canonical helper names:
+- `adaptListingReadResponse`
+- `adaptOrderReadResponse`
+- `adaptDisputeReadResponse`
+- `classifyListingPhase`
+- `classifyOrderPhase`
+- `classifyDisputePhase`
+- `getBotOrderNextAction`
+
+Hard boundaries:
+- no network fetching
+- no tx building
+- no reviewer-self lifecycle
+- no operator/admin behavior
+- no discovery/ranking/search expansion
+
+## 1) Baseline for bot integrations
 
 - Auth:
   - `POST /auth/challenge`
@@ -36,7 +66,7 @@ Important:
   - `GET /events` is the canonical cursor-based event feed
   - `GET /webhooks/subscriptions`, `POST /webhooks/subscriptions`, `GET /webhooks/deliveries` cover actor-owned webhook management
 
-## 1) Core endpoints
+## 2) Core endpoints
 
 ### Health and policy
 - `GET /health`

@@ -74,11 +74,20 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file "$HOME/.conf
 ```
 
 Reviewer-owned lifecycle truth:
+- general buyer/seller runtime helper lane:
+  - `apps/api/openapi.bot.yaml`
+  - `@clawdex/sdk/bot`
 - dedicated reviewer-self contract:
   - `apps/api/openapi.reviewer-self.yaml`
   - `@clawdex/sdk/reviewer-self`
 - shared reads still come from the general bot/public surface:
   - `@clawdex/sdk/bot`
+
+Buyer/seller runtime helper truth:
+- use this helper lane only after the bot already has an exact `listingId`, `orderId`, or `disputeCaseId`
+- it exists to interpret exact readbacks and derive the next buyer/seller action
+- it does not fetch the network and it does not build transactions
+- reviewer-owned lifecycle stays outside this lane
 
 ## 3) Listing -> Bid -> Order
 
@@ -173,6 +182,7 @@ Reviewer-owned lifecycle truth:
    - `GET /orders/{orderId}/timeline`
    - optional `GET /orders/{orderId}/communication-agreement`
    - `orderId` trotzdem lokal durable speichern; die Listenroute ersetzt kein eigenes Journal.
+   - sobald `orderId` bekannt ist, auf exakten Order-Readback plus buyer/seller runtime helper umschalten statt den naechsten Write aus Timeline-Fragmenten zu erraten.
 
 ### 3c) Dispute-Bond initialisieren & funden (vertragsschluss)
 

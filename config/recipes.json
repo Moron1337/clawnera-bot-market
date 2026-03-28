@@ -538,7 +538,7 @@
       "id": "buyer-accept-bid",
       "title": "Buyer Accept Bid And Create Order",
       "aliases": ["bid-accept"],
-      "summary": "The live runtime creates the order when the chosen buyer accepts the stored bid.",
+      "summary": "The live runtime creates the order when the chosen buyer accepts the stored bid; immediately switch to exact order readback before the next write.",
       "role": "buyer",
       "when": "Use this after the seller has chosen your bid on an OFFER listing.",
       "needs": [
@@ -560,9 +560,10 @@
       "steps": [
         "Run clawnera-help bid-accept --bid-id <bid-id> from the chosen buyer wallet with idempotency-key.",
         "Store orderId from the accept response.",
-        "Read back GET /orders/{orderId}.",
+        "Read back GET /orders/{orderId} and treat that exact order snapshot as canonical.",
         "Read back GET /orders/{orderId}/timeline.",
-        "Inspect status, disputeBondPolicy, and disputeBondState before doing anything else."
+        "Inspect status, disputeBondPolicy, and disputeBondState before doing anything else.",
+        "If you are using code, keep the next buyer/seller state interpretation on the pure runtime helper lane in @clawdex/sdk/bot instead of guessing from timeline fragments alone."
       ],
       "examples": [
         "Thin wrapper first:\\nclawnera-help bid-accept --auth-state-file ~/.config/clawnera/auth-state.json --bid-id <bid-id>",
@@ -628,7 +629,7 @@
     {
       "id": "fund-order",
       "title": "Fund Bond And Escrow",
-      "summary": "Determine exactly which value still needs to move: gas, bond principal, or escrow principal.",
+      "summary": "Determine from the exact order readback which value still needs to move next: gas, bond principal, or escrow principal.",
       "role": "buyer_or_seller",
       "when": "Use this after an order exists but before milestone work starts.",
       "needs": [
@@ -649,6 +650,7 @@
       ],
       "steps": [
         "Read GET /orders/{orderId}.",
+        "Treat that exact order snapshot as canonical and use the buyer/seller runtime helper lane only for phase interpretation, not for transport or tx building.",
         "Separate sponsor gas from dispute-bond principal and escrow principal.",
         "If sponsor is relevant, use clawnera-help sponsor-preflight before any execute attempt.",
         "If GET /orders/{orderId} or the accept response already includes disputeBondGuidance, prefer that structured object first. If disputeBondState is still PENDING, run clawnera-help chain-config, then clawnera-help order-init-bond --order-id <order-id> --auth-state-file <seller-auth-state-file> and persist bondObjectId. In REQUEST mode the seller is the accepted bidder, not the request creator.",
@@ -1434,7 +1436,7 @@
       "id": "resolve-dispute",
       "title": "Resolve Dispute Escrow",
       "aliases": ["dispute-resolve", "finalize-dispute-resolution"],
-      "summary": "Resolve the shared escrow from the finalized dispute binding after quorum or fallback closure; this is the payout/refund step for buyer or seller.",
+      "summary": "Resolve the shared escrow from the finalized dispute binding after exact dispute/order readbacks confirm quorum or fallback closure; this is the payout/refund step for buyer or seller.",
       "role": "buyer_or_seller",
       "when": "Use this after the dispute is finalized or fallback-resolved.",
       "needs": [
@@ -1452,6 +1454,7 @@
       ],
       "steps": [
         "Stay on the buyer or seller wallet for the disputed order.",
+        "Read the exact dispute and order snapshots first; do not infer terminal readiness from stale event fragments.",
         "POST /disputes/{disputeCaseId}/resolve-escrow.",
         "Treat this as the actual money move: seller-settlement pays the seller, buyer-settlement refunds the buyer.",
         "Execute the returned tx locally.",

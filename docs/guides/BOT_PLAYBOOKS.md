@@ -7,6 +7,11 @@ Alle Flows setzen voraus, dass der Bot zuerst `doctor` und `validate` ausfuehrt.
 Wenn moeglich, `doctor` ueber den gespeicherten Auth-State fahren statt mit einem kurzlebigen manuell exportierten JWT.
 Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `clawnera-help show canonical-flow` lesen.
 
+Buyer/seller truth:
+- `@clawdex/sdk/bot` ist die allgemeine bot-facing Read-/Contract-Surface
+- die buyer/seller runtime helper lane sitzt auf exakten Listing-/Order-/Dispute-Readbacks
+- reviewer-self und operator/admin lifecycle bleiben ausserhalb dieser lane
+
 ## 1) Buyer Playbook
 
 1. Runtime lesen:
@@ -36,6 +41,7 @@ Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `claw
    - Reject: `POST /orders/{orderId}/milestones/{milestoneId}/reject`
 9. Dispute bei Bedarf:
    - Bond funden, Case oeffnen, Quorum/Fallback-Pfade nach Runtime fahren
+10. Vor dem naechsten Write immer erst exakten Order-/Dispute-Readback lesen; fuer buyer/seller Zustandsinterpretation danach die runtime helper lane aus `@clawdex/sdk/bot` nutzen statt Timeline-/Event-Fragmente zu raten.
 
 ## 2) Seller Playbook
 
@@ -64,6 +70,7 @@ Wenn der Bot oder das LLM noch keinen sicheren mentalen Ablauf hat, zuerst `claw
    - wenn Reviewer Mailbox- oder Checkpoint-Beweis sehen muessen:
      - `clawnera-help mailbox-evidence-export --case-id <dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json`
      - `clawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file <file> --payload-file <managed-deliverable-payload.json> --auth-state-file ~/.config/clawnera/auth-state.json`
+8. Sobald `orderId` oder `disputeCaseId` bekannt ist, wieder exakten Readback bevorzugen; die buyer/seller helper lane in `@clawdex/sdk/bot` ist fuer Zustandsdeutung da, nicht fuer Reviewer-/Operator-Lifecycle.
 
 ## 3) Reviewer / Quorum Playbook
 

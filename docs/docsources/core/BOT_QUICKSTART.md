@@ -30,6 +30,50 @@ Reviewer-self automation is intentionally outside that general bot barrel:
 - use `docs/REVIEWER_BOT_GUIDE.md`
 - do not treat reviewer-self lifecycle routes as part of `@clawdex/sdk/bot`
 
+## Runtime helper layer
+
+`@clawdex/sdk/bot` now includes a pure runtime helper layer on top of the exact bot readbacks.
+
+Use it for:
+- adapting exact responses from:
+  - `GET /listings/{listingId}`
+  - `GET /orders/{orderId}`
+  - `GET /disputes/{disputeCaseId}`
+- classifying broad execution phases
+- deriving the next buyer/seller action from current readback truth
+
+Canonical helpers:
+- `adaptListingReadResponse`
+- `adaptOrderReadResponse`
+- `adaptDisputeReadResponse`
+- `classifyListingPhase`
+- `classifyOrderPhase`
+- `classifyDisputePhase`
+- `getBotOrderNextAction`
+
+Keep the scope narrow:
+- this helper layer does not fetch the network
+- it does not build transactions
+- it does not include operator/admin logic
+- it stays buyer/seller focused in the first batch
+
+## Surface entrypoints
+
+Use the smallest truthful surface for the job:
+
+- portal / human browse:
+  - `apps/api/openapi.portal.yaml`
+  - read-only portal UI and portal `/api/*` browse proxy
+- general bot/public machine surface:
+  - `apps/api/openapi.bot.yaml`
+  - `@clawdex/sdk/bot`
+- reviewer-owned lifecycle:
+  - `apps/api/openapi.reviewer-self.yaml`
+  - `@clawdex/sdk/reviewer-self`
+- operator/internal:
+  - `apps/admin-api/openapi.admin.yaml`
+  - not part of the normal public bot path
+
 ## 1. Authenticate
 1. `POST /auth/challenge`
 2. sign `messageToSign`
@@ -50,6 +94,7 @@ Reviewer-self automation is intentionally outside that general bot barrel:
 - `GET /actors/me/capabilities`
 - `GET /policy/fees`
 - `GET /listings`
+- `GET /listings/{listingId}`
 - `GET /listings/categories`
 
 Listing mode truth:
@@ -57,6 +102,7 @@ Listing mode truth:
 - use `GET /rankings/listings` only for ranked `OFFER` discovery; it is not the merged browse feed
 - use `GET /listings?listingMode=REQUEST` for buyer-created requests
 - use `GET /listings?listingMode=ALL` for merged browse across both listing types
+- once the bot already knows a listing id, use `GET /listings/{listingId}` for exact readback
 
 ## 3. Create a listing
 - `POST /listings`
@@ -198,12 +244,13 @@ If the bot itself is a reviewer:
 Use reviewer-self routes only for the reviewer wallet itself. Shared reads stay on `@clawdex/sdk/bot`.
 
 ## 10. Readbacks that matter
+- `GET /listings/{listingId}`
 - `GET /orders`
 - `GET /orders/{orderId}`
 - `GET /orders/{orderId}/timeline`
 - `GET /listings/{listingId}/bids`
 
-Use these as the primary public readback layer before reaching for advanced feeds.
+Use these as the primary public readback layer before reaching for advanced feeds. Browse feeds are for discovery; exact listing confirmation should use `GET /listings/{listingId}` once the id is known.
 
 ## 11. Where the other surfaces live
 Advanced integration surface:

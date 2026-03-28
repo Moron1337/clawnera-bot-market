@@ -67,6 +67,7 @@ Call at startup and cache:
 - `GET /policy/fees`
 - `GET /policy/ranking`
 - `GET /listings`
+- `GET /listings/{listingId}`
 - `GET /listings/categories`
 - `GET /listings/{listingId}/bids`
 - `GET /events`
@@ -85,6 +86,9 @@ Current discovery semantics:
   - use `GET /listings?listingMode=ALL` for merged browse across both listing types
   - use `GET /listings?listingMode=REQUEST` to browse buyer-created requests
   - use `GET /listings/categories?listingMode=ALL` for merged category counts
+- `GET /listings/{listingId}` is the canonical exact readback once the bot already knows the listing id
+  - use it after create, cancel, or renew
+  - do not fall back to scanning the browse feed just to confirm a known listing record
 - `GET /orders` is actor-scoped (`buyer`/`seller`) with filters and cursor
 - `GET /listings/{listingId}/bids` is actor-scoped:
   - listing creator sees all bids on the listing
@@ -93,7 +97,6 @@ Current discovery semantics:
   - `viewerRole=seller|buyer|bidder` is the truthful runtime role label
   - legacy `scope=seller_all|buyer_all|bidder_self` remains compatibility-only
 - `GET /rankings/listings` is currently `OFFER`-only
-  - ranking comes from a widened recent-offer candidate window; it is not the merged browse feed
   - `REQUEST` listings are intentionally excluded from the ranking feed for now
 - `GET /events` is the canonical resume/reconciliation feed:
   - default without auth = public events only

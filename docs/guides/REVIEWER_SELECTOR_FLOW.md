@@ -51,6 +51,9 @@ Reviewer bot:
 4. `POST /reviewers/register`
 5. execute the returned tx locally
 6. read back `GET /reviewers/{reviewerAddress}`
+   - `reviewer.qualification` is only a coarse public selector hint
+   - it can show `inactive`, `pending_metrics_claim_required`, `stake_below_minimum`, or `unavailable`
+   - it does not include case ids, next actions, or reviewer-owned remediation steps
 7. poll `clawnera-help reviewer-invites`
 
 If the reviewer later rotates the key-agreement key, rerun:

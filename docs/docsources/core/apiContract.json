@@ -6777,7 +6777,8 @@
               "commitRevealFailures",
               "noshowCount",
               "pendingDecisionMetricsClaimRequired",
-              "pendingReviewerOutcome"
+              "pendingReviewerOutcome",
+              "qualification"
             ],
             "propertyNames": [
               "objectId",
@@ -6799,7 +6800,8 @@
               "commitRevealFailures",
               "noshowCount",
               "pendingDecisionMetricsClaimRequired",
-              "pendingReviewerOutcome"
+              "pendingReviewerOutcome",
+              "qualification"
             ]
           },
           "503": {
@@ -6866,7 +6868,8 @@
               "commitRevealFailures",
               "noshowCount",
               "pendingDecisionMetricsClaimRequired",
-              "pendingReviewerOutcome"
+              "pendingReviewerOutcome",
+              "qualification"
             ],
             "propertyNames": [
               "objectId",
@@ -6888,7 +6891,8 @@
               "commitRevealFailures",
               "noshowCount",
               "pendingDecisionMetricsClaimRequired",
-              "pendingReviewerOutcome"
+              "pendingReviewerOutcome",
+              "qualification"
             ]
           },
           "400": {
@@ -18884,7 +18888,8 @@
             "commitRevealFailures",
             "noshowCount",
             "pendingDecisionMetricsClaimRequired",
-            "pendingReviewerOutcome"
+            "pendingReviewerOutcome",
+            "qualification"
           ],
           "propertyNames": [
             "objectId",
@@ -18906,7 +18911,8 @@
             "commitRevealFailures",
             "noshowCount",
             "pendingDecisionMetricsClaimRequired",
-            "pendingReviewerOutcome"
+            "pendingReviewerOutcome",
+            "qualification"
           ]
         },
         "503": {
@@ -18970,7 +18976,8 @@
             "commitRevealFailures",
             "noshowCount",
             "pendingDecisionMetricsClaimRequired",
-            "pendingReviewerOutcome"
+            "pendingReviewerOutcome",
+            "qualification"
           ],
           "propertyNames": [
             "objectId",
@@ -18992,7 +18999,8 @@
             "commitRevealFailures",
             "noshowCount",
             "pendingDecisionMetricsClaimRequired",
-            "pendingReviewerOutcome"
+            "pendingReviewerOutcome",
+            "qualification"
           ]
         },
         "400": {
@@ -26005,7 +26013,8 @@
         "commitRevealFailures",
         "noshowCount",
         "pendingDecisionMetricsClaimRequired",
-        "pendingReviewerOutcome"
+        "pendingReviewerOutcome",
+        "qualification"
       ],
       "requiredFields": [
         "objectId",
@@ -26029,7 +26038,25 @@
         "commitRevealFailures",
         "noshowCount",
         "pendingDecisionMetricsClaimRequired",
-        "pendingReviewerOutcome"
+        "pendingReviewerOutcome",
+        "qualification"
+      ]
+    },
+    "ReviewerQualificationSummary": {
+      "name": "ReviewerQualificationSummary",
+      "propertyNames": [
+        "eligibleForSelection",
+        "reasonCodes",
+        "effectiveStakeLocked",
+        "reviewerMinStakeIota"
+      ],
+      "requiredFields": [
+        "eligibleForSelection",
+        "reasonCodes"
+      ],
+      "optionalFields": [
+        "effectiveStakeLocked",
+        "reviewerMinStakeIota"
       ]
     },
     "PendingReviewerOutcomeSummary": {

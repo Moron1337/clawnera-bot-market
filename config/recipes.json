@@ -1196,7 +1196,7 @@
         "Run clawnera-help reputation-init --auth-state-file <reviewer-auth-state-file>.",
         "Run clawnera-help reviewer-register --auth-state-file <reviewer-auth-state-file>.",
         "If the reviewer later rotates that key, rerun clawnera-help key-agreement-upsert and then clawnera-help reviewer-update before expecting dispute-evidence publish to work again.",
-        "Read back GET /reviewers/{reviewerAddress}.",
+        "Read back GET /reviewers/{reviewerAddress} and treat reviewer.qualification only as a coarse selector eligibility summary, not a remediation object.",
         "Start polling GET /reviewers/me/invites."
       ],
       "examples": [

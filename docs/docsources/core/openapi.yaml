@@ -6313,6 +6313,25 @@ components:
           type: boolean
         pendingReviewerOutcome:
           $ref: "#/components/schemas/PendingReviewerOutcomeSummary"
+        qualification:
+          $ref: "#/components/schemas/ReviewerQualificationSummary"
+    ReviewerQualificationSummary:
+      type: object
+      required: [eligibleForSelection, reasonCodes]
+      properties:
+        eligibleForSelection:
+          type: boolean
+        reasonCodes:
+          type: array
+          items:
+            type: string
+            enum: [inactive, pending_metrics_claim_required, stake_below_minimum, unavailable]
+        effectiveStakeLocked:
+          type: string
+          pattern: "^[0-9]+$"
+        reviewerMinStakeIota:
+          type: string
+          pattern: "^[0-9]+$"
     PendingReviewerOutcomeSummary:
       type: object
       required:

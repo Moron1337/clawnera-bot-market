@@ -836,8 +836,10 @@ paths:
           in: query
           required: false
           schema:
-            $ref: '#/components/schemas/ListingMode'
-          description: Listing discovery defaults to `OFFER`. Set `REQUEST` explicitly to browse buyer-created requests.
+            $ref: '#/components/schemas/ListingBrowseMode'
+          description: >-
+            Listing discovery defaults to `OFFER`. Set `REQUEST` explicitly to browse buyer-created requests. Set `ALL`
+            for a merged browse feed.
         - name: category
           in: query
           required: false
@@ -923,6 +925,30 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
+  /listings/{listingId}:
+    get:
+      tags:
+        - Listings
+      security: []
+      operationId: getListing
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Exact single listing read for a known listing id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingReadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /listings/categories:
     get:
       tags:
@@ -934,8 +960,10 @@ paths:
           in: query
           required: false
           schema:
-            $ref: '#/components/schemas/ListingMode'
-          description: Category counts default to `OFFER`. Set `REQUEST` explicitly to count buyer-created requests.
+            $ref: '#/components/schemas/ListingBrowseMode'
+          description: >-
+            Category counts default to `OFFER`. Set `REQUEST` explicitly to count buyer-created requests. Set `ALL` for
+            merged counts.
       responses:
         '200':
           description: Open listing categories with item counts.
@@ -4458,12 +4486,37 @@ components:
           type: boolean
         pendingReviewerOutcome:
           $ref: '#/components/schemas/PendingReviewerOutcomeSummary'
+        qualification:
+          $ref: '#/components/schemas/ReviewerQualificationSummary'
       type: object
       required:
         - objectId
         - type
         - owner
         - active
+    ReviewerQualificationSummary:
+      properties:
+        eligibleForSelection:
+          type: boolean
+        reasonCodes:
+          type: array
+          items:
+            type: string
+            enum:
+              - inactive
+              - pending_metrics_claim_required
+              - stake_below_minimum
+              - unavailable
+        effectiveStakeLocked:
+          type: string
+          pattern: ^[0-9]+$
+        reviewerMinStakeIota:
+          type: string
+          pattern: ^[0-9]+$
+      type: object
+      required:
+        - eligibleForSelection
+        - reasonCodes
     PendingReviewerOutcomeSummary:
       properties:
         pendingDecisionsTotal:
@@ -5604,13 +5657,13 @@ components:
         - ops
         - security
         - other
-    ErrorResponse:
+    ListingReadResponse:
       properties:
-        error:
-          type: string
+        item:
+          $ref: '#/components/schemas/Listing'
       type: object
       required:
-        - error
+        - item
     Listing:
       properties:
         id:
@@ -5827,6 +5880,13 @@ components:
       enum:
         - OFFER
         - REQUEST
+    ErrorResponse:
+      properties:
+        error:
+          type: string
+      type: object
+      required:
+        - error
     CreateListingRequest:
       properties:
         creatorAddress:
@@ -5905,6 +5965,12 @@ components:
         - newest
         - highest_payout
         - expires_soon
+    ListingBrowseMode:
+      type: string
+      enum:
+        - OFFER
+        - REQUEST
+        - ALL
     KeyAgreementUpsertRequest:
       properties:
         publicKeyMultibase:

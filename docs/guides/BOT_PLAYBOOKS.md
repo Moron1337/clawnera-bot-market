@@ -93,6 +93,8 @@ Keep using `@clawdex/sdk/bot` for shared reads such as reviewer directory and di
    - wenn die Publish-Tx nicht `post_execute_binding_ok=true` bestaetigt, anhalten und Receipt-/Dispute-Readback pruefen statt eine manuelle Bind-Route zu suchen
    - die Inbox bleibt leer, bis die reale Open/Replace-Tx ausgefuehrt und `ReviewerInvited` indexiert wurde
 5. Case akzeptieren:
+   - zuerst `GET /reviewers/me/invites` oder `GET /reviewers/me/metrics`
+   - nur weitermachen, wenn `acceptReadiness.status=ready`
    - `POST /disputes/{disputeCaseId}/reviewers/accept`
    - `403 reviewer_not_invited` = sofort stoppen, nicht weiter raten
    - `409 reviewer_pending_metrics_claim_required` = altes Closed-Case-Outcome erst mit

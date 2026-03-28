@@ -1668,6 +1668,69 @@
         }
       }
     },
+    "/listings/{listingId}": {
+      "get": {
+        "path": "/listings/{listingId}",
+        "method": "get",
+        "operationId": "getListing",
+        "tags": [
+          "Listings"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "listingId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ListingReadResponse",
+            "schemaName": "ListingReadResponse",
+            "requiredFields": [
+              "item"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "item"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
     "/listings/categories": {
       "get": {
         "path": "/listings/categories",
@@ -6896,16 +6959,16 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ReviewerInviteSummary",
             "schemaName": "ReviewerInviteSummary",
-            "requiredFields": [
+            "requiredFields": [],
+            "optionalFields": [
               "disputeCaseObjectId",
               "reviewerAddress",
               "assignmentRound",
               "invitedAtMs",
               "status",
               "actorCanAccept",
-              "source"
-            ],
-            "optionalFields": [
+              "acceptReadiness",
+              "source",
               "disputeCase",
               "fetchError"
             ],
@@ -6916,6 +6979,7 @@
               "invitedAtMs",
               "status",
               "actorCanAccept",
+              "acceptReadiness",
               "source",
               "disputeCase",
               "fetchError"
@@ -6972,7 +7036,8 @@
             "schemaName": "ReviewerSelfMetricsResponse",
             "requiredFields": [
               "reviewerAddress",
-              "registered"
+              "registered",
+              "acceptReadiness"
             ],
             "optionalFields": [
               "reviewer",
@@ -6986,6 +7051,7 @@
             "propertyNames": [
               "reviewerAddress",
               "registered",
+              "acceptReadiness",
               "reviewer",
               "reputationProfileObjectId",
               "disputeQuorumConfigObjectId",
@@ -13835,6 +13901,66 @@
         }
       }
     },
+    "getListing": {
+      "path": "/listings/{listingId}",
+      "method": "get",
+      "tags": [
+        "Listings"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "listingId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ListingReadResponse",
+          "schemaName": "ListingReadResponse",
+          "requiredFields": [
+            "item"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "item"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
     "listListingCategories": {
       "path": "/listings/categories",
       "method": "get",
@@ -18934,16 +19060,16 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ReviewerInviteSummary",
           "schemaName": "ReviewerInviteSummary",
-          "requiredFields": [
+          "requiredFields": [],
+          "optionalFields": [
             "disputeCaseObjectId",
             "reviewerAddress",
             "assignmentRound",
             "invitedAtMs",
             "status",
             "actorCanAccept",
-            "source"
-          ],
-          "optionalFields": [
+            "acceptReadiness",
+            "source",
             "disputeCase",
             "fetchError"
           ],
@@ -18954,6 +19080,7 @@
             "invitedAtMs",
             "status",
             "actorCanAccept",
+            "acceptReadiness",
             "source",
             "disputeCase",
             "fetchError"
@@ -19007,7 +19134,8 @@
           "schemaName": "ReviewerSelfMetricsResponse",
           "requiredFields": [
             "reviewerAddress",
-            "registered"
+            "registered",
+            "acceptReadiness"
           ],
           "optionalFields": [
             "reviewer",
@@ -19021,6 +19149,7 @@
           "propertyNames": [
             "reviewerAddress",
             "registered",
+            "acceptReadiness",
             "reviewer",
             "reputationProfileObjectId",
             "disputeQuorumConfigObjectId",
@@ -26030,20 +26159,21 @@
         "invitedAtMs",
         "status",
         "actorCanAccept",
+        "acceptReadiness",
         "source",
         "disputeCase",
         "fetchError"
       ],
-      "requiredFields": [
+      "requiredFields": [],
+      "optionalFields": [
         "disputeCaseObjectId",
         "reviewerAddress",
         "assignmentRound",
         "invitedAtMs",
         "status",
         "actorCanAccept",
-        "source"
-      ],
-      "optionalFields": [
+        "acceptReadiness",
+        "source",
         "disputeCase",
         "fetchError"
       ]
@@ -26085,6 +26215,7 @@
       "propertyNames": [
         "reviewerAddress",
         "registered",
+        "acceptReadiness",
         "reviewer",
         "reputationProfileObjectId",
         "disputeQuorumConfigObjectId",
@@ -26095,7 +26226,8 @@
       ],
       "requiredFields": [
         "reviewerAddress",
-        "registered"
+        "registered",
+        "acceptReadiness"
       ],
       "optionalFields": [
         "reviewer",
@@ -26105,6 +26237,27 @@
         "runtime",
         "pendingMetricsClaimContext",
         "metrics"
+      ]
+    },
+    "ReviewerAcceptReadiness": {
+      "name": "ReviewerAcceptReadiness",
+      "propertyNames": [
+        "status",
+        "actorCanAcceptNewCase",
+        "reasonCodes",
+        "effectiveStakeLocked",
+        "reviewerMinStakeIota",
+        "nextAction"
+      ],
+      "requiredFields": [
+        "status",
+        "actorCanAcceptNewCase",
+        "reasonCodes"
+      ],
+      "optionalFields": [
+        "effectiveStakeLocked",
+        "reviewerMinStakeIota",
+        "nextAction"
       ]
     },
     "ReviewerRuntimeSummary": {
@@ -26162,6 +26315,7 @@
         "reviewerAddress",
         "reviewerEntryObjectId",
         "effectiveStakeLocked",
+        "reviewerMinStakeIota",
         "pendingReviewerOutcome",
         "nextStep"
       ],
@@ -26173,6 +26327,7 @@
       ],
       "optionalFields": [
         "effectiveStakeLocked",
+        "reviewerMinStakeIota",
         "pendingReviewerOutcome"
       ]
     },
@@ -26877,6 +27032,16 @@
       "requiredFields": [
         "items",
         "nextCursor"
+      ],
+      "optionalFields": []
+    },
+    "ListingReadResponse": {
+      "name": "ListingReadResponse",
+      "propertyNames": [
+        "item"
+      ],
+      "requiredFields": [
+        "item"
       ],
       "optionalFields": []
     },

@@ -369,6 +369,9 @@ components:
         effectiveStakeLocked:
           type: string
           pattern: ^[0-9]+$
+        reviewerMinStakeIota:
+          type: string
+          pattern: ^[0-9]+$
         pendingReviewerOutcome:
           $ref: '#/components/schemas/PendingReviewerOutcomeSummary'
         nextStep:
@@ -489,6 +492,8 @@ components:
           type: string
         registered:
           type: boolean
+        acceptReadiness:
+          $ref: '#/components/schemas/ReviewerAcceptReadiness'
         reviewer:
           $ref: '#/components/schemas/ReviewerSummary'
         reputationProfileObjectId:
@@ -507,6 +512,7 @@ components:
       required:
         - reviewerAddress
         - registered
+        - acceptReadiness
     ReviewerSelfMetrics:
       properties:
         performanceScore:
@@ -635,6 +641,48 @@ components:
         - type
         - owner
         - active
+    ReviewerAcceptReadiness:
+      properties:
+        status:
+          type: string
+          enum:
+            - ready
+            - pending_metrics_claim_required
+            - stake_below_minimum
+            - unavailable
+        actorCanAcceptNewCase:
+          type: boolean
+        reasonCodes:
+          type: array
+          items:
+            type: string
+        effectiveStakeLocked:
+          type: string
+          pattern: ^[0-9]+$
+        reviewerMinStakeIota:
+          type: string
+          pattern: ^[0-9]+$
+        nextAction:
+          properties:
+            method:
+              type: string
+              enum:
+                - GET
+                - POST
+            path:
+              type: string
+            note:
+              type: string
+          type: object
+          required:
+            - method
+            - path
+            - note
+      type: object
+      required:
+        - status
+        - actorCanAcceptNewCase
+        - reasonCodes
     ErrorResponse:
       properties:
         error:
@@ -670,8 +718,10 @@ components:
         actorCanAccept:
           type: boolean
           description: >-
-            True only when the invite still matches the current actionable round, reviewer slots remain open, and the
-            dispute is still awaiting reviewers.
+            True only when the invite still matches the current actionable round, reviewer slots remain open, the
+            dispute is still awaiting reviewers, and `acceptReadiness.status=ready`.
+        acceptReadiness:
+          $ref: '#/components/schemas/ReviewerAcceptReadiness'
         source:
           $ref: '#/components/schemas/ReviewerInviteSource'
         disputeCase:
@@ -686,6 +736,7 @@ components:
         - invitedAtMs
         - status
         - actorCanAccept
+        - acceptReadiness
         - source
     ReviewerInviteFetchError:
       properties:

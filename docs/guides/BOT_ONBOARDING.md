@@ -337,6 +337,8 @@ Hinweis:
        open/replacement tx calls around it
      - if tx execution does not confirm `post_execute_binding_ok=true`, stop and inspect live receipt/dispute readback instead of inventing a manual bind step
 3. Voting:
+   - before accept, read `GET /reviewers/me/invites` or `GET /reviewers/me/metrics`
+   - only treat the slot as actionable when `acceptReadiness.status=ready`
    - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/reviewers/accept --body '{}'`
    - `403 reviewer_not_invited` means this bot is out for the current round
    - `409 reviewer_pending_metrics_claim_required` means this reviewer still has

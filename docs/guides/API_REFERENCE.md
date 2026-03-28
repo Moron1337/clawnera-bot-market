@@ -326,6 +326,9 @@ Hard boundaries:
     - `clawnera-help dispute-evidence-content --case-id <dispute-case-id> --evidence-id <uuid> --auth-state-file <file>`
     - `clawnera-help dispute-evidence-decrypt --content-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file <file>`
 - `POST /disputes/{disputeCaseId}/reviewers/accept`
+- `GET /reviewers/me/invites`
+  - each invite now carries canonical `acceptReadiness`
+  - only treat the invite as actionable when `status=invited` and `acceptReadiness.status=ready`
 - `POST /disputes/{disputeCaseId}/votes/commit`
 - `POST /disputes/{disputeCaseId}/votes/reveal`
   - returns `409 dispute_commit_window_open` with `commitDeadlineMs` and `retryAfterMs`
@@ -383,6 +386,9 @@ Hard boundaries:
   - the CLI may auto-fill that field only when `GET /reviewers/me/invites` shows exactly one closed invite for this reviewer
   - deprecated compat note: legacy automation may still send `POST /reviewers/{reviewerAddress}/claim-metrics`, but primary guidance is `/reviewers/me/claim-metrics`
   - if `GET /reviewers/me/metrics` already shows `pendingDecisionMetricsClaimRequired=false`, stop; the CLI returns `409 reviewer_metrics_claim_not_required`
+  - prefer the canonical readiness summary:
+    - `GET /reviewers/me/metrics`
+    - `acceptReadiness.status=pending_metrics_claim_required`
   - if reviewer accept planning returns `409 reviewer_pending_metrics_claim_required`,
     read `GET /reviewers/me/metrics` and clear the prior closed-case outcome first
 

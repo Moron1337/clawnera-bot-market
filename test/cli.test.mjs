@@ -346,8 +346,9 @@ test("reviewer shortlist help prints operator and publish role split", () => {
   assert.match(result.stdout, /Replacement usage:/);
   assert.match(result.stdout, /writes the exact publish body for dispute-open or reviewer-replace/);
   assert.match(result.stdout, /buyer\/seller GET \/orders\/\{orderId\}\/timeline readback/);
-  assert.match(result.stdout, /The shortlist call itself uses operator auth/);
-  assert.match(result.stdout, /must then be published by the buyer or seller/);
+  assert.match(result.stdout, /The shortlist call itself uses operator auth and only prepares the receipt plus the exact publish body/);
+  assert.match(result.stdout, /OPEN publish is buyer\/seller-owned/);
+  assert.match(result.stdout, /REPLACEMENT publish is buyer\/seller-owned/);
   assert.match(result.stdout, /post_execute_binding_ok/);
   assert.match(result.stdout, /full reassignment rounds/);
 });
@@ -782,7 +783,10 @@ test("dispute-open compact output highlights the canonical dispute-open route", 
     result.stdout,
     /^do:clawnera-help tx-plan-execute POST \/orders\/<orderId>\/milestones\/<milestoneId>\/disputes\/open --auth-state-file ~\/\.config\/clawnera\/auth-state\.json --body-file \.\/clawnera-dispute-open-<orderId>-<milestoneId>\.json/m
   );
-  assert.match(result.stdout, /^write:POST \/orders\/\{orderId\}\/milestones\/\{milestoneId\}\/disputes\/open/m);
+  assert.match(
+    result.stdout,
+    /^write:buyer\/seller publish: POST \/orders\/\{orderId\}\/milestones\/\{milestoneId\}\/disputes\/open/m
+  );
   assert.doesNotMatch(result.stdout, /^write:POST \/admin\/reviewer-selection\/shortlist/m);
 });
 
@@ -814,7 +818,7 @@ test("replacement compact output highlights live case readback and replace publi
   );
   assert.match(
     result.stdout,
-    /^write:POST \/admin\/reviewer-selection\/shortlist \| POST \/disputes\/\{disputeCaseId\}\/reviewers\/replace/m
+    /^write:operator prep: POST \/admin\/reviewer-selection\/shortlist \| buyer\/seller publish: POST \/disputes\/\{disputeCaseId\}\/reviewers\/replace/m
   );
   assert.match(result.stdout, /^read:GET \/disputes\/\{disputeCaseId\}/m);
 });
@@ -855,12 +859,12 @@ test("reviewer inspect recipe json output is parseable", () => {
   assert.ok(payload.recipe.steps.some((step) => /dispute-evidence-decrypt/.test(step)));
 });
 
-test("dispute-open recipe explains manual bind inputs and auto-bind success", () => {
+test("dispute-open recipe explains activation proof and no-manual-bind fallback", () => {
   const result = runCli(["recipe", "dispute-open"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /post_execute_binding_ok=true/);
-  assert.match(result.stdout, /disputeCaseObjectId/);
-  assert.match(result.stdout, /activationTxDigest/);
+  assert.match(result.stdout, /stop and inspect live receipt\/dispute readback/i);
+  assert.match(result.stdout, /do not invent a manual bind step/i);
 });
 
 test("mailbox handshake recipe explains tx output seq fallback", () => {
@@ -884,7 +888,7 @@ test("replacement recipe explains full reassignment semantics", () => {
   const result = runCli(["recipe", "operator-shortlist-replacement"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /# Operator Shortlist Replacement/);
-  assert.match(result.stdout, /full replacement round/);
+  assert.match(result.stdout, /full replacement-round handoff/);
   assert.match(result.stdout, /requiredReviewerVotes/);
   assert.match(result.stdout, /do not request only the missing delta slots/);
   assert.match(result.stdout, /replacement_not_ready/);

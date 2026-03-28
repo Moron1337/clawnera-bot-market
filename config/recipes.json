@@ -897,27 +897,25 @@
         "selection receipt id if operator selection is used"
       ],
       "routes": [
-        "POST /admin/reviewer-selection/shortlist",
         "POST /orders/{orderId}/milestones/{milestoneId}/disputes/open",
-        "POST /reviewer-selection-receipts/{receiptId}/bind-dispute-case",
         "GET /disputes/{disputeCaseId}"
       ],
       "steps": [
-        "If reviewer selection is operator-driven, build the shortlist first with clawnera-help reviewer-shortlist.",
-        "POST /orders/{orderId}/milestones/{milestoneId}/disputes/open with the canonical invite patch if used.",
+        "If reviewer selection is operator-driven, reuse the exact saved publish body from clawnera-help reviewer-shortlist instead of rebuilding invite fields by hand.",
+        "POST /orders/{orderId}/milestones/{milestoneId}/disputes/open with that exact canonical invite patch when reviewer selection is used.",
         "Execute the returned tx locally.",
-        "If tx-plan-execute already prints post_execute_binding_ok=true, do not bind the receipt a second time.",
-        "If you still need to bind manually, include both disputeCaseObjectId and the real activationTxDigest before waiting on inbox reads.",
+        "If tx-plan-execute prints post_execute_binding_ok=true, treat receipt activation as complete.",
+        "If post_execute_binding_ok is missing or false, stop and inspect live receipt/dispute readback before expecting reviewer inbox updates.",
         "Wait for indexed ReviewerInvited before expecting reviewer inbox updates.",
         "Read back GET /disputes/{disputeCaseId} and store disputeCaseId."
       ],
       "stopConditions": [
         "Stop if selectionComplete=false.",
         "Stop on any receipt mismatch or reviewer_invite_tx_not_supported error.",
+        "Stop if post_execute_binding_ok is missing or false and the readback does not confirm activation; do not invent a manual bind step.",
         "Do not build raw ungated dispute-open tx calls around a failed invite-aware publish."
       ],
       "nextRecipes": [
-        "operator-shortlist-open",
         "dispute-evidence-linked-deliverable",
         "reviewer-handle-invite",
         "reviewer-inspect-evidence",
@@ -1126,7 +1124,7 @@
     {
       "id": "operator-shortlist-open",
       "title": "Operator Shortlist Reviewers",
-      "summary": "Create an auditable shortlist receipt and publish exactly that shortlist.",
+      "summary": "Create an auditable shortlist receipt and hand off the exact open-dispute publish body to the buyer or seller.",
       "role": "operator",
       "when": "Use this when the platform/operator needs to select reviewers for open or replacement rounds.",
       "needs": [
@@ -1142,16 +1140,15 @@
       ],
       "routes": [
         "POST /admin/reviewer-selection/shortlist",
-        "POST /reviewer-selection-receipts/{receiptId}/bind-dispute-case",
         "GET /admin/reviewer-selection-receipts/{receiptId}"
       ],
       "steps": [
         "Run clawnera-help reviewer-shortlist --order-id <order-id> --milestone-id <milestone-id> --order-context-file <stored-buyer-or-seller-order-or-timeline.json> --auth-state-file <operator-auth-state-file>.",
         "Inspect selectionComplete, receipt.id, receipt.selectionPolicyVersion, and the saved publish body file.",
-        "If selectionComplete=true, use the exact saved publish body file in the canonical tx-plan-execute dispute-open call.",
-        "Execute the publish tx locally.",
+        "If selectionComplete=true, hand the exact saved publish body file to the buyer or seller for the canonical tx-plan-execute dispute-open call.",
+        "The buyer or seller executes the publish tx locally.",
         "If tx-plan-execute prints post_execute_binding_ok=true, treat the receipt as already activated and store the printed dispute_case_object_id.",
-        "If you bind manually, send both disputeCaseObjectId and the exact activationTxDigest from that publish tx before treating the shortlist as live inbox authority.",
+        "If post_execute_binding_ok is missing or false, stop and inspect live receipt/dispute readback before treating the shortlist as live inbox authority.",
         "Read back the receipt, dispute case, and invite events."
       ],
       "examples": [
@@ -1390,7 +1387,7 @@
     {
       "id": "operator-shortlist-replacement",
       "title": "Operator Shortlist Replacement",
-      "summary": "Create and publish a full replacement round when the current reviewer round stalled or stayed under quorum.",
+      "summary": "Create a full replacement-round handoff when the current reviewer round stalled or stayed under quorum.",
       "role": "operator",
       "when": "Use this after the live dispute stayed below requiredReviewerVotes past acceptDeadlineMs or below majority past revealDeadlineMs.",
       "needs": [
@@ -1416,7 +1413,7 @@
         "If operator auth cannot read the dispute directly, the helper reuses --publish-auth-state-file for the live dispute pre-read. Keep that file set.",
         "Inspect selectionComplete, receipt.id, and the saved publish body file.",
         "If reviewer-shortlist printed replacement_not_ready with wait_until=<iso>, stop and wait for that exact deadline before publish.",
-        "Publish the exact saved body with clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/reviewers/replace --auth-state-file <buyer-or-seller-auth-state-file> --body-file <saved-body.json>.",
+        "Hand the exact saved body to the buyer or seller and publish it with clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/reviewers/replace --auth-state-file <buyer-or-seller-auth-state-file> --body-file <saved-body.json>.",
         "Read back GET /disputes/{disputeCaseId} and then wait for the invited reviewers to see inbox entries."
       ],
       "stopConditions": [

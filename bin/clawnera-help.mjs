@@ -566,13 +566,15 @@ function compactRecipeWriteText(recipe) {
     case "seller-deliver-encrypted-byo":
       return "POST /storage/uploads/presign | POST /orders/{orderId}/milestones/{milestoneId}/submit | POST /orders/{orderId}/milestones/{milestoneId}/anchor";
     case "dispute-open":
-      return "POST /orders/{orderId}/milestones/{milestoneId}/disputes/open";
+      return "buyer/seller publish: POST /orders/{orderId}/milestones/{milestoneId}/disputes/open";
     case "dispute-evidence-linked-deliverable":
       return "POST /disputes/{disputeCaseId}/evidence";
+    case "operator-shortlist-open":
+      return "operator prep: POST /admin/reviewer-selection/shortlist";
     case "reviewer-vote":
       return "POST /disputes/{disputeCaseId}/votes/commit | POST /disputes/{disputeCaseId}/votes/reveal";
     case "operator-shortlist-replacement":
-      return "POST /admin/reviewer-selection/shortlist | POST /disputes/{disputeCaseId}/reviewers/replace";
+      return "operator prep: POST /admin/reviewer-selection/shortlist | buyer/seller publish: POST /disputes/{disputeCaseId}/reviewers/replace";
     default: {
       const routes = Array.isArray(recipe.routes) ? recipe.routes : [];
       return selectPrimaryWriteRoute(routes);
@@ -587,8 +589,12 @@ function compactRecipeNextText(recipe) {
       return "buyer-accept-bid[handoff] | fund-order[after_buyer_accept]";
     case "seller-answer-request":
       return "buyer-accept-request-bid[handoff] | fund-order[after_request_buyer_accept]";
+    case "operator-shortlist-open":
+      return "dispute-open[buyer_or_seller_publish] | reviewer-handle-invite[after_indexed_publish]";
     case "reviewer-vote":
       return "reviewer-claim-metrics[after_buyer_or_seller_closeout]";
+    case "operator-shortlist-replacement":
+      return "reviewer-handle-invite[after_buyer_or_seller_publish] | reviewer-vote";
     default:
       return nextRecipes.join(" | ");
   }
@@ -13206,8 +13212,11 @@ function reviewerShortlistUsageLines() {
     "- Optional: --reviewer-count <n> --allow-new-reviewers <true|false> --min-decisions-total <n> --allow-truncated-scan <true|false>",
     "- Optional: --escrow-object-id <0x...> --bond-object-id <0x...> when no stored order/timeline file is available",
     "- Optional outputs: --receipt-out <file> --publish-body-out <file> --publish-auth-state-file <buyer-or-seller-auth-state> --rpc-url <url>",
-    "- The shortlist call itself uses operator auth. The saved publish body must then be published by the buyer or seller for that order.",
-    "- After publish, tx-plan-execute prints dispute_case_object_id and post_execute_binding_ok when receipt activation succeeded automatically.",
+    "- The shortlist call itself uses operator auth and only prepares the receipt plus the exact publish body.",
+    "- OPEN publish is buyer/seller-owned: POST /orders/{orderId}/milestones/{milestoneId}/disputes/open.",
+    "- REPLACEMENT publish is buyer/seller-owned: POST /disputes/{disputeCaseId}/reviewers/replace.",
+    "- Reviewer-self routes begin only after the publish tx succeeds and ReviewerInvited is indexed.",
+    "- After publish, trust post_execute_binding_ok=true as the activation proof. If it is missing or false, stop and inspect live receipt/dispute readback instead of reaching for a manual bind route.",
     "- Important: shortlist success only prepares the exact publish body; current runtimes can still hard-stop on 409 reviewer_invite_tx_not_supported until the live package exposes invite-aware callables.",
     "- Important: replacement rounds are full reassignment rounds; do not request only the missing delta slots unless the live case already lowered requiredReviewerVotes."
   ];

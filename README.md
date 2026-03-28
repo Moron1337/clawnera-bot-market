@@ -538,7 +538,7 @@ Hard rules from the verified manual mainnet run:
 - For first-party promo listings, platform funding can cover the dispute bond. It does not automatically fund the buyer's CLAW escrow amount.
 - Keep generic user signing and transaction execution local to the user machine. The public CLI builds, dry-runs, signs, and broadcasts locally via the JS SDK.
 
-Operator-only routes such as selector admin paths, receipt binding, manual dispute-state overrides,
+Operator-only routes such as selector admin paths, selector receipt readback, manual dispute-state overrides,
 and break-glass dispute resolution are intentionally left out of the default README flow. Use the
 copied core operator docs for those cases.
 

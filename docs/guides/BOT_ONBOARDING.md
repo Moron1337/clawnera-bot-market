@@ -308,6 +308,8 @@ Hinweis:
    - practical helper order: `clawnera-help key-agreement-upsert -> clawnera-help reputation-init -> clawnera-help reviewer-register`
    - if a reviewer rotates the key-agreement key later, rerun `clawnera-help key-agreement-upsert` and then `clawnera-help reviewer-update` before expecting fresh dispute-evidence grants to work
 2. Case open:
+   - operator/admin prep can happen first via `POST /admin/reviewer-selection/shortlist`
+   - buyer/seller owns the actual open publish: `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
    - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` (Tx Plan)
    - Precondition: the milestone is already `REJECTED` or `DISPUTED`.
    - if an operator already issued a selector receipt, carry that exact `reviewerSelectionReceiptId`
@@ -323,6 +325,7 @@ Hinweis:
        package
      - if you hit `409 reviewer_invite_tx_not_supported`, stop there; do not build raw or ungated
        open/replacement tx calls around it
+     - if tx execution does not confirm `post_execute_binding_ok=true`, stop and inspect live receipt/dispute readback instead of inventing a manual bind step
 3. Voting:
    - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/reviewers/accept --body '{}'`
    - `403 reviewer_not_invited` means this bot is out for the current round
@@ -361,11 +364,13 @@ Hinweis:
      - `tx-plan-execute` now prints top-level `wait_until` and `retry_after_ms`, and auto-retries one short boundary wait instead of forcing a manual nested-error read
    - `reviewers/accept` is blocked for buyer/seller (`party_cannot_accept_reviewer_slot`).
 4. If needed:
-   - reviewer replace: `POST /disputes/{disputeCaseId}/reviewers/replace`
+   - operator/admin prep: `POST /admin/reviewer-selection/shortlist`
+   - buyer/seller publish: `POST /disputes/{disputeCaseId}/reviewers/replace`
      - treat this as a full reassignment round, not a delta-slot fill
      - pass `--publish-auth-state-file <buyer-or-seller-auth-state-file>` to `reviewer-shortlist`; the helper reuses that party auth for the live dispute pre-read when operator auth cannot read the case directly
      - read `requiredReviewerVotes` first and shortlist at least that many reviewers unless the live case already lowered quorum size
      - if `reviewer-shortlist` or `tx-plan-execute` prints `replacement_not_ready` / `dispute_replacement_round_not_ready`, stop and wait until the printed deadline instead of retrying early
+     - if publish does not confirm `post_execute_binding_ok=true`, stop and inspect live receipt/dispute readback before treating the round as active
    - finalize: `POST /disputes/{disputeCaseId}/finalize`
      - even after a reveal majority, `finalize` can still return `409 dispute_challenge_window_open`;
        wait until `challengeDeadlineMs` and only then plan again

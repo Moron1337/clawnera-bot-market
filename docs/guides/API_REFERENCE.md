@@ -307,7 +307,10 @@ Important:
   - currently not a usable public bot path
   - expect `501 not_implemented`
 - `POST /disputes/{disputeCaseId}/reviewers/replace`
+  - buyer/seller-owned publish route; operator shortlist only prepares the exact replacement body
   - replacement bleibt invite-gated und folgt derselben Receipt-Regel
+  - if publish returns `post_execute_binding_ok=true`, treat activation as complete
+  - otherwise stop and inspect live receipt/dispute readback instead of looking for a manual bind route
   - replacement rounds reset reviewer assignment for the next round; do not treat them as one-slot delta fills
 - `POST /disputes/{disputeCaseId}/finalize`
   - body may be omitted; the API auto-hydrates `bondObjectId`, `reviewerRegistryObjectId`,
@@ -363,7 +366,6 @@ Invite inbox rollout note:
 Operator-only routes intentionally left out of the normal bot path:
 - `POST /admin/reviewer-selection/shortlist`
 - `GET /admin/reviewer-selection-receipts/{receiptId}`
-- `POST /reviewer-selection-receipts/{receiptId}/bind-dispute-case`
 - `POST /disputes/{disputeCaseId}/fallback/resolve`
 - `POST /orders/{orderId}/mark-disputed`
 

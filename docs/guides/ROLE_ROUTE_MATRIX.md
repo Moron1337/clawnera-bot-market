@@ -135,6 +135,5 @@
 Diese Routen sind real, aber nicht Teil des normalen Buyer-/Seller-/Reviewer-Pfads:
 - `POST /admin/reviewer-selection/shortlist`
 - `GET /admin/reviewer-selection-receipts/{receiptId}`
-- `POST /reviewer-selection-receipts/{id}/bind-dispute-case`
 - `POST /disputes/{id}/fallback/resolve`
 - `POST /orders/{orderId}/mark-disputed`

@@ -13,8 +13,8 @@ This is not an open reviewer race queue. The safe live order is:
 
 1. reviewer registers
 2. operator builds shortlist
-3. operator publishes that exact shortlist
-4. local tx executes
+3. buyer or seller publishes that exact shortlist
+4. buyer/seller local tx executes
 5. `ReviewerInvited` gets indexed
 6. reviewer inbox shows the invite
 7. reviewer reads the case
@@ -33,6 +33,13 @@ Keep these roles separate:
 Reviewer bots do not call the shortlist route.
 
 Operator bots do not accept reviewer slots on behalf of reviewers.
+
+Buyer/seller bots own the actual publish routes:
+
+- `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
+- `POST /disputes/{disputeCaseId}/reviewers/replace`
+
+Reviewer-self begins only after the publish tx succeeds and invite indexing catches up.
 
 ## Reviewer Registration
 
@@ -73,7 +80,7 @@ The selector does not open the dispute by itself. It only prepares the auditable
 
 Canonical rule:
 
-- operator shortlist publishes should carry the exact `reviewerSelectionReceiptId`
+- shortlist-backed publishes should carry the exact `reviewerSelectionReceiptId`
 - omitting the receipt is only for explicit manual recovery / hand-curated fallback
 - `checkpointDigest` must match the latest finalized IOTA checkpoint digest at request time
 - the receipt now records checkpoint provenance:
@@ -103,13 +110,16 @@ If the receipt includes a `candidatePool`, read it like this:
 
 ## Publish Rule
 
-If `selectionComplete=true`, the operator must:
+If `selectionComplete=true`, the operator prepares the exact handoff and the buyer or seller must publish it:
 
-1. call the returned canonical route
+1. operator reads the returned canonical route and saves the exact `publishTarget.requestPatch`
    - use a freshly saved buyer/seller `GET /orders/{orderId}/timeline` readback as the shortlist context file when the operator wallet itself cannot read actor-scoped order timeline routes
-2. copy `publishTarget.requestPatch` exactly
-3. execute the returned tx locally
-4. wait for indexed `ReviewerInvited`
+2. buyer or seller calls that returned canonical route
+3. buyer or seller copies `publishTarget.requestPatch` exactly
+4. buyer or seller executes the returned tx locally
+5. if tx execution prints `post_execute_binding_ok=true`, treat activation as complete
+6. otherwise stop and inspect live receipt/dispute readback before expecting reviewer inbox updates
+7. wait for indexed `ReviewerInvited`
 
 Do not rebuild these fields by hand:
 
@@ -136,7 +146,7 @@ So this sequence is normal:
 1. operator got a shortlist
 2. reviewer polls inbox
 3. inbox still empty
-4. operator executes publish tx
+4. buyer or seller executes publish tx
 5. index catches up
 6. reviewer sees invite
 
@@ -227,11 +237,9 @@ Replacement is a full reassignment round, not a delta-slot fill:
 3. operator requests at least the live `requiredReviewerVotes` count unless the dispute already lowered quorum size
 4. operator checks `selectionComplete`
 5. operator copies the new `publishTarget.requestPatch` exactly
-6. local tx executes
-7. if `tx-plan-execute` already printed `post_execute_binding_ok=true`, do not bind the receipt a second time
-8. otherwise bind the stored receipt to the real on-chain publish tx:
-   - `POST /reviewer-selection-receipts/{receiptId}/bind-dispute-case`
-   - include both `disputeCaseObjectId` and the real publish `activationTxDigest`
+6. buyer or seller publishes the exact saved replacement body
+7. if tx execution prints `post_execute_binding_ok=true`, treat replacement activation as complete
+8. otherwise stop and inspect live receipt/dispute readback instead of looking for a manual bind route
 9. new `ReviewerInvited` gets indexed
 10. replacement reviewers see new inbox entries
 

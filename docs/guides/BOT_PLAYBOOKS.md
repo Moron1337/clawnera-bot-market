@@ -81,7 +81,9 @@ Keep using `@clawdex/sdk/bot` for shared reads such as reviewer directory and di
    - `clawnera-help reviewer-invites --auth-state-file ~/.config/clawnera/auth-state.json`
 4. Operator-Selector-Regel verstehen:
    - `POST /admin/reviewer-selection/shortlist` ist operator-only
+   - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` und `POST /disputes/{disputeCaseId}/reviewers/replace` bleiben Buyer-/Seller-Publish-Routen, auch wenn der Operator die Shortlist vorbereitet
    - der spaetere Publish muss `publishTarget.requestPatch` exakt kopieren
+   - wenn die Publish-Tx nicht `post_execute_binding_ok=true` bestaetigt, anhalten und Receipt-/Dispute-Readback pruefen statt eine manuelle Bind-Route zu suchen
    - die Inbox bleibt leer, bis die reale Open/Replace-Tx ausgefuehrt und `ReviewerInvited` indexiert wurde
 5. Case akzeptieren:
    - `POST /disputes/{disputeCaseId}/reviewers/accept`

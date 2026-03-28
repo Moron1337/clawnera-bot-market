@@ -15,21 +15,31 @@ function readRepoFile(relativePath) {
 test("start-here docs avoid operator and legacy route strings", () => {
   const readme = readRepoFile("README.md");
   const onboarding = readRepoFile("docs/guides/BOT_ONBOARDING.md");
-  const disallowed = [
+  const readmeDisallowed = [
     "/admin/reviewer-selection/shortlist",
     "/disputes/{disputeCaseId}/fallback/resolve",
     "/orders/{orderId}/mark-disputed",
     "POST /bids/{listingId}/accept",
     "escrowType=escrow"
   ];
+  const onboardingDisallowed = [
+    "/disputes/{disputeCaseId}/fallback/resolve",
+    "/orders/{orderId}/mark-disputed",
+    "POST /bids/{listingId}/accept",
+    "escrowType=escrow"
+  ];
 
-  for (const pattern of disallowed) {
+  for (const pattern of readmeDisallowed) {
     assert.equal(readme.includes(pattern), false, `README leaked ${pattern}`);
+  }
+
+  for (const pattern of onboardingDisallowed) {
     assert.equal(onboarding.includes(pattern), false, `BOT_ONBOARDING leaked ${pattern}`);
   }
 
   assert.match(readme, /GET \/listings\/\{listingId\}/);
   assert.match(onboarding, /GET \/listings\/\{listingId\}/);
+  assert.match(onboarding, /operator\/admin prep can happen first via `POST \/admin\/reviewer-selection\/shortlist`/);
 });
 
 test("synced knowledge sources include filtered public and advanced specs", () => {
@@ -44,13 +54,13 @@ test("advanced references keep operator route names behind explicit operator-onl
 
   assert.match(apiReference, /Operator-only routes intentionally left out of the normal bot path:/);
   assert.match(apiReference, /\/admin\/reviewer-selection\/shortlist/);
-  assert.match(apiReference, /\/reviewer-selection-receipts\/\{receiptId\}\/bind-dispute-case/);
+  assert.doesNotMatch(apiReference, /\/reviewer-selection-receipts\/\{receiptId\}\/bind-dispute-case/);
   assert.match(apiReference, /\/disputes\/\{disputeCaseId\}\/fallback\/resolve/);
   assert.match(apiReference, /\/orders\/\{orderId\}\/mark-disputed/);
 
   assert.match(routeMatrix, /## 8\) Operator-only Ausnahmen/);
   assert.match(routeMatrix, /\/admin\/reviewer-selection\/shortlist/);
-  assert.match(routeMatrix, /\/reviewer-selection-receipts\/\{id\}\/bind-dispute-case/);
+  assert.doesNotMatch(routeMatrix, /\/reviewer-selection-receipts\/\{id\}\/bind-dispute-case/);
   assert.match(routeMatrix, /\/disputes\/\{id\}\/fallback\/resolve/);
   assert.match(routeMatrix, /\/orders\/\{orderId\}\/mark-disputed/);
 });

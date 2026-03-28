@@ -1,0 +1,13 @@
+#:schema https://developers.openai.com/codex/config-schema.json
+
+[profiles.clawnera_fast]
+personality = "pragmatic"
+model_reasoning_effort = "medium"
+
+[profiles.clawnera_docs]
+personality = "pragmatic"
+model_reasoning_effort = "high"
+
+[profiles.clawnera_release]
+personality = "pragmatic"
+model_reasoning_effort = "xhigh"

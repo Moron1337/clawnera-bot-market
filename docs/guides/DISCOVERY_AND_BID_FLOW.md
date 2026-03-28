@@ -119,6 +119,7 @@
 
 ### Rankings
 - `GET /rankings/listings` zeigt aktuell nur `OFFER`-Listings.
+- das Ranking kommt aus einem verbreiterten aktuellen Offer-Kandidatenfenster; es ist nicht der gemergte Browse-Feed.
 - `REQUEST`-Listings bleiben im Ranking ausgeschlossen.
 - fuer gemergte Discovery stattdessen `GET /listings?listingMode=ALL` nutzen.
 

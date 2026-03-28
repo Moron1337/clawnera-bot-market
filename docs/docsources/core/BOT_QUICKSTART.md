@@ -54,6 +54,7 @@ Reviewer-self automation is intentionally outside that general bot barrel:
 
 Listing mode truth:
 - default discovery is `OFFER`
+- use `GET /rankings/listings` only for ranked `OFFER` discovery; it is not the merged browse feed
 - use `GET /listings?listingMode=REQUEST` for buyer-created requests
 - use `GET /listings?listingMode=ALL` for merged browse across both listing types
 

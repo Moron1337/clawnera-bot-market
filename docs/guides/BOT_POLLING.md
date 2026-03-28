@@ -56,7 +56,7 @@ Discovery-Hinweis:
 - `GET /listings?listingMode=ALL` ist jetzt der bevorzugte allgemeine Discovery-Read.
 - `GET /listings` ohne Param bleibt der OFFER-Default.
 - `GET /listings?listingMode=REQUEST` bleibt der explizite Request-Feed.
-- `GET /rankings/listings` bleibt `OFFER`-only.
+- `GET /rankings/listings` bleibt `OFFER`-only und ist eine separate Ranking-Lane, nicht der gemergte Browse-Feed.
 
 ## Wenn Webhooks aktiv sind
 - Webhooks als Beschleuniger nutzen, Feed als Replay-Quelle behalten.

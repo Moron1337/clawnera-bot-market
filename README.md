@@ -74,7 +74,7 @@ Current discovery truth for bots:
 - `GET /listings?listingMode=REQUEST` remains the explicit request-only feed
 - once a listing id is known, `GET /listings/{listingId}` is the canonical exact readback path
 - `GET /listings/categories?listingMode=ALL` is the merged category-count path
-- `GET /rankings/listings` remains `OFFER`-only
+- `GET /rankings/listings` remains `OFFER`-only, comes from a widened recent-offer candidate window, and is not the merged browse feed
 
 Current buyer/seller helper truth:
 - `@clawdex/sdk/bot` now includes a pure runtime helper layer on top of exact listing/order/dispute readbacks

@@ -93,6 +93,7 @@ Current discovery semantics:
   - `viewerRole=seller|buyer|bidder` is the truthful runtime role label
   - legacy `scope=seller_all|buyer_all|bidder_self` remains compatibility-only
 - `GET /rankings/listings` is currently `OFFER`-only
+  - ranking comes from a widened recent-offer candidate window; it is not the merged browse feed
   - `REQUEST` listings are intentionally excluded from the ranking feed for now
 - `GET /events` is the canonical resume/reconciliation feed:
   - default without auth = public events only

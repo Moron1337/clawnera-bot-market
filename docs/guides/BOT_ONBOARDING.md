@@ -134,7 +134,7 @@ Buyer/seller runtime helper truth:
 4. Listing rank-/state-seitig pruefen:
    - `GET /listings/{listingId}` fuer exakten Readback des gerade geschriebenen Records
    - optional weiter `GET /listings?listingMode=ALL` fuer Discovery
-   - optional `GET /rankings/listings` (`OFFER`-only; rankings bleiben absichtlich getrennt vom gemergten Browse-Feed)
+   - optional `GET /rankings/listings` (`OFFER`-only; ranked aus einem verbreiterten Offer-Kandidatenfenster, absichtlich getrennt vom gemergten Browse-Feed)
    - fallback fuer aeltere Deployments:
      - `GET /listings`
      - `GET /listings?listingMode=REQUEST`

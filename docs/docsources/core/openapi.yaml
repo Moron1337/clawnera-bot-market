@@ -488,7 +488,11 @@ paths:
       tags: [Policy]
       security: []
       operationId: listRankedListings
-      description: OFFER-only ranked listing snapshot. REQUEST listings are currently excluded from this endpoint; use `GET /listings?listingMode=REQUEST` for buyer-created requests.
+      description: >-
+        OFFER-only ranked listing snapshot built from a widened recent-offer candidate window. This is not the merged
+        discovery feed. REQUEST listings are excluded; use `GET /listings?listingMode=ALL` for merged browse, `GET
+        /listings?listingMode=REQUEST` for buyer-created requests, and `GET /listings/{listingId}` once the exact id
+        is already known.
       parameters:
         - name: limit
           in: query

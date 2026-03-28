@@ -176,9 +176,10 @@ Hard boundaries:
       - `bidder`
   - legacy `scope` remains runtime compatibility only
 - `GET /rankings/listings`
-  - `OFFER`-only today
+  - `OFFER`-only ranked discovery lane today
+  - ranking comes from a widened recent-offer candidate window; it is not the merged browse feed
   - `REQUEST` listings are not included
-  - merged browse on `/listings` does not widen ranking semantics
+  - use `/listings?listingMode=ALL` for merged browse, `/listings?listingMode=REQUEST` for buyer-created requests, and `GET /listings/{listingId}` once the bot already knows the exact target
 - compatibility note:
   - if a self-hosted or older deployment rejects `listingMode=ALL`, fall back to:
     - `GET /listings`

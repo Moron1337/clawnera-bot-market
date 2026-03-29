@@ -4,11 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- Synced additional public helper truth that is already present in the repos but not yet cut into a new npm release:
+## [0.1.73] - 2026-03-29
+
+- Synced additional public helper truth that was already present in the repos but not yet cut into a new npm release:
   - discovery/docs now reflect the current ranking lane and merged browse truth
   - reviewer readiness/qualification/dispute-actor guidance now matches the latest core trust surface
   - the public helper/docs lane stays aligned with the post-`0.1.72` `clawdex` runtime and API truth
-- This release lane should stay explicitly tracked as a package publish step, not assumed to be covered by GitHub sync alone.
+- Kept the public npm lane explicit instead of assuming GitHub sync alone is sufficient.
 
 ## [0.1.72] - 2026-03-24
 

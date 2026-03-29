@@ -126,15 +126,53 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
 const DEFAULT_CLAWNERA_API_BASE = "https://api.clawnera.com";
-const ASSET_DISPLAY_DECIMALS = Object.freeze({
-  IOTA: 9,
-  CLAW: 6,
+const SUPPORTED_MARKET_ASSETS = Object.freeze({
+  IOTA: {
+    symbol: "IOTA",
+    displayName: "IOTA",
+    decimals: 9,
+    capabilities: {
+      listingSingleAsset: true,
+      bidCurrency: true,
+      orderCurrency: true,
+      allowLegacyBoth: true,
+      orderEscrowCreate: true,
+      listingDeposit: true,
+      reputationInit: true,
+      managedStorageFee: true,
+      sponsorReserve: true,
+      sponsorExecute: true,
+    },
+  },
+  CLAW: {
+    symbol: "CLAW",
+    displayName: "CLAW",
+    decimals: 6,
+    capabilities: {
+      listingSingleAsset: true,
+      bidCurrency: true,
+      orderCurrency: true,
+      allowLegacyBoth: true,
+      orderEscrowCreate: true,
+      listingDeposit: false,
+      reputationInit: false,
+      managedStorageFee: true,
+      sponsorReserve: true,
+      sponsorExecute: true,
+    },
+  },
 });
+const SUPPORTED_MARKET_ASSET_SYMBOLS = Object.freeze(Object.keys(SUPPORTED_MARKET_ASSETS));
+const ASSET_DISPLAY_DECIMALS = Object.freeze(
+  Object.fromEntries(
+    Object.entries(SUPPORTED_MARKET_ASSETS).map(([symbol, definition]) => [symbol, definition.decimals]),
+  ),
+);
 const ASSET_UNIT_HINTS = Object.freeze(
-  Object.entries(ASSET_DISPLAY_DECIMALS).map(([currency, decimals]) => ({
+  Object.entries(SUPPORTED_MARKET_ASSETS).map(([currency, definition]) => ({
     currency,
-    decimals,
-    atomicPerDisplayUnit: (10n ** BigInt(decimals)).toString(),
+    decimals: definition.decimals,
+    atomicPerDisplayUnit: (10n ** BigInt(definition.decimals)).toString(),
   }))
 );
 const DEFAULT_LISTING_EXPIRY_DAYS = 30;
@@ -369,7 +407,7 @@ function printUsage() {
   console.log("  clawnera-help wallet-list [options]       List local wallet aliases and addresses");
   console.log("  clawnera-help auth-login [options]        Create JWT + refresh token from local IOTA keystore");
   console.log("  clawnera-help ensure-auth [options]       Reuse or create a saved auth-state from the local wallet");
-  console.log("  clawnera-help units [options]             Show IOTA/CLAW decimals and atomic-unit examples");
+  console.log(`  clawnera-help units [options]             Show ${SUPPORTED_MARKET_ASSET_SYMBOLS.join("/")} decimals and atomic-unit examples`);
   console.log("  clawnera-help request <METHOD> <path>     Call Clawnera API with auth/env shortcuts");
   console.log("  clawnera-help listing-categories          Show the canonical listing category slugs");
   console.log("  clawnera-help listing-deposit-create [options]  Build and execute the listing deposit locally");
@@ -424,7 +462,7 @@ function printUsage() {
   console.log("  clawnera-help version                     Print CLI package version");
   console.log("  clawnera-help <command> --json            Emit machine-readable JSON");
   console.log("  clawnera-help journey|recipe --compact    Emit the low-token bot view");
-  console.log("  Atomic amounts: IOTA uses 9 decimals, CLAW uses 6. Run `clawnera-help units` if unsure.");
+  console.log(`  Atomic amounts: ${SUPPORTED_MARKET_ASSET_SYMBOLS.map((symbol) => `${symbol} uses ${SUPPORTED_MARKET_ASSETS[symbol].decimals} decimals`).join(", ")}. Run \`clawnera-help units\` if unsure.`);
 }
 
 function printTopics(topics) {
@@ -1631,10 +1669,18 @@ function normalizeListingCategorySlug(rawValue) {
   return normalized;
 }
 
+function getSupportedMarketAsset(currency) {
+  const normalized = normalizeString(currency).toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+  return SUPPORTED_MARKET_ASSETS[normalized] || null;
+}
+
 function parseDisplayAmountOption(rawValue, fieldName, currency) {
   const normalized = String(rawValue ?? "").trim();
-  const decimals = ASSET_DISPLAY_DECIMALS[currency];
-  if (!normalized || !decimals) {
+  const asset = getSupportedMarketAsset(currency);
+  if (!normalized || !asset) {
     throw new Error(`invalid_${fieldName}`);
   }
   const suffixPattern = new RegExp(`\\s+${String(currency).trim()}$`, "i");
@@ -1645,11 +1691,11 @@ function parseDisplayAmountOption(rawValue, fieldName, currency) {
   }
   const whole = BigInt(match[1]);
   const fraction = match[2] ?? "";
-  if (fraction.length > decimals) {
+  if (fraction.length > asset.decimals) {
     throw new Error(`invalid_${fieldName}`);
   }
-  const paddedFraction = `${fraction}${"0".repeat(decimals - fraction.length)}`;
-  const atomic = whole * (10n ** BigInt(decimals)) + BigInt(paddedFraction || "0");
+  const paddedFraction = `${fraction}${"0".repeat(asset.decimals - fraction.length)}`;
+  const atomic = whole * (10n ** BigInt(asset.decimals)) + BigInt(paddedFraction || "0");
   if (atomic <= 0n) {
     throw new Error(`invalid_${fieldName}`);
   }
@@ -5360,7 +5406,7 @@ function prepareListingDraftOptions(options = {}, runtimeContext = {}) {
   if (!promotionPolicy) {
     throw new Error("invalid_promotion_policy");
   }
-  if (displayValues && !ASSET_DISPLAY_DECIMALS[currency]) {
+  if (displayValues && !getSupportedMarketAsset(currency)) {
     throw new Error("display_values_require_single_currency");
   }
   if (!category) {
@@ -5410,7 +5456,7 @@ function prepareListingDraftOptions(options = {}, runtimeContext = {}) {
 function listingCreateUsageLines() {
   return [
     "Listing create helper:",
-    "- Usage: clawnera-help listing-create --listing-mode <OFFER|REQUEST> --title <text> --description <text> --category <slug> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' (--expires-at '<iso8601>' | --expires-at-ms <unix-ms> | --expires-in-days <1-30> | --use-default-expiry) [auth options]",
+    `- Usage: clawnera-help listing-create --listing-mode <OFFER|REQUEST> --title <text> --description <text> --category <slug> --currency <${SUPPORTED_MARKET_ASSET_SYMBOLS.join("|")}> --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' (--expires-at '<iso8601>' | --expires-at-ms <unix-ms> | --expires-in-days <1-30> | --use-default-expiry) [auth options]`,
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
     "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
     `- Valid category slugs: ${LISTING_CATEGORY_SLUGS.join(", ")} (or run: clawnera-help listing-categories)`,
@@ -5437,7 +5483,7 @@ function listingCreateUsageLines() {
 function listingDepositCreateUsageLines() {
   return [
     "Listing deposit helper:",
-    "- Usage: clawnera-help listing-deposit-create --listing-mode <OFFER|REQUEST> --title <text> --description <text> --category <slug> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' [auth options]",
+    `- Usage: clawnera-help listing-deposit-create --listing-mode <OFFER|REQUEST> --title <text> --description <text> --category <slug> --currency <${SUPPORTED_MARKET_ASSET_SYMBOLS.join("|")}> --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' [auth options]`,
     "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
     "- Reads /policy/fees, resolves the live listing-deposit config, computes the canonical listingRef digest locally, then builds `listing_deposit::create_listing_deposit_iota_entry` locally",
     "- Optional explicit ref: --listing-ref-digest-hex <64-hex> if you already computed the exact canonical binding digest",
@@ -5476,7 +5522,7 @@ function listingRenewUsageLines() {
 function bidCreateUsageLines() {
   return [
     "Bid create helper:",
-    "- Usage: clawnera-help bid-create --listing-id <listing-id> --amount <int> --currency <IOTA|CLAW> [auth options]",
+    `- Usage: clawnera-help bid-create --listing-id <listing-id> --amount <int> --currency <${SUPPORTED_MARKET_ASSET_SYMBOLS.join("|")}> [auth options]`,
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
     "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
     "- Optional: --message <text>, --bidder-address <0x...>",
@@ -5504,7 +5550,7 @@ function listingCategoriesUsageLines() {
 function unitsUsageLines() {
   return [
     "Units helper:",
-    "- Usage: clawnera-help units [--currency <IOTA|CLAW>] [--compact] [--json]",
+    `- Usage: clawnera-help units [--currency <${SUPPORTED_MARKET_ASSET_SYMBOLS.join("|")}>] [--compact] [--json]`,
     "- Prints the canonical display decimals and atomic-unit examples for supported marketplace currencies.",
     "- Use this before listing-create or bid-create if you are not sure whether numbers must be atomic or display values.",
     "- Without --display-values, write helpers expect atomic integers.",
@@ -5605,11 +5651,11 @@ async function runListingCreate(commandArgs) {
     if (!promotionPolicy) {
       return { ok: false, error: "invalid_promotion_policy" };
     }
-    if (displayValues && !ASSET_DISPLAY_DECIMALS[currency]) {
+    if (displayValues && !getSupportedMarketAsset(currency)) {
       return {
         ok: false,
         error: "display_values_require_single_currency",
-        supportedCurrencies: Object.keys(ASSET_DISPLAY_DECIMALS),
+        supportedCurrencies: SUPPORTED_MARKET_ASSET_SYMBOLS,
       };
     }
     if (!category) {
@@ -5664,7 +5710,7 @@ async function runListingCreate(commandArgs) {
       hintLines: buildListingCreateHintLines({ error: errorCode }, listingMode)
     };
     if (errorCode === "display_values_require_single_currency") {
-      response.supportedCurrencies = Object.keys(ASSET_DISPLAY_DECIMALS);
+      response.supportedCurrencies = SUPPORTED_MARKET_ASSET_SYMBOLS;
     }
     if (errorCode === "invalid_listing_category") {
       response.validCategories = LISTING_CATEGORY_SLUGS;
@@ -6150,8 +6196,8 @@ async function runBidCreate(commandArgs) {
     if (!listingId || !currency) {
       return { ok: false, error: "missing_required_bid_fields" };
     }
-    if (displayValues && !ASSET_DISPLAY_DECIMALS[currency]) {
-      return { ok: false, error: "display_values_require_single_currency", supportedCurrencies: Object.keys(ASSET_DISPLAY_DECIMALS) };
+    if (displayValues && !getSupportedMarketAsset(currency)) {
+      return { ok: false, error: "display_values_require_single_currency", supportedCurrencies: SUPPORTED_MARKET_ASSET_SYMBOLS };
     }
     const amount = (displayValues
       ? parseDisplayAmountOption(options.amount, "amount", currency)
@@ -6218,7 +6264,7 @@ async function runUnits(commandArgs) {
   }
   const requestedCurrency = normalizeString(options.currency).toUpperCase();
   if (requestedCurrency && !resolveAssetUnitHint(requestedCurrency)) {
-    return { ok: false, error: "invalid_currency", supportedCurrencies: ASSET_UNIT_HINTS.map((entry) => entry.currency) };
+    return { ok: false, error: "invalid_currency", supportedCurrencies: SUPPORTED_MARKET_ASSET_SYMBOLS };
   }
   const items = ASSET_UNIT_HINTS
     .filter((entry) => !requestedCurrency || entry.currency === requestedCurrency)

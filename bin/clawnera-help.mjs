@@ -373,6 +373,128 @@ function loadJourneys() {
   return Array.isArray(parsed.journeys) ? parsed.journeys : [];
 }
 
+function buildMinimalHelpJson() {
+  return {
+    name: "clawnera-help",
+    version: readPackageVersion(),
+    mode: "minimal",
+    botFirst: {
+      orderedStart: [
+        "clawnera-help journeys",
+        "clawnera-help journey <role> --compact",
+        "clawnera-help next <role>",
+        "clawnera-help next setup-quick"
+      ],
+      rules: [
+        "Prefer journey/recipe/next before show/search/request",
+        "Prefer thin helpers before raw request or tx-plan calls",
+        "Use ensure-auth; do not ask the human for a raw JWT if local wallet access exists",
+        "Use --compact whenever possible"
+      ],
+      nextCommands: [
+        "clawnera-help show onboarding",
+        "clawnera-help show http-examples",
+        "clawnera-help show canonical-flow",
+        "clawnera-help search <keyword>"
+      ],
+      thinHelpers: [
+        "listing-categories",
+        "listing-create",
+        "listing-cancel",
+        "listing-renew",
+        "bid-create",
+        "bid-accept",
+        "reviewer-invites"
+      ]
+    },
+    hints: {
+      fullInventoryText: "clawnera-help --help --all",
+      fullInventoryJson: "clawnera-help --help --all --json"
+    }
+  };
+}
+
+function buildFullHelpJson(topics, journeys, recipes) {
+  return {
+    ...buildMinimalHelpJson(),
+    mode: "all",
+    commands: [
+      "help",
+      "topics",
+      "journeys",
+      "journey",
+      "recipes",
+      "show",
+      "recipe",
+      "search",
+      "doctor",
+      "triage",
+      "report-issue",
+      "path",
+      "wallet-init",
+      "wallet-list",
+      "auth-login",
+      "ensure-auth",
+      "units",
+      "request",
+      "listing-categories",
+      "listing-deposit-create",
+      "listing-create",
+      "listing-cancel",
+      "listing-renew",
+      "bid-create",
+      "bid-accept",
+      "chain-config",
+      "tx-plan-dry-run",
+      "tx-plan-execute",
+      "order-init-bond",
+      "order-create-escrow",
+      "key-agreement-upsert",
+      "reputation-init",
+      "reviewer-register",
+      "reviewer-update",
+      "deliverable-encrypt",
+      "dispute-evidence-bundle-build",
+      "dispute-evidence-publish",
+      "dispute-evidence-list",
+      "dispute-evidence-content",
+      "dispute-evidence-decrypt",
+      "mailbox-evidence-export",
+      "checkpoint-evidence-export",
+      "managed-storage-fee-pay",
+      "managed-storage-presign",
+      "managed-storage-upload",
+      "reviewer-shortlist",
+      "reviewer-invites",
+      "mailbox-events",
+      "pinata-upload-json",
+      "milestone-submit-byo",
+      "milestone-anchor",
+      "milestone-reject",
+      "deliverable-decrypt",
+      "reviewer-vote-prepare",
+      "iota-active-env",
+      "iota-get-balance",
+      "iota-get-gas",
+      "iota-request-faucet",
+      "iota-prepare-transfer",
+      "iota-dry-run-transfer",
+      "iota-execute-transfer",
+      "notifications",
+      "first-steps",
+      "sponsor-preflight",
+      "sponsor-execute",
+      "validate",
+      "sync",
+      "bootstrap",
+      "version"
+    ],
+    topics,
+    journeys,
+    recipes
+  };
+}
+
 function printUsage() {
   console.log("CLAWNERA Bot Market CLI");
   console.log("");
@@ -396,6 +518,9 @@ function printUsage() {
   console.log("");
   console.log("Need the full command inventory?");
   console.log("  clawnera-help --help --all");
+  console.log("  clawnera-help --help --all --json");
+  console.log("");
+  console.log("Need machine-readable minimal startup help?");
   console.log("  clawnera-help --help --json");
   console.log("");
   console.log(`Atomic amounts: ${SUPPORTED_MARKET_ASSET_SYMBOLS.map((symbol) => `${symbol} uses ${SUPPORTED_MARKET_ASSETS[symbol].decimals} decimals`).join(", ")}. Run \`clawnera-help units\` if unsure.`);
@@ -13934,111 +14059,7 @@ const effectiveCommand = aliasCommands.get(parsedCommand) || parsedCommand;
 
 if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand === "--help") {
   if (flags.json) {
-    printJson({
-      name: "clawnera-help",
-      version: readPackageVersion(),
-      botFirst: {
-        orderedStart: [
-          "clawnera-help journeys",
-          "clawnera-help journey <role> --compact",
-          "clawnera-help next <role>",
-          "clawnera-help next setup-quick"
-        ],
-        rules: [
-          "Prefer journey/recipe/next before show/search/request",
-          "Prefer thin helpers before raw request or tx-plan calls",
-          "Use ensure-auth; do not ask the human for a raw JWT if local wallet access exists",
-          "Use --compact whenever possible"
-        ],
-        thinHelpers: [
-          "listing-categories",
-          "listing-deposit-create",
-          "listing-create",
-          "listing-cancel",
-          "listing-renew",
-          "bid-create",
-          "bid-accept",
-          "reviewer-update",
-          "reviewer-invites",
-          "mailbox-evidence-export",
-          "checkpoint-evidence-export"
-        ]
-      },
-      commands: [
-        "help",
-        "topics",
-        "journeys",
-        "journey",
-        "recipes",
-        "show",
-        "recipe",
-        "search",
-        "doctor",
-        "triage",
-        "report-issue",
-        "path",
-        "wallet-init",
-        "wallet-list",
-        "auth-login",
-        "ensure-auth",
-        "units",
-        "request",
-        "listing-categories",
-        "listing-deposit-create",
-        "listing-create",
-        "listing-cancel",
-        "listing-renew",
-        "bid-create",
-        "bid-accept",
-        "chain-config",
-        "tx-plan-dry-run",
-        "tx-plan-execute",
-        "order-init-bond",
-        "order-create-escrow",
-        "key-agreement-upsert",
-        "reputation-init",
-        "reviewer-register",
-        "reviewer-update",
-        "deliverable-encrypt",
-        "dispute-evidence-bundle-build",
-        "dispute-evidence-publish",
-        "dispute-evidence-list",
-        "dispute-evidence-content",
-        "dispute-evidence-decrypt",
-        "mailbox-evidence-export",
-        "checkpoint-evidence-export",
-        "managed-storage-fee-pay",
-        "managed-storage-presign",
-        "managed-storage-upload",
-        "reviewer-shortlist",
-        "reviewer-invites",
-        "mailbox-events",
-        "pinata-upload-json",
-        "milestone-submit-byo",
-        "milestone-anchor",
-        "milestone-reject",
-        "deliverable-decrypt",
-        "reviewer-vote-prepare",
-        "iota-active-env",
-        "iota-get-balance",
-        "iota-get-gas",
-        "iota-request-faucet",
-        "iota-prepare-transfer",
-        "iota-dry-run-transfer",
-        "iota-execute-transfer",
-        "notifications",
-        "first-steps",
-        "sponsor-preflight",
-        "sponsor-execute",
-        "validate",
-        "sync",
-        "bootstrap",
-        "version"
-      ],
-      topics,
-      journeys,
-      recipes
-    });
+    printJson(flags.all ? buildFullHelpJson(topics, journeys, recipes) : buildMinimalHelpJson());
   } else {
     if (flags.all) {
       printUsageAll();

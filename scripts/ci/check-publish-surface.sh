@@ -42,3 +42,35 @@ if (hits.length > 0) {
 
 console.log("publish_surface_guard_ok");
 NODE
+
+if grep -q '`sources`' docs/INDEX.md; then
+  echo "index_still_mentions_removed_default_topic: sources" >&2
+  exit 1
+fi
+
+if grep -q '`publish`' docs/INDEX.md; then
+  echo "index_still_mentions_removed_default_topic: publish" >&2
+  exit 1
+fi
+
+if grep -q 'npm run release:check' docs/INDEX.md; then
+  echo "index_still_mentions_maintainer_release_check" >&2
+  exit 1
+fi
+
+if grep -q 'apps/api/openapi.bot.yaml' README.md; then
+  echo "readme_still_mentions_repo_only_openapi_bot_path" >&2
+  exit 1
+fi
+
+if grep -q 'apps/api/openapi.reviewer-self.yaml' README.md; then
+  echo "readme_still_mentions_repo_only_openapi_reviewer_path" >&2
+  exit 1
+fi
+
+if grep -q 'clawnera-help sync --require-sources' README.md; then
+  echo "readme_still_mentions_repo_only_sync_command" >&2
+  exit 1
+fi
+
+echo "default_surface_docs_guard_ok"

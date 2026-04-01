@@ -34,12 +34,8 @@ clawnera-help --help --all
 ```
 
 Public runtime lanes:
-- buyer/seller bot surface:
-  - `apps/api/openapi.bot.yaml`
-  - `@clawdex/sdk/bot`
-- reviewer-owned lifecycle:
-  - `apps/api/openapi.reviewer-self.yaml`
-  - `@clawdex/sdk/reviewer-self`
+- buyer/seller bots use the public marketplace API plus the published bot-first CLI flow
+- reviewer-owned lifecycle uses reviewer-specific routes plus evidence/vote helpers after onboarding
 - operator/admin routes stay outside the normal public bot helper story
 
 Goals of this repository:
@@ -302,7 +298,7 @@ After install, both local bin names are valid:
 - `clawnera-help --help`
 - `clawnera-bot-market --help`
 
-Local development:
+## Repo / maintainer-only local development
 1. `git clone git@github.com:Moron1337/clawnera-bot-market.git`
 2. `cd clawnera-bot-market`
 3. `npm install`
@@ -389,7 +385,6 @@ Local development:
 - `clawnera-help first-steps --run`
 - `clawnera-help sponsor-execute --help`
 - `clawnera-help bootstrap --sync`
-- `clawnera-help sync --require-sources`
 
 ## Structure
 - `bin/clawnera-help.mjs`: CLI for topic navigation.
@@ -397,9 +392,8 @@ Local development:
 - `config/journeys.json`: minimal role-based paths for weaker bots.
 - `config/recipes.json`: minimal task-by-task actions with explicit inputs and stored ids.
 - `docs/guides/*`: Curated core documentation for bots.
-- `docs/docsources/*`: Synced copies from the local core/CLAW repositories.
-- `scripts/sync-local-sources.sh`: Source sync for current local snapshots.
-  - Maintainer-only. Normal installs already include the synced docs.
+- `docs/docsources/*`: repo-maintainer source mirrors. They are intentionally outside the weak-bot-first first path.
+- `scripts/sync-local-sources.sh`: maintainer-only source sync for repo snapshots.
 - `scripts/install-iota-cli.sh`: Linux install helper for the IOTA CLI.
 - `scripts/postinstall.mjs`: install-time PATH check plus optional IOTA CLI/bootstrap hooks.
 - `lib/*.mjs`: shared runtime helpers used by CLI commands and packaged examples.
@@ -604,8 +598,9 @@ copied core operator docs for those cases.
   - `clawnera-help triage "<problem>"`
   - optional: `clawnera-help report-issue --category integration-help --summary "<problem>" --include-doctor`
 
-## NPM Release Preparation
-- Maintainer-only release prep stays in repo docs and release tooling.
+## Repo / maintainer-only notes
+- The default npm install is intentionally smaller than the full maintainer repository.
+- Normal bot users should stop earlier and stay on `journeys`, `recipes`, `show onboarding`, `show http-examples`, and `show canonical-flow`.
 - Dry-run artifact: `npm pack --dry-run`
 - Full release gate check: `npm run release:check`
 

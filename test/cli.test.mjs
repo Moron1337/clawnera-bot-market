@@ -76,6 +76,7 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /clawnera-help show http-examples/);
   assert.match(result.stdout, /clawnera-help search <keyword>/);
   assert.match(result.stdout, /clawnera-help --help --all/);
+  assert.match(result.stdout, /clawnera-help --help --all --json/);
   assert.match(result.stdout, /clawnera-help --help --json/);
   assert.doesNotMatch(result.stdout, /clawnera-help next seller-create-listing/);
   assert.doesNotMatch(result.stdout, /Available topics:/);
@@ -98,10 +99,11 @@ test("help all prints full inventory and indexes", () => {
   assert.match(result.stdout, /Available recipes:/);
 });
 
-test("help json output includes auth-login command", () => {
+test("help json output is minimal by default", () => {
   const result = runCli(["--help", "--json"]);
   assert.equal(result.status, 0);
   const payload = JSON.parse(result.stdout);
+  assert.equal(payload.mode, "minimal");
   assert.deepEqual(payload.botFirst.orderedStart, [
     "clawnera-help journeys",
     "clawnera-help journey <role> --compact",
@@ -110,10 +112,30 @@ test("help json output includes auth-login command", () => {
   ]);
   assert.ok(Array.isArray(payload.botFirst.rules));
   assert.ok(payload.botFirst.rules.some((rule) => /ensure-auth/i.test(rule)));
+  assert.deepEqual(payload.botFirst.nextCommands, [
+    "clawnera-help show onboarding",
+    "clawnera-help show http-examples",
+    "clawnera-help show canonical-flow",
+    "clawnera-help search <keyword>"
+  ]);
   assert.ok(Array.isArray(payload.botFirst.thinHelpers));
   assert.ok(payload.botFirst.thinHelpers.includes("listing-create"));
-  assert.ok(payload.botFirst.thinHelpers.includes("reviewer-update"));
-  assert.ok(payload.botFirst.thinHelpers.includes("checkpoint-evidence-export"));
+  assert.ok(payload.botFirst.thinHelpers.includes("reviewer-invites"));
+  assert.deepEqual(payload.hints, {
+    fullInventoryText: "clawnera-help --help --all",
+    fullInventoryJson: "clawnera-help --help --all --json"
+  });
+  assert.equal("commands" in payload, false);
+  assert.equal("topics" in payload, false);
+  assert.equal("journeys" in payload, false);
+  assert.equal("recipes" in payload, false);
+});
+
+test("help all json output includes full inventory", () => {
+  const result = runCli(["--help", "--all", "--json"]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.mode, "all");
   assert.ok(Array.isArray(payload.commands));
   assert.ok(payload.commands.includes("auth-login"));
   assert.ok(payload.commands.includes("journeys"));
@@ -154,6 +176,9 @@ test("help json output includes auth-login command", () => {
   assert.ok(payload.commands.includes("iota-request-faucet"));
   assert.ok(payload.commands.includes("iota-prepare-transfer"));
   assert.ok(payload.commands.includes("iota-execute-transfer"));
+  assert.ok(Array.isArray(payload.topics));
+  assert.ok(Array.isArray(payload.journeys));
+  assert.ok(Array.isArray(payload.recipes));
 });
 
 test("wallet list help prints usage", () => {

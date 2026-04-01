@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.77] - 2026-04-01
+
+- Fixed the public helper order-escrow create path to use the current guarded on-chain entrypoints instead of the legacy disabled ones:
+  - `order-create-escrow` now builds `create_order_escrow_iota_entry_guarded` for IOTA orders
+  - `order-create-escrow` now builds `create_order_escrow_coin_entry_guarded` for CLAW orders
+  - the helper now passes the required governance config object into both guarded order-escrow builders
+- Added regression coverage so the helper vendored SDK cannot silently drift back to legacy disabled order-escrow create targets.
+
 ## [0.1.76] - 2026-04-01
 
 - Fixed the live listing-deposit/listing-create weak-bot path so whole-user-unit runs stay canonically bound:

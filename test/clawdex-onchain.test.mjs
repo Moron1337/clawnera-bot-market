@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   assertExecutionSuccess,
   buildClawdexTxFromPlan,
+  buildCreateOrderEscrowTx,
   extractLatestEventByTypeSuffix,
   extractMailboxSignalAcked,
   extractMailboxSignalPosted,
@@ -110,6 +111,40 @@ test("buildClawdexTxFromPlan dispatches canonical binding-based order-escrow set
   });
 
   assert.equal(extractLastMoveCallFunction(tx), "resolve_dispute_with_binding");
+});
+
+test("buildCreateOrderEscrowTx uses guarded IOTA order-escrow entrypoints", () => {
+  const tx = buildCreateOrderEscrowTx({
+    packageId: addr("1"),
+    sender: addr("a"),
+    governanceConfigObjectId: addr("b"),
+    orderId: "order-1",
+    seller: addr("c"),
+    amount: 2000000000n,
+    deadlineMs: 1776000000000n,
+    feeConfigObjectId: addr("d"),
+    currency: "IOTA",
+  });
+
+  assert.equal(extractLastMoveCallFunction(tx), "create_order_escrow_iota_entry_guarded");
+});
+
+test("buildCreateOrderEscrowTx uses guarded CLAW order-escrow entrypoints", () => {
+  const tx = buildCreateOrderEscrowTx({
+    packageId: addr("1"),
+    sender: addr("a"),
+    governanceConfigObjectId: addr("b"),
+    orderId: "order-2",
+    seller: addr("c"),
+    amount: 2000000n,
+    deadlineMs: 1776000000000n,
+    feeConfigObjectId: addr("d"),
+    currency: "CLAW",
+    clawCoinType: `${addr("2")}::claw::CLAW`,
+    paymentCoinObjectId: addr("e"),
+  });
+
+  assert.equal(extractLastMoveCallFunction(tx), "create_order_escrow_coin_entry_guarded");
 });
 
 test("buildClawdexTxFromPlan keeps legacy quorum-ticket settlement as explicit compat path", () => {

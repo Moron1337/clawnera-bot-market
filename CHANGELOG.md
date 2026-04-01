@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.74] - 2026-04-01
+
+- Hardened reviewer onboarding and rotation so the public helper now fails closed until the same non-expired transport key-agreement record is remotely readable before:
+  - `reviewer-register`
+  - `reviewer-update`
+- Clarified the bot-facing live flow so buyer exact-readback stays on `GET /listings/{listingId}/bids` until an order actually exists, instead of treating `GET /orders?role=buyer` as an exact fresh-bid readback.
+
 ## [0.1.73] - 2026-03-29
 
 - Synced additional public helper truth that was already present in the repos but not yet cut into a new npm release:

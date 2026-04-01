@@ -375,7 +375,10 @@ test("reviewer register help explains onboarding prerequisites", () => {
   const result = runCli(["reviewer-register", "--help"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Reviewer register helper/);
-  assert.match(result.stdout, /Requires a local key-agreement record and an on-chain reputation profile/);
+  assert.match(
+    result.stdout,
+    /Requires a local key-agreement record, a matching non-expired remote key-agreement readback, and an on-chain reputation profile/
+  );
   assert.match(result.stdout, /key-agreement-upsert/);
   assert.match(result.stdout, /reputation-init/);
 });

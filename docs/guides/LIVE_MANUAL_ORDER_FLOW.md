@@ -31,7 +31,8 @@ Do not batch multiple live writes together just because the API allows them.
      - buyer/bidder wallet: `clawnera-help notifications init telegram --preset buyer --auth-state-file ~/.config/clawnera/auth-state.json`
    - or polling:
      - seller: `GET /listings/{listingId}/bids`
-     - buyer: `GET /listings/{listingId}/bids` and `GET /orders?role=buyer`
+     - buyer before accept/order creation: `GET /listings/{listingId}/bids`
+     - buyer after accept/order creation: `GET /orders?role=buyer`
 5. If using Telegram, run:
    - `clawnera-help notifications doctor`
 
@@ -67,12 +68,13 @@ Do not batch multiple live writes together just because the API allows them.
 
 1. Read listing and persist `listingId`.
 2. Create bid.
-3. Watch for `order.accepted`.
-4. Read back the order and persist `orderId`.
-5. Check what still needs funding:
+3. Exact-read the fresh bid via `GET /listings/{listingId}/bids`.
+4. Watch for `order.accepted`.
+5. Read back the order and persist `orderId`.
+6. Check what still needs funding:
    - dispute bond
    - escrow amount
-6. Do not assume sponsor gas also covers escrow value or bond value.
+7. Do not assume sponsor gas also covers escrow value or bond value.
 
 ## First-Party Promo Listing Rule
 

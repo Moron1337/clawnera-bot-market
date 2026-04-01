@@ -6960,6 +6960,294 @@ test("key-agreement-upsert fails clearly when the remote version exists but no m
   }
 });
 
+test("reviewer-register stops before plan creation when the transport key readback is not ready", async () => {
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-register-key-readback-"));
+  const walletInit = await runCli(["wallet-init", "--alias", "reviewer", "--json"], { HOME: tempHome });
+  assert.equal(walletInit.status, 0);
+  const walletPayload = JSON.parse(walletInit.stdout);
+  const actorAddress = walletPayload.address;
+  const authStateFile = path.join(tempHome, ".config", "clawnera", "auth-state.json");
+  const keyFile = path.join(tempHome, "reviewer-key-agreement.json");
+  mkdirSync(path.dirname(authStateFile), { recursive: true });
+
+  const reviewerKeys = generateKeyAgreementKeypair("u");
+  await saveKeyAgreementRecord({
+    address: actorAddress,
+    keyVersion: 1,
+    publicKeyMultibase: reviewerKeys.publicKeyMultibase,
+    privateKeyMultibase: reviewerKeys.privateKeyMultibase,
+    expiresAtMs: Date.now() + 86_400_000,
+    filePath: keyFile,
+  });
+
+  let registerCalls = 0;
+  const mock = await startMockServer({
+    "GET /reviewers/me/metrics": () => ({
+      status: 200,
+      body: {
+        registered: false,
+        runtime: {
+          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
+          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+        },
+      },
+    }),
+    "GET /policy/fees": () => ({
+      status: 200,
+      body: {
+        policy: {
+          chainConfig: {
+            marketplacePackageId: "0x1111111111111111111111111111111111111111111111111111111111111111",
+            disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+          },
+        },
+      },
+    }),
+    [`GET /users/${actorAddress}/key-agreement?keyVersion=1`]: () => ({
+      status: 404,
+      body: {
+        error: "key_agreement_not_found",
+      },
+    }),
+    "POST /reviewers/register": () => {
+      registerCalls += 1;
+      return {
+        status: 500,
+        body: {
+          error: "should_not_register",
+        },
+      };
+    },
+    "POST /rpc": (request) => {
+      const method = request.body?.method;
+      if (method === "iota_getObject") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: {
+              data: {
+                objectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+                type: "0x1111111111111111111111111111111111111111111111111111111111111111::dispute_quorum::DisputeQuorumConfig",
+                previousTransaction: "init-reviewer-registry-1",
+                content: {
+                  fields: {
+                    default_required_reviewer_votes: "3",
+                    min_required_reviewer_votes: "3",
+                    min_dispute_bond_per_side_iota: "500000",
+                    reviewer_min_stake_iota: "500000",
+                  },
+                },
+              },
+            },
+          },
+        };
+      }
+      if (method === "iotax_getOwnedObjects") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: {
+              data: [
+                {
+                  data: {
+                    objectId: "0x4444444444444444444444444444444444444444444444444444444444444444",
+                  },
+                },
+              ],
+            },
+          },
+        };
+      }
+      throw new Error(`unexpected_rpc_method:${String(method)}`);
+    },
+  });
+
+  try {
+    writeFileSync(
+      authStateFile,
+      JSON.stringify(
+        {
+          apiBase: mock.baseUrl,
+          token: buildJwtWithExp(4102444800),
+          refreshToken: "refresh-token-1",
+          address: actorAddress,
+          alias: "reviewer",
+        },
+        null,
+        2,
+      ),
+    );
+    const result = await runCli(
+      [
+        "reviewer-register",
+        "--auth-state-file",
+        authStateFile,
+        "--transport-key-file",
+        keyFile,
+        "--rpc-url",
+        `${mock.baseUrl}/rpc`,
+        "--json",
+      ],
+      { HOME: tempHome },
+    );
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "transport_key_agreement_readback_not_ready");
+    assert.equal(payload.keyVersion, 1);
+    assert.match(payload.verifyPath, new RegExp(`/users/${actorAddress}/key-agreement\\?keyVersion=1`));
+    assert.match(payload.hint, /before rerunning reviewer-register/);
+    assert.equal(registerCalls, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("reviewer-update stops before plan creation when the rotated transport key readback is not ready", async () => {
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-update-key-readback-"));
+  const walletInit = await runCli(["wallet-init", "--alias", "reviewer", "--json"], { HOME: tempHome });
+  assert.equal(walletInit.status, 0);
+  const walletPayload = JSON.parse(walletInit.stdout);
+  const actorAddress = walletPayload.address;
+  const authStateFile = path.join(tempHome, ".config", "clawnera", "auth-state.json");
+  const keyFile = path.join(tempHome, "reviewer-key-agreement-v2.json");
+  mkdirSync(path.dirname(authStateFile), { recursive: true });
+
+  const reviewerKeys = generateKeyAgreementKeypair("u");
+  await saveKeyAgreementRecord({
+    address: actorAddress,
+    keyVersion: 2,
+    publicKeyMultibase: reviewerKeys.publicKeyMultibase,
+    privateKeyMultibase: reviewerKeys.privateKeyMultibase,
+    expiresAtMs: Date.now() + 86_400_000,
+    filePath: keyFile,
+  });
+
+  let updateCalls = 0;
+  const mock = await startMockServer({
+    [`GET /reviewers/${actorAddress}`]: () => ({
+      status: 200,
+      body: {
+        reviewer: {
+          objectId: "0x5555555555555555555555555555555555555555555555555555555555555555",
+          owner: actorAddress,
+          active: true,
+          transportType: 0,
+          minCaseRewardIota: "1",
+        },
+      },
+    }),
+    "GET /reviewers/me/metrics": () => ({
+      status: 200,
+      body: {
+        registered: true,
+        runtime: {
+          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
+          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+        },
+      },
+    }),
+    "GET /policy/fees": () => ({
+      status: 200,
+      body: {
+        policy: {
+          chainConfig: {
+            marketplacePackageId: "0x1111111111111111111111111111111111111111111111111111111111111111",
+            disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+          },
+        },
+      },
+    }),
+    [`GET /users/${actorAddress}/key-agreement?keyVersion=2`]: () => ({
+      status: 404,
+      body: {
+        error: "key_agreement_not_found",
+      },
+    }),
+    "POST /reviewers/update": () => {
+      updateCalls += 1;
+      return {
+        status: 500,
+        body: {
+          error: "should_not_update",
+        },
+      };
+    },
+    "POST /rpc": (request) => {
+      const method = request.body?.method;
+      if (method === "iota_getObject") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: {
+              data: {
+                objectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+                type: "0x1111111111111111111111111111111111111111111111111111111111111111::dispute_quorum::DisputeQuorumConfig",
+                previousTransaction: "init-reviewer-registry-1",
+                content: {
+                  fields: {
+                    default_required_reviewer_votes: "3",
+                    min_required_reviewer_votes: "3",
+                    min_dispute_bond_per_side_iota: "500000",
+                    reviewer_min_stake_iota: "500000",
+                  },
+                },
+              },
+            },
+          },
+        };
+      }
+      throw new Error(`unexpected_rpc_method:${String(method)}`);
+    },
+  });
+
+  try {
+    writeFileSync(
+      authStateFile,
+      JSON.stringify(
+        {
+          apiBase: mock.baseUrl,
+          token: buildJwtWithExp(4102444800),
+          refreshToken: "refresh-token-1",
+          address: actorAddress,
+          alias: "reviewer",
+        },
+        null,
+        2,
+      ),
+    );
+    const result = await runCli(
+      [
+        "reviewer-update",
+        "--auth-state-file",
+        authStateFile,
+        "--transport-key-file",
+        keyFile,
+        "--transport-key-version",
+        "2",
+        "--rpc-url",
+        `${mock.baseUrl}/rpc`,
+        "--json",
+      ],
+      { HOME: tempHome },
+    );
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "transport_key_agreement_readback_not_ready");
+    assert.equal(payload.keyVersion, 2);
+    assert.match(payload.verifyPath, new RegExp(`/users/${actorAddress}/key-agreement\\?keyVersion=2`));
+    assert.match(payload.hint, /before rerunning reviewer-update/);
+    assert.equal(updateCalls, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("deliverable-encrypt retries transient reads and writes the payload beside the plaintext file by default", async () => {
   const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-deliverable-encrypt-"));
   const plaintextDir = path.join(tempHome, "artifacts");

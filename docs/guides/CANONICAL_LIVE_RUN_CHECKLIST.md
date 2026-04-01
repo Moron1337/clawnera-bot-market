@@ -57,7 +57,8 @@ Before the first live write, do all of this:
      - mixed-role wallet: `clawnera-help notifications init telegram --preset all --auth-state-file ~/.config/clawnera/auth-state.json`
    - or explicit polling plan:
      - seller: `GET /listings/{listingId}/bids`
-     - buyer: `GET /listings/{listingId}/bids` and `GET /orders?role=buyer`
+     - buyer before accept/order creation: `GET /listings/{listingId}/bids`
+     - buyer after accept/order creation: `GET /orders?role=buyer`
      - both sides after accept/funding/delivery/dispute: `GET /orders/{orderId}` and `GET /orders/{orderId}/timeline`
 5. if using Telegram, run:
    - `clawnera-help notifications doctor`

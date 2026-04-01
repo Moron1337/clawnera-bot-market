@@ -7949,6 +7949,79 @@ async function fetchPolicyAndChainConfig(contextOptions = {}, runtimeOptions = {
   };
 }
 
+async function ensureTransportKeyAgreementReadbackReady(input = {}) {
+  const actorAddress = normalizeIotaAddress(input.actorAddress || "");
+  const keyVersion = Number.isSafeInteger(input.keyVersion) ? input.keyVersion : null;
+  const keyFile = typeof input.keyFile === "string" ? input.keyFile : "";
+  const keyRecord = input.keyRecord && typeof input.keyRecord === "object" ? input.keyRecord : null;
+  const options = input.options && typeof input.options === "object" ? input.options : {};
+  const timeoutMs = Number.isSafeInteger(input.timeoutMs) ? input.timeoutMs : 20_000;
+  const commandName = normalizeString(input.commandName) || "reviewer-register";
+  if (!actorAddress || !keyVersion || !keyRecord?.publicKeyMultibase) {
+    return {
+      ok: false,
+      error: "transport_key_agreement_readback_invalid_input",
+    };
+  }
+
+  const verifyPath = `/users/${actorAddress}/key-agreement?keyVersion=${keyVersion}`;
+  const expectedPublicKeyMultibase = keyRecord.publicKeyMultibase.trim();
+  const expectedTransportPubkeyHex = keyAgreementPublicKeyHex(expectedPublicKeyMultibase).toLowerCase();
+  let lastReadbackStatus = null;
+  let lastReadbackResponse = null;
+  let lastReadback = null;
+  for (const retryDelayMs of [0, 500, 1_500, 3_000, 5_000]) {
+    if (retryDelayMs > 0) {
+      await sleep(retryDelayMs);
+    }
+    const readCall = await callApiRoute({
+      method: "GET",
+      rawPath: verifyPath,
+      options,
+      timeoutMs,
+    });
+    lastReadbackStatus = readCall.result.status;
+    lastReadbackResponse = readCall.result.body ?? null;
+    lastReadback = readCall.result.body?.keyAgreement ?? null;
+    if (!readCall.result.ok) {
+      continue;
+    }
+
+    const readback = readCall.result.body?.keyAgreement;
+    const publicKeyMultibase =
+      typeof readback?.publicKeyMultibase === "string" ? readback.publicKeyMultibase.trim() : "";
+    const expiresAt = typeof readback?.expiresAt === "string" ? readback.expiresAt.trim() : "";
+    const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+    const isExpired =
+      readback?.isExpired === true || (Number.isFinite(expiresAtMs) ? expiresAtMs <= Date.now() : false);
+    if (
+      publicKeyMultibase === expectedPublicKeyMultibase &&
+      readback?.keyVersion === keyVersion &&
+      !isExpired
+    ) {
+      return {
+        ok: true,
+        verifyPath,
+        keyAgreement: readback,
+      };
+    }
+  }
+
+  return {
+    ok: false,
+    error: "transport_key_agreement_readback_not_ready",
+    keyFile,
+    keyVersion,
+    verifyPath,
+    expectedPublicKeyMultibase,
+    expectedTransportPubkeyHex,
+    readbackStatus: lastReadbackStatus,
+    readbackResponse: lastReadbackResponse,
+    readback: lastReadback,
+    hint: `wait until GET ${verifyPath} returns 200 with the same non-expired publicKeyMultibase before rerunning ${commandName}`,
+  };
+}
+
 async function runChainConfig(commandArgs) {
   const { options, positionals } = parseLongOptions(commandArgs);
   if (options.help || options.h) {
@@ -9178,6 +9251,18 @@ async function runReviewerRegister(commandArgs) {
         hint: "run clawnera-help key-agreement-upsert first",
       };
     }
+    const transportKeyReadback = await ensureTransportKeyAgreementReadbackReady({
+      actorAddress,
+      commandName: "reviewer-register",
+      keyFile: transportKeyFile,
+      keyRecord,
+      keyVersion: transportKeyVersion,
+      options,
+      timeoutMs,
+    });
+    if (!transportKeyReadback.ok) {
+      return transportKeyReadback;
+    }
 
     const body = {
       reviewerRegistryObjectId: chainConfig.reviewerRegistryObjectId,
@@ -9373,6 +9458,18 @@ async function runReviewerUpdate(commandArgs) {
         keyFile: transportKeyFile,
         hint: "run clawnera-help key-agreement-upsert first",
       };
+    }
+    const transportKeyReadback = await ensureTransportKeyAgreementReadbackReady({
+      actorAddress,
+      commandName: "reviewer-update",
+      keyFile: transportKeyFile,
+      keyRecord,
+      keyVersion: transportKeyVersion,
+      options,
+      timeoutMs,
+    });
+    if (!transportKeyReadback.ok) {
+      return transportKeyReadback;
     }
 
     const currentMinCaseRewardIota =
@@ -13226,11 +13323,12 @@ function reviewerRegisterUsageLines() {
   return [
     "Reviewer register helper:",
     "- Usage: clawnera-help reviewer-register --auth-state-file <file>",
-    "- Requires a local key-agreement record and an on-chain reputation profile for the same actor",
+    "- Requires a local key-agreement record, a matching non-expired remote key-agreement readback, and an on-chain reputation profile for the same actor",
     "- Auto-resolves reviewer registry + dispute quorum config ids from the live chain config",
     "- Uses the actor key-agreement public key as reviewer transportPubkeyHex",
     "- Defaults: --min-case-reward-iota 1 and --stake-amount <live reviewer_min_stake_iota>",
     "- Optional: --transport-type <u8> --transport-key-file <file> --transport-key-version <int> --dry-run",
+    "- If key-agreement-upsert prints warning=key_agreement_readback_pending, wait until GET /users/{address}/key-agreement?keyVersion=<n> returns 200 with the same non-expired key before rerunning reviewer-register",
     "- Run `clawnera-help key-agreement-upsert` and `clawnera-help reputation-init` first when onboarding a fresh reviewer"
   ];
 }
@@ -13280,6 +13378,7 @@ function reviewerUpdateUsageLines() {
     "Reviewer update helper:",
     "- Usage: clawnera-help reviewer-update --auth-state-file <file>",
     "- Reads the current reviewer entry, then refreshes transportPubkeyHex from the local key-agreement record for the same wallet",
+    "- Stops if the same key version is not yet visible as a non-expired remote key-agreement record",
     "- Use this after `key-agreement-upsert --rotate`, after any key file replacement, or when reviewer-readable dispute evidence reports reviewer key-agreement drift",
     "- Optional: --transport-type <u8> --transport-key-file <file> --transport-key-version <int> --min-case-reward-iota <int> --active <true|false> --dry-run",
     "- If the actor is not registered yet, stop and run `clawnera-help reviewer-register` first"

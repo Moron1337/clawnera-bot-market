@@ -316,6 +316,7 @@ Hinweis:
 1. Optional Reviewer Onboarding:
    - `POST /reviewers/register` (Tx Plan)
    - practical helper order: `clawnera-help key-agreement-upsert -> clawnera-help reputation-init -> clawnera-help reviewer-register`
+   - if `key-agreement-upsert` prints `warning=key_agreement_readback_pending`, stop there and wait until `GET /users/{address}/key-agreement?keyVersion=<n>` returns the same non-expired key before continuing into `reviewer-register`
    - if a reviewer rotates the key-agreement key later, rerun `clawnera-help key-agreement-upsert` and then `clawnera-help reviewer-update` before expecting fresh dispute-evidence grants to work
 2. Case open:
    - operator/admin prep can happen first via `POST /admin/reviewer-selection/shortlist`

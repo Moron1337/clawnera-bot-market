@@ -374,6 +374,7 @@ Minimum polling fallback:
   - `GET /listings/<listing-id>/bids`
 - buyer after bid write:
   - `GET /listings/<listing-id>/bids`
+- buyer after accept/order creation:
   - `GET /orders?role=buyer`
 - both sides after accept/funding/delivery/dispute writes:
   - `GET /orders/<order-id>`

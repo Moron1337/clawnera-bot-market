@@ -3,15 +3,27 @@ set -euo pipefail
 
 PACKAGE_NAME="clawnera-bot-market"
 EXPECTED_VERSION="${1:-$(node -p "require('./package.json').version")}"
+VISIBILITY_RETRIES="${VISIBILITY_RETRIES:-12}"
+VISIBILITY_SLEEP_SEC="${VISIBILITY_SLEEP_SEC:-5}"
 
 if [[ -z "${EXPECTED_VERSION}" ]]; then
   echo "missing_expected_version" >&2
   exit 1
 fi
 
-PUBLISHED_VERSION="$(npm view "${PACKAGE_NAME}@${EXPECTED_VERSION}" version 2>/dev/null || true)"
+PUBLISHED_VERSION=""
+for ((attempt = 1; attempt <= VISIBILITY_RETRIES; attempt += 1)); do
+  PUBLISHED_VERSION="$(npm view "${PACKAGE_NAME}@${EXPECTED_VERSION}" version 2>/dev/null || true)"
+  if [[ "${PUBLISHED_VERSION}" == "${EXPECTED_VERSION}" ]]; then
+    break
+  fi
+  if (( attempt < VISIBILITY_RETRIES )); then
+    sleep "${VISIBILITY_SLEEP_SEC}"
+  fi
+done
+
 if [[ "${PUBLISHED_VERSION}" != "${EXPECTED_VERSION}" ]]; then
-  echo "published_version_not_visible: expected=${EXPECTED_VERSION} got=${PUBLISHED_VERSION:-<none>}" >&2
+  echo "published_version_not_visible: expected=${EXPECTED_VERSION} got=${PUBLISHED_VERSION:-<none>} retries=${VISIBILITY_RETRIES}" >&2
   exit 1
 fi
 

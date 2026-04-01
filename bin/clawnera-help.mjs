@@ -10276,6 +10276,7 @@ async function runMailboxEvidenceExport(commandArgs) {
   }
   const unexpectedOptions = findUnexpectedOptions(options, [
     ...FORWARDED_REQUEST_OPTION_NAMES,
+    "rpc-url",
     "case-id",
     "limit",
     "include-acked",
@@ -10453,6 +10454,7 @@ async function runCheckpointEvidenceExport(commandArgs) {
   }
   const unexpectedOptions = findUnexpectedOptions(options, [
     ...FORWARDED_REQUEST_OPTION_NAMES,
+    "rpc-url",
     "case-id",
     "submit-body-file",
     "payload-file",
@@ -13508,6 +13510,7 @@ function mailboxEvidenceExportUsageLines() {
     "- Reads the live dispute, then exports mailbox posted/acked events into one canonical MAILBOX_COORDINATION supplemental bundle.",
     "- Optional filters: --posted-seqs <csv> --acked-seqs <csv> --limit <n> --include-acked <true|false>",
     "- Live event reads are the default; on transient feed timeouts the helper automatically retries with a smaller recent-event window before failing.",
+    "- Optional chain override: --rpc-url <url> to enable exact on-chain mailbox fallback when the event feed is incomplete.",
     "- Optional reuse: --events-file <saved-mailbox-events.json> instead of refetching the mailbox event feed",
     "- Optional statement: --statement-title <text> plus --statement-text <text> or --statement-file <file>",
     "- Writes one plaintext bundle JSON plus the normal encrypted payload/build files used by dispute-evidence-publish --kind supplemental-bundle",
@@ -13521,6 +13524,7 @@ function checkpointEvidenceExportUsageLines() {
     "- Builds one canonical CHECKPOINT_HANDOVER packet locally, wraps it into a supplemental dispute bundle, and writes the normal payload/build artifacts.",
     "- Ciphertext source: choose one explicitly via --payload-file <managed-deliverable-payload.json>, --ciphertext-hash <64-hex>, or --signal-seq <n>.",
     "- Mailbox shortcut: pair --signal-seq <n> with live mailbox reads or --mailbox-events-file <saved-mailbox-events.json> to attach the delivery-ready signal ref.",
+    "- Optional chain override: --rpc-url <url> to enable exact on-chain mailbox fallback when the event feed is incomplete.",
     "- Power-user fallback: add --allow-latest-signal-fallback only if you really want the helper to auto-pick the newest posted signal.",
     "- Optional anchor: --anchor-file <milestone-anchor.json> or explicit --anchor-tx-digest <digest> [--anchor-event-seq <n>] [--anchor-status PENDING|CONFIRMED|MISMATCH]",
     "- Optional statement: --statement-title <text> plus --statement-text <text> or --statement-file <file>",

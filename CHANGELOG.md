@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.82] - 2026-04-01
+
+- Fixed the live dispute-evidence utility surface for mailbox-backed flows:
+  - `mailbox-evidence-export` now accepts `--rpc-url <url>` so live on-chain mailbox fallback can be used when the event feed is incomplete
+  - `checkpoint-evidence-export` now accepts `--rpc-url <url>` for the same mailbox signal fallback path
+- Added regression coverage so both evidence-export helpers keep accepting explicit `--rpc-url` overrides instead of failing early on their option allowlists.
+
 ## [0.1.81] - 2026-04-01
 
 - Closed a weak-bot helper drift between `next`/`journey` recipe IDs and direct CLI invocation:

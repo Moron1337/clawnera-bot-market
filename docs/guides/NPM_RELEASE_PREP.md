@@ -95,6 +95,12 @@ Wichtig:
 5. Verifikation:
    - `npm view clawnera-bot-market version dist --json`
    - `npx clawnera-bot-market --help`
+6. Pflicht auf jedem Operator-Host, der `clawnera-help` direkt nutzt:
+   - `npm run release:sync-global`
+   - danach verifizieren:
+     - `clawnera-help --help --all --json`
+   - Ziel:
+     - die global genutzte Helper-Version muss exakt der frisch veroeffentlichten npm-Version entsprechen
 
 ## 5a) Externe Pflicht-Config fuer npm Trusted Publishing
 
@@ -120,7 +126,10 @@ Erst nachdem der Trusted Publisher erfolgreich getestet wurde.
 
 1. GitHub Release/Notes erstellen.
 2. Integratoren ueber neue Version informieren.
-3. Optional: vorherige Version als Rollback-Referenz dokumentieren.
+3. Pflicht auf den lokalen Operator-Maschinen:
+   - `npm run release:sync-global`
+   - nur danach mit dem globalen `clawnera-help` weiterarbeiten
+4. Optional: vorherige Version als Rollback-Referenz dokumentieren.
 
 ## 7) Abort / Containment
 

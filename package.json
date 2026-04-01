@@ -115,6 +115,7 @@
     "pack:dry-run": "npm pack --dry-run",
     "check:publish-surface": "bash ./scripts/ci/check-publish-surface.sh",
     "release:check": "npm run lint && npm run test && npm run validate:strict && npm run check:publish-surface && npm run pack:dry-run",
+    "release:sync-global": "bash ./scripts/release/sync-global-published.sh",
     "prepack": "npm run lint && npm run test && npm run validate:strict && npm run check:publish-surface",
     "sync:local": "bash ./scripts/sync-local-sources.sh",
     "bootstrap": "bash ./scripts/bootstrap.sh"

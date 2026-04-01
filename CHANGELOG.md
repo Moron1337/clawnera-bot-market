@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.79] - 2026-04-01
+
+- Hardened the live mailbox helper path so weak bots can still recover exact mailbox signal history when the API event feed is temporarily empty:
+  - `mailbox-events` now falls back to direct on-chain `SignalPosted` / `SignalAcked` reads through the live package id from `/policy/fees`
+  - successful fallback results are marked with `fallbackUsed=onchain_rpc` instead of silently pretending the feed was complete
+- Extended the live helper surface for current weak-bot/manual runs:
+  - `listing-deposit-create --help` now documents `--rpc-url <url>` explicitly for hosts whose local IOTA CLI default is on the wrong network
+  - regression coverage now locks the mailbox-event fallback and the deposit helper RPC hint in place
+- Tightened operator release discipline after npm publishes:
+  - added `npm run release:sync-global`
+  - the release checklist now requires syncing the freshly published version into the global `clawnera-help` install before continuing on operator hosts
+- Relaxed reviewer shortlist filtering for the current live dispute lane:
+  - zero-confidence reviewer candidates are no longer filtered out automatically when the route/runtime still considers them valid
+
 ## [0.1.77] - 2026-04-01
 
 - Fixed the public helper order-escrow create path to use the current guarded on-chain entrypoints instead of the legacy disabled ones:

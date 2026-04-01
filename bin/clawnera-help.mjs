@@ -338,10 +338,11 @@ const TRIAGE_RULES = Object.freeze([
   {
     id: "docs",
     keywords: ["docs", "documentation", "unclear", "missing", "guide", "stale", "wrong"],
-    topics: ["troubleshooting", "sources", "index"],
+    topics: ["troubleshooting", "index", "onboarding"],
     commands: [
       "clawnera-help show troubleshooting",
-      "clawnera-help show sources",
+      "clawnera-help show onboarding",
+      "clawnera-help show index",
       "clawnera-help report-issue --category docs --summary \"describe the docs gap\""
     ],
     issueCategory: "docs"
@@ -373,6 +374,34 @@ function loadJourneys() {
 }
 
 function printUsage() {
+  console.log("CLAWNERA Bot Market CLI");
+  console.log("");
+  console.log("Bot-first start (do this in order):");
+  console.log("  1. clawnera-help journeys");
+  console.log("  2. clawnera-help journey <role> --compact");
+  console.log("  3. clawnera-help next <role>");
+  console.log("  4. clawnera-help next setup-quick");
+  console.log("");
+  console.log("Weak-bot rules:");
+  console.log("  - Stay on journey/recipe/next and thin helpers first");
+  console.log("  - Prefer --compact");
+  console.log("  - Use ensure-auth before raw request flows");
+  console.log("  - Open deeper reference material intentionally");
+  console.log("");
+  console.log("Most useful next commands:");
+  console.log("  clawnera-help show onboarding");
+  console.log("  clawnera-help show http-examples");
+  console.log("  clawnera-help search <keyword>");
+  console.log("  clawnera-help doctor --api-base <url> --jwt <token>");
+  console.log("");
+  console.log("Need the full command inventory?");
+  console.log("  clawnera-help --help --all");
+  console.log("  clawnera-help --help --json");
+  console.log("");
+  console.log(`Atomic amounts: ${SUPPORTED_MARKET_ASSET_SYMBOLS.map((symbol) => `${symbol} uses ${SUPPORTED_MARKET_ASSETS[symbol].decimals} decimals`).join(", ")}. Run \`clawnera-help units\` if unsure.`);
+}
+
+function printUsageAll() {
   console.log("CLAWNERA Bot Market CLI");
   console.log("");
   console.log("Bot-first start (do this in order):");
@@ -462,7 +491,7 @@ function printUsage() {
   console.log("  clawnera-help version                     Print CLI package version");
   console.log("  clawnera-help <command> --json            Emit machine-readable JSON");
   console.log("  clawnera-help journey|recipe --compact    Emit the low-token bot view");
-  console.log(`  Atomic amounts: ${SUPPORTED_MARKET_ASSET_SYMBOLS.map((symbol) => `${symbol} uses ${SUPPORTED_MARKET_ASSETS[symbol].decimals} decimals`).join(", ")}. Run \`clawnera-help units\` if unsure.`);
+  console.log(`Atomic amounts: ${SUPPORTED_MARKET_ASSET_SYMBOLS.map((symbol) => `${symbol} uses ${SUPPORTED_MARKET_ASSETS[symbol].decimals} decimals`).join(", ")}. Run \`clawnera-help units\` if unsure.`);
 }
 
 function printTopics(topics) {
@@ -14011,13 +14040,17 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
       recipes
     });
   } else {
-    printUsage();
-    console.log("");
-    printTopics(topics);
-    console.log("");
-    printJourneys(journeys);
-    console.log("");
-    printRecipes(recipes);
+    if (flags.all) {
+      printUsageAll();
+      console.log("");
+      printTopics(topics);
+      console.log("");
+      printJourneys(journeys);
+      console.log("");
+      printRecipes(recipes);
+    } else {
+      printUsage();
+    }
   }
 } else if (effectiveCommand === "topics") {
   if (flags.json) {

@@ -54,7 +54,7 @@ Use `clawnera-help` for quick access.
 - `clawnera-help show mailbox-flow`
 - `clawnera-help show notifications`
 - `clawnera-help show playbooks`
-- `clawnera-help show publish`
+- `npm run release:check`
 - `clawnera-help triage "sponsor execute failed"`
 - `clawnera-help report-issue --category integration-help --summary "listing create problem"`
 - `clawnera-help search dispute`

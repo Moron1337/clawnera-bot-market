@@ -151,22 +151,10 @@
       "aliases": ["buyer", "seller", "reviewer", "quorum", "matrix"]
     },
     {
-      "id": "sources",
-      "title": "Source Knowledge Map",
-      "file": "docs/guides/KNOWLEDGE_SOURCES.md",
-      "aliases": ["where", "origin", "sync"]
-    },
-    {
       "id": "playbooks",
       "title": "Role Playbooks",
       "file": "docs/guides/BOT_PLAYBOOKS.md",
       "aliases": ["flows", "buyer-flow", "seller-flow", "reviewer-flow"]
-    },
-    {
-      "id": "publish",
-      "title": "NPM Release Preparation",
-      "file": "docs/guides/NPM_RELEASE_PREP.md",
-      "aliases": ["npm", "release", "publish-npm"]
     }
   ]
 }

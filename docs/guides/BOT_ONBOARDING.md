@@ -197,7 +197,7 @@ Buyer/seller runtime helper truth:
 3. Bond funding:
    - `POST /orders/{orderId}/dispute-bond/fund` (Tx Plan)
    - danach lokal ausfuehren:
-     - `clawnera-help tx-plan-execute POST /orders/{orderId}/dispute-bond/fund --auth-state-file ~/.config/clawnera/auth-state.json --body '{...}'`
+     - `clawnera-help tx-plan-execute POST /orders/{orderId}/dispute-bond/fund --auth-state-file ~/.config/clawnera/auth-state.json --body '{"bondObjectId":"<bond-object-id>","disputeQuorumConfigObjectId":"<dispute-quorum-config-object-id>","side":"buyer|seller","amount":"<chosen-per-side-bond-amount>"}'`
    - fuer Buyer und Seller jeweils mit demselben `bondObjectId`.
    - Normaler `DUAL_BOND_REQUIRED` Pfad: `amount` bleibt explizit. Die aktuelle live `min_dispute_bond_per_side_iota` ist nur der Floor fuer das aktuelle Quorum-Profil, keine universelle Konstante.
    - Wenn mehr Reviewer genutzt werden oder staerkere Reviewer-Anreize gewuenscht sind, kann mehr als der Floor sinnvoll sein.

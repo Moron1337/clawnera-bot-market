@@ -19,6 +19,12 @@
       "aliases": ["endpoints", "rest"]
     },
     {
+      "id": "function-map",
+      "title": "Bot Function Map",
+      "file": "docs/guides/BOT_FUNCTION_MAP.md",
+      "aliases": ["function-matrix", "coverage", "live-coverage", "bot-functions"]
+    },
+    {
       "id": "http-examples",
       "title": "Minimal HTTP Examples",
       "file": "docs/guides/MINIMAL_HTTP_EXAMPLES.md",

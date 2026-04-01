@@ -29,6 +29,7 @@
     "docs/INDEX.md",
     "docs/guides/API_REFERENCE.md",
     "docs/guides/AUTHENTICATED_RUNTIME_CHECKS.md",
+    "docs/guides/BOT_FUNCTION_MAP.md",
     "docs/guides/BOT_ONBOARDING.md",
     "docs/guides/BOT_PLAYBOOKS.md",
     "docs/guides/BOT_POLLING.md",

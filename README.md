@@ -87,6 +87,7 @@ Current buyer/seller helper truth:
 - it does not build transactions
 - it does not include reviewer-self or operator/admin lifecycle
 - `docs/guides/API_REFERENCE.md` is the one technical place for the exact helper names
+- `docs/guides/BOT_FUNCTION_MAP.md` is the live bot-lane inventory plus current test coverage status
 
 ## Current Focus
 - Escrow payment coins: only `IOTA` and `CLAW`.

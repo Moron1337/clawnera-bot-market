@@ -2628,6 +2628,7 @@ test("mailbox-events retries with a smaller limit after transient event-feed fai
 
 test("mailbox-events falls back to direct chain reads when the event feed is empty", async () => {
   const packageId = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  const mailboxPackageId = "0x2222222222222222222222222222222222222222222222222222222222222222";
   const mailboxObjectId = "0x9999999999999999999999999999999999999999999999999999999999999999";
   const mock = await startMockServer({
     "GET /orders/order-1/mailbox": () => ({
@@ -2659,8 +2660,24 @@ test("mailbox-events falls back to direct chain reads when the event feed is emp
       },
     }),
     "POST /rpc": (request) => {
+      const method = request.body?.method;
+      if (method === "iota_getObject") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? "object",
+            result: {
+              data: {
+                objectId: mailboxObjectId,
+                type: `${mailboxPackageId}::order_mailbox::OrderMailbox`,
+              },
+            },
+          },
+        };
+      }
       const moveEventType = request.body?.params?.[0]?.MoveEventType;
-      if (moveEventType === `${packageId}::order_mailbox::SignalPosted`) {
+      if (moveEventType === `${mailboxPackageId}::order_mailbox::SignalPosted`) {
         return {
           status: 200,
           body: {
@@ -2673,7 +2690,7 @@ test("mailbox-events falls back to direct chain reads when the event feed is emp
                     txDigest: "tx-posted-chain",
                     eventSeq: "7",
                   },
-                  type: `${packageId}::order_mailbox::SignalPosted`,
+                  type: `${mailboxPackageId}::order_mailbox::SignalPosted`,
                   parsedJson: {
                     mailbox_id: mailboxObjectId,
                     order_id: "order-1",
@@ -2693,7 +2710,7 @@ test("mailbox-events falls back to direct chain reads when the event feed is emp
           },
         };
       }
-      if (moveEventType === `${packageId}::order_mailbox::SignalAcked`) {
+      if (moveEventType === `${mailboxPackageId}::order_mailbox::SignalAcked`) {
         return {
           status: 200,
           body: {
@@ -2706,7 +2723,7 @@ test("mailbox-events falls back to direct chain reads when the event feed is emp
                     txDigest: "tx-acked-chain",
                     eventSeq: "8",
                   },
-                  type: `${packageId}::order_mailbox::SignalAcked`,
+                  type: `${mailboxPackageId}::order_mailbox::SignalAcked`,
                   parsedJson: {
                     mailbox_id: mailboxObjectId,
                     order_id: "order-1",

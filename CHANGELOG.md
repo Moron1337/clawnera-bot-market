@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.80] - 2026-04-01
+
+- Corrected the live mailbox-event fallback for current testnet/manual order flows:
+  - `mailbox-events` now derives the `order_mailbox` event package from the live mailbox object type instead of assuming the marketplace package id from `/policy/fees`
+  - if the marketplace package and mailbox package differ on-chain, the helper now still finds the exact `SignalPosted` / `SignalAcked` events
+- Added regression coverage for the real mismatch case where:
+  - `/policy/fees` returns one package id
+  - the mailbox object type resolves to a different `order_mailbox` package
+  - only the mailbox-package event query returns the live events
+
 ## [0.1.79] - 2026-04-01
 
 - Hardened the live mailbox helper path so weak bots can still recover exact mailbox signal history when the API event feed is temporarily empty:

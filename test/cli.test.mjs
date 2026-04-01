@@ -316,6 +316,15 @@ test("listing-create help explains display values and categories", () => {
   assert.match(result.stdout, /--use-default-expiry/);
 });
 
+test("listing-deposit-create help explains matching display-value mode", () => {
+  const result = runCli(["listing-deposit-create", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Listing deposit helper/);
+  assert.match(result.stdout, /--display-values/);
+  assert.match(result.stdout, /Without --display-values, milestone and budget numbers must already be atomic integers/);
+  assert.match(result.stdout, /Use the returned listingDepositObjectId as listingDepositObjectId on the later clawnera-help listing-create call/);
+});
+
 test("listing lifecycle helpers explain canonical POST routes", () => {
   const cancelResult = runCli(["listing-cancel", "--help"]);
   assert.equal(cancelResult.status, 0);
@@ -714,7 +723,7 @@ test("recipe compact output focuses on immediate command, readback, and next", (
   assert.match(result.stdout, /^recipe:seller-create-listing/m);
   assert.match(result.stdout, /^do:clawnera-help request GET \/policy\/fees /m);
   assert.match(result.stdout, /listing-categories --compact/);
-  assert.match(result.stdout, /listing-deposit-create /);
+  assert.match(result.stdout, /listing-deposit-create .* --display-values/);
   assert.match(result.stdout, /--listing-mode OFFER/);
   assert.match(result.stdout, /--category <canonical-category>/);
   assert.match(result.stdout, /--display-values/);
@@ -732,7 +741,9 @@ test("request recipe compact output uses explicit request mode", () => {
   const result = runCli(["recipe", "buyer-create-request", "--compact"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^recipe:buyer-create-request/m);
+  assert.match(result.stdout, /^do:clawnera-help request GET \/policy\/fees /m);
   assert.match(result.stdout, /listing-categories --compact --listing-mode REQUEST/);
+  assert.match(result.stdout, /listing-deposit-create .* --display-values/);
   assert.match(result.stdout, /listing-create .* --listing-mode REQUEST /);
   assert.match(result.stdout, /--expires-in-days 7/);
   assert.match(result.stdout, /--milestone-due-dates/);

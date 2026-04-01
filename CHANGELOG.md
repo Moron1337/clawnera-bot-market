@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.76] - 2026-04-01
+
+- Fixed the live listing-deposit/listing-create weak-bot path so whole-user-unit runs stay canonically bound:
+  - `listing-deposit-create` help, compact recipes, and public examples now use `--display-values` when the paired `listing-create` flow also uses `--display-values`
+  - the public next-hint for `listing_deposit_required` now points bots at the same display-value-safe deposit path
+  - minimal HTTP and live manual guides now say explicitly that deposit-create and listing-create must use the same unit mode
+
 ## [0.1.75] - 2026-04-01
 
 - Made the public seller/request create path explicitly deposit-aware for weak bots:

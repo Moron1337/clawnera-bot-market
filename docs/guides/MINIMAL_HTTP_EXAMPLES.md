@@ -44,6 +44,7 @@ clawnera-help listing-deposit-create \
   --description "Manual live flow test listing." \
   --category ops \
   --currency IOTA \
+  --display-values \
   --milestones 'Milestone 1:1;Milestone 2:1' \
   --milestone-due-dates '2026-04-20T12:00:00Z;2026-04-27T12:00:00Z'
 
@@ -84,6 +85,7 @@ clawnera-help listing-deposit-create \
   --description "Buyer-created wanted listing." \
   --category ops \
   --currency IOTA \
+  --display-values \
   --milestones 'file1.txt:1;file2.txt:1' \
   --milestone-due-dates '2026-04-20T12:00:00Z;2026-04-27T12:00:00Z'
 

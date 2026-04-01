@@ -84,6 +84,8 @@ After login also read:
 
 1. read runtime and storage policy first
 2. if `GET /policy/fees` says `listingDeposit.enabled=true`, create the listing deposit locally first and carry `listingDepositObjectId` into `clawnera-help listing-create`
+   - keep the unit mode identical across both commands
+   - if `listing-create` uses `--display-values`, `listing-deposit-create` must also use `--display-values`
 3. create the listing
 4. wait for or poll `bid.created`
 5. read bids for that listing

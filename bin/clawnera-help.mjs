@@ -678,9 +678,9 @@ function compactRecipeCommand(recipe) {
     case "reputation-init":
       return `clawnera-help reputation-init ${auth}`;
     case "seller-create-listing":
-      return `clawnera-help request GET /policy/fees ${auth} && clawnera-help listing-categories --compact && if listingDeposit.enabled=true then clawnera-help listing-deposit-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' && clawnera-help listing-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' --listing-deposit-object-id <listingDepositObjectId>; else clawnera-help listing-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'; fi`;
+      return `clawnera-help request GET /policy/fees ${auth} && clawnera-help listing-categories --compact && if listingDeposit.enabled=true then clawnera-help listing-deposit-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' && clawnera-help listing-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' --listing-deposit-object-id <listingDepositObjectId>; else clawnera-help listing-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'; fi`;
     case "buyer-create-request":
-      return `clawnera-help request GET /policy/fees ${auth} && clawnera-help listing-categories --compact --listing-mode REQUEST && if listingDeposit.enabled=true then clawnera-help listing-deposit-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' && clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' --listing-deposit-object-id <listingDepositObjectId>; else clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'; fi`;
+      return `clawnera-help request GET /policy/fees ${auth} && clawnera-help listing-categories --compact --listing-mode REQUEST && if listingDeposit.enabled=true then clawnera-help listing-deposit-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' && clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' --listing-deposit-object-id <listingDepositObjectId>; else clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'; fi`;
     case "creator-cancel-listing":
       return `clawnera-help listing-cancel ${auth} --listing-id <listingId>`;
     case "creator-renew-listing":
@@ -5642,12 +5642,17 @@ function listingCreateUsageLines() {
 function listingDepositCreateUsageLines() {
   return [
     "Listing deposit helper:",
-    `- Usage: clawnera-help listing-deposit-create --listing-mode <OFFER|REQUEST> --title <text> --description <text> --category <slug> --currency <${SUPPORTED_MARKET_ASSET_SYMBOLS.join("|")}> --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' [auth options]`,
+    `- Usage: clawnera-help listing-deposit-create --listing-mode <OFFER|REQUEST> --title <text> --description <text> --category <slug> --currency <${SUPPORTED_MARKET_ASSET_SYMBOLS.join("|")}> [--display-values] --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' [auth options]`,
     "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
     "- Reads /policy/fees, resolves the live listing-deposit config, computes the canonical listingRef digest locally, then builds `listing_deposit::create_listing_deposit_iota_entry` locally",
     "- Optional explicit ref: --listing-ref-digest-hex <64-hex> if you already computed the exact canonical binding digest",
     "- Optional payment override: --payment-coin-object-id <0x...>",
     "- Optional outputs: --proof-out <file> --dry-run --shared",
+    "- Optional human mode: add --display-values when the later listing-create will also use whole-user units so both commands hash the same canonical listingRef",
+    ...buildCurrencyUnitLines("IOTA"),
+    ...buildCurrencyUnitLines("CLAW"),
+    "- Without --display-values, milestone and budget numbers must already be atomic integers",
+    "- If you are unsure, run: clawnera-help units",
     "- Use the returned listingDepositObjectId as listingDepositObjectId on the later clawnera-help listing-create call",
   ];
 }
@@ -6266,7 +6271,7 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
         "detail=public_listing_create_requires_reputation_init_plus_any_live_deposit_policy_preflight",
         `next_hint=clawnera-help reputation-init --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
         `next_hint=clawnera-help request GET /policy/fees --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
-        `next_hint=clawnera-help listing-deposit-create --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file> --listing-mode ${listingMode || "<OFFER|REQUEST>"} --title '<title>' --description '<description>' --category <slug> --currency <IOTA|CLAW> --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'`,
+        `next_hint=clawnera-help listing-deposit-create --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file> --listing-mode ${listingMode || "<OFFER|REQUEST>"} --title '<title>' --description '<description>' --category <slug> --currency <IOTA|CLAW> --display-values --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'`,
         `next_hint=clawnera-help recipe ${listingMode === "REQUEST" ? "buyer-create-request" : "seller-create-listing"} --compact`,
       ];
     case "missing_listing_expiry_choice":

@@ -55,6 +55,8 @@ Do not batch multiple live writes together just because the API allows them.
    - `GET /policy/fees`
    - if storage is relevant: `GET /policy/storage`
 2. If `GET /policy/fees` says `listingDeposit.enabled=true`, run `clawnera-help listing-deposit-create` first and keep the returned `listingDepositObjectId`.
+   - use the same unit mode on both commands
+   - if `listing-create` will use `--display-values`, `listing-deposit-create` must also use `--display-values`
 3. Create the listing and pass `--listing-deposit-object-id <listingDepositObjectId>` when the deposit path is active.
 4. Watch for `bid.created`.
 5. Read bids for the listing.

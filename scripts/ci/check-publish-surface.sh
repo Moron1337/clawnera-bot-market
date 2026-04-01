@@ -44,12 +44,12 @@ if (hits.length > 0) {
 console.log("publish_surface_guard_ok");
 NODE
 
-if grep -q '`sources`' docs/INDEX.md; then
+if grep -Fq -- "\`sources\`" docs/INDEX.md; then
   echo "index_still_mentions_removed_default_topic: sources" >&2
   exit 1
 fi
 
-if grep -q '`publish`' docs/INDEX.md; then
+if grep -Fq -- "\`publish\`" docs/INDEX.md; then
   echo "index_still_mentions_removed_default_topic: publish" >&2
   exit 1
 fi

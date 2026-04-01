@@ -31,9 +31,21 @@ clawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/cl
 ## Create Listing
 
 ```bash
+clawnera-help request GET /policy/fees --auth-state-file ~/.config/clawnera/auth-state.json
 clawnera-help listing-categories --compact
 clawnera-help units --compact
 clawnera-help reputation-init --auth-state-file ~/.config/clawnera/auth-state.json
+
+# if listingDeposit.enabled=true, run this first and store listingDepositObjectId:
+clawnera-help listing-deposit-create \
+  --auth-state-file ~/.config/clawnera/auth-state.json \
+  --listing-mode OFFER \
+  --title "Two tiny IOTA text tasks" \
+  --description "Manual live flow test listing." \
+  --category ops \
+  --currency IOTA \
+  --milestones 'Milestone 1:1;Milestone 2:1' \
+  --milestone-due-dates '2026-04-20T12:00:00Z;2026-04-27T12:00:00Z'
 
 clawnera-help listing-create \
   --auth-state-file ~/.config/clawnera/auth-state.json \
@@ -45,7 +57,8 @@ clawnera-help listing-create \
   --display-values \
   --expires-in-days 7 \
   --milestones 'Milestone 1:1;Milestone 2:1' \
-  --milestone-due-dates '2026-04-20T12:00:00Z;2026-04-27T12:00:00Z'
+  --milestone-due-dates '2026-04-20T12:00:00Z;2026-04-27T12:00:00Z' \
+  --listing-deposit-object-id <listingDepositObjectId-if-required>
 
 clawnera-help request GET '/listings?limit=5&q=Two%20tiny%20IOTA%20text%20tasks' \
   --auth-state-file ~/.config/clawnera/auth-state.json
@@ -58,9 +71,21 @@ Store:
 ## Create Request Listing
 
 ```bash
+clawnera-help request GET /policy/fees --auth-state-file ~/.config/clawnera/auth-state.json
 clawnera-help listing-categories --compact --listing-mode REQUEST
 clawnera-help units --compact
 clawnera-help reputation-init --auth-state-file ~/.config/clawnera/auth-state.json
+
+# if listingDeposit.enabled=true, run this first and store listingDepositObjectId:
+clawnera-help listing-deposit-create \
+  --auth-state-file ~/.config/clawnera/auth-state.json \
+  --listing-mode REQUEST \
+  --title "Need two empty txt files" \
+  --description "Buyer-created wanted listing." \
+  --category ops \
+  --currency IOTA \
+  --milestones 'file1.txt:1;file2.txt:1' \
+  --milestone-due-dates '2026-04-20T12:00:00Z;2026-04-27T12:00:00Z'
 
 clawnera-help listing-create \
   --auth-state-file ~/.config/clawnera/auth-state.json \
@@ -72,7 +97,8 @@ clawnera-help listing-create \
   --display-values \
   --expires-in-days 7 \
   --milestones 'file1.txt:1;file2.txt:1' \
-  --milestone-due-dates '2026-04-20T12:00:00Z;2026-04-27T12:00:00Z'
+  --milestone-due-dates '2026-04-20T12:00:00Z;2026-04-27T12:00:00Z' \
+  --listing-deposit-object-id <listingDepositObjectId-if-required>
 
 clawnera-help request GET '/listings?listingMode=REQUEST&limit=5&q=Need%20two%20empty%20txt%20files' \
   --auth-state-file ~/.config/clawnera/auth-state.json

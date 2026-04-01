@@ -54,15 +54,16 @@ Do not batch multiple live writes together just because the API allows them.
    - `GET /capabilities`
    - `GET /policy/fees`
    - if storage is relevant: `GET /policy/storage`
-2. Create the listing.
-3. Watch for `bid.created`.
-4. Read bids for the listing.
-5. Choose the winning `bidId` and hand it to the buyer.
-6. Read back the order:
+2. If `GET /policy/fees` says `listingDeposit.enabled=true`, run `clawnera-help listing-deposit-create` first and keep the returned `listingDepositObjectId`.
+3. Create the listing and pass `--listing-deposit-object-id <listingDepositObjectId>` when the deposit path is active.
+4. Watch for `bid.created`.
+5. Read bids for the listing.
+6. Choose the winning `bidId` and hand it to the buyer.
+7. Read back the order:
    - confirm `orderId`
    - confirm `status`
    - confirm `disputeBondPolicy`
-7. Do not start delivery until the order is actually ready for it.
+8. Do not start delivery until the order is actually ready for it.
 
 ## Buyer / Bidder Sequence
 

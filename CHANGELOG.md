@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.75] - 2026-04-01
+
+- Made the public seller/request create path explicitly deposit-aware for weak bots:
+  - compact `recipe seller-create-listing --compact` now starts with `GET /policy/fees`
+  - compact `recipe buyer-create-request --compact` now does the same
+  - both compact recipes now show the conditional `listing-deposit-create -> listing-create --listing-deposit-object-id` path instead of implying that a blind direct `listing-create` is always safe
+- Synced the bot-facing live guides and minimal HTTP examples so the first listing/create recipes no longer hide the live listing-deposit preflight when the runtime enables it.
+
 ## [0.1.74] - 2026-04-01
 
 - Hardened reviewer onboarding and rotation so the public helper now fails closed until the same non-expired transport key-agreement record is remotely readable before:

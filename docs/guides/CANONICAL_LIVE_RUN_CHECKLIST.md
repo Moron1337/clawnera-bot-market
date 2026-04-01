@@ -83,18 +83,19 @@ After login also read:
 ## Seller Path
 
 1. read runtime and storage policy first
-2. create the listing
-3. wait for or poll `bid.created`
-4. read bids for that listing
-5. choose the winner and hand the exact `bidId` to that buyer
-6. read back the order:
-   - `orderId`
-   - `status`
-   - `disputeBondPolicy`
-   - `disputeBondState`
-   - `disputeBondGuidance` when present
-7. stop if the order is still waiting on bond or escrow funding
-8. only start delivery when the order is actually ready for it
+2. if `GET /policy/fees` says `listingDeposit.enabled=true`, create the listing deposit locally first and carry `listingDepositObjectId` into `clawnera-help listing-create`
+3. create the listing
+4. wait for or poll `bid.created`
+5. read bids for that listing
+6. choose the winner and hand the exact `bidId` to that buyer
+7. read back the order:
+  - `orderId`
+  - `status`
+  - `disputeBondPolicy`
+  - `disputeBondState`
+  - `disputeBondGuidance` when present
+8. stop if the order is still waiting on bond or escrow funding
+9. only start delivery when the order is actually ready for it
 
 ## Buyer Path
 

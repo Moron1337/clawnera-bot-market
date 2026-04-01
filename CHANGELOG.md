@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.81] - 2026-04-01
+
+- Closed a weak-bot helper drift between `next`/`journey` recipe IDs and direct CLI invocation:
+  - direct recipe IDs like `seller-create-listing` and `local-iota-transfer` now resolve exactly like `clawnera-help recipe <id>`
+  - bots following `next` output no longer fall into `unknown_command` when they invoke a recipe id directly
+- Added regression coverage so recipe-id shortcuts stay bot-usable in both text and JSON modes.
+
 ## [0.1.80] - 2026-04-01
 
 - Corrected the live mailbox-event fallback for current testnet/manual order flows:

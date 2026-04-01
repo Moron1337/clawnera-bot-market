@@ -196,6 +196,21 @@ test("help all json output includes full inventory", () => {
   assert.ok(Array.isArray(payload.recipes));
 });
 
+test("recipe ids can be invoked directly as bot-first shortcuts", () => {
+  const sellerResult = runCli(["seller-create-listing"]);
+  assert.equal(sellerResult.status, 0);
+  assert.match(sellerResult.stdout, /# Seller Create Listing/);
+  assert.match(sellerResult.stdout, /recipeId: seller-create-listing/);
+
+  const transferResult = runCli(["local-iota-transfer", "--json"]);
+  assert.equal(transferResult.status, 0);
+  const payload = JSON.parse(transferResult.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.recipe?.id, "local-iota-transfer");
+  assert.ok(Array.isArray(payload.recipe?.steps));
+  assert.ok(payload.recipe.steps.some((step) => /iota-prepare-transfer/.test(step)));
+});
+
 test("wallet list help prints usage", () => {
   const result = runCli(["wallet-list", "--help"]);
   assert.equal(result.status, 0);

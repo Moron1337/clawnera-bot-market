@@ -16188,7 +16188,21 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(version);
   }
 } else {
-  console.error(`unknown_command: ${effectiveCommand}`);
-  printUsage();
-  process.exitCode = 1;
+  const directRecipe = resolveRecipe(recipes, parsedCommand);
+  if (directRecipe) {
+    if (flags.json) {
+      printJson({
+        ok: true,
+        recipe: directRecipe
+      });
+    } else if (flags.compact) {
+      printRecipeCompact(directRecipe);
+    } else {
+      printRecipe(directRecipe);
+    }
+  } else {
+    console.error(`unknown_command: ${effectiveCommand}`);
+    printUsage();
+    process.exitCode = 1;
+  }
 }

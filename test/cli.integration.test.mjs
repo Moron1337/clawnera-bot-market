@@ -2626,6 +2626,145 @@ test("mailbox-events retries with a smaller limit after transient event-feed fai
   }
 });
 
+test("mailbox-events falls back to direct chain reads when the event feed is empty", async () => {
+  const packageId = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  const mailboxObjectId = "0x9999999999999999999999999999999999999999999999999999999999999999";
+  const mock = await startMockServer({
+    "GET /orders/order-1/mailbox": () => ({
+      status: 200,
+      body: {
+        mailboxObjectId,
+      },
+    }),
+    "GET /events?scope=all&type=mailbox.signal_posted&limit=20": () => ({
+      status: 200,
+      body: {
+        items: [],
+      },
+    }),
+    "GET /events?scope=all&type=mailbox.signal_acked&limit=20": () => ({
+      status: 200,
+      body: {
+        items: [],
+      },
+    }),
+    "GET /policy/fees": () => ({
+      status: 200,
+      body: {
+        policy: {
+          chainConfig: {
+            marketplacePackageId: packageId,
+          },
+        },
+      },
+    }),
+    "POST /rpc": (request) => {
+      const moveEventType = request.body?.params?.[0]?.MoveEventType;
+      if (moveEventType === `${packageId}::order_mailbox::SignalPosted`) {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: "posted",
+            result: {
+              data: [
+                {
+                  id: {
+                    txDigest: "tx-posted-chain",
+                    eventSeq: "7",
+                  },
+                  type: `${packageId}::order_mailbox::SignalPosted`,
+                  parsedJson: {
+                    mailbox_id: mailboxObjectId,
+                    order_id: "order-1",
+                    seq: "2",
+                    signal_type: "1",
+                    sender: "0xseller",
+                    sender_role: "1",
+                    ciphertext_hash: "aa".repeat(32),
+                    payload_ref: "ipfs://payload-chain",
+                    created_at_ms: "1773914400000",
+                  },
+                },
+              ],
+              hasNextPage: false,
+              nextCursor: null,
+            },
+          },
+        };
+      }
+      if (moveEventType === `${packageId}::order_mailbox::SignalAcked`) {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: "acked",
+            result: {
+              data: [
+                {
+                  id: {
+                    txDigest: "tx-acked-chain",
+                    eventSeq: "8",
+                  },
+                  type: `${packageId}::order_mailbox::SignalAcked`,
+                  parsedJson: {
+                    mailbox_id: mailboxObjectId,
+                    order_id: "order-1",
+                    acked_seq: "2",
+                    acker: "0xbuyer",
+                    acker_role: "0",
+                    acked_at_ms: "1773914460000",
+                  },
+                },
+              ],
+              hasNextPage: false,
+              nextCursor: null,
+            },
+          },
+        };
+      }
+      return {
+        status: 200,
+        body: {
+          jsonrpc: "2.0",
+          id: "empty",
+          result: {
+            data: [],
+            hasNextPage: false,
+            nextCursor: null,
+          },
+        },
+      };
+    },
+  });
+
+  try {
+    const result = await runCli([
+      "mailbox-events",
+      "--api-base",
+      mock.baseUrl,
+      "--rpc-url",
+      `${mock.baseUrl}/rpc`,
+      "--jwt",
+      "test-jwt",
+      "--order-id",
+      "order-1",
+      "--json",
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.fallbackUsed, "onchain_rpc");
+    assert.equal(payload.latestPostedSeq, 2);
+    assert.equal(payload.latestAckByRole.buyer, 2);
+    assert.equal(payload.events.length, 2);
+    assert.equal(payload.events[0].category, "posted");
+    assert.equal(payload.events[1].category, "acked");
+  } finally {
+    await mock.close();
+  }
+});
+
 test("reviewer-shortlist builds a full dispute-open body and warns on stale context status", async () => {
   const mock = await startMockServer({
     "POST /rpc": (request) => {

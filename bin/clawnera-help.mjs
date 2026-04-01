@@ -35,6 +35,7 @@ import {
   extractCreatedObjects,
   extractMailboxSignalAcked,
   extractMailboxSignalPosted,
+  listMailboxEventFeedItems,
   resolveClawdexChainConfig,
   resolveClawdexReputationProfileObjectIdByOwner,
   dryRunTransaction,
@@ -5644,6 +5645,7 @@ function listingDepositCreateUsageLines() {
     "Listing deposit helper:",
     `- Usage: clawnera-help listing-deposit-create --listing-mode <OFFER|REQUEST> --title <text> --description <text> --category <slug> --currency <${SUPPORTED_MARKET_ASSET_SYMBOLS.join("|")}> [--display-values] --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' [auth options]`,
     "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
+    "- Optional chain override: --rpc-url <url> when your local IOTA CLI default is not the intended network",
     "- Reads /policy/fees, resolves the live listing-deposit config, computes the canonical listingRef digest locally, then builds `listing_deposit::create_listing_deposit_iota_entry` locally",
     "- Optional explicit ref: --listing-ref-digest-hex <64-hex> if you already computed the exact canonical binding digest",
     "- Optional payment override: --payment-coin-object-id <0x...>",
@@ -5893,6 +5895,7 @@ async function runListingDepositCreate(commandArgs) {
   }
   const unexpectedOptions = findUnexpectedOptions(options, [
     ...FORWARDED_REQUEST_OPTION_NAMES,
+    "rpc-url",
     "alias",
     "address",
     "keystore-path",
@@ -7309,7 +7312,46 @@ async function fetchMailboxEventsSnapshot(options, orderId, { timeoutMs, limit, 
       .map(normalizeMailboxAckedEvent);
   }
 
-  const events = postedEvents.concat(ackedEvents).sort((left, right) => mailboxEventSortKey(left) - mailboxEventSortKey(right));
+  let events = postedEvents.concat(ackedEvents).sort((left, right) => mailboxEventSortKey(left) - mailboxEventSortKey(right));
+  let fallbackUsed = null;
+  if (events.length === 0) {
+    try {
+      const feesCall = await callApiRoute({
+        method: "GET",
+        rawPath: "/policy/fees",
+        options,
+        timeoutMs: effectiveTimeoutMs,
+      });
+      if (feesCall.result.ok) {
+        const packageId = extractPackageIdFromPolicyResponse(feesCall.result.body);
+        const chainItems = await listMailboxEventFeedItems({
+          packageId,
+          orderId,
+          mailboxObjectId,
+          limit: effectiveLimit,
+          includeAcked: effectiveIncludeAcked,
+          network: options.network,
+          rpcUrl: options["rpc-url"],
+        });
+        const chainPostedEvents = chainItems
+          .filter((item) => item?.eventType === "mailbox.signal_posted")
+          .map(normalizeMailboxPostedEvent);
+        const chainAckedEvents = chainItems
+          .filter((item) => item?.eventType === "mailbox.signal_acked")
+          .map(normalizeMailboxAckedEvent);
+        if (chainPostedEvents.length > 0 || chainAckedEvents.length > 0) {
+          postedEvents.splice(0, postedEvents.length, ...chainPostedEvents);
+          ackedEvents = chainAckedEvents;
+          events = postedEvents
+            .concat(ackedEvents)
+            .sort((left, right) => mailboxEventSortKey(left) - mailboxEventSortKey(right));
+          fallbackUsed = "onchain_rpc";
+        }
+      }
+    } catch {
+      // Keep the empty API feed result if on-chain fallback is unavailable.
+    }
+  }
   const latestPostedSeq = postedEvents.reduce((max, event) => {
     const seq = Number.parseInt(String(event.seq ?? ""), 10);
     return Number.isFinite(seq) && seq > max ? seq : max;
@@ -7337,6 +7379,7 @@ async function fetchMailboxEventsSnapshot(options, orderId, { timeoutMs, limit, 
     latestAckByRole,
     eventsOut: resolvedEventsOut || null,
     events,
+    fallbackUsed,
     ...(usedLimit !== effectiveLimit ? { downgradedFromLimit: effectiveLimit } : {}),
     note:
       "Current runtime can map seller DELIVERABLE_READY signals back as CHECKPOINT in the event feed; use payloadRef + ciphertextHash + seq, not only the label.",

@@ -321,6 +321,7 @@ test("listing-deposit-create help explains matching display-value mode", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Listing deposit helper/);
   assert.match(result.stdout, /--display-values/);
+  assert.match(result.stdout, /--rpc-url <url>/);
   assert.match(result.stdout, /Without --display-values, milestone and budget numbers must already be atomic integers/);
   assert.match(result.stdout, /Use the returned listingDepositObjectId as listingDepositObjectId on the later clawnera-help listing-create call/);
 });

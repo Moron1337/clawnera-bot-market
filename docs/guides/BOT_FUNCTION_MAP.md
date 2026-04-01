@@ -68,26 +68,24 @@ Use it for two things:
 | Linked deliverable evidence | `clawnera-help dispute-evidence-publish` | `live-green` | Buyer/seller publish; reviewers read via dispute-scoped evidence routes. |
 | Evidence list / content / decrypt | `dispute-evidence-list`, `dispute-evidence-content`, `dispute-evidence-decrypt` | `live-green` | Covered live as reviewer1. |
 | Mailbox evidence export | `clawnera-help mailbox-evidence-export` | `live-green` | Covered live, including subsequent upload + supplemental publish. |
-| Supplemental bundle build / publish | `dispute-evidence-bundle-build`, `dispute-evidence-publish --kind supplemental-bundle` | `live-green-partial` | `MAILBOX_COORDINATION` supplemental flow is live-green; the generic build helper itself should still be exercised directly with another evidence class. |
+| Supplemental bundle build / publish | `dispute-evidence-bundle-build`, `dispute-evidence-publish --kind supplemental-bundle` | `live-green` | Covered live via `MAILBOX_COORDINATION` publish plus a direct `SUPPORTING_EXHIBIT` bundle build. |
 | Vote prepare | `clawnera-help reviewer-vote-prepare` | `live-green` | Covered for reviewer1/reviewer2/reviewer4. |
 | Vote commit | `tx-plan-execute POST /disputes/{caseId}/votes/commit` | `live-green` | Covered live. |
-| Vote reveal | `tx-plan-execute POST /disputes/{caseId}/votes/reveal` | `live-green-windowed` | Can only complete after the live `commitDeadlineMs`. |
-| Finalize | `tx-plan-execute POST /disputes/{caseId}/finalize` | `live-green-windowed` | Depends on reveal completion and challenge timing. |
+| Vote reveal | `tx-plan-execute POST /disputes/{caseId}/votes/reveal` | `live-green` | Covered live on the reviewer1/reviewer2/reviewer4 quorum case after the real commit window opened. |
+| Finalize | `tx-plan-execute POST /disputes/{caseId}/finalize` | `live-green` | Covered live with helper-managed wait through the challenge window. |
 | Fallback timeout | `tx-plan-execute POST /disputes/{caseId}/fallback/timeout` | `pending` | Separate fallback lane; not yet covered in the current run. |
-| Resolve escrow | `tx-plan-execute POST /disputes/{caseId}/resolve-escrow` | `live-green-windowed` | Must stay on the same buyer/seller wallet as finalize while compat fallback remains possible. |
-| Reviewer claim metrics | `tx-plan-execute POST /reviewers/me/claim-metrics` | `live-green-windowed` | Follows dispute closeout. Majority payouts already happen at finalize. |
+| Resolve escrow | `tx-plan-execute POST /disputes/{caseId}/resolve-escrow` | `live-green` | Covered live on the same buyer wallet immediately after finalize; resulting order state reached `COMPLETED`. |
+| Reviewer claim metrics | `tx-plan-execute POST /reviewers/me/claim-metrics` | `live-green` | Covered live for reviewer1/reviewer2/reviewer4 on the freshly closed case. Majority payouts still happen at finalize. |
 
 ## Current Live Blockers
 
-- The current active case is time-gated, not logic-gated:
-  - `commitDeadlineMs`: `2026-04-01 18:45:44 UTC`
-  - `revealDeadlineMs`: `2026-04-01 22:45:44 UTC`
+- No main-path blocker remains on the current quorum closeout lane; the end-to-end disputed order path is now live-green.
 - Reviewer stake is a real live precondition. A reviewer below the current minimum will fail on `reviewers/accept` even if the invite exists.
 - `POST /orders/{orderId}/dispute-bond/fund` is not a thin `amount`-only helper body on the live tx-plan route. It needs the full four-field body listed above.
+- The remaining uncovered closeout lane is `fallback/timeout`, which still needs a genuinely eligible timeout case instead of a forced synthetic shortcut.
 
 ## Recommended Completion Order
 
-1. finish the current `votes/reveal -> finalize -> resolve-escrow -> claim-metrics` closeout on the open live case
-2. exercise one explicit fallback lane (`fallback/timeout`)
-3. exercise one more direct supplemental class via `dispute-evidence-bundle-build` outside the mailbox shortcut
-4. only then move to local-LLM or external-user bot traffic
+1. exercise one explicit fallback lane (`fallback/timeout`)
+2. then move to local-LLM bot traffic
+3. only after that widen to external-user bot traffic

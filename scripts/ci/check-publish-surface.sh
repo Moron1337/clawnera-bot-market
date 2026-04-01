@@ -5,7 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 tmp_json="$(mktemp)"
-trap 'rm -f "$tmp_json"' EXIT
+tmp_dir="$(mktemp -d)"
+trap 'rm -f "$tmp_json"; rm -rf "$tmp_dir"' EXIT
 
 npm pack --ignore-scripts --dry-run --json > "$tmp_json"
 
@@ -73,4 +74,41 @@ if grep -q 'clawnera-help sync --require-sources' README.md; then
   exit 1
 fi
 
+node ./bin/clawnera-help.mjs --help --json > "$tmp_dir/help-min.json"
+node ./bin/clawnera-help.mjs --help --all --json > "$tmp_dir/help-all.json"
+node ./bin/clawnera-help.mjs --help > "$tmp_dir/help-min.txt"
+
+node - "$tmp_dir/help-min.json" "$tmp_dir/help-all.json" <<'NODE'
+const fs = require("node:fs");
+
+const minPath = process.argv[2];
+const allPath = process.argv[3];
+const min = JSON.parse(fs.readFileSync(minPath, "utf8"));
+const all = JSON.parse(fs.readFileSync(allPath, "utf8"));
+
+for (const forbidden of ["commands", "topics", "journeys", "recipes"]) {
+  if (Object.prototype.hasOwnProperty.call(min, forbidden)) {
+    console.error(`minimal_help_exposes_broad_inventory: ${forbidden}`);
+    process.exit(1);
+  }
+}
+
+for (const required of ["commands", "topics", "journeys", "recipes"]) {
+  if (!Object.prototype.hasOwnProperty.call(all, required)) {
+    console.error(`full_help_missing_inventory_lane: ${required}`);
+    process.exit(1);
+  }
+}
+NODE
+
+grep -q 'clawnera-help show onboarding' "$tmp_dir/help-min.txt"
+grep -q 'clawnera-help show http-examples' "$tmp_dir/help-min.txt"
+grep -q 'clawnera-help show canonical-flow' "$tmp_dir/help-min.txt"
+grep -q 'clawnera-help search <keyword>' "$tmp_dir/help-min.txt"
+if grep -q 'doctor --api-base' "$tmp_dir/help-min.txt"; then
+  echo "default_text_help_still_exposes_doctor_in_minimal_path" >&2
+  exit 1
+fi
+
 echo "default_surface_docs_guard_ok"
+echo "default_machine_help_guard_ok"

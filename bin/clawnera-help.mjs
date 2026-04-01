@@ -373,44 +373,52 @@ function loadJourneys() {
   return Array.isArray(parsed.journeys) ? parsed.journeys : [];
 }
 
+const DEFAULT_MINIMAL_HELP = Object.freeze({
+  orderedStart: Object.freeze([
+    "clawnera-help journeys",
+    "clawnera-help journey <role> --compact",
+    "clawnera-help next <role>",
+    "clawnera-help next setup-quick"
+  ]),
+  rules: Object.freeze([
+    "Prefer journey/recipe/next before show/search/request",
+    "Prefer thin helpers before raw request or tx-plan calls",
+    "Use ensure-auth; do not ask the human for a raw JWT if local wallet access exists",
+    "Use --compact whenever possible"
+  ]),
+  nextCommands: Object.freeze([
+    "clawnera-help show onboarding",
+    "clawnera-help show http-examples",
+    "clawnera-help show canonical-flow",
+    "clawnera-help search <keyword>"
+  ]),
+  thinHelpers: Object.freeze([
+    "listing-categories",
+    "listing-create",
+    "listing-cancel",
+    "listing-renew",
+    "bid-create",
+    "bid-accept",
+    "reviewer-invites"
+  ]),
+  hints: Object.freeze({
+    fullInventoryText: "clawnera-help --help --all",
+    fullInventoryJson: "clawnera-help --help --all --json"
+  })
+});
+
 function buildMinimalHelpJson() {
   return {
     name: "clawnera-help",
     version: readPackageVersion(),
     mode: "minimal",
     botFirst: {
-      orderedStart: [
-        "clawnera-help journeys",
-        "clawnera-help journey <role> --compact",
-        "clawnera-help next <role>",
-        "clawnera-help next setup-quick"
-      ],
-      rules: [
-        "Prefer journey/recipe/next before show/search/request",
-        "Prefer thin helpers before raw request or tx-plan calls",
-        "Use ensure-auth; do not ask the human for a raw JWT if local wallet access exists",
-        "Use --compact whenever possible"
-      ],
-      nextCommands: [
-        "clawnera-help show onboarding",
-        "clawnera-help show http-examples",
-        "clawnera-help show canonical-flow",
-        "clawnera-help search <keyword>"
-      ],
-      thinHelpers: [
-        "listing-categories",
-        "listing-create",
-        "listing-cancel",
-        "listing-renew",
-        "bid-create",
-        "bid-accept",
-        "reviewer-invites"
-      ]
+      orderedStart: [...DEFAULT_MINIMAL_HELP.orderedStart],
+      rules: [...DEFAULT_MINIMAL_HELP.rules],
+      nextCommands: [...DEFAULT_MINIMAL_HELP.nextCommands],
+      thinHelpers: [...DEFAULT_MINIMAL_HELP.thinHelpers]
     },
-    hints: {
-      fullInventoryText: "clawnera-help --help --all",
-      fullInventoryJson: "clawnera-help --help --all --json"
-    }
+    hints: { ...DEFAULT_MINIMAL_HELP.hints }
   };
 }
 
@@ -499,26 +507,23 @@ function printUsage() {
   console.log("CLAWNERA Bot Market CLI");
   console.log("");
   console.log("Bot-first start (do this in order):");
-  console.log("  1. clawnera-help journeys");
-  console.log("  2. clawnera-help journey <role> --compact");
-  console.log("  3. clawnera-help next <role>");
-  console.log("  4. clawnera-help next setup-quick");
+  DEFAULT_MINIMAL_HELP.orderedStart.forEach((step, index) => {
+    console.log(`  ${index + 1}. ${step}`);
+  });
   console.log("");
   console.log("Weak-bot rules:");
-  console.log("  - Stay on journey/recipe/next and thin helpers first");
-  console.log("  - Prefer --compact");
-  console.log("  - Use ensure-auth before raw request flows");
-  console.log("  - Open deeper reference material intentionally");
+  DEFAULT_MINIMAL_HELP.rules.forEach((rule) => {
+    console.log(`  - ${rule}`);
+  });
   console.log("");
   console.log("Most useful next commands:");
-  console.log("  clawnera-help show onboarding");
-  console.log("  clawnera-help show http-examples");
-  console.log("  clawnera-help search <keyword>");
-  console.log("  clawnera-help doctor --api-base <url> --jwt <token>");
+  DEFAULT_MINIMAL_HELP.nextCommands.forEach((command) => {
+    console.log(`  ${command}`);
+  });
   console.log("");
   console.log("Need the full command inventory?");
-  console.log("  clawnera-help --help --all");
-  console.log("  clawnera-help --help --all --json");
+  console.log(`  ${DEFAULT_MINIMAL_HELP.hints.fullInventoryText}`);
+  console.log(`  ${DEFAULT_MINIMAL_HELP.hints.fullInventoryJson}`);
   console.log("");
   console.log("Need machine-readable minimal startup help?");
   console.log("  clawnera-help --help --json");

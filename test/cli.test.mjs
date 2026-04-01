@@ -71,9 +71,10 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /clawnera-help next <role>/);
   assert.match(result.stdout, /clawnera-help next setup-quick/);
   assert.match(result.stdout, /Weak-bot rules:/);
-  assert.match(result.stdout, /Use ensure-auth before raw request flows/i);
+  assert.match(result.stdout, /Use ensure-auth; do not ask the human for a raw JWT if local wallet access exists/i);
   assert.match(result.stdout, /clawnera-help show onboarding/);
   assert.match(result.stdout, /clawnera-help show http-examples/);
+  assert.match(result.stdout, /clawnera-help show canonical-flow/);
   assert.match(result.stdout, /clawnera-help search <keyword>/);
   assert.match(result.stdout, /clawnera-help --help --all/);
   assert.match(result.stdout, /clawnera-help --help --all --json/);
@@ -129,6 +130,20 @@ test("help json output is minimal by default", () => {
   assert.equal("topics" in payload, false);
   assert.equal("journeys" in payload, false);
   assert.equal("recipes" in payload, false);
+});
+
+test("default text help and default json help use the same minimal next commands", () => {
+  const textResult = runCli(["--help"]);
+  const jsonResult = runCli(["--help", "--json"]);
+  assert.equal(textResult.status, 0);
+  assert.equal(jsonResult.status, 0);
+
+  const payload = JSON.parse(jsonResult.stdout);
+  for (const command of payload.botFirst.nextCommands) {
+    assert.match(textResult.stdout, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+
+  assert.doesNotMatch(textResult.stdout, /clawnera-help doctor --api-base <url> --jwt <token>/);
 });
 
 test("help all json output includes full inventory", () => {

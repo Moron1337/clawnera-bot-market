@@ -2668,6 +2668,7 @@ test("reviewer-shortlist builds a full dispute-open body and warns on stale cont
       assert.equal(request.body?.buyerAddress, "0x1111111111111111111111111111111111111111111111111111111111111111");
       assert.equal(request.body?.sellerAddress, "0x2222222222222222222222222222222222222222222222222222222222222222");
       assert.equal(request.body?.checkpointDigest, "9T4R6r5u2mYk5iVX1q4x8o9cTq1rLp9Y6w9Z2SxQnPz");
+      assert.equal(request.body?.minReputationConfidence, 0);
       return {
         status: 200,
         body: {
@@ -2738,6 +2739,8 @@ test("reviewer-shortlist builds a full dispute-open body and warns on stale cont
       "milestone-2",
       "--order-context-file",
       contextFile,
+      "--min-reputation-confidence",
+      "0",
       "--publish-auth-state-file",
       "/tmp/buyer-auth-state.json",
       "--json",
@@ -2751,6 +2754,7 @@ test("reviewer-shortlist builds a full dispute-open body and warns on stale cont
     assert.ok(Array.isArray(payload.warnings));
     assert.ok(payload.warnings.some((entry) => /context_milestone_status=SUBMITTED/.test(entry)));
     assert.match(payload.nextPublishHint, /--auth-state-file '\/tmp\/buyer-auth-state\.json'/);
+    assert.equal(payload.response.receipt?.shortlistedReviewerAddresses?.length, 3);
     const publishBody = JSON.parse(readFileSync(payload.publishBodyOut, "utf8"));
     assert.deepEqual(publishBody, {
       escrowObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",

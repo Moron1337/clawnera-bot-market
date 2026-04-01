@@ -12465,7 +12465,11 @@ async function runReviewerShortlist(commandArgs) {
       directoryScanLimit: parsePositiveIntOption(options["directory-scan-limit"], "directory_scan_limit", 1000),
       minPerformanceScore: parsePositiveIntOption(options["min-performance-score"], "min_performance_score", 50),
       minReputationScore: parsePositiveIntOption(options["min-reputation-score"], "min_reputation_score", 50),
-      minReputationConfidence: parsePositiveIntOption(options["min-reputation-confidence"], "min_reputation_confidence", 20),
+      minReputationConfidence: parseNonNegativeIntOption(
+        options["min-reputation-confidence"],
+        "min_reputation_confidence",
+        20
+      ),
       allowNewReviewers: parseBooleanOption(options["allow-new-reviewers"], true),
       minDecisionsTotal: parsePositiveIntOption(options["min-decisions-total"], "min_decisions_total", 0),
       maxNoshowCount: parsePositiveIntOption(options["max-noshow-count"], "max_noshow_count", 3),

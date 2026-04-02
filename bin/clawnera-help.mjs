@@ -798,6 +798,46 @@ function compactRecipeNextText(recipe) {
   }
 }
 
+function buildRecipeCompactHints(recipe) {
+  return {
+    do: compactRecipeCommand(recipe) || null,
+    write: compactRecipeWriteText(recipe) || null,
+    read: compactRecipeReadText(recipe) || null,
+    next: compactRecipeNextText(recipe) || null
+  };
+}
+
+function buildJourneyNextHints(journey) {
+  const orderedSteps = Array.isArray(journey?.steps) ? journey.steps : [];
+  const firstStep = orderedSteps[0] || null;
+  const afterSetup = firstStep === "setup-quick" ? orderedSteps[1] || null : firstStep;
+  return {
+    journeyId: journey?.id || null,
+    role: journey?.role || null,
+    nextIfNotSetup: firstStep,
+    nextIfSetup: afterSetup,
+    nextCommandIfNotSetup: firstStep ? `clawnera-help next ${firstStep}` : null,
+    nextCommandIfSetup: afterSetup ? `clawnera-help next ${afterSetup}` : null,
+    recommendedCommandFromFreshStart: firstStep ? `clawnera-help next ${firstStep}` : null,
+    recommendedCommandIfSetupComplete: afterSetup ? `clawnera-help next ${afterSetup}` : null,
+    hint: journey?.id ? `clawnera-help journey ${journey.id} --compact` : null
+  };
+}
+
+function buildRecipeJson(recipe) {
+  return {
+    ...recipe,
+    compactHints: buildRecipeCompactHints(recipe)
+  };
+}
+
+function buildJourneyJson(journey) {
+  return {
+    ...journey,
+    nextHints: buildJourneyNextHints(journey)
+  };
+}
+
 function printRecipesCompact(recipes) {
   console.log(`recipes:${recipes.map((recipe) => recipe.id).join(" | ")}`);
 }
@@ -14292,7 +14332,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     } else {
       printJson({
         ok: true,
-        journey
+        journey: buildJourneyJson(journey)
       });
     }
   } else if (!journey) {
@@ -14311,18 +14351,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   const compactRecipeMode = flags.compact || parsedCommand === "next";
   if (flags.json) {
     if (!recipe && journey) {
-      const orderedSteps = Array.isArray(journey.steps) ? journey.steps : [];
-      const firstStep = orderedSteps[0] || null;
-      const afterSetup = firstStep === "setup-quick" ? orderedSteps[1] || null : firstStep;
       printJson({
         ok: true,
-        journeyNext: {
-          journeyId: journey.id,
-          role: journey.role || null,
-          nextIfNotSetup: firstStep,
-          nextIfSetup: afterSetup,
-          hint: `clawnera-help journey ${journey.id} --compact`
-        }
+        journeyNext: buildJourneyNextHints(journey)
       });
     } else if (!recipe) {
       printJson({ ok: false, error: `unknown_recipe: ${String(commandArgs[0] || "")}` });
@@ -14330,7 +14361,7 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     } else {
       printJson({
         ok: true,
-        recipe
+        recipe: buildRecipeJson(recipe)
       });
     }
   } else if (!recipe && journey) {

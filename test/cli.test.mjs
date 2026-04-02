@@ -682,6 +682,20 @@ test("next on a journey id returns setup and post-setup hints instead of unknown
   assert.match(result.stdout, /hint:clawnera-help journey seller --compact/);
 });
 
+test("next json on a journey id includes explicit next commands for weak bots", () => {
+  const result = runCli(["next", "seller", "--json"]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.journeyNext.journeyId, "seller");
+  assert.equal(payload.journeyNext.nextIfNotSetup, "setup-quick");
+  assert.equal(payload.journeyNext.nextIfSetup, "reputation-init");
+  assert.equal(payload.journeyNext.nextCommandIfNotSetup, "clawnera-help next setup-quick");
+  assert.equal(payload.journeyNext.nextCommandIfSetup, "clawnera-help next reputation-init");
+  assert.equal(payload.journeyNext.recommendedCommandFromFreshStart, "clawnera-help next setup-quick");
+  assert.equal(payload.journeyNext.recommendedCommandIfSetupComplete, "clawnera-help next reputation-init");
+});
+
 test("reviewer journey includes the post-case claim step", () => {
   const result = runCli(["journey", "reviewer"]);
   assert.equal(result.status, 0);
@@ -881,6 +895,9 @@ test("recipe json output is parseable", () => {
   assert.equal(payload.ok, true);
   assert.equal(payload.recipe.id, "reviewer-vote");
   assert.ok(Array.isArray(payload.recipe.steps));
+  assert.equal(typeof payload.recipe.compactHints?.do, "string");
+  assert.equal(payload.recipe.compactHints.write, "POST /disputes/{disputeCaseId}/votes/commit | POST /disputes/{disputeCaseId}/votes/reveal");
+  assert.equal(payload.recipe.compactHints.next, "reviewer-claim-metrics[after_buyer_or_seller_closeout]");
   assert.ok(payload.recipe.steps.some((step) => /tx-plan-execute POST .*votes\/commit/.test(step)));
   assert.ok(payload.recipe.steps.some((step) => /reviewer-vote-prepare/.test(step)));
   assert.ok(payload.recipe.steps.some((step) => /sequentially, not in parallel/.test(step)));
@@ -906,8 +923,21 @@ test("reviewer inspect recipe json output is parseable", () => {
   assert.equal(result.status, 0);
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.recipe.id, "reviewer-inspect-evidence");
+  assert.equal(payload.recipe.compactHints.do, "clawnera-help dispute-evidence-list --case-id <disputeCaseId> --auth-state-file ~/.config/clawnera/auth-state.json");
   assert.ok(payload.recipe.steps.some((step) => /dispute-evidence-content/.test(step)));
   assert.ok(payload.recipe.steps.some((step) => /dispute-evidence-decrypt/.test(step)));
+});
+
+test("journey json includes machine-readable next hints", () => {
+  const result = runCli(["journey", "seller", "--json"]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.journey.id, "seller");
+  assert.equal(payload.journey.nextHints.nextIfNotSetup, "setup-quick");
+  assert.equal(payload.journey.nextHints.nextCommandIfNotSetup, "clawnera-help next setup-quick");
+  assert.equal(payload.journey.nextHints.nextCommandIfSetup, "clawnera-help next reputation-init");
+  assert.equal(payload.journey.nextHints.recommendedCommandFromFreshStart, "clawnera-help next setup-quick");
 });
 
 test("dispute-open recipe explains activation proof and no-manual-bind fallback", () => {

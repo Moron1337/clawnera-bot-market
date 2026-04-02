@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.87] - 2026-04-02
+
+- Hardened the bot-facing lane selectors so weak local LLMs stop failing open on ignored runtime context:
+  - `next <id>`, `journey <id>`, and `recipe <id>` now reject trailing runtime flags instead of silently dropping them
+  - `next buyer --order ...` and `next fund-order --order-id ...` now return a targeted machine-readable hint that splits lane selection from exact order reads
+  - `journey reviewer --auth-state-file ...` now fails closed with exact reviewer-safe follow-up commands instead of drifting into invented readiness verbs
+- Added regression coverage so those single-target guard rails stay stable in JSON mode for weaker bots.
+
 ## [0.1.82] - 2026-04-01
 
 - Fixed the live dispute-evidence utility surface for mailbox-backed flows:

@@ -14146,6 +14146,85 @@ function parseArgs(argv) {
   return { flags, command, commandArgs };
 }
 
+function extractTrailingFlagValue(extraArgs = [], flagNames = []) {
+  const names = new Set(flagNames.map((name) => String(name || "").trim()));
+  for (let index = 0; index < extraArgs.length; index += 1) {
+    const token = String(extraArgs[index] || "").trim();
+    if (!names.has(token)) {
+      continue;
+    }
+    const next = String(extraArgs[index + 1] || "").trim();
+    if (next && !next.startsWith("--")) {
+      return next;
+    }
+    return "";
+  }
+  return "";
+}
+
+function buildSingleTargetCommandOverflowPayload(kind, target, extraArgs = []) {
+  const normalizedKind = String(kind || "").trim();
+  const normalizedTarget = String(target || "").trim();
+  const ignoredArgs = extraArgs.map((entry) => String(entry || "").trim()).filter(Boolean);
+  const orderId = extractTrailingFlagValue(ignoredArgs, ["--order", "--order-id"]);
+  const hasOrderContext = ignoredArgs.some((entry) => entry === "--order" || entry === "--order-id");
+  const hasAuthContext = ignoredArgs.some((entry) => entry === "--auth-state-file" || entry === "--auth-state");
+
+  const payload = {
+    ok: false,
+    error: `${normalizedKind}_target_does_not_accept_extra_arguments`,
+    target: normalizedTarget,
+    ignoredArgs,
+    hint: `${normalizedKind} accepts exactly one target id and no runtime context flags. Use runtime ids only with wrappers or raw request reads.`
+  };
+
+  if (
+    normalizedKind === "next" &&
+    ["buyer", "request-buyer", "fund-order"].includes(normalizedTarget) &&
+    (hasOrderContext || hasAuthContext)
+  ) {
+    payload.error = "next_target_does_not_accept_order_context";
+    payload.recommendedCommands = [
+      "clawnera-help next fund-order --json",
+      orderId
+        ? `clawnera-help request GET /orders/${orderId} --auth-state-file <buyer-auth-state-file> --json`
+        : "clawnera-help request GET /orders/<orderId> --auth-state-file <buyer-auth-state-file> --json"
+    ];
+    payload.hint = "Do not pass --order / --order-id / --auth-state-file to next. Use next fund-order only for lane selection, then use an exact order read for state.";
+    return payload;
+  }
+
+  if (["journey", "next"].includes(normalizedKind) && normalizedTarget === "reviewer") {
+    payload.recommendedCommands = [
+      "clawnera-help journey reviewer --compact",
+      "clawnera-help next reviewer-register --json"
+    ];
+    payload.hint = "For reviewer readiness, use journey reviewer --compact for discovery or next reviewer-register --json for the authenticated next-step lane.";
+    return payload;
+  }
+
+  return payload;
+}
+
+function printSingleTargetCommandOverflow(payload, asJson) {
+  if (asJson) {
+    printJson(payload);
+    return;
+  }
+  console.error(`${payload.error}`);
+  if (Array.isArray(payload.ignoredArgs) && payload.ignoredArgs.length > 0) {
+    console.error(`ignored_args=${payload.ignoredArgs.join(" ")}`);
+  }
+  if (Array.isArray(payload.recommendedCommands)) {
+    for (const command of payload.recommendedCommands) {
+      console.error(`next_hint=${command}`);
+    }
+  }
+  if (payload.hint) {
+    console.error(`hint=${payload.hint}`);
+  }
+}
+
 function printJson(payload) {
   process.stdout.write(`${stringifyJson(payload)}\n`);
 }
@@ -14324,59 +14403,75 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     showTopic(topics, commandArgs[0]);
   }
 } else if (effectiveCommand === "journey") {
-  const journey = resolveJourney(journeys, commandArgs[0]);
-  if (flags.json) {
-    if (!journey) {
-      printJson({ ok: false, error: `unknown_journey: ${String(commandArgs[0] || "")}` });
-      process.exitCode = 1;
-    } else {
-      printJson({
-        ok: true,
-        journey: buildJourneyJson(journey)
-      });
-    }
-  } else if (!journey) {
-    console.error(`unknown_journey: ${String(commandArgs[0] || "")}`);
+  const target = commandArgs[0];
+  const extraArgs = commandArgs.slice(1);
+  if (extraArgs.length > 0) {
+    const payload = buildSingleTargetCommandOverflowPayload("journey", target, extraArgs);
+    printSingleTargetCommandOverflow(payload, flags.json);
     process.exitCode = 1;
   } else {
-    if (flags.compact) {
-      printJourneyCompact(journey, recipes);
+    const journey = resolveJourney(journeys, target);
+    if (flags.json) {
+      if (!journey) {
+        printJson({ ok: false, error: `unknown_journey: ${String(target || "")}` });
+        process.exitCode = 1;
+      } else {
+        printJson({
+          ok: true,
+          journey: buildJourneyJson(journey)
+        });
+      }
+    } else if (!journey) {
+      console.error(`unknown_journey: ${String(target || "")}`);
+      process.exitCode = 1;
     } else {
-      printJourney(journey, recipes);
+      if (flags.compact) {
+        printJourneyCompact(journey, recipes);
+      } else {
+        printJourney(journey, recipes);
+      }
     }
   }
 } else if (effectiveCommand === "recipe") {
-  const recipe = resolveRecipe(recipes, commandArgs[0]);
-  const journey = parsedCommand === "next" ? resolveJourney(journeys, commandArgs[0]) : null;
-  const compactRecipeMode = flags.compact || parsedCommand === "next";
-  if (flags.json) {
-    if (!recipe && journey) {
-      printJson({
-        ok: true,
-        journeyNext: buildJourneyNextHints(journey)
-      });
-    } else if (!recipe) {
-      printJson({ ok: false, error: `unknown_recipe: ${String(commandArgs[0] || "")}` });
-      process.exitCode = 1;
-    } else {
-      printJson({
-        ok: true,
-        recipe: buildRecipeJson(recipe)
-      });
-    }
-  } else if (!recipe && journey) {
-    printJourneyNextCompact(journey);
-  } else if (!recipe) {
-    console.error(`unknown_recipe: ${String(commandArgs[0] || "")}`);
-    if (parsedCommand === "next") {
-      console.error("next_hint=use clawnera-help next <recipe-id> or clawnera-help journey <role> --compact");
-    }
+  const target = commandArgs[0];
+  const extraArgs = commandArgs.slice(1);
+  if (extraArgs.length > 0) {
+    const payload = buildSingleTargetCommandOverflowPayload(parsedCommand === "next" ? "next" : "recipe", target, extraArgs);
+    printSingleTargetCommandOverflow(payload, flags.json);
     process.exitCode = 1;
   } else {
-    if (compactRecipeMode) {
-      printRecipeCompact(recipe);
+    const recipe = resolveRecipe(recipes, target);
+    const journey = parsedCommand === "next" ? resolveJourney(journeys, target) : null;
+    const compactRecipeMode = flags.compact || parsedCommand === "next";
+    if (flags.json) {
+      if (!recipe && journey) {
+        printJson({
+          ok: true,
+          journeyNext: buildJourneyNextHints(journey)
+        });
+      } else if (!recipe) {
+        printJson({ ok: false, error: `unknown_recipe: ${String(target || "")}` });
+        process.exitCode = 1;
+      } else {
+        printJson({
+          ok: true,
+          recipe: buildRecipeJson(recipe)
+        });
+      }
+    } else if (!recipe && journey) {
+      printJourneyNextCompact(journey);
+    } else if (!recipe) {
+      console.error(`unknown_recipe: ${String(target || "")}`);
+      if (parsedCommand === "next") {
+        console.error("next_hint=use clawnera-help next <recipe-id> or clawnera-help journey <role> --compact");
+      }
+      process.exitCode = 1;
     } else {
-      printRecipe(recipe);
+      if (compactRecipeMode) {
+        printRecipeCompact(recipe);
+      } else {
+        printRecipe(recipe);
+      }
     }
   }
 } else if (effectiveCommand === "search") {

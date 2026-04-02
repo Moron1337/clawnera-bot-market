@@ -704,6 +704,55 @@ test("next json on a journey id includes explicit next commands for weak bots", 
   assert.equal(payload.journeyNext.recommendedCommandIfSetupComplete, "clawnera-help next reputation-init");
 });
 
+test("next buyer fails closed when order context is passed", () => {
+  const orderId = "c264927a-5938-4f0d-b3bc-78babd2febbb";
+  const result = runCli(["next", "buyer", "--json", "--order", orderId]);
+  assert.notEqual(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, "next_target_does_not_accept_order_context");
+  assert.deepEqual(payload.ignoredArgs, ["--order", orderId]);
+  assert.ok(payload.recommendedCommands.includes("clawnera-help next fund-order --json"));
+  assert.ok(payload.recommendedCommands.some((entry) => entry.includes(`/orders/${orderId}`)));
+});
+
+test("next fund-order fails closed when runtime flags are appended", () => {
+  const orderId = "8eda7f4b-a4e5-414c-a0c3-9bed948ccb2c";
+  const result = runCli([
+    "next",
+    "fund-order",
+    "--json",
+    "--auth-state-file",
+    "~/.config/clawnera/buyer-auth.json",
+    "--order-id",
+    orderId
+  ]);
+  assert.notEqual(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, "next_target_does_not_accept_order_context");
+  assert.ok(payload.recommendedCommands.includes("clawnera-help next fund-order --json"));
+  assert.ok(payload.recommendedCommands.some((entry) => entry.includes(`/orders/${orderId}`)));
+});
+
+test("journey reviewer fails closed when runtime flags are appended", () => {
+  const result = runCli(["journey", "reviewer", "--json", "--auth-state-file", "~/.config/clawnera/reviewer-auth.json"]);
+  assert.notEqual(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, "journey_target_does_not_accept_extra_arguments");
+  assert.ok(payload.recommendedCommands.includes("clawnera-help journey reviewer --compact"));
+  assert.ok(payload.recommendedCommands.includes("clawnera-help next reviewer-register --json"));
+});
+
+test("plain next buyer still returns journey-next hints", () => {
+  const result = runCli(["next", "buyer", "--json"]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.journeyNext.journeyId, "buyer");
+});
+
 test("reviewer journey includes the post-case claim step", () => {
   const result = runCli(["journey", "reviewer"]);
   assert.equal(result.status, 0);

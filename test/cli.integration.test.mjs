@@ -3666,6 +3666,54 @@ test("request can persist the response body to a file", async () => {
   }
 });
 
+test("request accepts CLAWNERA_AUTH_STATE_FILE from the shell without an explicit flag", async () => {
+  const mock = await startMockServer({
+    "GET /auth/session": (request) => {
+      assert.equal(request.headers.authorization, `Bearer ${buildJwtWithExp(4102444800)}`);
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          session: {
+            refreshAvailable: true,
+          },
+        },
+      };
+    },
+  });
+
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-request-auth-state-env-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: "0x1111111111111111111111111111111111111111111111111111111111111111",
+        alias: "bot",
+      },
+      null,
+      2,
+    ),
+  );
+
+  try {
+    const result = await runCli(["request", "GET", "/auth/session", "--json"], {
+      CLAWNERA_AUTH_STATE_FILE: authStateFile,
+    });
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.status, 200);
+    assert.equal(payload.authStateFile, authStateFile);
+    assert.equal(payload.response?.session?.refreshAvailable, true);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("request surfaces response headers and recommended poll interval hints", async () => {
   const mock = await startMockServer({
     "GET /reviewers/me/invites": () => ({

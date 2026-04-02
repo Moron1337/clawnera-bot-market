@@ -82,6 +82,7 @@ import {
   prepareIotaTransfer,
   dryRunIotaTransfer
 } from "../lib/iota-local.mjs";
+import { resolveRuntimeIotaOptions } from "../lib/runtime-iota-context.mjs";
 import {
   DEFAULT_TRANSFER_DRAFT_TTL_SEC,
   defaultIotaTransferDraftsPath,
@@ -3856,8 +3857,8 @@ function resolvePreferredKeystorePath(options = {}, context = {}) {
 }
 
 async function resolveApiRuntimeContext(options = {}) {
-  const envFile = resolveOptionalPathOption(options["env-file"]);
-  const authStateFile = resolveOptionalPathOption(options["auth-state-file"]);
+  const envFile = resolveOptionalPathOption(options["env-file"] || process.env.CLAWNERA_ENV_FILE);
+  const authStateFile = resolveOptionalPathOption(options["auth-state-file"] || process.env.CLAWNERA_AUTH_STATE_FILE);
   const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 8_000);
   const explicitApiBase = normalizeApiBase(options["api-base"] || process.env.CLAWNERA_API_BASE_URL);
   const explicitJwt =
@@ -3931,6 +3932,19 @@ async function resolveApiRuntimeContext(options = {}) {
     authState,
     authStateRefreshed
   };
+}
+
+function hasRuntimeAuthHints(options = {}) {
+  return Boolean(
+    options["auth-state-file"] ||
+      options["env-file"] ||
+      options["api-base"] ||
+      options.jwt ||
+      process.env.CLAWNERA_AUTH_STATE_FILE ||
+      process.env.CLAWNERA_ENV_FILE ||
+      process.env.CLAWNERA_API_BASE_URL ||
+      process.env.CLAWNERA_API_JWT,
+  );
 }
 
 function notificationsPresetPayload() {
@@ -5568,7 +5582,7 @@ function extractCommonCreatedId(responseBody, paths = []) {
 }
 
 async function resolveRuntimeContextForHelper(options = {}) {
-  if (!(options["auth-state-file"] || options["env-file"] || options["api-base"] || options.jwt)) {
+  if (!hasRuntimeAuthHints(options)) {
     return { authState: null, envValues: {} };
   }
   return resolveApiRuntimeContext(options);
@@ -5974,6 +5988,7 @@ async function runListingDepositCreate(commandArgs) {
     const runtimeContext = await resolveApiRuntimeContext(options);
     const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
     const prepared = prepareListingDraftOptions(options, runtimeContext);
+    const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
     const actorAddress =
       normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
       normalizeIotaAddress(signer.entry.address || "");
@@ -5990,12 +6005,11 @@ async function runListingDepositCreate(commandArgs) {
       };
     }
 
-    const { feesCall, packageId, chainConfig } = await fetchPolicyAndChainConfig(options, {
+    const { feesCall, packageId, chainConfig, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfig(options, {
       requireDisputeQuorumConfig: false,
       requireEscrowFeeConfig: false,
       requireGovernanceConfig: false,
-      network: options.network,
-      rpcUrl: options["rpc-url"],
+      ...iotaRuntime,
     });
     const listingDepositPolicy = extractListingDepositPolicy(feesCall.result.body);
     if (!listingDepositPolicy.enabled) {
@@ -6046,8 +6060,7 @@ async function runListingDepositCreate(commandArgs) {
     const transaction = buildCreateListingDepositTx(request);
     if (parseBooleanOption(options["dry-run"], false)) {
       const result = await dryRunTransaction(transaction, {
-        network: options.network,
-        rpcUrl: options["rpc-url"],
+        ...resolvedIotaRuntime,
       });
       const payload = {
         ok: true,
@@ -6072,8 +6085,7 @@ async function runListingDepositCreate(commandArgs) {
       alias: signer.alias,
       address: signer.address,
       keystorePath: signer.keystorePath,
-      network: options.network,
-      rpcUrl: options["rpc-url"],
+      ...resolvedIotaRuntime,
     });
     const payload = {
       ok: true,
@@ -8015,6 +8027,13 @@ async function fetchPolicyAndChainConfig(contextOptions = {}, runtimeOptions = {
   if (reviewerRuntimeResult.ok) {
     reviewerRuntime = reviewerRuntimeResult.runtime;
   }
+  const iotaRuntime = resolveRuntimeIotaOptions(
+    {
+      network: runtimeOptions.network,
+      "rpc-url": runtimeOptions.rpcUrl,
+    },
+    feesCall.context,
+  );
   const chainConfig = await resolveClawdexChainConfig({
     packageId,
     disputeQuorumConfigObjectId:
@@ -8026,12 +8045,13 @@ async function fetchPolicyAndChainConfig(contextOptions = {}, runtimeOptions = {
     requireDisputeQuorumConfig: runtimeOptions.requireDisputeQuorumConfig,
     requireEscrowFeeConfig: runtimeOptions.requireEscrowFeeConfig,
     requireGovernanceConfig: runtimeOptions.requireGovernanceConfig,
-    network: runtimeOptions.network,
-    rpcUrl: runtimeOptions.rpcUrl,
+    network: iotaRuntime.network,
+    rpcUrl: iotaRuntime.rpcUrl,
   });
   return {
     feesCall,
     chainConfig: mergeChainConfigWithReviewerRuntime(chainConfig, reviewerRuntime),
+    iotaRuntime,
     packageId,
     reviewerRuntime,
   };
@@ -8290,6 +8310,7 @@ async function runTxPlanCommand(commandArgs, mode) {
   const planOut = resolveOptionalPathOption(options["plan-out"]);
   const txBytesOut = resolveOptionalPathOption(options["tx-bytes-out"]);
   const signer = resolveRuntimeSigner(options, apiCall.context);
+  const iotaRuntime = resolveRuntimeIotaOptions(options, apiCall.context);
   let autoRetriedExecutionCount = 0;
   while (true) {
     try {
@@ -8300,8 +8321,7 @@ async function runTxPlanCommand(commandArgs, mode) {
 
     if (mode === "dry_run") {
       const dryRun = await dryRunTransaction(transaction, {
-        network: options.network,
-        rpcUrl: options["rpc-url"],
+        ...iotaRuntime,
       });
       if (txBytesOut) {
         writeOptionalOutputFile(txBytesOut, `${dryRun.txBytesB64}\n`);
@@ -8328,8 +8348,7 @@ async function runTxPlanCommand(commandArgs, mode) {
       alias: signer.alias,
       address: signer.address,
       keystorePath: signer.keystorePath,
-      network: options.network,
-      rpcUrl: options["rpc-url"],
+      ...iotaRuntime,
     });
     if (txBytesOut) {
       writeOptionalOutputFile(txBytesOut, `${executed.txBytesB64}\n`);
@@ -8526,6 +8545,7 @@ async function runOrderInitBond(commandArgs) {
     }
     const order = ensureOrderPayload(orderCall.result.body);
     const actorAddress = resolveActorAddressForSignedRun(options, orderCall.context);
+    const iotaRuntime = resolveRuntimeIotaOptions(options, orderCall.context);
     if (!actorAddress) {
       return {
         ok: false,
@@ -8542,9 +8562,8 @@ async function runOrderInitBond(commandArgs) {
       };
     }
 
-    const { chainConfig, packageId } = await fetchPolicyAndChainConfig(options, {
-      network: options.network,
-      rpcUrl: options["rpc-url"],
+    const { chainConfig, packageId, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfig(options, {
+      ...iotaRuntime,
     });
     const requiredReviewerVotes =
       options["required-reviewer-votes"] !== undefined
@@ -8574,8 +8593,7 @@ async function runOrderInitBond(commandArgs) {
     const dryRun = parseBooleanOption(options["dry-run"], false);
     if (dryRun) {
       const result = await dryRunTransaction(transaction, {
-        network: options.network,
-        rpcUrl: options["rpc-url"],
+        ...resolvedIotaRuntime,
       });
       return {
         ok: true,
@@ -8598,8 +8616,7 @@ async function runOrderInitBond(commandArgs) {
       alias: signer.alias,
       address: signer.address,
       keystorePath: signer.keystorePath,
-      network: options.network,
-      rpcUrl: options["rpc-url"],
+      ...resolvedIotaRuntime,
     });
     return {
       ok: true,
@@ -8670,6 +8687,7 @@ async function runOrderCreateEscrow(commandArgs) {
     }
     const order = ensureOrderPayload(orderCall.result.body);
     const actorAddress = resolveActorAddressForSignedRun(options, orderCall.context);
+    const iotaRuntime = resolveRuntimeIotaOptions(options, orderCall.context);
     if (!actorAddress) {
       return {
         ok: false,
@@ -8683,9 +8701,8 @@ async function runOrderCreateEscrow(commandArgs) {
       };
     }
 
-    const { chainConfig, packageId } = await fetchPolicyAndChainConfig(options, {
-      network: options.network,
-      rpcUrl: options["rpc-url"],
+    const { chainConfig, packageId, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfig(options, {
+      ...iotaRuntime,
     });
     const deadlineMs =
       options["deadline-ms"] !== undefined
@@ -8751,8 +8768,7 @@ async function runOrderCreateEscrow(commandArgs) {
     const dryRun = parseBooleanOption(options["dry-run"], false);
     if (dryRun) {
       const result = await dryRunTransaction(transaction, {
-        network: options.network,
-        rpcUrl: options["rpc-url"],
+        ...resolvedIotaRuntime,
       });
       return {
         ok: true,
@@ -8770,8 +8786,7 @@ async function runOrderCreateEscrow(commandArgs) {
       alias: signer.alias,
       address: signer.address,
       keystorePath: signer.keystorePath,
-      network: options.network,
-      rpcUrl: options["rpc-url"],
+      ...resolvedIotaRuntime,
     });
     return {
       ok: true,
@@ -9110,6 +9125,7 @@ async function runReputationInit(commandArgs) {
   try {
     const runtimeContext = await resolveApiRuntimeContext(options);
     const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
     const actorAddress =
       normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
       normalizeIotaAddress(signer.entry.address || "");
@@ -9126,12 +9142,11 @@ async function runReputationInit(commandArgs) {
       };
     }
 
-    const { feesCall, chainConfig, packageId } = await fetchPolicyAndChainConfig(options, {
+    const { feesCall, chainConfig, packageId, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfig(options, {
       requireDisputeQuorumConfig: false,
       requireEscrowFeeConfig: false,
       requireGovernanceConfig: false,
-      network: options.network,
-      rpcUrl: options["rpc-url"],
+      ...iotaRuntime,
     });
     const feePolicy = extractReputationInitFeePolicy(feesCall.result.body);
     const paymentCoinObjectId =
@@ -9144,8 +9159,7 @@ async function runReputationInit(commandArgs) {
         packageId,
         ownerAddress: actorAddress,
         reputationInitFeeConfigObjectId: feePolicy.configObjectId,
-        network: options.network,
-        rpcUrl: options["rpc-url"],
+        ...resolvedIotaRuntime,
       });
       return {
         ok: true,
@@ -9174,8 +9188,7 @@ async function runReputationInit(commandArgs) {
     const dryRun = parseBooleanOption(options["dry-run"], false);
     if (dryRun) {
       const result = await dryRunTransaction(transaction, {
-        network: options.network,
-        rpcUrl: options["rpc-url"],
+        ...resolvedIotaRuntime,
       });
       return {
         ok: true,
@@ -9193,8 +9206,7 @@ async function runReputationInit(commandArgs) {
       alias: signer.alias,
       address: signer.address,
       keystorePath: signer.keystorePath,
-      network: options.network,
-      rpcUrl: options["rpc-url"],
+      ...resolvedIotaRuntime,
     });
 
     let reputationProfileObjectId = extractCreatedObjectIdByTypeSuffix(executed, "::reputation::ReputationProfile");
@@ -9208,8 +9220,7 @@ async function runReputationInit(commandArgs) {
             packageId,
             ownerAddress: actorAddress,
             reputationInitFeeConfigObjectId: feePolicy.configObjectId,
-            network: options.network,
-            rpcUrl: options["rpc-url"],
+            ...resolvedIotaRuntime,
           });
           if (reputationProfileObjectId) {
             break;
@@ -9260,6 +9271,7 @@ async function runReviewerRegister(commandArgs) {
   try {
     const runtimeContext = await resolveApiRuntimeContext(options);
     const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
     const actorAddress =
       normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
       normalizeIotaAddress(signer.entry.address || "");
@@ -9293,12 +9305,11 @@ async function runReviewerRegister(commandArgs) {
       };
     }
 
-    const { chainConfig } = await fetchPolicyAndChainConfig(options, {
+    const { chainConfig, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfig(options, {
       requireDisputeQuorumConfig: true,
       requireEscrowFeeConfig: false,
       requireGovernanceConfig: false,
-      network: options.network,
-      rpcUrl: options["rpc-url"],
+      ...iotaRuntime,
     });
 
     let reputationProfileObjectId = "";
@@ -9307,8 +9318,7 @@ async function runReviewerRegister(commandArgs) {
         packageId: chainConfig.packageId,
         ownerAddress: actorAddress,
         disputeQuorumConfigObjectId: chainConfig.disputeQuorumConfigObjectId,
-        network: options.network,
-        rpcUrl: options["rpc-url"],
+        ...resolvedIotaRuntime,
       });
     } catch (error) {
       return {
@@ -9399,8 +9409,7 @@ async function runReviewerRegister(commandArgs) {
     const dryRun = parseBooleanOption(options["dry-run"], false);
     if (dryRun) {
       const result = await dryRunTransaction(transaction, {
-        network: options.network,
-        rpcUrl: options["rpc-url"],
+        ...resolvedIotaRuntime,
       });
       return {
         ok: true,
@@ -9417,8 +9426,7 @@ async function runReviewerRegister(commandArgs) {
       alias: signer.alias,
       address: signer.address,
       keystorePath: signer.keystorePath,
-      network: options.network,
-      rpcUrl: options["rpc-url"],
+      ...resolvedIotaRuntime,
     });
 
     let reviewerReadback = null;
@@ -9477,6 +9485,7 @@ async function runReviewerUpdate(commandArgs) {
   try {
     const runtimeContext = await resolveApiRuntimeContext(options);
     const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
     const actorAddress =
       normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
       normalizeIotaAddress(signer.entry.address || "");
@@ -9518,12 +9527,11 @@ async function runReviewerUpdate(commandArgs) {
       };
     }
 
-    const { chainConfig } = await fetchPolicyAndChainConfig(options, {
+    const { chainConfig, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfig(options, {
       requireDisputeQuorumConfig: true,
       requireEscrowFeeConfig: false,
       requireGovernanceConfig: false,
-      network: options.network,
-      rpcUrl: options["rpc-url"],
+      ...iotaRuntime,
     });
 
     const transportKeyVersion = parsePositiveIntOption(options["transport-key-version"], "transport_key_version", 1);
@@ -9607,8 +9615,7 @@ async function runReviewerUpdate(commandArgs) {
     const dryRun = parseBooleanOption(options["dry-run"], false);
     if (dryRun) {
       const result = await dryRunTransaction(transaction, {
-        network: options.network,
-        rpcUrl: options["rpc-url"],
+        ...resolvedIotaRuntime,
       });
       return {
         ok: true,
@@ -9625,8 +9632,7 @@ async function runReviewerUpdate(commandArgs) {
       alias: signer.alias,
       address: signer.address,
       keystorePath: signer.keystorePath,
-      network: options.network,
-      rpcUrl: options["rpc-url"],
+      ...resolvedIotaRuntime,
     });
 
     let reviewerReadback = null;
@@ -10902,10 +10908,9 @@ async function runDisputeEvidenceContent(commandArgs) {
   }
 
   try {
-    const runtimeContext =
-      options["auth-state-file"] || options["env-file"] || options["api-base"] || options.jwt
-        ? await resolveApiRuntimeContext(options)
-        : { authState: null, envValues: {} };
+    const runtimeContext = hasRuntimeAuthHints(options)
+      ? await resolveApiRuntimeContext(options)
+      : { authState: null, envValues: {} };
     const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
     const contentCall = await callApiRoute({
       method: "GET",
@@ -10981,10 +10986,9 @@ async function runDisputeEvidenceDecrypt(commandArgs) {
   }
 
   try {
-    const runtimeContext =
-      options["auth-state-file"] || options["env-file"] || options["api-base"] || options.jwt
-        ? await resolveApiRuntimeContext(options)
-        : { authState: null, envValues: {} };
+    const runtimeContext = hasRuntimeAuthHints(options)
+      ? await resolveApiRuntimeContext(options)
+      : { authState: null, envValues: {} };
     const actorAddress =
       normalizeIotaAddress(options["recipient-address"] || "") ||
       resolveActorAddressForSignedRun(options, runtimeContext);
@@ -11124,6 +11128,7 @@ async function runManagedStorageFeePay(commandArgs) {
   try {
     const runtimeContext = await resolveApiRuntimeContext(options);
     const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
     const actorAddress = resolveActorAddressForSignedRun(options, runtimeContext) || normalizeIotaAddress(signer.entry.address || "");
     if (!actorAddress) {
       return {
@@ -11201,9 +11206,8 @@ async function runManagedStorageFeePay(commandArgs) {
       };
     }
 
-    const { packageId } = await fetchPolicyAndChainConfig(options, {
-      network: options.network,
-      rpcUrl: options["rpc-url"],
+    const { packageId, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfig(options, {
+      ...iotaRuntime,
     });
     const tx = buildManagedStorageFeeTx({
       packageId,
@@ -11219,8 +11223,7 @@ async function runManagedStorageFeePay(commandArgs) {
         alias: signer.alias,
         address: signer.address,
         keystorePath: signer.keystorePath,
-        network: options.network,
-        rpcUrl: options["rpc-url"],
+        ...resolvedIotaRuntime,
       });
       return {
         ok: true,
@@ -11244,8 +11247,7 @@ async function runManagedStorageFeePay(commandArgs) {
       alias: signer.alias,
       address: signer.address,
       keystorePath: signer.keystorePath,
-      network: options.network,
-      rpcUrl: options["rpc-url"],
+      ...resolvedIotaRuntime,
     });
     const txDigest = executed.result?.digest || null;
     if (!txDigest) {
@@ -11738,6 +11740,7 @@ async function runMilestoneSubmitByo(commandArgs) {
   try {
     const runtimeContext = await resolveApiRuntimeContext(options);
     const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
     const actorAddress =
       normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
       normalizeIotaAddress(signer.entry.address || "");
@@ -11862,6 +11865,7 @@ async function runMilestoneAnchor(commandArgs) {
   try {
     const runtimeContext = await resolveApiRuntimeContext(options);
     const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
     const actorAddress =
       normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
       normalizeIotaAddress(signer.entry.address || "");
@@ -11911,9 +11915,8 @@ async function runMilestoneAnchor(commandArgs) {
       };
     }
 
-    const { packageId } = await fetchPolicyAndChainConfig(options, {
-      network: options.network,
-      rpcUrl: options["rpc-url"],
+    const { packageId, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfig(options, {
+      ...iotaRuntime,
     });
     const anchorTx = buildMilestoneAnchorTx({
       packageId,
@@ -11929,8 +11932,7 @@ async function runMilestoneAnchor(commandArgs) {
       alias: signer.alias,
       address: signer.address,
       keystorePath: signer.keystorePath,
-      network: options.network,
-      rpcUrl: options["rpc-url"],
+      ...resolvedIotaRuntime,
     });
     const txDigest = executed.result?.digest || null;
     if (!txDigest) {
@@ -12050,10 +12052,9 @@ async function runDeliverableDecrypt(commandArgs) {
   }
 
   try {
-    const runtimeContext =
-      options["auth-state-file"] || options["env-file"] || options["api-base"] || options.jwt
-        ? await resolveApiRuntimeContext(options)
-        : { authState: null, envValues: {} };
+    const runtimeContext = hasRuntimeAuthHints(options)
+      ? await resolveApiRuntimeContext(options)
+      : { authState: null, envValues: {} };
     const actorAddress =
       normalizeIotaAddress(options["recipient-address"] || "") ||
       resolveActorAddressForSignedRun(options, runtimeContext);
@@ -12759,10 +12760,9 @@ async function runReviewerVotePrepare(commandArgs) {
 
   try {
     const vote = normalizeReviewerVoteValue(options.vote);
-    const runtimeContext =
-      options["auth-state-file"] || options["env-file"] || options["api-base"] || options.jwt
-        ? await resolveApiRuntimeContext(options)
-        : { authState: null, envValues: {} };
+    const runtimeContext = hasRuntimeAuthHints(options)
+      ? await resolveApiRuntimeContext(options)
+      : { authState: null, envValues: {} };
     const reviewerAddress =
       normalizeIotaAddress(options.address || "") ||
       resolveActorAddressForSignedRun(options, runtimeContext);

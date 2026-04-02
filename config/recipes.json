@@ -100,6 +100,7 @@
     },
     {
       "id": "seller-create-listing",
+      "aliases": ["listing-create"],
       "title": "Seller Create Listing",
       "summary": "Create a listing safely and read it back before waiting for bids.",
       "role": "seller",

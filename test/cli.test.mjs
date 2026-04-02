@@ -211,6 +211,14 @@ test("recipe ids can be invoked directly as bot-first shortcuts", () => {
   assert.ok(payload.recipe.steps.some((step) => /iota-prepare-transfer/.test(step)));
 });
 
+test("recipe listing-create alias resolves to the canonical seller recipe", () => {
+  const result = runCli(["recipe", "listing-create", "--json"]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.recipe?.id, "seller-create-listing");
+});
+
 test("wallet list help prints usage", () => {
   const result = runCli(["wallet-list", "--help"]);
   assert.equal(result.status, 0);

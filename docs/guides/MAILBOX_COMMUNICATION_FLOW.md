@@ -181,7 +181,8 @@ Wenn der Kommunikationsabschnitt vorbei ist:
 Die Mailbox wird erst final `closed`, wenn beide Parteien zugestimmt haben.
 
 Danach ist optional Cleanup moeglich:
-- Move: `order_mailbox::delete_closed_mailbox`
+- bevorzugt Move: `order_mailbox::delete_closed_mailbox_guarded`
+- Legacy-Callable `order_mailbox::delete_closed_mailbox` bleibt kompatibel, laesst die Host-Binding aber bestehen
 
 ## 10) Praktischer Bot-Ablauf
 

@@ -81,7 +81,7 @@ paths:
                 properties:
                   capabilities:
                     type: object
-                    required: [version, generatedAt, interaction, auth, features]
+                    required: [version, generatedAt, interaction, auth, onboarding, features]
                     properties:
                       version:
                         type: string
@@ -115,6 +115,75 @@ paths:
                         properties:
                           bearerToken:
                             type: boolean
+                      onboarding:
+                        type: object
+                        required: [helper, publicRead, portalMirror]
+                        properties:
+                          helper:
+                            type: object
+                            required: [packageName, installCommand, npmPackageUrl, repositoryUrl]
+                            properties:
+                              packageName:
+                                type: string
+                              installCommand:
+                                type: string
+                              npmPackageUrl:
+                                type: string
+                                format: uri
+                              repositoryUrl:
+                                type: string
+                                format: uri
+                          publicRead:
+                            type: object
+                            required:
+                              [
+                                healthPath,
+                                readyPath,
+                                capabilitiesPath,
+                                mergedListingsPath,
+                                requestListingsPath,
+                                listingDetailPathTemplate
+                              ]
+                            properties:
+                              healthPath:
+                                type: string
+                              readyPath:
+                                type: string
+                              capabilitiesPath:
+                                type: string
+                              mergedListingsPath:
+                                type: string
+                              requestListingsPath:
+                                type: string
+                              listingDetailPathTemplate:
+                                type: string
+                          portalMirror:
+                            type: object
+                            required:
+                              [
+                                healthPath,
+                                readyPath,
+                                capabilitiesPath,
+                                mergedListingsPath,
+                                requestListingsPath,
+                                listingDetailPathTemplate,
+                                guidePath
+                              ]
+                            properties:
+                              healthPath:
+                                type: string
+                              readyPath:
+                                type: string
+                              capabilitiesPath:
+                                type: string
+                              mergedListingsPath:
+                                type: string
+                              requestListingsPath:
+                                type: string
+                              listingDetailPathTemplate:
+                                type: string
+                              guidePath:
+                                type: string
                       features:
                         type: object
                         required:
@@ -2241,6 +2310,10 @@ paths:
       tags: [Orders]
       operationId: acceptDeadlineExtensionPlan
       x-clawnera-surface: public-user
+      deprecated: true
+      description: >
+        Deprecated. This route is dark-disabled and non-authoritative until an
+        escrow deadline-apply path exists.
       parameters:
         - name: extensionObjectId
           in: path
@@ -2254,22 +2327,13 @@ paths:
             schema:
               $ref: "#/components/schemas/DeadlineExtActionRequest"
       responses:
-        "200":
-          description: Transaction plan for `deadline_ext::accept`.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TxPlanResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          description: On-chain validation unavailable.
+        "409":
+          description: >
+            Deadline extension accept is dark-disabled until an authoritative
+            escrow deadline-apply path exists. Returns
+            `deadline_extension_accept_disabled`.
           content:
             application/json:
               schema:
@@ -2787,6 +2851,50 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+  /orders/{orderId}/milestones/{milestoneId}/force-resolve-timeout:
+    post:
+      tags: [Orders]
+      operationId: resolveMilestoneTimeoutPlan
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: milestoneId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderMilestoneTimeoutResolveRequest"
+      responses:
+        "200":
+          description: Transaction plan for permissionless timeout resolution of a milestone escrow dispute.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          description: On-chain milestone escrow verification temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /orders/{orderId}/milestones/{milestoneId}/disputes/open:
     post:
       tags: [Disputes]
@@ -2899,6 +3007,16 @@ paths:
                 type: object
                 required: [evidenceItem]
                 properties:
+                  consistencyWarning:
+                    type: object
+                    required: [publishedAssignmentRound, liveAssignmentRound]
+                    properties:
+                      publishedAssignmentRound:
+                        type: integer
+                      liveAssignmentRound:
+                        type: integer
+                      liveClosedAtMs:
+                        type: integer
                   evidenceItem:
                     $ref: "#/components/schemas/DisputeEvidenceItem"
         "400":
@@ -7245,6 +7363,19 @@ components:
       required: [escrowObjectId]
       properties:
         escrowObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+    OrderMilestoneTimeoutResolveRequest:
+      type: object
+      additionalProperties: false
+      required: [escrowObjectId]
+      properties:
+        escrowObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        clockObjectId:
           type: string
           minLength: 3
           maxLength: 200

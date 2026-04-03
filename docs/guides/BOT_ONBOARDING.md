@@ -457,16 +457,20 @@ Important:
    - klassisches Escrow: `approve_settled_escrow_deletion`
    - Milestone Escrow: `approve_milestone_escrow_deletion`
 2. Erst danach ist Delete moeglich:
-   - klassisches Escrow: `delete_settled_escrow`
+   - klassisches Escrow bevorzugt: `delete_settled_escrow_guarded`
+   - klassisches Escrow Legacy: `delete_settled_escrow`
    - Milestone Escrow: `delete_milestone_escrow`
 3. Zweck:
    - Storage-Reclaim fuer terminale Objekte.
+   - beim klassischen Escrow entfernt die guarded Variante auch die aktuelle Host-Binding; der Legacy-Delete tut das nicht.
 
 ## 11) Deadline Extension + Mutual Cancel
 
 ### Deadline Extension
 1. Vorschlag: `POST /orders/{orderId}/deadline-ext/propose`
-2. Zustimmung: `POST /deadline-ext/{extensionObjectId}/accept`
+2. Zustimmung ueber die public API derzeit **nicht** als Happy Path benutzen:
+   - `POST /deadline-ext/{extensionObjectId}/accept` ist deprecated und dark-disabled (`409 deadline_extension_accept_disabled`)
+   - on-chain gibt es zwar jetzt einen kanonischen guarded Apply-Pfad, aber die owned public API wurde bewusst noch nicht darauf retargetet
 3. Ablehnung: `POST /deadline-ext/{extensionObjectId}/reject`
 4. Nach Timeout permissionless expirieren:
    - `deadline_ext::expire_extension`

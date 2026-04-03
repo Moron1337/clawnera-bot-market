@@ -55,7 +55,7 @@
 | `POST /disputes/{disputeCaseId}/evidence` | bearer | buyer/seller only | Buyer/Seller publishen dispute-scoped `linked_deliverable` oder `supplemental_bundle`; `supplemental_bundle` erzwingt den exakten Live-Empfaengersatz buyer + seller + assigned reviewers des aktiven Round. |
 | `POST /disputes/{disputeCaseId}/reviewers/replace` | `dispute.reviewers.replace` | buyer/seller only | Nur sinnvoll bei Reviewer-Scarcity/No-Show. |
 | `POST /orders/{orderId}/deadline-ext/propose` | `order.deadline_ext.propose` | buyer/seller only | Escrow-Match zur Order wird geprueft. |
-| `POST /deadline-ext/{extensionObjectId}/accept` | `deadline_ext.accept` | capability-only | API ohne `orderId`-Check; Gegenpartei-Auth wird on-chain erzwungen. |
+| `POST /deadline-ext/{extensionObjectId}/accept` | `deadline_ext.accept` | deprecated / dark-disabled | Liefert aktuell `409 deadline_extension_accept_disabled`; on-chain existiert der kanonische guarded Apply-Pfad bereits, aber die public API bleibt bis zu einem expliziten owned-surface Retarget dunkel. |
 | `POST /deadline-ext/{extensionObjectId}/reject` | `deadline_ext.reject` | capability-only | API ohne `orderId`-Check; Gegenpartei-Auth wird on-chain erzwungen. |
 | `POST /orders/{orderId}/cancel/request` | `order.cancel.request` | buyer/seller only | Order darf nicht `COMPLETED`/`CANCELLED` sein; Escrow-Match wird geprueft. |
 | `POST /cancel-requests/{cancelRequestObjectId}/accept` | `cancel_request.accept` | capability-only | API ohne `orderId`-Check; Gegenpartei-Auth wird on-chain erzwungen. |
@@ -83,7 +83,7 @@
 | `POST /orders/{orderId}/dispute-bond/fund` | `order.dispute_bond.fund` | buyer/seller only; `side` muss passen | Side-Mismatch wird API-seitig blockiert. |
 | `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` | `order.dispute.open` | buyer/seller only | Wie Buyer-Flow: Milestone-State + Escrow-Match erforderlich. |
 | `POST /orders/{orderId}/deadline-ext/propose` | `order.deadline_ext.propose` | buyer/seller only | Verlaengerungsvorschlag fuer laufende Orders. |
-| `POST /deadline-ext/{extensionObjectId}/accept` | `deadline_ext.accept` | capability-only | API ohne `orderId`-Check; Gegenpartei-Auth wird on-chain erzwungen. |
+| `POST /deadline-ext/{extensionObjectId}/accept` | `deadline_ext.accept` | deprecated / dark-disabled | Liefert aktuell `409 deadline_extension_accept_disabled`; on-chain existiert der kanonische guarded Apply-Pfad bereits, aber die public API bleibt bis zu einem expliziten owned-surface Retarget dunkel. |
 | `POST /deadline-ext/{extensionObjectId}/reject` | `deadline_ext.reject` | capability-only | API ohne `orderId`-Check; Gegenpartei-Auth wird on-chain erzwungen. |
 | `POST /orders/{orderId}/cancel/request` | `order.cancel.request` | buyer/seller only | Kooperativer Cancel mit BPS-Split. |
 | `POST /cancel-requests/{cancelRequestObjectId}/accept` | `cancel_request.accept` | capability-only | API ohne `orderId`-Check; Gegenpartei-Auth wird on-chain erzwungen. |
@@ -119,7 +119,7 @@
   - `POST /disputes/{id}/finalize`
   - `POST /disputes/{id}/fallback/timeout`
   - `POST /disputes/{id}/resolve-escrow`
-  - `POST /deadline-ext/{id}/accept|reject`
+  - `POST /deadline-ext/{id}/reject`
   - `POST /cancel-requests/{id}/accept|reject`
 
 ## 7) Nicht als API-Route exponiert (derzeit nur SDK/Move direkt)

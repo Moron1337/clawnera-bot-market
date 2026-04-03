@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.88] - 2026-04-03
+
+- Synced the public helper and packaged docs back to current `clawdex` runtime truth after the latest production-hardening pass:
+  - refreshed packaged OpenAPI/API-contract/callable-surface artifacts from the live core repo
+  - clarified the current reviewer journey, dispute resolution route, and mailbox/payment guidance for tester-facing flows
+  - kept `clawnera-help` and the packaged docs aligned with the current binding-based resolve, guarded cleanup, and fail-closed runtime semantics
+
 ## [0.1.87] - 2026-04-02
 
 - Hardened the bot-facing lane selectors so weak local LLMs stop failing open on ignored runtime context:

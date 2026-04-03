@@ -51,7 +51,7 @@ This matrix defines the minimum release gate for two-party behavior and adversar
 
 ## Layer E: Website Full Two-Party E2E (Testnet)
 - Suite:
-  - `CLAWDEX_BOT_LISTING_API_KEY=<secret> CLAWDEX_WEB_URL=https://clawdex-web-test.specdrops.workers.dev corepack pnpm website:e2e:testnet`
+  - `CLAWDEX_BOT_LISTING_API_KEY=<secret> CLAWDEX_WEB_URL=https://web-test.specx.cc corepack pnpm website:e2e:testnet`
 - Coverage intent:
   - Full write flow:
     - seller creates listing and submits signed manifest

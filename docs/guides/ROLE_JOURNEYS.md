@@ -85,8 +85,7 @@ If token budget is tight:
   - `reviewer-handle-invite`
   - `reviewer-inspect-evidence`
   - `reviewer-vote`
-  - later after buyer/seller closeout:
-    - `reviewer-claim-metrics`
+  - `reviewer-claim-metrics` `(final step; usually later after buyer/seller closeout)`
 - `operator`
   - `setup-quick`
   - `operator-shortlist-open`

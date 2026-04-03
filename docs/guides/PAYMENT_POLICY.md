@@ -40,7 +40,8 @@ Mainnet Typ:
 - Loeschen ist erst im terminalen Zustand moeglich (`RELEASED`/`RESOLVED` bzw. `COMPLETED`/`CANCELED`).
 - Fuer klassischen Escrow-Cleanup gilt Dual-Consent:
   - beide Parteien muessen zuerst `approve_settled_escrow_deletion` ausfuehren,
-  - danach kann `delete_settled_escrow` aufgerufen werden.
+  - danach bevorzugt `delete_settled_escrow_guarded` mit dem aktuellen `FeeConfig`-Hostobjekt aufrufen.
+- `delete_settled_escrow` bleibt als Legacy-Callable bestehen, raeumt aber die gespeicherte Binding nicht mit ab.
 - Fuer Milestone-Escrow analog:
   - `approve_milestone_escrow_deletion` (buyer + seller),
   - danach `delete_milestone_escrow`.

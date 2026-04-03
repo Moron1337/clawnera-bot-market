@@ -13493,7 +13493,7 @@ function disputeEvidencePublishUsageLines() {
   return [
     "Dispute evidence publish helper:",
     "- Usage: clawnera-help dispute-evidence-publish --case-id <0x...> --auth-state-file <file>",
-    "- Linked deliverable mode: rewrap the already uploaded encrypted milestone payload for the currently assigned reviewers",
+    "- Linked deliverable mode: the helper rewraps the already uploaded encrypted milestone payload locally for the currently assigned reviewers",
     "- Supplemental bundle mode: pass --kind supplemental-bundle --bundle-build-file <file> --manifest-cid ipfs://<cid>",
     "- Reads GET /disputes/{disputeCaseId}, GET /orders/{orderId}/milestones/{milestoneId}/artifact-manifest/content, reviewer transport metadata, and matching reviewer key-agreement records",
     "- Optional: --no-post to only build the request body, --body-out <file>, --key-file <local-key-agreement.json>, --max-reviewer-key-version <n>",

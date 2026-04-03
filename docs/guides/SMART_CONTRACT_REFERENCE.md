@@ -25,7 +25,8 @@ Quellen:
 | `open_dispute` | Escrow in Dispute ueberfuehren | buyer/seller | dispute-faehiger State, clock |
 | `claim_after_deadline` | Seller claimt nach Deadline | seller | deadline erreicht, kein final settlement |
 | `approve_settled_escrow_deletion` | Partei-Freigabe fuer Escrow-Cleanup | buyer/seller | Escrow terminal (`RELEASED`/`RESOLVED`) |
-| `delete_settled_escrow` | Escrow loeschen / Storage reclaim | buyer/seller | terminal + **beide** Delete-Approvals gesetzt |
+| `delete_settled_escrow` | Legacy Escrow-Delete / Storage reclaim | buyer/seller | terminal + **beide** Delete-Approvals gesetzt; laesst alte Binding unter dem Host weiterliegen |
+| `delete_settled_escrow_guarded` | bevorzugter Escrow-Delete / Storage reclaim | buyer/seller | terminal + **beide** Delete-Approvals gesetzt + korrektes `FeeConfig`-Hostobjekt fuer die aktuelle Binding |
 | `resolve_dispute_to_seller` | Arb-Cap Resolution seller | arb/admin path | ArbCap, disputed state |
 | `resolve_dispute_to_buyer` | Arb-Cap Resolution buyer | arb/admin path | ArbCap, disputed state |
 | `resolve_dispute_after_timeout_split` | Timeout Fallback Split | permissionless timeout path | timeout reached, kein dispute-quorum binding fuer dieses escrow |
@@ -51,8 +52,10 @@ Quellen:
 | --- | --- | --- | --- |
 | `create_listing_deposit_iota_entry` | Listing-Deposit erzeugen (owned) | listing creator | `listing_ref` digest gueltig, IOTA amount exakt = `cfg.deposit_amount_iota` |
 | `create_listing_deposit_iota_shared_entry` | Listing-Deposit erzeugen (shared) | listing creator | wie oben; shared fuer admin/keeper settlement paths |
-| `refund_listing_deposit_full` | Deposit komplett rueckerstatten | admin/keeper | Deposit `ACTIVE`, AdminCap path |
-| `forfeit_listing_deposit_by_policy` | Deposit gemaess Policy teilweise/komplett forfeit | admin/keeper | Deposit `ACTIVE`, Policy-Cfg + Forfeit-Sink gesetzt |
+| `refund_listing_deposit_full_and_unbind` | Bevorzugter kompletter Refund + Binding-Cleanup | admin/keeper | Deposit `ACTIVE`, AdminCap path, entfernt die aktuelle `listing_ref`-Binding atomar |
+| `forfeit_listing_deposit_by_policy_and_unbind` | Bevorzugter Policy-Forfeit + Binding-Cleanup | admin/keeper | Deposit `ACTIVE`, Policy-Cfg + Forfeit-Sink gesetzt, entfernt die aktuelle `listing_ref`-Binding atomar |
+| `refund_listing_deposit_full` | Legacy kompletter Refund | admin/keeper | Deposit `ACTIVE`, AdminCap path; laesst die bisherige Binding absichtlich bestehen |
+| `forfeit_listing_deposit_by_policy` | Legacy Policy-Forfeit | admin/keeper | Deposit `ACTIVE`, Policy-Cfg + Forfeit-Sink gesetzt; laesst die bisherige Binding absichtlich bestehen |
 
 ### `dispute_quorum`
 
@@ -112,7 +115,8 @@ Quellen:
 | `post_signal` | verschluesseltes Signal posten | buyer/seller | mailbox offen + signal payload valid |
 | `ack_signal` | monotones ack setzen | buyer/seller | ack seq nur steigend |
 | `close_order_mailbox` | mailbox-schliessen approven | buyer/seller | mailbox offen; final geschlossen erst nach buyer+seller approval |
-| `delete_closed_mailbox` | mailbox cleanup / storage reclaim | buyer/seller | mailbox `closed=true` |
+| `delete_closed_mailbox` | Legacy mailbox cleanup / storage reclaim | buyer/seller | mailbox `closed=true`; laesst alte Binding unter dem Host weiterliegen |
+| `delete_closed_mailbox_guarded` | bevorzugtes mailbox cleanup / storage reclaim | buyer/seller | mailbox `closed=true` + korrektes `GovernanceConfig`-Hostobjekt fuer die aktuelle Binding |
 | `anchor_milestone_manifest` | Manifest kryptographisch verankern | seller | cid/hash/signature refs gueltig |
 | `create_reputation_profile_iota_entry` | Reputation profil erzeugen | actor | fee config + init fee coin |
 
@@ -134,7 +138,7 @@ Quellen:
 | `POST /disputes/{id}/resolve-escrow` | `orderEscrow.resolveDisputeWithBinding` | `order_escrow::resolve_dispute_with_binding` |
 | `POST /orders/{orderId}/reviews` | `review.postWithEscrow/postWithMilestoneEscrow` | `review::post_review_with_escrow` / `review::post_review_with_milestone_escrow` |
 | `POST /orders/{orderId}/deadline-ext/propose` | `deadlineExt.propose` | `deadline_ext::propose_extension` |
-| `POST /deadline-ext/{id}/accept` | `deadlineExt.accept` | `deadline_ext::accept_extension` |
+| `POST /deadline-ext/{id}/accept` | deprecated / dark-disabled | on-chain existiert jetzt ein kanonischer guarded Apply-Pfad, aber die public API bleibt bis zu einem expliziten owned-surface Retarget weiter auf `409 deadline_extension_accept_disabled` |
 | `POST /deadline-ext/{id}/reject` | `deadlineExt.reject` | `deadline_ext::reject_extension` |
 | `POST /orders/{orderId}/cancel/request` | `mutualCancel.request` | `mutual_cancel::request_cancel` |
 | `POST /cancel-requests/{id}/accept` | `mutualCancel.accept` | `mutual_cancel::accept_cancel` |

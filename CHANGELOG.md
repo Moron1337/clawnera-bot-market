@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.91] - 2026-04-08
+
+- Fixed the public helper auth/runtime lane so `doctor`, `sponsor-preflight`, and `sponsor-execute` now accept saved `--auth-state-file` auth the same way as `request`, including one automatic refresh retry after `401 invalid_token`.
+- Fixed `sponsor-execute` to forward `--order-id` into the reserve step and surface it back in JSON output, which is required for the live `orderIdMode=required` sponsor policy.
+- Re-ran the helper against current mainnet/runtime truth:
+  - seller/buyer read lane (`doctor`, `GET /listings?listingMode=ALL`, merged category read, reviewer invites)
+  - seller/buyer write canary (`listing-create`, exact listing read, `bid-create`, `bid-accept`, exact order read)
+  - order-scoped sponsor compare (`sponsor-preflight`, `sponsor-execute --dry-run`)
+  - `order-init-bond --dry-run` on the fresh CLAW mainnet order
+- Fixed two weak-bot quality-of-life drifts discovered during the deeper manual runs:
+  - `mailbox-events` now infers the runtime IOTA network context for direct fallback reads when no explicit `--network` was passed
+  - `reviewer-shortlist` now retries transient shortlist-side `rpc_unreachable` / timeout failures instead of failing immediately on the first short-lived RPC wobble
+
 ## [0.1.90] - 2026-04-08
 
 - Fixed `iota-prepare-transfer` / `iota-dry-run-transfer` draft handling so an existing empty `--drafts-file` now initializes cleanly instead of crashing with `Unexpected end of JSON input`.

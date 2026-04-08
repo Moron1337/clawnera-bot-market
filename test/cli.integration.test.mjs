@@ -153,6 +153,73 @@ test("doctor with jwt reports actor capability failure details", async () => {
   }
 });
 
+test("doctor refreshes saved auth state after invalid_token on actor probes", async () => {
+  const staleToken = buildJwtWithExp(1);
+  const refreshedToken = buildJwtWithExp(4102444800);
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-doctor-refresh-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+
+  const mock = await startMockServer({
+    "GET /health": () => ({ status: 200, body: { ok: true } }),
+    "GET /ready": () => ({ status: 200, body: { ok: true } }),
+    "GET /capabilities": () => ({ status: 200, body: { ok: true } }),
+    "GET /policy/fees": () => ({ status: 200, body: { ok: true } }),
+    "GET /actors/me/capabilities": (request) => {
+      if (request.headers.authorization === `Bearer ${staleToken}`) {
+        return { status: 401, body: { error: "invalid_token" } };
+      }
+      assert.equal(request.headers.authorization, `Bearer ${refreshedToken}`);
+      return { status: 200, body: { ok: true } };
+    },
+    "GET /auth/session": (request) => {
+      assert.equal(request.headers.authorization, `Bearer ${refreshedToken}`);
+      return { status: 200, body: { ok: true } };
+    },
+    "POST /auth/refresh": (request) => {
+      assert.equal(request.body?.refreshToken, "refresh-token-1");
+      return {
+        status: 200,
+        body: {
+          token: refreshedToken,
+          refreshToken: "refresh-token-2",
+          expiresAtMs: 4102444800000
+        }
+      };
+    }
+  });
+
+  try {
+    writeFileSync(
+      authStateFile,
+      JSON.stringify(
+        {
+          apiBase: mock.baseUrl,
+          token: staleToken,
+          refreshToken: "refresh-token-1",
+          address: "0x1111111111111111111111111111111111111111111111111111111111111111",
+          alias: "bot"
+        },
+        null,
+        2
+      )
+    );
+    const result = await runCli(["doctor", "--api-base", mock.baseUrl, "--auth-state-file", authStateFile, "--json"]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.authContext.authStateRefreshed, true);
+    const actorCheck = payload.remote.checks.find((check) => check.id === "actor_capabilities");
+    const sessionCheck = payload.remote.checks.find((check) => check.id === "auth_session");
+    assert.equal(actorCheck.status, "pass");
+    assert.equal(sessionCheck.status, "pass");
+    const saved = JSON.parse(readFileSync(authStateFile, "utf8"));
+    assert.equal(saved.token, refreshedToken);
+    assert.equal(saved.refreshToken, "refresh-token-2");
+  } finally {
+    await mock.close();
+  }
+});
+
 test("request rejects absolute URLs before sending auth headers", async () => {
   const tmpDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-cli-abs-url-"));
   const authStateFile = path.join(tmpDir, "auth-state.json");
@@ -3073,6 +3140,140 @@ test("reviewer-shortlist retries once when the server reports checkpoint_digest_
       publishBody.reviewerSelectionReceiptId,
       "receipt-open-1"
     );
+  } finally {
+    await mock.close();
+  }
+});
+
+test("reviewer-shortlist retries transient rpc_unreachable shortlist failures automatically", async () => {
+  let shortlistCalls = 0;
+  const mock = await startMockServer({
+    "POST /admin/reviewer-selection/shortlist": (request) => {
+      shortlistCalls += 1;
+      if (shortlistCalls === 1) {
+        return {
+          status: 502,
+          body: {
+            error: "rpc_unreachable",
+            detail: "https://api.testnet.iota.cafe:rpc_unreachable(rpc_timeout)"
+          }
+        };
+      }
+      assert.equal(request.body?.checkpointDigest, "checkpoint-live");
+      return {
+        status: 200,
+        body: {
+          selectionComplete: true,
+          receipt: {
+            id: "receipt-open-rpc-retry",
+            shortlistedReviewerAddresses: [
+              "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            ]
+          },
+          publishTarget: {
+            route: "/orders/order-1/milestones/milestone-1/disputes/open",
+            requestPatch: {
+              invitedReviewerAddresses: [
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+              ],
+              reviewerSelectionReceiptId: "receipt-open-rpc-retry"
+            }
+          }
+        }
+      };
+    },
+    "POST /rpc": (request) => {
+      const method = request.body?.method;
+      if (method === "iota_getLatestCheckpointSequenceNumber") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: "42"
+          }
+        };
+      }
+      if (method === "iota_getCheckpoint") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: {
+              digest: "checkpoint-live",
+              sequenceNumber: "42",
+              timestampMs: "1700000000000"
+            }
+          }
+        };
+      }
+      throw new Error(`unexpected_rpc_method:${String(method)}`);
+    }
+  });
+
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-shortlist-rpc-retry-"));
+  const contextFile = path.join(tempDir, "timeline.json");
+  const publishBodyOut = path.join(tempDir, "publish.json");
+  writeFileSync(
+    contextFile,
+    JSON.stringify(
+      {
+        order: {
+          id: "order-1",
+          buyerAddress: "0x1111111111111111111111111111111111111111111111111111111111111111",
+          sellerAddress: "0x2222222222222222222222222222222222222222222222222222222222222222",
+          escrowObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+          disputeBondObjectId: "0x4444444444444444444444444444444444444444444444444444444444444444",
+          status: "DISPUTED"
+        },
+        milestones: [
+          {
+            id: "milestone-1",
+            status: "REJECTED"
+          }
+        ]
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "reviewer-shortlist",
+      "--api-base",
+      mock.baseUrl,
+      "--rpc-url",
+      `${mock.baseUrl}/rpc`,
+      "--jwt",
+      buildJwtWithExp(4102444800),
+      "--order-id",
+      "order-1",
+      "--milestone-id",
+      "milestone-1",
+      "--order-context-file",
+      contextFile,
+      "--publish-body-out",
+      publishBodyOut,
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(shortlistCalls, 2);
+    assert.ok(Array.isArray(payload.warnings));
+    assert.ok(
+      payload.warnings.some((entry) =>
+        /shortlist_rpc_retry_count=1/.test(entry)
+      )
+    );
+    const publishBody = JSON.parse(readFileSync(publishBodyOut, "utf8"));
+    assert.equal(publishBody.reviewerSelectionReceiptId, "receipt-open-rpc-retry");
   } finally {
     await mock.close();
   }
@@ -7640,6 +7841,90 @@ test("sponsor preflight surfaces runtime failures", async () => {
   }
 });
 
+test("sponsor preflight accepts auth state and refreshes one invalid token response", async () => {
+  const staleToken = buildJwtWithExp(1);
+  const refreshedToken = buildJwtWithExp(4102444800);
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-sponsor-preflight-refresh-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+
+  const mock = await startMockServer({
+    "POST /sponsor/preflight": (request) => {
+      if (request.headers.authorization === `Bearer ${staleToken}`) {
+        return { status: 401, body: { error: "invalid_token" } };
+      }
+      assert.equal(request.headers.authorization, `Bearer ${refreshedToken}`);
+      assert.equal(request.body?.purpose, "marketplace_tx");
+      assert.equal(request.body?.paymentCoin, "claw");
+      assert.equal(request.body?.orderId, "order-1");
+      return {
+        status: 200,
+        body: {
+          paymentCoin: "claw",
+          orderId: "order-1",
+          txFamily: "marketplace_write",
+          strategy: {
+            sponsorLikelyAllowed: true,
+            selfPayFallbackAvailable: true,
+            strictMode: false
+          },
+          minimumGasBudget: 1000000,
+          recommendedGasBudget: 2000000,
+          maxGasBudget: 5000000,
+          diagnostics: []
+        }
+      };
+    },
+    "POST /auth/refresh": (request) => {
+      assert.equal(request.body?.refreshToken, "refresh-token-1");
+      return {
+        status: 200,
+        body: {
+          token: refreshedToken,
+          refreshToken: "refresh-token-2",
+          expiresAtMs: 4102444800000
+        }
+      };
+    }
+  });
+
+  try {
+    writeFileSync(
+      authStateFile,
+      JSON.stringify(
+        {
+          apiBase: mock.baseUrl,
+          token: staleToken,
+          refreshToken: "refresh-token-1",
+          address: "0x1111111111111111111111111111111111111111111111111111111111111111",
+          alias: "bot"
+        },
+        null,
+        2
+      )
+    );
+    const result = await runCli([
+      "sponsor-preflight",
+      "--api-base",
+      mock.baseUrl,
+      "--auth-state-file",
+      authStateFile,
+      "--order-id",
+      "order-1",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.orderId, "order-1");
+    assert.equal(payload.txFamily, "marketplace_write");
+    const saved = JSON.parse(readFileSync(authStateFile, "utf8"));
+    assert.equal(saved.token, refreshedToken);
+    assert.equal(saved.refreshToken, "refresh-token-2");
+  } finally {
+    await mock.close();
+  }
+});
+
 test("sponsor execute surfaces execute-side failures after successful reserve", async () => {
   const mock = await startMockServer({
     "POST /sponsor/reserve": (request) => {
@@ -7685,6 +7970,98 @@ test("sponsor execute surfaces execute-side failures after successful reserve", 
     assert.equal(payload.status, 409);
     assert.equal(payload.reservationId, "resv-1");
     assert.equal(payload.response.error, "sponsor_reservation_not_active");
+  } finally {
+    await mock.close();
+  }
+});
+
+test("sponsor execute accepts auth state, refreshes reserve auth, and forwards order id", async () => {
+  const staleToken = buildJwtWithExp(1);
+  const refreshedToken = buildJwtWithExp(4102444800);
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-sponsor-execute-refresh-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+
+  const mock = await startMockServer({
+    "POST /sponsor/reserve": (request) => {
+      if (request.headers.authorization === `Bearer ${staleToken}`) {
+        return { status: 401, body: { error: "invalid_token" } };
+      }
+      assert.equal(request.headers.authorization, `Bearer ${refreshedToken}`);
+      assert.equal(request.body?.gasBudget, 1000000);
+      assert.equal(request.body?.paymentCoin, "claw");
+      assert.equal(request.body?.orderId, "order-9");
+      return {
+        status: 200,
+        body: {
+          reservation: {
+            reservationId: "resv-9",
+            sponsorAddress: "0xabc",
+            gasCoins: ["0x1"]
+          }
+        }
+      };
+    },
+    "POST /sponsor/execute": (request) => {
+      assert.equal(request.headers.authorization, `Bearer ${refreshedToken}`);
+      assert.equal(request.body?.reservationId, "resv-9");
+      return {
+        status: 200,
+        body: {
+          execution: {
+            txDigest: "0xdeadbeef"
+          }
+        }
+      };
+    },
+    "POST /auth/refresh": (request) => {
+      assert.equal(request.body?.refreshToken, "refresh-token-1");
+      return {
+        status: 200,
+        body: {
+          token: refreshedToken,
+          refreshToken: "refresh-token-2",
+          expiresAtMs: 4102444800000
+        }
+      };
+    }
+  });
+
+  try {
+    writeFileSync(
+      authStateFile,
+      JSON.stringify(
+        {
+          apiBase: mock.baseUrl,
+          token: staleToken,
+          refreshToken: "refresh-token-1",
+          address: "0x1111111111111111111111111111111111111111111111111111111111111111",
+          alias: "bot"
+        },
+        null,
+        2
+      )
+    );
+    const result = await runCli([
+      "sponsor-execute",
+      "--api-base",
+      mock.baseUrl,
+      "--auth-state-file",
+      authStateFile,
+      "--order-id",
+      "order-9",
+      "--build-cmd",
+      `node -e "console.log(JSON.stringify({txBytesB64:'dHhieXRlcw==',userSig:'c2ln'}))"`,
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.orderId, "order-9");
+    assert.equal(payload.reservationId, "resv-9");
+    assert.equal(payload.txDigest, "0xdeadbeef");
+    const saved = JSON.parse(readFileSync(authStateFile, "utf8"));
+    assert.equal(saved.token, refreshedToken);
+    assert.equal(saved.refreshToken, "refresh-token-2");
   } finally {
     await mock.close();
   }

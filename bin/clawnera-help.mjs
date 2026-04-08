@@ -2587,11 +2587,11 @@ function hasSelfPayFallback(payload) {
 function sponsorExecuteUsageLines() {
   return [
     "Sponsor execute helper:",
-    "- Required: --api-base <url> --jwt <token>",
+    "- Required auth: --auth-state-file <file> or --env-file <file> or --jwt <token>",
     "- Default flow: reserve -> run --build-cmd -> execute",
     "- Required unless --dry-run: --build-cmd '<shell command>'",
     "- Defaults: --purpose marketplace_tx --gas-budget 1000000 --payment-coin claw",
-    "- Optional: --idempotency-key <key> --timeout-ms <ms> --builder-timeout-ms <ms> --reservation-out <file>",
+    "- Optional: --order-id <id> --idempotency-key <key> --timeout-ms <ms> --builder-timeout-ms <ms> --reservation-out <file>",
     "- Canonical live posture: pass --order-id <id> on every order-scoped reserve/execute call.",
     "- Build command receives env vars:",
     "  CLAWNERA_SPONSOR_RESERVATION_JSON",
@@ -3930,6 +3930,76 @@ async function resolveApiRuntimeContext(options = {}) {
     authStateFile: authStateFile || null,
     authState,
     authStateRefreshed
+  };
+}
+
+function isInvalidTokenResponse(result) {
+  return Boolean(
+    result &&
+      result.status === 401 &&
+      result.body &&
+      typeof result.body === "object" &&
+      !Array.isArray(result.body) &&
+      result.body.error === "invalid_token"
+  );
+}
+
+async function requestJsonWithRuntimeContext({
+  runtimeContext,
+  url,
+  method = "GET",
+  headers = {},
+  body,
+  timeoutMs
+}) {
+  const buildHeaders = () => {
+    const requestHeaders = { ...headers };
+    if (runtimeContext.jwt) {
+      requestHeaders.authorization = `Bearer ${runtimeContext.jwt}`;
+    }
+    return requestHeaders;
+  };
+
+  let result = await requestJson(
+    url,
+    {
+      method,
+      headers: buildHeaders(),
+      ...(body !== undefined ? { body } : {})
+    },
+    timeoutMs
+  );
+
+  const shouldRetryInvalidToken =
+    isInvalidTokenResponse(result) &&
+    runtimeContext.authStateFile &&
+    runtimeContext.authState?.refreshToken &&
+    !runtimeContext.authStateRefreshed;
+
+  if (shouldRetryInvalidToken) {
+    const refreshedAuthState = await refreshAuthState({
+      apiBase: runtimeContext.apiBase || normalizeApiBase(url),
+      authState: runtimeContext.authState,
+      timeoutMs
+    });
+    await saveAuthState(runtimeContext.authStateFile, refreshedAuthState);
+    runtimeContext.authState = refreshedAuthState;
+    runtimeContext.jwt = refreshedAuthState.token;
+    runtimeContext.authStateRefreshed = true;
+    result = await requestJson(
+      url,
+      {
+        method,
+        headers: buildHeaders(),
+        ...(body !== undefined ? { body } : {})
+      },
+      timeoutMs
+    );
+  }
+
+  return {
+    runtimeContext,
+    result
   };
 }
 
@@ -7381,14 +7451,18 @@ async function fetchMailboxEventsSnapshot(options, orderId, { timeoutMs, limit, 
       });
       if (feesCall.result.ok) {
         const packageId = extractPackageIdFromPolicyResponse(feesCall.result.body);
+        const iotaRuntime = resolveRuntimeIotaOptions(
+          options,
+          feesCall.context || postedCall.context || ackCall?.context || mailboxCall.context,
+        );
         const chainItems = await listMailboxEventFeedItems({
           packageId,
           orderId,
           mailboxObjectId,
           limit: effectiveLimit,
           includeAcked: effectiveIncludeAcked,
-          network: options.network,
-          rpcUrl: options["rpc-url"],
+          network: iotaRuntime.network,
+          rpcUrl: iotaRuntime.rpcUrl,
         });
         const chainPostedEvents = chainItems
           .filter((item) => item?.eventType === "mailbox.signal_posted")
@@ -12552,7 +12626,7 @@ async function runReviewerShortlist(commandArgs) {
     let effectiveCheckpointDigest = checkpoint.digest;
     let effectiveCheckpointSequenceNumber = checkpoint.sequenceNumber;
     let effectiveCheckpointTimestampMs = checkpoint.timestampMs;
-    const shortlistTimeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+    const shortlistTimeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 30_000);
     const body = {
       scope,
       orderId: scope === "OPEN" ? orderId : undefined,
@@ -12593,10 +12667,22 @@ async function runReviewerShortlist(commandArgs) {
         },
         timeoutMs: shortlistTimeoutMs,
       });
-    let shortlistCall = await requestShortlist();
     let checkpointDigestRetryCount = 0;
+    let shortlistRpcRetryCount = 0;
     const maxCheckpointDigestRetries = 4;
-    while (checkpointDigestRetryCount < maxCheckpointDigestRetries) {
+    const maxShortlistRpcRetries = 2;
+    const isRetryableShortlistFailure = (call) => {
+      const failureBody = asRecord(call?.result?.body) || {};
+      const summarized = summarizeApiFailure(call?.result);
+      return (
+        summarized === "backend_timeout" ||
+        summarized === "http_timeout" ||
+        (call?.result?.status === 502 && failureBody.error === "rpc_unreachable")
+      );
+    };
+    let shortlistCall = null;
+    while (true) {
+      shortlistCall = await requestShortlist();
       const shortlistFailureBody = asRecord(shortlistCall.result.body) || {};
       const latestCheckpointDigest =
         shortlistCall.result.status === 409 && shortlistFailureBody.error === "checkpoint_digest_mismatch"
@@ -12604,24 +12690,40 @@ async function runReviewerShortlist(commandArgs) {
             ? shortlistFailureBody.latestCheckpointDigest.trim()
             : ""
           : "";
+      if (
+        latestCheckpointDigest &&
+        latestCheckpointDigest !== effectiveCheckpointDigest &&
+        checkpointDigestRetryCount < maxCheckpointDigestRetries
+      ) {
+        effectiveCheckpointDigest = latestCheckpointDigest;
+        body.checkpointDigest = latestCheckpointDigest;
+        if (
+          typeof shortlistFailureBody.latestCheckpointSequenceNumber === "string" &&
+          /^\d+$/.test(shortlistFailureBody.latestCheckpointSequenceNumber)
+        ) {
+          effectiveCheckpointSequenceNumber = shortlistFailureBody.latestCheckpointSequenceNumber;
+        } else if (
+          typeof shortlistFailureBody.latestCheckpointSequenceNumber === "number" &&
+          Number.isFinite(shortlistFailureBody.latestCheckpointSequenceNumber)
+        ) {
+          effectiveCheckpointSequenceNumber = String(shortlistFailureBody.latestCheckpointSequenceNumber);
+        }
+        checkpointDigestRetryCount += 1;
+        continue;
+      }
+      if (
+        !shortlistCall.result.ok &&
+        isRetryableShortlistFailure(shortlistCall) &&
+        shortlistRpcRetryCount < maxShortlistRpcRetries
+      ) {
+        shortlistRpcRetryCount += 1;
+        await sleep(500 * shortlistRpcRetryCount);
+        continue;
+      }
       if (!latestCheckpointDigest || latestCheckpointDigest === effectiveCheckpointDigest) {
         break;
       }
-      effectiveCheckpointDigest = latestCheckpointDigest;
-      body.checkpointDigest = latestCheckpointDigest;
-      if (
-        typeof shortlistFailureBody.latestCheckpointSequenceNumber === "string" &&
-        /^\d+$/.test(shortlistFailureBody.latestCheckpointSequenceNumber)
-      ) {
-        effectiveCheckpointSequenceNumber = shortlistFailureBody.latestCheckpointSequenceNumber;
-      } else if (
-        typeof shortlistFailureBody.latestCheckpointSequenceNumber === "number" &&
-        Number.isFinite(shortlistFailureBody.latestCheckpointSequenceNumber)
-      ) {
-        effectiveCheckpointSequenceNumber = String(shortlistFailureBody.latestCheckpointSequenceNumber);
-      }
-      checkpointDigestRetryCount += 1;
-      shortlistCall = await requestShortlist();
+      break;
     }
     if (!shortlistCall.result.ok) {
       return {
@@ -12693,6 +12795,11 @@ async function runReviewerShortlist(commandArgs) {
     if (effectiveCheckpointDigest !== checkpoint.digest) {
       warnings.push(
         `checkpoint_digest_advanced_to=${effectiveCheckpointDigest}; retried shortlist automatically ${checkpointDigestRetryCount} time(s) after server reported newer finalized checkpoints`
+      );
+    }
+    if (shortlistRpcRetryCount > 0) {
+      warnings.push(
+        `shortlist_rpc_retry_count=${shortlistRpcRetryCount}; retried shortlist automatically after transient rpc/backend failures`
       );
     }
     if (scope === "OPEN" && milestoneStatus && !["REJECTED", "DISPUTED"].includes(milestoneStatus)) {
@@ -12856,7 +12963,7 @@ async function runReviewerVotePrepare(commandArgs) {
 function sponsorPreflightUsageLines() {
   return [
     "Sponsor preflight helper:",
-    "- Required: --api-base <url> --jwt <token>",
+    "- Required auth: --auth-state-file <file> or --env-file <file> or --jwt <token>",
     "- Defaults: --purpose marketplace_tx --payment-coin claw",
     "- Optional: --gas-budget <int> --tx-family <family> --order-id <id> --timeout-ms <ms>",
     "- Runtime returns strategy, diagnostics, tx family, and gas recommendations without consuming a reservation.",
@@ -12882,7 +12989,12 @@ async function runSponsorPreflight(commandArgs) {
     };
   }
 
-  const apiBase = normalizeApiBase(options["api-base"] || process.env.CLAWNERA_API_BASE_URL);
+  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+  const runtimeContext = await resolveApiRuntimeContext({
+    ...options,
+    "timeout-ms": timeoutMs
+  });
+  const apiBase = runtimeContext.apiBase;
   if (!apiBase) {
     return {
       ok: false,
@@ -12891,12 +13003,11 @@ async function runSponsorPreflight(commandArgs) {
     };
   }
 
-  const jwt = String(options.jwt || process.env.CLAWNERA_API_JWT || "").trim();
-  if (!jwt) {
+  if (!runtimeContext.jwt) {
     return {
       ok: false,
       error: "missing_jwt",
-      hint: "set --jwt or CLAWNERA_API_JWT"
+      hint: "set --auth-state-file / --env-file or provide --jwt"
     };
   }
 
@@ -12907,7 +13018,6 @@ async function runSponsorPreflight(commandArgs) {
   const txFamily = typeof options["tx-family"] === "string" ? options["tx-family"].trim() : "";
 
   try {
-    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
     const gasBudgetRaw = options["gas-budget"];
     const gasBudget =
       gasBudgetRaw === undefined || gasBudgetRaw === null || gasBudgetRaw === ""
@@ -12922,18 +13032,16 @@ async function runSponsorPreflight(commandArgs) {
       ...(gasBudget ? { gasBudget } : {})
     };
 
-    const preflightResult = await requestJson(
-      `${apiBase}/sponsor/preflight`,
-      {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${jwt}`,
-          "content-type": "application/json"
-        },
-        body: JSON.stringify(preflightBody)
+    const { result: preflightResult } = await requestJsonWithRuntimeContext({
+      runtimeContext,
+      url: `${apiBase}/sponsor/preflight`,
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
       },
+      body: JSON.stringify(preflightBody),
       timeoutMs
-    );
+    });
 
     if (!preflightResult.ok) {
       return {
@@ -12987,7 +13095,12 @@ async function runSponsorExecute(commandArgs) {
     };
   }
 
-  const apiBase = normalizeApiBase(options["api-base"] || process.env.CLAWNERA_API_BASE_URL);
+  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+  const runtimeContext = await resolveApiRuntimeContext({
+    ...options,
+    "timeout-ms": timeoutMs
+  });
+  const apiBase = runtimeContext.apiBase;
   if (!apiBase) {
     return {
       ok: false,
@@ -12996,25 +13109,24 @@ async function runSponsorExecute(commandArgs) {
     };
   }
 
-  const jwt = String(options.jwt || process.env.CLAWNERA_API_JWT || "").trim();
-  if (!jwt) {
+  if (!runtimeContext.jwt) {
     return {
       ok: false,
       error: "missing_jwt",
-      hint: "set --jwt or CLAWNERA_API_JWT"
+      hint: "set --auth-state-file / --env-file or provide --jwt"
     };
   }
 
   const purpose = String(options.purpose || "marketplace_tx").trim().toLowerCase();
   const paymentCoinRaw = options["payment-coin"];
   const paymentCoin = paymentCoinRaw === undefined ? "claw" : String(paymentCoinRaw).trim().toLowerCase();
+  const orderId = typeof options["order-id"] === "string" ? options["order-id"].trim() : "";
   const dryRun = Boolean(options["dry-run"]);
   const buildCmd = typeof options["build-cmd"] === "string" ? options["build-cmd"] : "";
   const reservationOut = typeof options["reservation-out"] === "string" ? options["reservation-out"].trim() : "";
 
   try {
     const gasBudget = parsePositiveIntOption(options["gas-budget"], "gas_budget", 1_000_000);
-    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
     const builderTimeoutMs = parsePositiveIntOption(options["builder-timeout-ms"], "builder_timeout_ms", 60_000);
     const idempotencyKey = typeof options["idempotency-key"] === "string" ? options["idempotency-key"] : randomUUID();
 
@@ -13029,21 +13141,20 @@ async function runSponsorExecute(commandArgs) {
     const reserveBody = {
       purpose,
       gasBudget,
-      ...(paymentCoin ? { paymentCoin } : {})
+      ...(paymentCoin ? { paymentCoin } : {}),
+      ...(orderId ? { orderId } : {})
     };
 
-    const reserveResult = await requestJson(
-      `${apiBase}/sponsor/reserve`,
-      {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${jwt}`,
-          "content-type": "application/json"
-        },
-        body: JSON.stringify(reserveBody)
+    const { result: reserveResult } = await requestJsonWithRuntimeContext({
+      runtimeContext,
+      url: `${apiBase}/sponsor/reserve`,
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
       },
+      body: JSON.stringify(reserveBody),
       timeoutMs
-    );
+    });
 
     if (!reserveResult.ok) {
       return {
@@ -13085,6 +13196,7 @@ async function runSponsorExecute(commandArgs) {
         ok: true,
         mode: "dry_run",
         reservationId,
+        orderId: orderId || null,
         sponsorAddress: reservation?.sponsorAddress || null,
         reservationOut: safeReservationOut || null
       };
@@ -13112,23 +13224,21 @@ async function runSponsorExecute(commandArgs) {
       };
     }
 
-    const executeResult = await requestJson(
-      `${apiBase}/sponsor/execute`,
-      {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${jwt}`,
-          "content-type": "application/json",
-          "idempotency-key": idempotencyKey
-        },
-        body: JSON.stringify({
-          reservationId,
-          txBytesB64: built.payload.txBytesB64,
-          userSig: built.payload.userSig
-        })
+    const { result: executeResult } = await requestJsonWithRuntimeContext({
+      runtimeContext,
+      url: `${apiBase}/sponsor/execute`,
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": idempotencyKey
       },
+      body: JSON.stringify({
+        reservationId,
+        txBytesB64: built.payload.txBytesB64,
+        userSig: built.payload.userSig
+      }),
       timeoutMs
-    );
+    });
 
     if (!executeResult.ok) {
       return {
@@ -13153,6 +13263,7 @@ async function runSponsorExecute(commandArgs) {
       ok: true,
       mode: "execute",
       reservationId,
+      orderId: orderId || null,
       txDigest: executeResult.body?.execution?.txDigest || null,
       sponsorAddress: reservation?.sponsorAddress || null
     };
@@ -13643,6 +13754,7 @@ function mailboxEventsUsageLines() {
     "- Reads the bound mailbox object id, then fetches mailbox.signal_posted and mailbox.signal_acked events for that order",
     "- Optional: --limit <n> --include-acked <true|false> --events-out <file>",
     "- If the wider event read times out transiently, the helper automatically retries with a smaller recent-event window",
+    "- When the API event feed is empty, the helper falls back to on-chain reads and infers the IOTA network from explicit --network/--rpc-url first, otherwise from runtime/auth API base",
     "- Use this instead of guessing seq numbers from raw /events queries",
     "- If indexing is still catching up, use the mailbox_signal_posted_seq or mailbox_signal_acked_seq printed by tx-plan-execute as the temporary source of truth and re-read later"
   ];
@@ -13758,7 +13870,9 @@ function summarizeApiFailure(result) {
   return "unexpected_response";
 }
 
-async function collectRemoteDoctor(apiBase, jwt, timeoutMs) {
+async function collectRemoteDoctor(runtimeContext, timeoutMs) {
+  const apiBase = runtimeContext?.apiBase || null;
+  const jwt = runtimeContext?.jwt || "";
   const probes = [
     { id: "health", path: "/health", requiresJwt: false },
     { id: "ready", path: "/ready", requiresJwt: false },
@@ -13782,18 +13896,13 @@ async function collectRemoteDoctor(apiBase, jwt, timeoutMs) {
       continue;
     }
 
-    const result = await requestJson(
-      `${apiBase}${probe.path}`,
-      {
-        method: "GET",
-        headers: probe.requiresJwt
-          ? {
-              authorization: `Bearer ${jwt}`
-            }
-          : undefined
-      },
+    const { result } = await requestJsonWithRuntimeContext({
+      runtimeContext,
+      url: `${apiBase}${probe.path}`,
+      method: "GET",
+      headers: {},
       timeoutMs
-    );
+    });
     const ok = result.ok && result.status === 200;
     checks.push({
       id: probe.id,
@@ -13842,7 +13951,7 @@ async function runDoctorCommand(commandArgs) {
   });
 
   if (runtimeContext.apiBase) {
-    report.remote = await collectRemoteDoctor(runtimeContext.apiBase, runtimeContext.jwt, timeoutMs);
+    report.remote = await collectRemoteDoctor(runtimeContext, timeoutMs);
     report.ok = report.remote.ok;
   } else {
     report.remote = null;

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -308,4 +309,28 @@ test("transfer drafts save, load, and delete cleanly", async () => {
 
   await deleteIotaTransferDraft(draftsPath, "draft-1");
   await assert.rejects(async () => loadIotaTransferDraft(draftsPath, "draft-1"), /transfer_draft_not_found/);
+});
+
+test("transfer drafts tolerate an existing empty drafts file", async () => {
+  const draftsPath = path.join(os.tmpdir(), `clawnera-empty-drafts-${Date.now()}.json`);
+  await fs.writeFile(draftsPath, "");
+
+  const draft = {
+    id: "draft-empty-file",
+    kind: "iota_transfer",
+    createdAt: Date.now(),
+    expiresAt: Date.now() + DEFAULT_TRANSFER_DRAFT_TTL_SEC * 1000,
+    signerAddress: A,
+    recipient: B,
+    amountNanos: "100",
+    inputCoins: [C],
+    txBytesB64: "QUJD",
+    network: "testnet",
+    rpcUrl: "https://rpc.example",
+  };
+
+  await saveIotaTransferDraft(draftsPath, draft);
+  const loaded = await loadIotaTransferDraft(draftsPath, draft.id);
+  assert.equal(loaded.id, draft.id);
+  await fs.unlink(draftsPath);
 });

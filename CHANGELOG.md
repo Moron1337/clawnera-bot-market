@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.90] - 2026-04-08
+
+- Fixed `iota-prepare-transfer` / `iota-dry-run-transfer` draft handling so an existing empty `--drafts-file` now initializes cleanly instead of crashing with `Unexpected end of JSON input`.
+- Re-ran the published helper manually against testnet across the documented core paths:
+  - wallet init/list/auth/faucet/balance helpers
+  - discovery, seller offer flow, buyer bid/accept flow, sponsor preflight/dry-run flow
+  - reviewer onboarding/update/invites and request listing create/match/cancel flows
+
 ## [0.1.89] - 2026-04-08
 
 - Synced the published helper and packaged docs to the current `clawdex` launch/runtime truth:

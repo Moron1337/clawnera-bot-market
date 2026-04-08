@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.89] - 2026-04-08
+
+- Synced the published helper and packaged docs to the current `clawdex` launch/runtime truth:
+  - sponsor examples and public helper defaults now use `CLAW` and require explicit `orderId` on sponsor reserve/execute flows
+  - retired the old reviewer address-path `claim-metrics` compat lane from the public helper surface
+  - refreshed the packaged OpenAPI/API-contract/docsource snapshots so the npm helper matches the current marketplace runtime and launch posture
+
 ## [0.1.88] - 2026-04-03
 
 - Synced the public helper and packaged docs back to current `clawdex` runtime truth after the latest production-hardening pass:

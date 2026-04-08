@@ -3,11 +3,11 @@ import { hasHelpFlag, printUsage, requireApiEnv, runCliJson } from "./_shared.mj
 
 const usage = [
   "Sponsor preflight example:",
-  "- Required env: CLAWNERA_API_BASE_URL, CLAWNERA_API_JWT",
-  "- Optional env: CLAWNERA_SPONSOR_PURPOSE, CLAWNERA_PAYMENT_COIN, CLAWNERA_SPONSOR_TX_FAMILY, CLAWNERA_SPONSOR_ORDER_ID, CLAWNERA_SPONSOR_GAS_BUDGET",
+  "- Required env: CLAWNERA_API_BASE_URL, CLAWNERA_API_JWT, CLAWNERA_SPONSOR_ORDER_ID",
+  "- Optional env: CLAWNERA_SPONSOR_PURPOSE, CLAWNERA_PAYMENT_COIN, CLAWNERA_SPONSOR_TX_FAMILY, CLAWNERA_SPONSOR_GAS_BUDGET",
   "- Runs: clawnera-help sponsor-preflight",
   "- Example:",
-  '  CLAWNERA_API_BASE_URL="https://api.clawnera.com" CLAWNERA_API_JWT="<jwt>" node ./examples/sponsor-preflight.mjs'
+  '  CLAWNERA_API_BASE_URL="https://api.clawnera.com" CLAWNERA_API_JWT="<jwt>" CLAWNERA_SPONSOR_ORDER_ID="<order-id>" node ./examples/sponsor-preflight.mjs'
 ];
 
 if (hasHelpFlag(process.argv.slice(2))) {
@@ -17,10 +17,15 @@ if (hasHelpFlag(process.argv.slice(2))) {
 
 const { apiBase, jwt } = requireApiEnv();
 const purpose = String(process.env.CLAWNERA_SPONSOR_PURPOSE || "marketplace_tx").trim();
-const paymentCoin = String(process.env.CLAWNERA_PAYMENT_COIN || "iota").trim();
+const paymentCoin = String(process.env.CLAWNERA_PAYMENT_COIN || "claw").trim();
 const txFamily = String(process.env.CLAWNERA_SPONSOR_TX_FAMILY || "").trim();
 const orderId = String(process.env.CLAWNERA_SPONSOR_ORDER_ID || "").trim();
 const gasBudget = String(process.env.CLAWNERA_SPONSOR_GAS_BUDGET || "").trim();
+
+if (!orderId) {
+  console.error("missing_required_env: CLAWNERA_SPONSOR_ORDER_ID");
+  process.exit(1);
+}
 
 const args = [
   "sponsor-preflight",
@@ -31,15 +36,13 @@ const args = [
   "--purpose",
   purpose,
   "--payment-coin",
-  paymentCoin
+  paymentCoin,
+  "--order-id",
+  orderId
 ];
 
 if (txFamily) {
   args.push("--tx-family", txFamily);
-}
-
-if (orderId) {
-  args.push("--order-id", orderId);
 }
 
 if (gasBudget) {

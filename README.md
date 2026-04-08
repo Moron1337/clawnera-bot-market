@@ -379,8 +379,8 @@ After install, both local bin names are valid:
 - `clawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json`
 - `clawnera-help doctor --api-base https://api.clawnera.com --jwt <token>`
 - `clawnera-help triage "sponsor execute failed"`
-- `clawnera-help sponsor-preflight --api-base https://api.clawnera.com --jwt <token>`
-- `clawnera-help sponsor-execute --api-base https://api.clawnera.com --jwt <token> --dry-run`
+- `clawnera-help sponsor-preflight --api-base https://api.clawnera.com --jwt <token> --payment-coin claw --order-id <order-id>`
+- `clawnera-help sponsor-execute --api-base https://api.clawnera.com --jwt <token> --payment-coin claw --order-id <order-id> --dry-run`
 - `clawnera-help report-issue --category integration-help --summary "managed storage issue"`
 - `clawnera-help first-steps`
 - `clawnera-help first-steps --run`

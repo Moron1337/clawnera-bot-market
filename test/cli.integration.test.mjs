@@ -2333,14 +2333,14 @@ test("sponsor preflight returns strategy and diagnostics", async () => {
     "POST /sponsor/preflight": (request) => {
       assert.equal(request.headers.authorization, "Bearer test-jwt");
       assert.equal(request.body?.purpose, "marketplace_tx");
-      assert.equal(request.body?.paymentCoin, "iota");
+      assert.equal(request.body?.paymentCoin, "claw");
       assert.equal(request.body?.txFamily, "marketplace_write");
       return {
         status: 200,
         body: {
           actorAddress: "0xabc",
           purpose: "marketplace_tx",
-          paymentCoin: "iota",
+          paymentCoin: "claw",
           orderId: null,
           order: null,
           sponsorProxyMode: "live",
@@ -2368,15 +2368,15 @@ test("sponsor preflight returns strategy and diagnostics", async () => {
           policy: {
             version: "sponsor_policy.v2",
             allowedPurposes: ["marketplace_tx"],
-            allowedPaymentCoins: ["iota"],
+            allowedPaymentCoins: ["claw"],
             paymentCoinOptional: true,
             selfPayFallback: true,
-            orderIdMode: "optional",
+            orderIdMode: "required",
             reservationTtlSec: 120,
             liveMinimumGasBudget: 1000000,
             maxGasBudget: 12000000,
             reserve: {
-              orderIdRequired: false,
+              orderIdRequired: true,
               rateLimitPerMin: 30,
               windowSec: 120,
               windowTxCap: 3,
@@ -6800,66 +6800,25 @@ test("tx-plan-execute stops explicit claim-metrics bodies when reviewer metrics 
   }
 });
 
-test("tx-plan-execute still accepts compat reviewer address claim-metrics path", async () => {
+test("tx-plan-execute rejects retired reviewer address claim-metrics path locally", async () => {
   const reviewerAddress = "0x8212e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
-  const disputeCaseObjectId = "0x2cb6d1df7a78eb63647728d7cdf7a5098dce8cb4f0693b20fee7641629068ac5";
-  let claimCalls = 0;
-  const mock = await startMockServer({
-    [`POST /reviewers/${reviewerAddress}/claim-metrics`]: () => {
-      claimCalls += 1;
-      return {
-        status: 409,
-        body: {
-          error: "reviewer_metrics_already_claimed"
-        }
-      };
-    },
-    "GET /reviewers/me/metrics": () => ({
-      status: 200,
-      body: {
-        registered: true,
-        reviewerAddress,
-        reviewer: {
-          objectId: "0x1111111111111111111111111111111111111111111111111111111111111111",
-          owner: reviewerAddress,
-          pendingDecisionMetricsClaimRequired: true
-        },
-        runtime: {
-          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
-          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
-        },
-        pendingMetricsClaimContext: {
-          status: "ready",
-          disputeCaseObjectId,
-          candidates: [{ disputeCaseObjectId }]
-        }
-      }
-    })
-  });
+  const result = await runCli([
+    "tx-plan-execute",
+    "POST",
+    `/reviewers/${reviewerAddress}/claim-metrics`,
+    "--api-base",
+    "https://api.example.test",
+    "--jwt",
+    buildJwtWithExp(4102444800),
+    "--body",
+    "{}",
+    "--json"
+  ]);
 
-  try {
-    const result = await runCli([
-      "tx-plan-execute",
-      "POST",
-      `/reviewers/${reviewerAddress}/claim-metrics`,
-      "--api-base",
-      mock.baseUrl,
-      "--jwt",
-      buildJwtWithExp(4102444800),
-      "--body",
-      "{}",
-      "--json"
-    ]);
-
-    assert.equal(result.status, 1);
-    const payload = JSON.parse(result.stdout);
-    assert.equal(payload.error, "reviewer_metrics_already_claimed");
-    assert.equal(payload.autoHydratedReviewerContext.route, "claim_metrics");
-    assert.equal(payload.autoHydratedReviewerContext.disputeCaseObjectId, disputeCaseObjectId);
-    assert.equal(claimCalls, 1);
-  } finally {
-    await mock.close();
-  }
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.error, "reviewer_claim_metrics_path_retired");
+  assert.match(payload.hint, /POST \/reviewers\/me\/claim-metrics/);
 });
 
 test("key-agreement-upsert stores the default key file under the auth-state home when remote version is absent", async () => {
@@ -7685,7 +7644,7 @@ test("sponsor execute surfaces execute-side failures after successful reserve", 
   const mock = await startMockServer({
     "POST /sponsor/reserve": (request) => {
       assert.equal(request.body?.gasBudget, 1000000);
-      assert.equal(request.body?.paymentCoin, "iota");
+      assert.equal(request.body?.paymentCoin, "claw");
       return {
         status: 200,
         body: {

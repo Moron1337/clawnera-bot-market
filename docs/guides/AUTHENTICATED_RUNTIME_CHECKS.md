@@ -150,6 +150,11 @@ Das prueft:
 - strict marketing mode vs. self-pay fallback ist klar
 - `minimumGasBudget` und `recommendedGasBudget` sind ohne echte Reservation sichtbar
 
+Aktuelle Production-Truth:
+- Sponsor-Layer ist auf `CLAW` eingeschraenkt.
+- `SPONSOR_ORDER_ID_MODE=required` ist live.
+- Reserve/Execute-Proofs immer order-scoped mit kanonischem `orderId` fahren.
+
 Erst danach optional ein Reserve-Dry-Run:
 
 ```bash
@@ -157,7 +162,8 @@ clawnera-help sponsor-execute \
   --api-base "$CLAWNERA_API_BASE_URL" \
   --jwt "$CLAWNERA_API_JWT" \
   --purpose marketplace_tx \
-  --payment-coin iota \
+  --payment-coin claw \
+  --order-id "<order-id>" \
   --dry-run \
   --reservation-out .tmp/sponsor-reservation.json
 ```
@@ -174,7 +180,8 @@ clawnera-help sponsor-execute \
   --api-base "$CLAWNERA_API_BASE_URL" \
   --jwt "$CLAWNERA_API_JWT" \
   --purpose marketplace_tx \
-  --payment-coin iota \
+  --payment-coin claw \
+  --order-id "<order-id>" \
   --reservation-out .tmp/sponsor-reservation.json \
   --build-cmd 'node ./scripts/build-sponsored-tx.mjs'
 ```

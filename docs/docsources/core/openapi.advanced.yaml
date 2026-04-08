@@ -226,6 +226,36 @@ paths:
                             type: boolean
                           milestoneSigningContextStrict:
                             type: boolean
+                          assetLaneTruth:
+                            properties:
+                              orderCurrency:
+                                type: array
+                                items:
+                                  type: string
+                              disputeBondPrincipal:
+                                type: array
+                                items:
+                                  type: string
+                              reviewerStakePrincipal:
+                                type: array
+                                items:
+                                  type: string
+                              listingDepositPrincipal:
+                                type: array
+                                items:
+                                  type: string
+                              reputationInitPrincipal:
+                                type: array
+                                items:
+                                  type: string
+                            type: object
+                            additionalProperties: false
+                            required:
+                              - orderCurrency
+                              - disputeBondPrincipal
+                              - reviewerStakePrincipal
+                              - listingDepositPrincipal
+                              - reputationInitPrincipal
                         type: object
                         required:
                           - disputeQuorum
@@ -236,6 +266,7 @@ paths:
                           - manualDispute
                           - milestoneManifestStrict
                           - milestoneSigningContextStrict
+                          - assetLaneTruth
                     type: object
                     required:
                       - version
@@ -2478,223 +2509,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /orders/{orderId}/deadline-ext/propose:
-    post:
-      tags:
-        - Orders
-      operationId: proposeDeadlineExtensionPlan
-      parameters:
-        - name: orderId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DeadlineExtProposeRequest'
-      responses:
-        '200':
-          description: Transaction plan for `deadline_ext::propose`.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TxPlanResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '503':
-          description: Marketplace package not configured.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /deadline-ext/{extensionObjectId}/accept:
-    post:
-      tags:
-        - Orders
-      operationId: acceptDeadlineExtensionPlan
-      deprecated: true
-      description: |
-        Deprecated. This route is dark-disabled and non-authoritative until an escrow deadline-apply path exists.
-      parameters:
-        - name: extensionObjectId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DeadlineExtActionRequest'
-      responses:
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '409':
-          description: >
-            Deadline extension accept is dark-disabled until an authoritative escrow deadline-apply path exists. Returns
-            `deadline_extension_accept_disabled`.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /deadline-ext/{extensionObjectId}/reject:
-    post:
-      tags:
-        - Orders
-      operationId: rejectDeadlineExtensionPlan
-      parameters:
-        - name: extensionObjectId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DeadlineExtActionRequest'
-      responses:
-        '200':
-          description: Transaction plan for `deadline_ext::reject`.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TxPlanResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '503':
-          description: On-chain validation unavailable.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /orders/{orderId}/cancel/request:
-    post:
-      tags:
-        - Orders
-      operationId: requestMutualCancelPlan
-      parameters:
-        - name: orderId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MutualCancelRequest'
-      responses:
-        '200':
-          description: Transaction plan for `mutual_cancel::request`.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TxPlanResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '503':
-          description: Marketplace package not configured.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /cancel-requests/{cancelRequestObjectId}/accept:
-    post:
-      tags:
-        - Orders
-      operationId: acceptMutualCancelPlan
-      parameters:
-        - name: cancelRequestObjectId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MutualCancelActionRequest'
-      responses:
-        '200':
-          description: Transaction plan for `mutual_cancel::accept`.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TxPlanResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '503':
-          description: On-chain validation unavailable.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /cancel-requests/{cancelRequestObjectId}/reject:
-    post:
-      tags:
-        - Orders
-      operationId: rejectMutualCancelPlan
-      parameters:
-        - name: cancelRequestObjectId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Transaction plan for `mutual_cancel::reject`.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TxPlanResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '503':
-          description: On-chain validation unavailable.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
   /reviewers/register:
     post:
       tags:
@@ -4313,8 +4127,6 @@ components:
         - mailbox_signal
         - milestone_submit
         - review_post
-        - deadline_extension
-        - mutual_cancel
         - dispute_bond
         - dispute_vote
         - dispute_resolution
@@ -4758,6 +4570,21 @@ components:
           type: array
           items:
             type: string
+        paymentCoinTruthBoundary:
+          properties:
+            sponsorLayerOnly:
+              type: boolean
+              enum:
+                - true
+            principalLaneTruthPath:
+              type: string
+              enum:
+                - /capabilities
+          type: object
+          additionalProperties: false
+          required:
+            - sponsorLayerOnly
+            - principalLaneTruthPath
         paymentCoinOptional:
           type: boolean
         selfPayFallback:
@@ -4865,10 +4692,6 @@ components:
               $ref: '#/components/schemas/SponsorGasEstimate'
             review_post:
               $ref: '#/components/schemas/SponsorGasEstimate'
-            deadline_extension:
-              $ref: '#/components/schemas/SponsorGasEstimate'
-            mutual_cancel:
-              $ref: '#/components/schemas/SponsorGasEstimate'
             dispute_bond:
               $ref: '#/components/schemas/SponsorGasEstimate'
             dispute_vote:
@@ -4884,8 +4707,6 @@ components:
             - mailbox_signal
             - milestone_submit
             - review_post
-            - deadline_extension
-            - mutual_cancel
             - dispute_bond
             - dispute_vote
             - dispute_resolution
@@ -4896,6 +4717,7 @@ components:
         - version
         - allowedPurposes
         - allowedPaymentCoins
+        - paymentCoinTruthBoundary
         - paymentCoinOptional
         - selfPayFallback
         - orderIdMode
@@ -6327,78 +6149,6 @@ components:
         - transportPubkeyHex
         - minCaseRewardIota
         - stakeAmount
-    MutualCancelActionRequest:
-      properties:
-        clockObjectId:
-          type: string
-          minLength: 3
-          maxLength: 200
-      type: object
-      additionalProperties: false
-    MutualCancelRequest:
-      properties:
-        escrowId:
-          type: string
-          minLength: 3
-          maxLength: 200
-        buyerRefundBps:
-          type: integer
-          minimum: 0
-          maximum: 10000
-        amount:
-          type: string
-          pattern: ^[0-9]+$
-        clockObjectId:
-          type: string
-          minLength: 3
-          maxLength: 200
-      type: object
-      additionalProperties: false
-      required:
-        - escrowId
-        - buyerRefundBps
-        - amount
-    DeadlineExtActionRequest:
-      properties:
-        deadlineExtRegistryObjectId:
-          type: string
-          minLength: 3
-          maxLength: 200
-        clockObjectId:
-          type: string
-          minLength: 3
-          maxLength: 200
-      type: object
-      additionalProperties: false
-      required:
-        - deadlineExtRegistryObjectId
-    DeadlineExtProposeRequest:
-      properties:
-        deadlineExtRegistryObjectId:
-          type: string
-          minLength: 3
-          maxLength: 200
-        escrowId:
-          type: string
-          minLength: 3
-          maxLength: 200
-        currentDeadlineMs:
-          type: string
-          pattern: ^[0-9]+$
-        proposedDeadlineMs:
-          type: string
-          pattern: ^[0-9]+$
-        clockObjectId:
-          type: string
-          minLength: 3
-          maxLength: 200
-      type: object
-      additionalProperties: false
-      required:
-        - deadlineExtRegistryObjectId
-        - escrowId
-        - currentDeadlineMs
-        - proposedDeadlineMs
     ReviewPostRequest:
       properties:
         reviewRegistryObjectId:
@@ -7116,6 +6866,18 @@ components:
           description: >-
             True when the order uses the separate platform-funded marketing path instead of a normal user-selected
             amount.
+        supportedPrincipalAssets:
+          type: array
+          description: >-
+            Canonical live principal-asset truth for dispute-bond objects today. Do not infer broader principal support
+            from sponsor `allowedPaymentCoins`.
+          items:
+            type: string
+        selectedPrincipalAsset:
+          type: string
+          description: >-
+            Principal asset selected by current live policy semantics. Today this remains `iota` for both public and
+            platform-funded marketing bonds.
         currentMinPerSideAmount:
           type: string
           nullable: true
@@ -7149,6 +6911,8 @@ components:
         - selectionMode
         - userAmountChoiceRequired
         - platformOperatorFunding
+        - supportedPrincipalAssets
+        - selectedPrincipalAsset
         - currentMinPerSideAmount
         - currentMaxPerSideAmount
         - defaultRequiredReviewerVotes
@@ -7679,7 +7443,6 @@ components:
           enum:
             - IOTA
             - CLAW
-            - BOTH
         budgetAmount:
           type: string
         milestones:
@@ -7897,7 +7660,6 @@ components:
           enum:
             - IOTA
             - CLAW
-            - BOTH
         budgetAmount:
           type: string
           pattern: ^[0-9]+$

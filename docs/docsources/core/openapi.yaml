@@ -195,7 +195,8 @@ paths:
                             managedStorageAnchorEnforcedOnAccept,
                             manualDispute,
                             milestoneManifestStrict,
-                            milestoneSigningContextStrict
+                            milestoneSigningContextStrict,
+                            assetLaneTruth
                           ]
                         properties:
                           disputeQuorum:
@@ -214,6 +215,38 @@ paths:
                             type: boolean
                           milestoneSigningContextStrict:
                             type: boolean
+                          assetLaneTruth:
+                            type: object
+                            additionalProperties: false
+                            required:
+                              [
+                                orderCurrency,
+                                disputeBondPrincipal,
+                                reviewerStakePrincipal,
+                                listingDepositPrincipal,
+                                reputationInitPrincipal
+                              ]
+                            properties:
+                              orderCurrency:
+                                type: array
+                                items:
+                                  type: string
+                              disputeBondPrincipal:
+                                type: array
+                                items:
+                                  type: string
+                              reviewerStakePrincipal:
+                                type: array
+                                items:
+                                  type: string
+                              listingDepositPrincipal:
+                                type: array
+                                items:
+                                  type: string
+                              reputationInitPrincipal:
+                                type: array
+                                items:
+                                  type: string
   /actors/me/capabilities:
     get:
       tags: [Auth]
@@ -2267,225 +2300,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /orders/{orderId}/deadline-ext/propose:
-    post:
-      tags: [Orders]
-      operationId: proposeDeadlineExtensionPlan
-      x-clawnera-surface: public-user
-      parameters:
-        - name: orderId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/DeadlineExtProposeRequest"
-      responses:
-        "200":
-          description: Transaction plan for `deadline_ext::propose`.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TxPlanResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          description: Marketplace package not configured.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /deadline-ext/{extensionObjectId}/accept:
-    post:
-      tags: [Orders]
-      operationId: acceptDeadlineExtensionPlan
-      x-clawnera-surface: public-user
-      deprecated: true
-      description: >
-        Deprecated. This route is dark-disabled and non-authoritative until an
-        escrow deadline-apply path exists.
-      parameters:
-        - name: extensionObjectId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/DeadlineExtActionRequest"
-      responses:
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "409":
-          description: >
-            Deadline extension accept is dark-disabled until an authoritative
-            escrow deadline-apply path exists. Returns
-            `deadline_extension_accept_disabled`.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /deadline-ext/{extensionObjectId}/reject:
-    post:
-      tags: [Orders]
-      operationId: rejectDeadlineExtensionPlan
-      x-clawnera-surface: public-user
-      parameters:
-        - name: extensionObjectId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/DeadlineExtActionRequest"
-      responses:
-        "200":
-          description: Transaction plan for `deadline_ext::reject`.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TxPlanResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          description: On-chain validation unavailable.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /orders/{orderId}/cancel/request:
-    post:
-      tags: [Orders]
-      operationId: requestMutualCancelPlan
-      x-clawnera-surface: public-user
-      parameters:
-        - name: orderId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/MutualCancelRequest"
-      responses:
-        "200":
-          description: Transaction plan for `mutual_cancel::request`.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TxPlanResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "503":
-          description: Marketplace package not configured.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /cancel-requests/{cancelRequestObjectId}/accept:
-    post:
-      tags: [Orders]
-      operationId: acceptMutualCancelPlan
-      x-clawnera-surface: public-user
-      parameters:
-        - name: cancelRequestObjectId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/MutualCancelActionRequest"
-      responses:
-        "200":
-          description: Transaction plan for `mutual_cancel::accept`.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TxPlanResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          description: On-chain validation unavailable.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /cancel-requests/{cancelRequestObjectId}/reject:
-    post:
-      tags: [Orders]
-      operationId: rejectMutualCancelPlan
-      x-clawnera-surface: public-user
-      parameters:
-        - name: cancelRequestObjectId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Transaction plan for `mutual_cancel::reject`.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TxPlanResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          description: On-chain validation unavailable.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
   /orders/{orderId}/mark-disputed:
     post:
       tags: [Orders]
@@ -2764,41 +2578,6 @@ paths:
       tags: [Disputes]
       operationId: claimReviewerDecisionMetricsPlan
       x-clawnera-surface: reviewer-self
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ReviewerClaimMetricsRequest"
-      responses:
-        "200":
-          description: Transaction plan for `dispute_quorum::claim_decision_metrics`.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TxPlanResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-  /reviewers/{address}/claim-metrics:
-    post:
-      tags: [Disputes]
-      operationId: claimReviewerDecisionMetricsCompatPlan
-      x-clawnera-surface: compat-only
-      deprecated: true
-      summary: Compat alias for older reviewer-owned clients.
-      description: >-
-        Deprecated compat alias. Canonical reviewer-self route is
-        `POST /reviewers/me/claim-metrics`.
-      parameters:
-        - name: address
-          in: path
-          required: true
-          schema:
-            type: string
       requestBody:
         required: false
         content:
@@ -4539,7 +4318,7 @@ components:
           x-clawnera-surface: operator-internal
         currency:
           type: string
-          enum: [IOTA, CLAW, BOTH]
+          enum: [IOTA, CLAW]
         budgetAmount:
           type: string
           pattern: "^[0-9]+$"
@@ -4817,8 +4596,6 @@ components:
           mailbox_signal,
           milestone_submit,
           review_post,
-          deadline_extension,
-          mutual_cancel,
           dispute_bond,
           dispute_vote,
           dispute_resolution,
@@ -4852,6 +4629,7 @@ components:
           version,
           allowedPurposes,
           allowedPaymentCoins,
+          paymentCoinTruthBoundary,
           paymentCoinOptional,
           selfPayFallback,
           orderIdMode,
@@ -4876,6 +4654,17 @@ components:
           type: array
           items:
             type: string
+        paymentCoinTruthBoundary:
+          type: object
+          additionalProperties: false
+          required: [sponsorLayerOnly, principalLaneTruthPath]
+          properties:
+            sponsorLayerOnly:
+              type: boolean
+              enum: [true]
+            principalLaneTruthPath:
+              type: string
+              enum: [/capabilities]
         paymentCoinOptional:
           type: boolean
         selfPayFallback:
@@ -4964,8 +4753,6 @@ components:
               mailbox_signal,
               milestone_submit,
               review_post,
-              deadline_extension,
-              mutual_cancel,
               dispute_bond,
               dispute_vote,
               dispute_resolution,
@@ -4979,10 +4766,6 @@ components:
             milestone_submit:
               $ref: "#/components/schemas/SponsorGasEstimate"
             review_post:
-              $ref: "#/components/schemas/SponsorGasEstimate"
-            deadline_extension:
-              $ref: "#/components/schemas/SponsorGasEstimate"
-            mutual_cancel:
               $ref: "#/components/schemas/SponsorGasEstimate"
             dispute_bond:
               $ref: "#/components/schemas/SponsorGasEstimate"
@@ -7442,70 +7225,6 @@ components:
           type: string
           minLength: 3
           maxLength: 200
-    DeadlineExtProposeRequest:
-      type: object
-      additionalProperties: false
-      required: [deadlineExtRegistryObjectId, escrowId, currentDeadlineMs, proposedDeadlineMs]
-      properties:
-        deadlineExtRegistryObjectId:
-          type: string
-          minLength: 3
-          maxLength: 200
-        escrowId:
-          type: string
-          minLength: 3
-          maxLength: 200
-        currentDeadlineMs:
-          type: string
-          pattern: "^[0-9]+$"
-        proposedDeadlineMs:
-          type: string
-          pattern: "^[0-9]+$"
-        clockObjectId:
-          type: string
-          minLength: 3
-          maxLength: 200
-    DeadlineExtActionRequest:
-      type: object
-      additionalProperties: false
-      required: [deadlineExtRegistryObjectId]
-      properties:
-        deadlineExtRegistryObjectId:
-          type: string
-          minLength: 3
-          maxLength: 200
-        clockObjectId:
-          type: string
-          minLength: 3
-          maxLength: 200
-    MutualCancelRequest:
-      type: object
-      additionalProperties: false
-      required: [escrowId, buyerRefundBps, amount]
-      properties:
-        escrowId:
-          type: string
-          minLength: 3
-          maxLength: 200
-        buyerRefundBps:
-          type: integer
-          minimum: 0
-          maximum: 10000
-        amount:
-          type: string
-          pattern: "^[0-9]+$"
-        clockObjectId:
-          type: string
-          minLength: 3
-          maxLength: 200
-    MutualCancelActionRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        clockObjectId:
-          type: string
-          minLength: 3
-          maxLength: 200
     AuthClaims:
       type: object
       required: [sub, iat, exp, jti, iss, aud]
@@ -7553,7 +7272,7 @@ components:
           x-clawnera-surface: operator-internal
         currency:
           type: string
-          enum: [IOTA, CLAW, BOTH]
+          enum: [IOTA, CLAW]
         budgetAmount:
           type: string
         milestones:
@@ -7744,6 +7463,8 @@ components:
           selectionMode,
           userAmountChoiceRequired,
           platformOperatorFunding,
+          supportedPrincipalAssets,
+          selectedPrincipalAsset,
           currentMinPerSideAmount,
           currentMaxPerSideAmount,
           defaultRequiredReviewerVotes,
@@ -7763,6 +7484,14 @@ components:
         platformOperatorFunding:
           type: boolean
           description: True when the order uses the separate platform-funded marketing path instead of a normal user-selected amount.
+        supportedPrincipalAssets:
+          type: array
+          description: Canonical live principal-asset truth for dispute-bond objects today. Do not infer broader principal support from sponsor `allowedPaymentCoins`.
+          items:
+            type: string
+        selectedPrincipalAsset:
+          type: string
+          description: Principal asset selected by current live policy semantics. Today this remains `iota` for both public and platform-funded marketing bonds.
         currentMinPerSideAmount:
           type: string
           nullable: true

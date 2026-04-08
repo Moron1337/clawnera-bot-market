@@ -331,7 +331,6 @@ Reviewer lifecycle:
   - `POST /reviewers/deregister`
 - realize on-chain performance/decision metrics after a case:
   - `POST /reviewers/me/claim-metrics`
-  - treat `POST /reviewers/{reviewerAddress}/claim-metrics` as a compat-only old-client fallback
   - send the closed `disputeCaseObjectId`; the remaining reviewer self-context is auto-hydrated
   - if the case id is omitted, expect `400 dispute_case_object_id_required`
   - majority reviewer payouts happen at `finalize`

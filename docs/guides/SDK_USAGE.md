@@ -201,7 +201,7 @@ Self-pay fallback build:
 - `packageId` and all object IDs match target environment.
 - Sender is correct actor for route/capability.
 - For sponsor execute, never reuse stale reservations.
-- For sponsor reserve/execute, prefer always sending canonical `orderId` (future-proof against required mode).
+- For sponsor reserve/execute, always send canonical `orderId`; current production posture already runs with required mode.
 - For sponsor reserve, stay at `gasBudget >= 1_000_000` in live flows.
 - For sponsor execute, respect reservation TTL (`SPONSOR_RESERVATION_TTL_SEC`, default `120`) and target `<60s` between reserve and execute.
 - For marketing sponsor execute, ensure full intent tuple is exact:

@@ -386,7 +386,7 @@ Hard boundaries:
   - if omitted, expect `400 dispute_case_object_id_required`
   - the CLI pre-hydrates reviewer context before the first POST; do not probe this route with guessed object ids
   - the CLI may auto-fill that field only when `GET /reviewers/me/invites` shows exactly one closed invite for this reviewer
-  - deprecated compat note: legacy automation may still send `POST /reviewers/{reviewerAddress}/claim-metrics`, but primary guidance is `/reviewers/me/claim-metrics`
+  - the old address-scoped compat path is retired; use `/reviewers/me/claim-metrics` only
   - if `GET /reviewers/me/metrics` already shows `pendingDecisionMetricsClaimRequired=false`, stop; the CLI returns `409 reviewer_metrics_claim_not_required`
   - prefer the canonical readiness summary:
     - `GET /reviewers/me/metrics`

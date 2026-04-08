@@ -137,7 +137,6 @@ const SUPPORTED_MARKET_ASSETS = Object.freeze({
       listingSingleAsset: true,
       bidCurrency: true,
       orderCurrency: true,
-      allowLegacyBoth: true,
       orderEscrowCreate: true,
       listingDeposit: true,
       reputationInit: true,
@@ -154,7 +153,6 @@ const SUPPORTED_MARKET_ASSETS = Object.freeze({
       listingSingleAsset: true,
       bidCurrency: true,
       orderCurrency: true,
-      allowLegacyBoth: true,
       orderEscrowCreate: true,
       listingDeposit: false,
       reputationInit: false,
@@ -2592,8 +2590,9 @@ function sponsorExecuteUsageLines() {
     "- Required: --api-base <url> --jwt <token>",
     "- Default flow: reserve -> run --build-cmd -> execute",
     "- Required unless --dry-run: --build-cmd '<shell command>'",
-    "- Defaults: --purpose marketplace_tx --gas-budget 1000000 --payment-coin iota",
+    "- Defaults: --purpose marketplace_tx --gas-budget 1000000 --payment-coin claw",
     "- Optional: --idempotency-key <key> --timeout-ms <ms> --builder-timeout-ms <ms> --reservation-out <file>",
+    "- Canonical live posture: pass --order-id <id> on every order-scoped reserve/execute call.",
     "- Build command receives env vars:",
     "  CLAWNERA_SPONSOR_RESERVATION_JSON",
     "  CLAWNERA_SPONSOR_RESERVATION_ID",
@@ -4854,17 +4853,23 @@ function classifyReviewerSelfTxPlanRoute(method, rawPath, apiBase = "") {
     return {
       kind: "claim_metrics",
       reviewerAddress: "",
-      canonicalPath: "/reviewers/me/claim-metrics",
-      compatAddressPath: false,
     };
   }
-  const claimMetricsMatch = pathname.match(/^\/reviewers\/(0x[a-f0-9]+)\/claim-metrics$/i);
-  if (claimMetricsMatch) {
+  return null;
+}
+
+function classifyRetiredTxPlanRoute(method, rawPath, apiBase = "") {
+  if (String(method || "").toUpperCase() !== "POST") {
+    return null;
+  }
+  const pathname = resolveApiPathname(rawPath, apiBase);
+  if (!pathname) {
+    return null;
+  }
+  if (/^\/reviewers\/0x[a-f0-9]+\/claim-metrics$/i.test(pathname)) {
     return {
-      kind: "claim_metrics",
-      reviewerAddress: normalizeIotaAddress(claimMetricsMatch[1] || ""),
-      canonicalPath: "/reviewers/me/claim-metrics",
-      compatAddressPath: true,
+      error: "reviewer_claim_metrics_path_retired",
+      hint: "Use POST /reviewers/me/claim-metrics with the reviewer auth state instead of the old address-scoped path.",
     };
   }
   return null;
@@ -8185,6 +8190,15 @@ async function runTxPlanCommand(commandArgs, mode) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "invalid_request",
+    };
+  }
+
+  const retiredRoute = classifyRetiredTxPlanRoute(method, rawPath, options["api-base"]);
+  if (retiredRoute) {
+    return {
+      ok: false,
+      error: retiredRoute.error,
+      hint: retiredRoute.hint,
     };
   }
 
@@ -12843,7 +12857,7 @@ function sponsorPreflightUsageLines() {
   return [
     "Sponsor preflight helper:",
     "- Required: --api-base <url> --jwt <token>",
-    "- Defaults: --purpose marketplace_tx --payment-coin iota",
+    "- Defaults: --purpose marketplace_tx --payment-coin claw",
     "- Optional: --gas-budget <int> --tx-family <family> --order-id <id> --timeout-ms <ms>",
     "- Runtime returns strategy, diagnostics, tx family, and gas recommendations without consuming a reservation.",
     "- Use this before sponsor reserve/execute for actor-scoped dry-run planning."
@@ -12888,7 +12902,7 @@ async function runSponsorPreflight(commandArgs) {
 
   const purpose = String(options.purpose || "marketplace_tx").trim().toLowerCase();
   const paymentCoinRaw = options["payment-coin"];
-  const paymentCoin = paymentCoinRaw === undefined ? "iota" : String(paymentCoinRaw).trim().toLowerCase();
+  const paymentCoin = paymentCoinRaw === undefined ? "claw" : String(paymentCoinRaw).trim().toLowerCase();
   const orderId = typeof options["order-id"] === "string" ? options["order-id"].trim() : "";
   const txFamily = typeof options["tx-family"] === "string" ? options["tx-family"].trim() : "";
 
@@ -12993,7 +13007,7 @@ async function runSponsorExecute(commandArgs) {
 
   const purpose = String(options.purpose || "marketplace_tx").trim().toLowerCase();
   const paymentCoinRaw = options["payment-coin"];
-  const paymentCoin = paymentCoinRaw === undefined ? "iota" : String(paymentCoinRaw).trim().toLowerCase();
+  const paymentCoin = paymentCoinRaw === undefined ? "claw" : String(paymentCoinRaw).trim().toLowerCase();
   const dryRun = Boolean(options["dry-run"]);
   const buildCmd = typeof options["build-cmd"] === "string" ? options["build-cmd"] : "";
   const reservationOut = typeof options["reservation-out"] === "string" ? options["reservation-out"].trim() : "";

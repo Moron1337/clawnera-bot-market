@@ -65,6 +65,22 @@ test("advanced references keep operator route names behind explicit operator-onl
   assert.match(routeMatrix, /\/orders\/\{orderId\}\/mark-disputed/);
 });
 
+test("reviewer and sponsor docs match the current runtime truth", () => {
+  const apiReference = readRepoFile("docs/guides/API_REFERENCE.md");
+  const routeMatrix = readRepoFile("docs/guides/ROLE_ROUTE_MATRIX.md");
+  const runtimeChecks = readRepoFile("docs/guides/AUTHENTICATED_RUNTIME_CHECKS.md");
+  const sdkUsage = readRepoFile("docs/guides/SDK_USAGE.md");
+  const publicSpec = readRepoFile("docs/docsources/core/openapi.public.yaml");
+
+  assert.doesNotMatch(apiReference, /reviewers\/\{reviewerAddress\}\/claim-metrics/);
+  assert.doesNotMatch(routeMatrix, /reviewers\/\{reviewerAddress\}\/claim-metrics/);
+  assert.match(runtimeChecks, /--payment-coin claw/);
+  assert.match(runtimeChecks, /--order-id "<order-id>"/);
+  assert.match(runtimeChecks, /SPONSOR_ORDER_ID_MODE=required/);
+  assert.match(sdkUsage, /always send canonical `orderId`/);
+  assert.equal(publicSpec.includes("BOTH"), false, "public spec leaked retired BOTH asset");
+});
+
 test("core knowledge sources avoid stale bid accept path strings", () => {
   const protocol = readRepoFile("docs/docsources/core/BOT_PROTOCOL_V1.md");
   const quickstart = readRepoFile("docs/docsources/core/BOT_QUICKSTART.md");

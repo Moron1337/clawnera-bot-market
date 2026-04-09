@@ -382,51 +382,6 @@ paths:
                 properties:
                   policy:
                     $ref: "#/components/schemas/SponsorPolicySnapshot"
-  /onboarding/iota-topup:
-    post:
-      tags: [Sponsor]
-      operationId: claimOnboardingIotaTopup
-      responses:
-        "200":
-          description: Existing onboarding grant was already claimed for this actor.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OnboardingIotaTopupResponse"
-        "201":
-          description: IOTA onboarding topup submitted successfully.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OnboardingIotaTopupResponse"
-        "202":
-          description: IOTA onboarding topup is pending confirmation after an uncertain execution outcome.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OnboardingIotaTopupResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Conflict. Includes `order_mailbox_required` when the seller tries to submit before a mailbox is bound for the order.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "502":
-          description: Funding transaction failed.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "503":
-          description: Onboarding topup unavailable or misconfigured.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
   /policy/storage:
     get:
       tags: [Policy]
@@ -956,7 +911,7 @@ paths:
     post:
       tags: [Listings]
       operationId: createListing
-      description: Create a public OFFER or REQUEST listing. `listingMode` is required and must be sent explicitly. Live runtimes with on-chain reputation config may reject missing creator reputation profiles with `409 reputation_profile_required`. `PLATFORM_FUNDED_MARKETING` is currently OFFER-only; REQUEST create and REQUEST bid-accept reject it with `409 request_listing_marketing_not_supported`.
+      description: Create a public OFFER or REQUEST listing. `listingMode` is required and must be sent explicitly. Live runtimes with on-chain reputation config may reject missing creator reputation profiles with `409 reputation_profile_required`.
       parameters:
         - name: idempotency-key
           in: header
@@ -2300,6 +2255,225 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /orders/{orderId}/deadline-ext/propose:
+    post:
+      tags: [Orders]
+      operationId: proposeDeadlineExtensionPlan
+      x-clawnera-surface: public-user
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeadlineExtProposeRequest"
+      responses:
+        "200":
+          description: Transaction plan for `deadline_ext::propose`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: Marketplace package not configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /deadline-ext/{extensionObjectId}/accept:
+    post:
+      tags: [Orders]
+      operationId: acceptDeadlineExtensionPlan
+      x-clawnera-surface: public-user
+      deprecated: true
+      description: >
+        Deprecated. This route is dark-disabled and non-authoritative until an
+        escrow deadline-apply path exists.
+      parameters:
+        - name: extensionObjectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeadlineExtActionRequest"
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: >
+            Deadline extension accept is dark-disabled until an authoritative
+            escrow deadline-apply path exists. Returns
+            `deadline_extension_accept_disabled`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /deadline-ext/{extensionObjectId}/reject:
+    post:
+      tags: [Orders]
+      operationId: rejectDeadlineExtensionPlan
+      x-clawnera-surface: public-user
+      parameters:
+        - name: extensionObjectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeadlineExtActionRequest"
+      responses:
+        "200":
+          description: Transaction plan for `deadline_ext::reject`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: On-chain validation unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /orders/{orderId}/cancel/request:
+    post:
+      tags: [Orders]
+      operationId: requestMutualCancelPlan
+      x-clawnera-surface: public-user
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MutualCancelRequest"
+      responses:
+        "200":
+          description: Transaction plan for `mutual_cancel::request`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          description: Marketplace package not configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /cancel-requests/{cancelRequestObjectId}/accept:
+    post:
+      tags: [Orders]
+      operationId: acceptMutualCancelPlan
+      x-clawnera-surface: public-user
+      parameters:
+        - name: cancelRequestObjectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MutualCancelActionRequest"
+      responses:
+        "200":
+          description: Transaction plan for `mutual_cancel::accept`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: On-chain validation unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /cancel-requests/{cancelRequestObjectId}/reject:
+    post:
+      tags: [Orders]
+      operationId: rejectMutualCancelPlan
+      x-clawnera-surface: public-user
+      parameters:
+        - name: cancelRequestObjectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Transaction plan for `mutual_cancel::reject`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: On-chain validation unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /orders/{orderId}/mark-disputed:
     post:
       tags: [Orders]
@@ -2578,6 +2752,41 @@ paths:
       tags: [Disputes]
       operationId: claimReviewerDecisionMetricsPlan
       x-clawnera-surface: reviewer-self
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewerClaimMetricsRequest"
+      responses:
+        "200":
+          description: Transaction plan for `dispute_quorum::claim_decision_metrics`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /reviewers/{address}/claim-metrics:
+    post:
+      tags: [Disputes]
+      operationId: claimReviewerDecisionMetricsCompatPlan
+      x-clawnera-surface: compat-only
+      deprecated: true
+      summary: Compat alias for older reviewer-owned clients.
+      description: >-
+        Deprecated compat alias. Canonical reviewer-self route is
+        `POST /reviewers/me/claim-metrics`.
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
       requestBody:
         required: false
         content:
@@ -4313,12 +4522,9 @@ components:
           maxLength: 2000
         category:
           $ref: "#/components/schemas/ListingCategory"
-        promotionPolicy:
-          $ref: "#/components/schemas/ListingPromotionPolicy"
-          x-clawnera-surface: operator-internal
         currency:
           type: string
-          enum: [IOTA, CLAW]
+          enum: [IOTA, CLAW, BOTH]
         budgetAmount:
           type: string
           pattern: "^[0-9]+$"
@@ -4371,17 +4577,13 @@ components:
           maxLength: 256
     ListingCategory:
       type: string
-      enum: [dev, design, marketing, ops, security, other]
+      enum: [dev, design, ops, security, other]
     ListingMode:
       type: string
       enum: [OFFER, REQUEST]
     ListingBrowseMode:
       type: string
       enum: [OFFER, REQUEST, ALL]
-    ListingPromotionPolicy:
-      type: string
-      enum: [STANDARD, PLATFORM_FUNDED_MARKETING]
-      description: "`PLATFORM_FUNDED_MARKETING` is currently OFFER-only in the public runtime. REQUEST listing create and REQUEST bid-accept reject it with `409 request_listing_marketing_not_supported`."
     ListingSort:
       type: string
       enum: [newest, highest_payout, expires_soon]
@@ -4596,6 +4798,8 @@ components:
           mailbox_signal,
           milestone_submit,
           review_post,
+          deadline_extension,
+          mutual_cancel,
           dispute_bond,
           dispute_vote,
           dispute_resolution,
@@ -4638,8 +4842,6 @@ components:
           maxGasBudget,
           reserve,
           execute,
-          platformFundedMarketing,
-          onboardingIotaTopup,
           recommendedGasBudgets
         ]
       properties:
@@ -4703,47 +4905,17 @@ components:
         execute:
           type: object
           additionalProperties: false
-          required:
-            [idempotencyHeader, intentSupported, intentRequiredForPlatformFundedMarketing, intentSignatureRequiredForPlatformFundedMarketing]
+          required: [idempotencyHeader, intentSupported, intentRequired, intentSignatureRequired]
           properties:
             idempotencyHeader:
               type: string
               enum: [idempotency-key]
             intentSupported:
               type: boolean
-            intentRequiredForPlatformFundedMarketing:
-              type: boolean
-            intentSignatureRequiredForPlatformFundedMarketing:
-              type: boolean
-        platformFundedMarketing:
-          type: object
-          additionalProperties: false
-          required:
-            [sponsorPreferred, sponsorRequired, selfPayFallback, intentRequired, intentSignatureRequired]
-          properties:
-            sponsorPreferred:
-              type: boolean
-            sponsorRequired:
-              type: boolean
-            selfPayFallback:
-              type: boolean
             intentRequired:
               type: boolean
             intentSignatureRequired:
               type: boolean
-        onboardingIotaTopup:
-          type: object
-          additionalProperties: false
-          required: [enabled, amount, maxEligibleBalance]
-          properties:
-            enabled:
-              type: boolean
-            amount:
-              type: string
-              pattern: "^[0-9]+$"
-            maxEligibleBalance:
-              type: string
-              pattern: "^[0-9]+$"
         recommendedGasBudgets:
           type: object
           additionalProperties: false
@@ -4753,6 +4925,8 @@ components:
               mailbox_signal,
               milestone_submit,
               review_post,
+              deadline_extension,
+              mutual_cancel,
               dispute_bond,
               dispute_vote,
               dispute_resolution,
@@ -4767,6 +4941,10 @@ components:
               $ref: "#/components/schemas/SponsorGasEstimate"
             review_post:
               $ref: "#/components/schemas/SponsorGasEstimate"
+            deadline_extension:
+              $ref: "#/components/schemas/SponsorGasEstimate"
+            mutual_cancel:
+              $ref: "#/components/schemas/SponsorGasEstimate"
             dispute_bond:
               $ref: "#/components/schemas/SponsorGasEstimate"
             dispute_vote:
@@ -4775,35 +4953,6 @@ components:
               $ref: "#/components/schemas/SponsorGasEstimate"
             claw_payment:
               $ref: "#/components/schemas/SponsorGasEstimate"
-    OnboardingIotaTopupResponse:
-      type: object
-      additionalProperties: false
-      required: [funded, amount, senderAddress, maxEligibleBalance]
-      properties:
-        funded:
-          type: boolean
-        alreadyClaimed:
-          type: boolean
-        pendingConfirmation:
-          type: boolean
-        amount:
-          type: string
-          pattern: "^[0-9]+$"
-        txDigest:
-          type: string
-        senderAddress:
-          type: string
-        completedAt:
-          type: string
-          format: date-time
-        balanceBefore:
-          type: string
-          pattern: "^[0-9]+$"
-        maxEligibleBalance:
-          type: string
-          pattern: "^[0-9]+$"
-        detail:
-          type: string
     SponsorReserveRequest:
       type: object
       additionalProperties: false
@@ -4811,7 +4960,7 @@ components:
       properties:
         purpose:
           type: string
-          enum: [claw_payment, bond, onboarding, marketplace_tx]
+          enum: [claw_payment, bond, marketplace_tx]
         gasBudget:
           type: integer
           minimum: 1
@@ -4832,7 +4981,7 @@ components:
       properties:
         purpose:
           type: string
-          enum: [claw_payment, bond, onboarding, marketplace_tx]
+          enum: [claw_payment, bond, marketplace_tx]
         paymentCoin:
           type: string
           minLength: 1
@@ -4936,7 +5085,7 @@ components:
           minimum: 1
         purpose:
           type: string
-          enum: [claw_payment, bond, onboarding, marketplace_tx]
+          enum: [claw_payment, bond, marketplace_tx]
         gasCoins:
           type: array
           items:
@@ -5561,30 +5710,10 @@ components:
         amount:
           type: string
           pattern: "^[0-9]+$"
-          description: Per-side bond amount in atomic IOTA. For `DUAL_BOND_REQUIRED` orders this remains an explicit client choice inside the live on-chain min/max range, so read the current floor first and do not hardcode one universal value. For `PLATFORM_FUNDED_MARKETING` orders, the configured platform operator must supply the exact live minimum on the operator/custody path.
+          description: Per-side bond amount in atomic IOTA. For `DUAL_BOND_REQUIRED` orders this remains an explicit client choice inside the live on-chain min/max range, so read the current floor first and do not hardcode one universal value.
         paymentCoinObjectId:
           type: string
-        marketingFundingCapObjectId:
-          type: string
-        marketingFundingCustodyProof:
-          $ref: "#/components/schemas/MarketingFundingCustodyProofRequest"
         clockObjectId:
-          type: string
-    MarketingFundingCustodyProofRequest:
-      type: object
-      additionalProperties: false
-      required: [jobId, approvalMode, approverA, approverB]
-      properties:
-        jobId:
-          type: string
-          minLength: 3
-          maxLength: 160
-        approvalMode:
-          type: string
-          enum: [four_eyes, multisig_2of3]
-        approverA:
-          type: string
-        approverB:
           type: string
     DisputeOpenRequest:
       type: object
@@ -7225,6 +7354,70 @@ components:
           type: string
           minLength: 3
           maxLength: 200
+    DeadlineExtProposeRequest:
+      type: object
+      additionalProperties: false
+      required: [deadlineExtRegistryObjectId, escrowId, currentDeadlineMs, proposedDeadlineMs]
+      properties:
+        deadlineExtRegistryObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        escrowId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        currentDeadlineMs:
+          type: string
+          pattern: "^[0-9]+$"
+        proposedDeadlineMs:
+          type: string
+          pattern: "^[0-9]+$"
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+    DeadlineExtActionRequest:
+      type: object
+      additionalProperties: false
+      required: [deadlineExtRegistryObjectId]
+      properties:
+        deadlineExtRegistryObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+    MutualCancelRequest:
+      type: object
+      additionalProperties: false
+      required: [escrowId, buyerRefundBps, amount]
+      properties:
+        escrowId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        buyerRefundBps:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        amount:
+          type: string
+          pattern: "^[0-9]+$"
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+    MutualCancelActionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
     AuthClaims:
       type: object
       required: [sub, iat, exp, jti, iss, aud]
@@ -7267,12 +7460,9 @@ components:
           type: string
         category:
           $ref: "#/components/schemas/ListingCategory"
-        promotionPolicy:
-          $ref: "#/components/schemas/ListingPromotionPolicy"
-          x-clawnera-surface: operator-internal
         currency:
           type: string
-          enum: [IOTA, CLAW]
+          enum: [IOTA, CLAW, BOTH]
         budgetAmount:
           type: string
         milestones:
@@ -7448,13 +7638,13 @@ components:
           description: True when the on-chain event scan hit its safety cap before it could prove the page is complete.
     OrderDisputeBondPolicy:
       type: string
-      enum: [DUAL_BOND_REQUIRED, PLATFORM_FUNDED_MARKETING]
+      enum: [DUAL_BOND_REQUIRED]
     OrderDisputeBondState:
       type: string
       enum: [PENDING, ACTIVE, CANCELED]
     DisputeBondSelectionMode:
       type: string
-      enum: [EXPLICIT_RANGE, EXACT_MIN_PLATFORM_FUNDED]
+      enum: [EXPLICIT_RANGE]
     DisputeBondGuidance:
       type: object
       required:
@@ -7462,7 +7652,6 @@ components:
           policy,
           selectionMode,
           userAmountChoiceRequired,
-          platformOperatorFunding,
           supportedPrincipalAssets,
           selectedPrincipalAsset,
           currentMinPerSideAmount,
@@ -7481,9 +7670,6 @@ components:
         userAmountChoiceRequired:
           type: boolean
           description: True when the normal user path must still choose and submit an explicit amount on `/orders/{orderId}/dispute-bond/fund`.
-        platformOperatorFunding:
-          type: boolean
-          description: True when the order uses the separate platform-funded marketing path instead of a normal user-selected amount.
         supportedPrincipalAssets:
           type: array
           description: Canonical live principal-asset truth for dispute-bond objects today. Do not infer broader principal support from sponsor `allowedPaymentCoins`.
@@ -7491,7 +7677,7 @@ components:
             type: string
         selectedPrincipalAsset:
           type: string
-          description: Principal asset selected by current live policy semantics. Today this remains `iota` for both public and platform-funded marketing bonds.
+          description: Principal asset selected by current live policy semantics.
         currentMinPerSideAmount:
           type: string
           nullable: true
@@ -7499,7 +7685,7 @@ components:
         currentMaxPerSideAmount:
           type: string
           nullable: true
-          description: Current live maximum per-side bond amount for explicit-range funding, if known. Stays null on the exact-min marketing path.
+          description: Current live maximum per-side bond amount for explicit-range funding, if known.
         defaultRequiredReviewerVotes:
           type: integer
           nullable: true
@@ -7562,8 +7748,6 @@ components:
         disputeBondActivatedAt:
           type: string
           format: date-time
-        marketingCampaignId:
-          type: string
         deadlineMs:
           type: integer
           format: int64
@@ -7603,12 +7787,12 @@ components:
         disputeBondPolicy:
           allOf:
             - $ref: "#/components/schemas/OrderDisputeBondPolicy"
-          description: Funding policy selected for the order. This tells clients whether the later funding step is explicit-range or exact-min platform-funded; it does not select the final amount by itself.
+          description: Funding policy selected for the order.
         disputeBondGuidance:
           $ref: "#/components/schemas/DisputeBondGuidance"
         operationalWarnings:
           type: array
-          description: May include warning codes such as `order_requires_dual_bond_funding`, `dispute_bond_amount_explicit_choice_required`, `platform_funded_marketing_operator_handoff_required`, and `platform_marketing_dispute_bond_exact_min`.
+          description: May include warning codes such as `order_requires_dual_bond_funding` and `dispute_bond_amount_explicit_choice_required`.
           items:
             $ref: "#/components/schemas/OperationalWarning"
     OrderReadResponse:

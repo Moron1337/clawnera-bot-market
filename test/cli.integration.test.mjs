@@ -363,7 +363,6 @@ test("chain-config output explains that the live minimum is a floor and amount c
     assert.match(result.stdout, /guidance_max_required_reviewer_votes=7/);
     assert.match(result.stdout, /guidance_note=chain-config reads the live floor and current quorum defaults only/);
     assert.match(result.stdout, /guidance_note=Treat the live minimum as a floor/);
-    assert.match(result.stdout, /guidance_note=PLATFORM_FUNDED_MARKETING stays separate: exact-min operator funding/);
   } finally {
     await mock.close();
   }
@@ -4066,7 +4065,6 @@ test("listing-create infers creator address and posts a canonical body", async (
       description: "Manual live flow test listing.",
       category: "ops",
       listingMode: "OFFER",
-      promotionPolicy: "STANDARD",
       currency: "IOTA",
       budgetAmount: "1000000000",
       expiresAtMs,
@@ -4527,79 +4525,6 @@ test("listing-create forwards explicit request listing mode", async () => {
   }
 });
 
-test("listing-create forwards explicit promotion policy", async () => {
-  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-promotion-policy-"));
-  const authStateFile = path.join(tempDir, "auth-state.json");
-  const creatorAddress = "0x3333333333333333333333333333333333333333333333333333333333333333";
-  let capturedBody = null;
-  const mock = await startMockServer({
-    "POST /listings": (request) => {
-      capturedBody = request.body;
-      return {
-        status: 201,
-        body: {
-          item: {
-            id: "listing-promotion",
-            creatorAddress,
-            listingMode: "OFFER",
-            promotionPolicy: "PLATFORM_FUNDED_MARKETING",
-            expiresAt: "2026-04-20T12:00:00.000Z",
-            creatorReputationStatus: "AVAILABLE"
-          }
-        }
-      };
-    }
-  });
-
-  writeFileSync(
-    authStateFile,
-    JSON.stringify(
-      {
-        apiBase: mock.baseUrl,
-        token: buildJwtWithExp(4102444800),
-        refreshToken: "refresh-token-1",
-        address: creatorAddress,
-        alias: "seller"
-      },
-      null,
-      2
-    )
-  );
-
-  try {
-    const result = await runCli([
-      "listing-create",
-      "--auth-state-file",
-      authStateFile,
-      "--listing-mode",
-      "OFFER",
-      "--title",
-      "Marketing offer",
-      "--description",
-      "Offer listing with explicit promotion policy.",
-      "--category",
-      "marketing",
-      "--currency",
-      "CLAW",
-      "--promotion-policy",
-      "PLATFORM_FUNDED_MARKETING",
-      "--use-default-expiry",
-      "--milestones",
-      "Milestone 1:500000;Milestone 2:500000",
-      "--milestone-due-dates",
-      `${TEST_LISTING_DUE_AT_1};${TEST_LISTING_DUE_AT_2}`,
-      "--json"
-    ]);
-    assert.equal(result.status, 0);
-    const payload = JSON.parse(result.stdout);
-    assert.equal(payload.ok, true);
-    assert.equal(payload.promotionPolicy, "PLATFORM_FUNDED_MARKETING");
-    assert.equal(capturedBody?.promotionPolicy, "PLATFORM_FUNDED_MARKETING");
-  } finally {
-    await mock.close();
-  }
-});
-
 test("listing-create rejects invalid category before posting", async () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-category-"));
   const authStateFile = path.join(tempDir, "auth-state.json");
@@ -4641,7 +4566,7 @@ test("listing-create rejects invalid category before posting", async () => {
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, false);
   assert.equal(payload.error, "invalid_listing_category");
-  assert.deepEqual(payload.validCategories, ["dev", "design", "marketing", "ops", "security", "other"]);
+  assert.deepEqual(payload.validCategories, ["dev", "design", "ops", "security", "other"]);
 });
 
 test("listing-cancel posts the canonical cancel route", async () => {
@@ -5290,66 +5215,6 @@ test("request listing-create prints request-buyer verification guidance for trad
   }
 });
 
-test("request listing-create prints offer-only marketing guidance for request marketing failures", async () => {
-  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-request-listing-create-marketing-guidance-"));
-  const authStateFile = path.join(tempDir, "auth-state.json");
-  const creatorAddress = "0x1111111111111111111111111111111111111111111111111111111111111111";
-  const mock = await startMockServer({
-    "POST /listings": () => ({
-      status: 409,
-      body: {
-        error: "request_listing_marketing_not_supported"
-      }
-    })
-  });
-
-  writeFileSync(
-    authStateFile,
-    JSON.stringify(
-      {
-        apiBase: mock.baseUrl,
-        token: buildJwtWithExp(4102444800),
-        refreshToken: "refresh-token-1",
-        address: creatorAddress,
-        alias: "request-buyer"
-      },
-      null,
-      2
-    )
-  );
-
-  try {
-    const result = await runCli([
-      "listing-create",
-      "--auth-state-file",
-      authStateFile,
-      "--listing-mode",
-      "REQUEST",
-      "--title",
-      "Need two tiny text files",
-      "--description",
-      "Manual live flow test request listing.",
-      "--category",
-      "ops",
-      "--currency",
-      "IOTA",
-      "--promotion-policy",
-      "PLATFORM_FUNDED_MARKETING",
-      "--use-default-expiry",
-      "--milestones",
-      "Milestone 1:500000000;Milestone 2:500000000",
-      "--milestone-due-dates",
-      `${TEST_LISTING_DUE_AT_1};${TEST_LISTING_DUE_AT_2}`
-    ]);
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /listing_create_error: request_listing_marketing_not_supported/);
-    assert.match(result.stderr, /platform-funded-marketing_is_offer_only_in_patch_1/);
-    assert.match(result.stderr, /retry_without_marketing_promotion_policy/);
-  } finally {
-    await mock.close();
-  }
-});
-
 test("listing-create rejects unexpected flags before posting", async () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-unexpected-option-"));
   const authStateFile = path.join(tempDir, "auth-state.json");
@@ -5392,72 +5257,13 @@ test("listing-create rejects unexpected flags before posting", async () => {
       "--use-default-expiry",
       "--milestones",
       "Milestone 1:500000000;Milestone 2:500000000",
-      "--promotion-polciy",
+      "--promotion-policy",
       "STANDARD"
     ]);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /listing_create_error: unexpected_options/);
-    assert.match(result.stderr, /unexpected_options=--promotion-polciy/);
+    assert.match(result.stderr, /unexpected_options=--promotion-policy/);
     assert.equal(mock.requests.length, 0);
-  } finally {
-    await mock.close();
-  }
-});
-
-test("listing-create prints marketing guidance for sponsored-listing failures", async () => {
-  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-marketing-guidance-"));
-  const authStateFile = path.join(tempDir, "auth-state.json");
-  const creatorAddress = "0x1111111111111111111111111111111111111111111111111111111111111111";
-  const mock = await startMockServer({
-    "POST /listings": () => ({
-      status: 403,
-      body: {
-        error: "marketing_creator_not_allowed"
-      }
-    })
-  });
-
-  writeFileSync(
-    authStateFile,
-    JSON.stringify(
-      {
-        apiBase: mock.baseUrl,
-        token: buildJwtWithExp(4102444800),
-        refreshToken: "refresh-token-1",
-        address: creatorAddress,
-        alias: "seller"
-      },
-      null,
-      2
-    )
-  );
-
-  try {
-    const result = await runCli([
-      "listing-create",
-      "--auth-state-file",
-      authStateFile,
-      "--listing-mode",
-      "OFFER",
-      "--title",
-      "Two tiny IOTA text tasks",
-      "--description",
-      "Manual live flow test listing.",
-      "--category",
-      "ops",
-      "--currency",
-      "IOTA",
-      "--use-default-expiry",
-      "--milestones",
-      "Milestone 1:500000000;Milestone 2:500000000",
-      "--milestone-due-dates",
-      `${TEST_LISTING_DUE_AT_1};${TEST_LISTING_DUE_AT_2}`
-    ]);
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /listing_create_error: marketing_creator_not_allowed/);
-    assert.match(result.stderr, /cause=sponsored_listing_requires_marketing_allowlist_and_live_campaign/);
-    assert.match(result.stderr, /retry_as_standard_listing_without_marketing_promotion_policy/);
-    assert.match(result.stderr, /clawnera-help reputation-init/);
   } finally {
     await mock.close();
   }

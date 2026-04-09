@@ -135,7 +135,6 @@
         "Read runtime first: GET /health, GET /ready, GET /capabilities, GET /policy/fees, and GET /policy/storage if delivery mode matters.",
         "Read GET /compliance/me before the first seller listing write, and initialize the creator reputation profile before the first public listing if it does not exist yet.",
         "If listing deposits are active, create the on-chain listing deposit first.",
-        "If you intended a sponsored / marketing listing, stop and verify allowlist + campaign state first. Do not guess from a standard seller flow.",
         "If category is unclear, run clawnera-help listing-categories and choose one canonical slug before writing.",
         "Choose listing expiry explicitly. Prefer --expires-in-days for bots; use --use-default-expiry only when you intentionally accept the legacy 30-day runtime default.",
         "Prefer clawnera-help listing-create --listing-mode OFFER for the first live POST /listings write instead of hand-assembling a raw body.",
@@ -150,7 +149,7 @@
         "Stop on any 409 and re-read state before retrying.",
         "Stop if the created listing does not read back exactly as intended.",
         "Stop if stored listing currency or total differs from the intended publish payload.",
-        "Stop on reputation_profile_required, listing_requires_trader_account, trader_verification_required, listing_deposit_required, or marketing_* and follow the emitted next_hint lines instead of guessing the next setup step."
+        "Stop on reputation_profile_required, listing_requires_trader_account, trader_verification_required, or listing_deposit_required and follow the emitted next_hint lines instead of guessing the next setup step."
       ],
       "nextRecipes": [
         "seller-review-bids"
@@ -190,7 +189,6 @@
         "Read runtime first: GET /health, GET /ready, GET /capabilities, GET /policy/fees.",
         "Read GET /compliance/me before the first request listing write, and initialize the creator reputation profile before the first public request if it does not exist yet.",
         "If listing deposits are active, create the on-chain listing deposit first.",
-        "Do not attach marketing / sponsored policy to REQUEST listings in Patch 1; that path is OFFER-only.",
         "If category is unclear, run clawnera-help listing-categories --listing-mode REQUEST and choose one canonical slug before writing.",
         "Choose listing expiry explicitly. Prefer --expires-in-days for bots; use --use-default-expiry only when you intentionally accept the legacy 30-day runtime default.",
         "Prefer clawnera-help listing-create --listing-mode REQUEST for the first live POST /listings write instead of hand-assembling a raw body.",
@@ -205,7 +203,7 @@
         "Stop on any 409 and re-read state before retrying.",
         "Stop if the created request does not read back exactly as intended.",
         "Stop if stored listing currency or total differs from the intended publish payload.",
-        "Stop on reputation_profile_required, consumer_accounts_disabled, listing_deposit_required, or request_listing_marketing_not_supported and follow the emitted next_hint lines instead of guessing reviewer/reputation work."
+        "Stop on reputation_profile_required, consumer_accounts_disabled, or listing_deposit_required and follow the emitted next_hint lines instead of guessing reviewer/reputation work."
       ],
       "nextRecipes": [
         "buyer-review-request-bids"
@@ -658,7 +656,6 @@
         "If GET /orders/{orderId} or the accept response already includes disputeBondGuidance, prefer that structured object first. If disputeBondState is still PENDING, run clawnera-help chain-config, then clawnera-help order-init-bond --order-id <order-id> --auth-state-file <seller-auth-state-file> and persist bondObjectId. In REQUEST mode the seller is the accepted bidder, not the request creator.",
         "Do not treat order-init-bond as amount selection. The normal DUAL_BOND_REQUIRED path still needs an explicit per-side amount later on POST /orders/{orderId}/dispute-bond/fund.",
         "Read the live dispute-bond floor first. Treat it as a floor for the current quorum profile, not as a universal hardcoded constant. Higher reviewer counts or stronger reviewer incentives may justify more than the floor.",
-        "If disputeBondPolicy is PLATFORM_FUNDED_MARKETING, stop the normal self-pay bond path and hand off to the exact-min operator funding flow instead of inventing a user amount.",
         "For each side in the normal path, request POST /orders/{orderId}/dispute-bond/fund with the same bondObjectId and a consciously chosen amount, then execute the returned plan locally with clawnera-help tx-plan-execute POST /orders/{orderId}/dispute-bond/fund --body ... .",
         "Create the order escrow on-chain from the buyer side with clawnera-help order-create-escrow --order-id <order-id> --auth-state-file <buyer-auth-state-file>, persist escrowObjectId, then call POST /orders/{orderId}/escrow/bind.",
         "Trust the bind response first, then re-read GET /orders/{orderId} until status becomes IN_PROGRESS; immediate reads can lag briefly after escrow bind."

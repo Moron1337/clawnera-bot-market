@@ -181,16 +181,11 @@ const LISTING_DEPOSIT_BINDING_VERSION = "clawdex.listing.deposit.ref.v1";
 const LISTING_CATEGORY_SLUGS = Object.freeze([
   "dev",
   "design",
-  "marketing",
   "ops",
   "security",
   "other",
 ]);
 const LISTING_CATEGORY_SET = new Set(LISTING_CATEGORY_SLUGS);
-const LISTING_PROMOTION_POLICIES = Object.freeze([
-  "STANDARD",
-  "PLATFORM_FUNDED_MARKETING",
-]);
 const DEFAULT_TX_PLAN_WAIT_UNTIL_READY_MAX_MS = 60 * 60 * 1000;
 const DEFAULT_TX_PLAN_WAIT_UNTIL_READY_BUFFER_MS = 250;
 const SUPPLEMENTAL_EVIDENCE_CLASSES = Object.freeze([
@@ -5528,7 +5523,6 @@ function buildListingDepositBindingPreimage(input) {
     title: input.title,
     description: input.description,
     category: input.category ?? "",
-    promotionPolicy: input.promotionPolicy ?? "",
     currency: input.currency,
     budgetAmount: normalizeListingDepositBindingAmountString(input.budgetAmount),
     milestones: input.milestones.map((milestone) => ({
@@ -5676,12 +5670,6 @@ function prepareListingDraftOptions(options = {}, runtimeContext = {}) {
   const currency = normalizeString(options.currency).toUpperCase();
   const listingModeRaw = normalizeString(options["listing-mode"]).toUpperCase();
   const listingMode = ["OFFER", "REQUEST"].includes(listingModeRaw) ? listingModeRaw : "";
-  const promotionPolicyRaw = normalizeString(options["promotion-policy"]).toUpperCase();
-  const promotionPolicy = !promotionPolicyRaw
-    ? "STANDARD"
-    : LISTING_PROMOTION_POLICIES.includes(promotionPolicyRaw)
-      ? promotionPolicyRaw
-      : "";
   const displayValues = isDisplayValueModeEnabled(options);
   if (!title || !description || !rawCategory || !currency) {
     throw new Error("missing_required_listing_fields");
@@ -5691,9 +5679,6 @@ function prepareListingDraftOptions(options = {}, runtimeContext = {}) {
   }
   if (!listingMode) {
     throw new Error("invalid_listing_mode");
-  }
-  if (!promotionPolicy) {
-    throw new Error("invalid_promotion_policy");
   }
   if (displayValues && !getSupportedMarketAsset(currency)) {
     throw new Error("display_values_require_single_currency");
@@ -5724,7 +5709,6 @@ function prepareListingDraftOptions(options = {}, runtimeContext = {}) {
   return {
     creatorAddress,
     listingMode,
-    promotionPolicy,
     budgetAmount,
     warnings,
     milestones,
@@ -5734,7 +5718,6 @@ function prepareListingDraftOptions(options = {}, runtimeContext = {}) {
       description,
       category,
       listingMode,
-      promotionPolicy,
       currency,
       budgetAmount,
       milestones,
@@ -5754,7 +5737,6 @@ function listingCreateUsageLines() {
     "- Required milestone timing: use --milestone-due-dates with shorthand milestones, or include dueAtMs on every milestone in --milestones-json / --milestones-file.",
     "- Optional: --budget-amount <atomic-int> (defaults to the milestone sum), --creator-address <0x...>, --milestones-json <json>, --milestones-file <file>",
     "- Optional live deposit binding: --listing-deposit-object-id <0x...> [--listing-deposit-tx-digest <digest>]",
-    "- Optional promotion: --promotion-policy STANDARD|PLATFORM_FUNDED_MARKETING (default STANDARD)",
     "- Optional human mode: add --display-values to interpret milestone and budget numbers in whole-user units for the selected currency (examples: --currency IOTA --display-values --milestones 'file1.txt:1;file2.txt:1' or 'file1.txt:1 IOTA;file2.txt:1 IOTA')",
     ...buildCurrencyUnitLines("IOTA"),
     ...buildCurrencyUnitLines("CLAW"),
@@ -5765,7 +5747,6 @@ function listingCreateUsageLines() {
     "- REQUEST means the listing creator is the future buyer and later accepts the chosen seller bid",
     "- Public listing create should be treated as: explicit listingMode + reputation-init + compliance/deposit preflight",
     "- If /policy/fees shows listingDeposit.enabled=true, run clawnera-help listing-deposit-create first and pass its object id into listing-create",
-    "- Sponsored / marketing listing is not the default public path; verify allowlist/campaign state first instead of guessing",
   ];
 }
 
@@ -5900,7 +5881,6 @@ async function runListingCreate(commandArgs) {
     "milestones-file",
     "budget-amount",
     "display-values",
-    "promotion-policy",
     "milestone-due-dates",
     "listing-deposit-object-id",
     "listing-deposit-tx-digest",
@@ -5927,12 +5907,6 @@ async function runListingCreate(commandArgs) {
     const currency = normalizeString(options.currency).toUpperCase();
     const listingModeRaw = normalizeString(options["listing-mode"]).toUpperCase();
     const listingMode = ["OFFER", "REQUEST"].includes(listingModeRaw) ? listingModeRaw : "";
-    const promotionPolicyRaw = normalizeString(options["promotion-policy"]).toUpperCase();
-    const promotionPolicy = !promotionPolicyRaw
-      ? "STANDARD"
-      : LISTING_PROMOTION_POLICIES.includes(promotionPolicyRaw)
-        ? promotionPolicyRaw
-        : "";
     const displayValues = isDisplayValueModeEnabled(options);
     if (!title || !description || !rawCategory || !currency) {
       return { ok: false, error: "missing_required_listing_fields" };
@@ -5942,9 +5916,6 @@ async function runListingCreate(commandArgs) {
     }
     if (!listingMode) {
       return { ok: false, error: "invalid_listing_mode" };
-    }
-    if (!promotionPolicy) {
-      return { ok: false, error: "invalid_promotion_policy" };
     }
     if (displayValues && !getSupportedMarketAsset(currency)) {
       return {
@@ -5981,7 +5952,6 @@ async function runListingCreate(commandArgs) {
       ...result,
       creatorAddress: prepared.creatorAddress,
       listingMode: prepared.listingMode,
-      promotionPolicy: prepared.promotionPolicy,
       listingId: extractCommonCreatedId(result.response, [["listingId"], ["item", "id"], ["listing", "id"], ["id"]]) || null,
       budgetAmount: prepared.budgetAmount,
       warnings: prepared.warnings,
@@ -6039,7 +6009,6 @@ async function runListingDepositCreate(commandArgs) {
     "milestones-file",
     "budget-amount",
     "display-values",
-    "promotion-policy",
     "milestone-due-dates",
     "listing-ref-digest-hex",
     "payment-coin-object-id",
@@ -6111,7 +6080,6 @@ async function runListingDepositCreate(commandArgs) {
         title: prepared.createBody.title,
         description: prepared.createBody.description,
         category: prepared.createBody.category,
-        promotionPolicy: prepared.createBody.promotionPolicy,
         currency: prepared.createBody.currency,
         budgetAmount: prepared.createBody.budgetAmount,
         milestones: prepared.createBody.milestones,
@@ -6333,11 +6301,6 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
       ];
     case "unexpected_options":
       return buildUnexpectedOptionHintLines("listing-create", result);
-    case "invalid_promotion_policy":
-      return [
-        `supported_promotion_policies=${LISTING_PROMOTION_POLICIES.join(",")}`,
-        "next_hint=use --promotion-policy STANDARD or --promotion-policy PLATFORM_FUNDED_MARKETING",
-      ];
     case "listing_milestone_due_at_required":
       return [
         "cause=listing_requires_structured_milestone_target_dates",
@@ -6427,25 +6390,6 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
         "cause=listing_expiry_days_too_large",
         `detail=helper_caps_expires-in-days_at_${MAX_LISTING_EXPIRY_DAYS}_to_match_the_legacy_runtime_default_window`,
         `next_hint=retry_with --expires-in-days <1-${MAX_LISTING_EXPIRY_DAYS}> or an earlier --expires-at`,
-      ];
-    case "request_listing_marketing_not_supported":
-      return [
-        "cause=request_listing_marketing_not_supported",
-        "detail=platform-funded-marketing_is_offer_only_in_patch_1",
-        "next_hint=retry_without_marketing_promotion_policy",
-      ];
-    case "marketing_creator_not_allowed":
-    case "marketing_disabled":
-    case "marketing_campaign_not_configured":
-    case "marketing_campaign_expired":
-    case "marketing_campaign_disabled":
-    case "marketing_campaign_max_order_amount_exceeded":
-      return [
-        "cause=sponsored_listing_requires_marketing_allowlist_and_live_campaign",
-        "detail=public_listing_create_still_needs_reputation_init_and_normal_preflight_before_any_marketing_rules",
-        `next_hint=clawnera-help reputation-init --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
-        "next_hint=retry_as_standard_listing_without_marketing_promotion_policy",
-        "next_hint=clawnera-help request GET /policy/fees --auth-state-file <seller-auth-state-file>",
       ];
     default:
       return [];
@@ -8661,10 +8605,6 @@ async function runOrderInitBond(commandArgs) {
       options["required-reviewer-votes-floor"] !== undefined
         ? parsePositiveBigIntOption(options["required-reviewer-votes-floor"], "required_reviewer_votes_floor")
         : chainConfig.minRequiredReviewerVotes;
-    const marketingCampaignId =
-      typeof options["marketing-campaign-id"] === "string" && options["marketing-campaign-id"].trim()
-        ? options["marketing-campaign-id"].trim()
-        : "";
     const request = {
       packageId,
       sender: actorAddress,
@@ -8674,7 +8614,6 @@ async function runOrderInitBond(commandArgs) {
       requiredReviewerVotes,
       requiredReviewerVotesFloor,
       disputeQuorumConfigObjectId: chainConfig.disputeQuorumConfigObjectId,
-      ...(marketingCampaignId ? { marketingCampaignId } : {}),
     };
     const transaction = buildInitOrderBondTx(request);
     const signer = resolveRuntimeSigner(options, orderCall.context);
@@ -13323,7 +13262,6 @@ function chainConfigUsageLines() {
     "- Optional IOTA runtime overrides: --network <name> --rpc-url <url>",
     "- Reads the live dispute-bond floor and current quorum defaults; it does not choose or fund the final bond amount",
     "- Normal DUAL_BOND_REQUIRED funding still needs an explicit amount later on POST /orders/{orderId}/dispute-bond/fund",
-    "- PLATFORM_FUNDED_MARKETING is a separate exact-min operator path, not a normal user amount choice",
     "- Use this when a bot must build local bond/escrow PTBs without guessing object ids"
   ];
 }
@@ -13354,18 +13292,16 @@ function orderInitBondUsageLines() {
     "- Usage: clawnera-help order-init-bond --order-id <id> --auth-state-file <file>",
     "- Reads the order + fee policy, resolves live chain config, then builds `init_order_dispute_bond` locally",
     "- Optional: --required-reviewer-votes <odd-int> --required-reviewer-votes-floor <odd-int>",
-    "- Optional marketing: --marketing-campaign-id <id>",
     "- Optional execution mode: --dry-run",
     "- Optional signer overrides: --alias <wallet-alias> --address <0x...> --keystore-path <file>",
     "- This creates the shared dispute-bond object and reviewer-vote policy only; it does not fund the amount",
     "- Normal DUAL_BOND_REQUIRED funding still needs an explicit amount later on POST /orders/{orderId}/dispute-bond/fund",
-    "- PLATFORM_FUNDED_MARKETING remains a separate exact-min operator path",
     "- Use this before `tx-plan-execute POST /orders/{orderId}/dispute-bond/fund ...`"
   ];
 }
 
 function normalizeDisputeBondSelectionMode(policy) {
-  return policy === "PLATFORM_FUNDED_MARKETING" ? "EXACT_MIN_PLATFORM_FUNDED" : "EXPLICIT_RANGE";
+  return "EXPLICIT_RANGE";
 }
 
 function buildFallbackApiDisputeBondGuidance(response) {
@@ -13373,12 +13309,11 @@ function buildFallbackApiDisputeBondGuidance(response) {
   if (!policy) {
     return null;
   }
-  const platformOperatorFunding = policy === "PLATFORM_FUNDED_MARKETING";
   return {
     policy,
     selectionMode: normalizeDisputeBondSelectionMode(policy),
-    userAmountChoiceRequired: !platformOperatorFunding,
-    platformOperatorFunding,
+    userAmountChoiceRequired: true,
+    platformOperatorFunding: false,
     currentMinPerSideAmount: null,
     currentMaxPerSideAmount: null,
     defaultRequiredReviewerVotes: null,
@@ -13412,8 +13347,7 @@ function buildChainConfigGuidance(chainConfig) {
       "chain-config reads the live floor and current quorum defaults only; it does not choose or fund the final dispute-bond amount.",
       "For normal DUAL_BOND_REQUIRED orders, POST /orders/{orderId}/dispute-bond/fund still requires an explicit per-side amount inside the live range.",
       "Treat the live minimum as a floor for the current quorum profile, not as a universal hardcoded constant.",
-      "If the order uses more reviewers or wants stronger reviewer incentives, choosing more than the floor may be appropriate.",
-      "PLATFORM_FUNDED_MARKETING stays separate: exact-min operator funding, not a normal user amount choice."
+      "If the order uses more reviewers or wants stronger reviewer incentives, choosing more than the floor may be appropriate."
     ]
   };
 }
@@ -13424,28 +13358,20 @@ function buildOrderInitBondGuidance({
   selectedRequiredReviewerVotes,
   selectedRequiredReviewerVotesFloor
 }) {
-  const normalizedPolicy = policy === "PLATFORM_FUNDED_MARKETING" ? "PLATFORM_FUNDED_MARKETING" : "DUAL_BOND_REQUIRED";
-  const notes =
-    normalizedPolicy === "PLATFORM_FUNDED_MARKETING"
-      ? [
-          "order-init-bond created the shared bond object and reviewer-vote policy only; it did not fund the amount.",
-          "PLATFORM_FUNDED_MARKETING uses the exact live minimum on the operator/custody path; the bidder does not choose a normal bond amount here.",
-          "The buyer still has to fund and bind the order escrow principal from the buyer wallet."
-        ]
-      : [
-          "order-init-bond created the shared bond object and reviewer-vote policy only; it did not fund the amount.",
-          "POST /orders/{orderId}/dispute-bond/fund still requires an explicit per-side amount for the normal DUAL_BOND_REQUIRED path.",
-          "Treat the live minimum as a floor for the selected quorum profile, not as a universal hardcoded constant.",
-          "If the order uses more reviewers or wants stronger reviewer incentives, choosing more than the floor may be appropriate."
-        ];
+  const normalizedPolicy = policy || "DUAL_BOND_REQUIRED";
+  const notes = [
+    "order-init-bond created the shared bond object and reviewer-vote policy only; it did not fund the amount.",
+    "POST /orders/{orderId}/dispute-bond/fund still requires an explicit per-side amount for the normal DUAL_BOND_REQUIRED path.",
+    "Treat the live minimum as a floor for the selected quorum profile, not as a universal hardcoded constant.",
+    "If the order uses more reviewers or wants stronger reviewer incentives, choosing more than the floor may be appropriate."
+  ];
   return {
     policy: normalizedPolicy,
     selectionMode: normalizeDisputeBondSelectionMode(normalizedPolicy),
-    userAmountChoiceRequired: normalizedPolicy !== "PLATFORM_FUNDED_MARKETING",
-    platformOperatorFunding: normalizedPolicy === "PLATFORM_FUNDED_MARKETING",
+    userAmountChoiceRequired: true,
+    platformOperatorFunding: false,
     currentMinPerSideAmount: chainConfig.minDisputeBondPerSideIota,
-    currentMaxPerSideAmount:
-      normalizedPolicy === "PLATFORM_FUNDED_MARKETING" ? null : chainConfig.maxDisputeBondPerSideIota,
+    currentMaxPerSideAmount: chainConfig.maxDisputeBondPerSideIota,
     defaultRequiredReviewerVotes: chainConfig.defaultRequiredReviewerVotes,
     minRequiredReviewerVotes: chainConfig.minRequiredReviewerVotes,
     maxRequiredReviewerVotes: chainConfig.maxRequiredReviewerVotes,
@@ -14936,7 +14862,6 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   } else if (result.ok) {
     console.log(`listing_create_ok listing_id=${result.listingId || "unknown"}`);
     console.log(`listing_mode=${result.listingMode || "unknown"}`);
-    console.log(`promotion_policy=${result.promotionPolicy || "STANDARD"}`);
     console.log(`creator_address=${result.creatorAddress}`);
     console.log(`budget_amount=${result.budgetAmount}`);
     if (Array.isArray(result.warnings) && result.warnings.length > 0) {

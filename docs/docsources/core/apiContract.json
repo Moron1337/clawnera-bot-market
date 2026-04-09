@@ -105,8 +105,6 @@
               "maxGasBudget",
               "reserve",
               "execute",
-              "platformFundedMarketing",
-              "onboardingIotaTopup",
               "recommendedGasBudgets"
             ],
             "propertyNames": [
@@ -122,8 +120,6 @@
               "maxGasBudget",
               "reserve",
               "execute",
-              "platformFundedMarketing",
-              "onboardingIotaTopup",
               "recommendedGasBudgets"
             ]
           }
@@ -164,8 +160,6 @@
               "maxGasBudget",
               "reserve",
               "execute",
-              "platformFundedMarketing",
-              "onboardingIotaTopup",
               "recommendedGasBudgets"
             ],
             "propertyNames": [
@@ -181,8 +175,6 @@
               "maxGasBudget",
               "reserve",
               "execute",
-              "platformFundedMarketing",
-              "onboardingIotaTopup",
               "recommendedGasBudgets"
             ]
           },
@@ -311,8 +303,6 @@
               "maxGasBudget",
               "reserve",
               "execute",
-              "platformFundedMarketing",
-              "onboardingIotaTopup",
               "recommendedGasBudgets"
             ],
             "propertyNames": [
@@ -328,188 +318,7 @@
               "maxGasBudget",
               "reserve",
               "execute",
-              "platformFundedMarketing",
-              "onboardingIotaTopup",
               "recommendedGasBudgets"
-            ]
-          }
-        }
-      }
-    },
-    "/onboarding/iota-topup": {
-      "post": {
-        "path": "/onboarding/iota-topup",
-        "method": "post",
-        "operationId": "claimOnboardingIotaTopup",
-        "tags": [
-          "Sponsor"
-        ],
-        "parameters": {
-          "path": [],
-          "query": [],
-          "header": []
-        },
-        "requestBody": null,
-        "responses": {
-          "200": {
-            "status": "200",
-            "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/OnboardingIotaTopupResponse",
-            "schemaName": "OnboardingIotaTopupResponse",
-            "requiredFields": [
-              "funded",
-              "amount",
-              "senderAddress",
-              "maxEligibleBalance"
-            ],
-            "optionalFields": [
-              "alreadyClaimed",
-              "pendingConfirmation",
-              "txDigest",
-              "completedAt",
-              "balanceBefore",
-              "detail"
-            ],
-            "propertyNames": [
-              "funded",
-              "alreadyClaimed",
-              "pendingConfirmation",
-              "amount",
-              "txDigest",
-              "senderAddress",
-              "completedAt",
-              "balanceBefore",
-              "maxEligibleBalance",
-              "detail"
-            ]
-          },
-          "201": {
-            "status": "201",
-            "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/OnboardingIotaTopupResponse",
-            "schemaName": "OnboardingIotaTopupResponse",
-            "requiredFields": [
-              "funded",
-              "amount",
-              "senderAddress",
-              "maxEligibleBalance"
-            ],
-            "optionalFields": [
-              "alreadyClaimed",
-              "pendingConfirmation",
-              "txDigest",
-              "completedAt",
-              "balanceBefore",
-              "detail"
-            ],
-            "propertyNames": [
-              "funded",
-              "alreadyClaimed",
-              "pendingConfirmation",
-              "amount",
-              "txDigest",
-              "senderAddress",
-              "completedAt",
-              "balanceBefore",
-              "maxEligibleBalance",
-              "detail"
-            ]
-          },
-          "202": {
-            "status": "202",
-            "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/OnboardingIotaTopupResponse",
-            "schemaName": "OnboardingIotaTopupResponse",
-            "requiredFields": [
-              "funded",
-              "amount",
-              "senderAddress",
-              "maxEligibleBalance"
-            ],
-            "optionalFields": [
-              "alreadyClaimed",
-              "pendingConfirmation",
-              "txDigest",
-              "completedAt",
-              "balanceBefore",
-              "detail"
-            ],
-            "propertyNames": [
-              "funded",
-              "alreadyClaimed",
-              "pendingConfirmation",
-              "amount",
-              "txDigest",
-              "senderAddress",
-              "completedAt",
-              "balanceBefore",
-              "maxEligibleBalance",
-              "detail"
-            ]
-          },
-          "401": {
-            "status": "401",
-            "reusableResponseRef": "#/components/responses/Unauthorized",
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          },
-          "403": {
-            "status": "403",
-            "reusableResponseRef": "#/components/responses/Forbidden",
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          },
-          "409": {
-            "status": "409",
-            "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          },
-          "502": {
-            "status": "502",
-            "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          },
-          "503": {
-            "status": "503",
-            "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
             ]
           }
         }
@@ -1546,7 +1355,6 @@
           "optionalFields": [
             "description",
             "category",
-            "promotionPolicy",
             "expiresAtMs",
             "communicationPolicy",
             "listingDepositObjectId",
@@ -1558,7 +1366,6 @@
             "title",
             "description",
             "category",
-            "promotionPolicy",
             "currency",
             "budgetAmount",
             "expiresAtMs",
@@ -1588,7 +1395,6 @@
             ],
             "optionalFields": [
               "category",
-              "promotionPolicy",
               "communicationPolicy",
               "listingDepositObjectId",
               "listingDepositTxDigest",
@@ -1604,7 +1410,6 @@
               "title",
               "description",
               "category",
-              "promotionPolicy",
               "currency",
               "budgetAmount",
               "milestones",
@@ -1935,7 +1740,6 @@
             ],
             "optionalFields": [
               "category",
-              "promotionPolicy",
               "communicationPolicy",
               "listingDepositObjectId",
               "listingDepositTxDigest",
@@ -1951,7 +1755,6 @@
               "title",
               "description",
               "category",
-              "promotionPolicy",
               "currency",
               "budgetAmount",
               "milestones",
@@ -2091,7 +1894,6 @@
             ],
             "optionalFields": [
               "category",
-              "promotionPolicy",
               "communicationPolicy",
               "listingDepositObjectId",
               "listingDepositTxDigest",
@@ -2107,7 +1909,6 @@
               "title",
               "description",
               "category",
-              "promotionPolicy",
               "currency",
               "budgetAmount",
               "milestones",
@@ -3281,7 +3082,6 @@
               "disputeBondPolicy",
               "disputeBondState",
               "disputeBondActivatedAt",
-              "marketingCampaignId",
               "deadlineMs",
               "status",
               "createdAt",
@@ -3301,7 +3101,6 @@
               "disputeBondPolicy",
               "disputeBondState",
               "disputeBondActivatedAt",
-              "marketingCampaignId",
               "deadlineMs",
               "status",
               "createdAt",
@@ -3785,7 +3584,6 @@
               "disputeBondPolicy",
               "disputeBondState",
               "disputeBondActivatedAt",
-              "marketingCampaignId",
               "deadlineMs",
               "status",
               "createdAt",
@@ -3805,7 +3603,6 @@
               "disputeBondPolicy",
               "disputeBondState",
               "disputeBondActivatedAt",
-              "marketingCampaignId",
               "deadlineMs",
               "status",
               "createdAt",
@@ -4564,7 +4361,6 @@
               "disputeBondPolicy",
               "disputeBondState",
               "disputeBondActivatedAt",
-              "marketingCampaignId",
               "deadlineMs",
               "status",
               "createdAt",
@@ -4584,7 +4380,6 @@
               "disputeBondPolicy",
               "disputeBondState",
               "disputeBondActivatedAt",
-              "marketingCampaignId",
               "deadlineMs",
               "status",
               "createdAt",
@@ -4695,7 +4490,6 @@
               "disputeBondPolicy",
               "disputeBondState",
               "disputeBondActivatedAt",
-              "marketingCampaignId",
               "deadlineMs",
               "status",
               "createdAt",
@@ -4715,7 +4509,6 @@
               "disputeBondPolicy",
               "disputeBondState",
               "disputeBondActivatedAt",
-              "marketingCampaignId",
               "deadlineMs",
               "status",
               "createdAt",
@@ -5295,7 +5088,6 @@
               "disputeBondPolicy",
               "disputeBondState",
               "disputeBondActivatedAt",
-              "marketingCampaignId",
               "deadlineMs",
               "status",
               "createdAt",
@@ -5315,7 +5107,6 @@
               "disputeBondPolicy",
               "disputeBondState",
               "disputeBondActivatedAt",
-              "marketingCampaignId",
               "deadlineMs",
               "status",
               "createdAt",
@@ -5434,7 +5225,6 @@
               "disputeBondPolicy",
               "disputeBondState",
               "disputeBondActivatedAt",
-              "marketingCampaignId",
               "deadlineMs",
               "status",
               "createdAt",
@@ -5454,7 +5244,6 @@
               "disputeBondPolicy",
               "disputeBondState",
               "disputeBondActivatedAt",
-              "marketingCampaignId",
               "deadlineMs",
               "status",
               "createdAt",
@@ -5764,6 +5553,691 @@
         }
       }
     },
+    "/orders/{orderId}/deadline-ext/propose": {
+      "post": {
+        "path": "/orders/{orderId}/deadline-ext/propose",
+        "method": "post",
+        "operationId": "proposeDeadlineExtensionPlan",
+        "tags": [
+          "Orders"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "orderId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/DeadlineExtProposeRequest",
+          "schemaName": "DeadlineExtProposeRequest",
+          "requiredFields": [
+            "deadlineExtRegistryObjectId",
+            "escrowId",
+            "currentDeadlineMs",
+            "proposedDeadlineMs"
+          ],
+          "optionalFields": [
+            "clockObjectId"
+          ],
+          "propertyNames": [
+            "deadlineExtRegistryObjectId",
+            "escrowId",
+            "currentDeadlineMs",
+            "proposedDeadlineMs",
+            "clockObjectId"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/TxPlanResponse",
+            "schemaName": "TxPlanResponse",
+            "requiredFields": [
+              "status",
+              "txBuilder",
+              "request"
+            ],
+            "optionalFields": [
+              "txMoveCall"
+            ],
+            "propertyNames": [
+              "status",
+              "txBuilder",
+              "request",
+              "txMoveCall"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/deadline-ext/{extensionObjectId}/accept": {
+      "post": {
+        "path": "/deadline-ext/{extensionObjectId}/accept",
+        "method": "post",
+        "operationId": "acceptDeadlineExtensionPlan",
+        "tags": [
+          "Orders"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "extensionObjectId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/DeadlineExtActionRequest",
+          "schemaName": "DeadlineExtActionRequest",
+          "requiredFields": [
+            "deadlineExtRegistryObjectId"
+          ],
+          "optionalFields": [
+            "clockObjectId"
+          ],
+          "propertyNames": [
+            "deadlineExtRegistryObjectId",
+            "clockObjectId"
+          ]
+        },
+        "responses": {
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/deadline-ext/{extensionObjectId}/reject": {
+      "post": {
+        "path": "/deadline-ext/{extensionObjectId}/reject",
+        "method": "post",
+        "operationId": "rejectDeadlineExtensionPlan",
+        "tags": [
+          "Orders"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "extensionObjectId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/DeadlineExtActionRequest",
+          "schemaName": "DeadlineExtActionRequest",
+          "requiredFields": [
+            "deadlineExtRegistryObjectId"
+          ],
+          "optionalFields": [
+            "clockObjectId"
+          ],
+          "propertyNames": [
+            "deadlineExtRegistryObjectId",
+            "clockObjectId"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/TxPlanResponse",
+            "schemaName": "TxPlanResponse",
+            "requiredFields": [
+              "status",
+              "txBuilder",
+              "request"
+            ],
+            "optionalFields": [
+              "txMoveCall"
+            ],
+            "propertyNames": [
+              "status",
+              "txBuilder",
+              "request",
+              "txMoveCall"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/orders/{orderId}/cancel/request": {
+      "post": {
+        "path": "/orders/{orderId}/cancel/request",
+        "method": "post",
+        "operationId": "requestMutualCancelPlan",
+        "tags": [
+          "Orders"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "orderId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/MutualCancelRequest",
+          "schemaName": "MutualCancelRequest",
+          "requiredFields": [
+            "escrowId",
+            "buyerRefundBps",
+            "amount"
+          ],
+          "optionalFields": [
+            "clockObjectId"
+          ],
+          "propertyNames": [
+            "escrowId",
+            "buyerRefundBps",
+            "amount",
+            "clockObjectId"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/TxPlanResponse",
+            "schemaName": "TxPlanResponse",
+            "requiredFields": [
+              "status",
+              "txBuilder",
+              "request"
+            ],
+            "optionalFields": [
+              "txMoveCall"
+            ],
+            "propertyNames": [
+              "status",
+              "txBuilder",
+              "request",
+              "txMoveCall"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": "#/components/responses/Conflict",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/cancel-requests/{cancelRequestObjectId}/accept": {
+      "post": {
+        "path": "/cancel-requests/{cancelRequestObjectId}/accept",
+        "method": "post",
+        "operationId": "acceptMutualCancelPlan",
+        "tags": [
+          "Orders"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "cancelRequestObjectId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/MutualCancelActionRequest",
+          "schemaName": "MutualCancelActionRequest",
+          "requiredFields": [],
+          "optionalFields": [
+            "clockObjectId"
+          ],
+          "propertyNames": [
+            "clockObjectId"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/TxPlanResponse",
+            "schemaName": "TxPlanResponse",
+            "requiredFields": [
+              "status",
+              "txBuilder",
+              "request"
+            ],
+            "optionalFields": [
+              "txMoveCall"
+            ],
+            "propertyNames": [
+              "status",
+              "txBuilder",
+              "request",
+              "txMoveCall"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/cancel-requests/{cancelRequestObjectId}/reject": {
+      "post": {
+        "path": "/cancel-requests/{cancelRequestObjectId}/reject",
+        "method": "post",
+        "operationId": "rejectMutualCancelPlan",
+        "tags": [
+          "Orders"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "cancelRequestObjectId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/TxPlanResponse",
+            "schemaName": "TxPlanResponse",
+            "requiredFields": [
+              "status",
+              "txBuilder",
+              "request"
+            ],
+            "optionalFields": [
+              "txMoveCall"
+            ],
+            "propertyNames": [
+              "status",
+              "txBuilder",
+              "request",
+              "txMoveCall"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
     "/orders/{orderId}/mark-disputed": {
       "post": {
         "path": "/orders/{orderId}/mark-disputed",
@@ -5805,7 +6279,6 @@
               "disputeBondPolicy",
               "disputeBondState",
               "disputeBondActivatedAt",
-              "marketingCampaignId",
               "deadlineMs",
               "status",
               "createdAt",
@@ -5825,7 +6298,6 @@
               "disputeBondPolicy",
               "disputeBondState",
               "disputeBondActivatedAt",
-              "marketingCampaignId",
               "deadlineMs",
               "status",
               "createdAt",
@@ -6811,6 +7283,106 @@
         }
       }
     },
+    "/reviewers/{address}/claim-metrics": {
+      "post": {
+        "path": "/reviewers/{address}/claim-metrics",
+        "method": "post",
+        "operationId": "claimReviewerDecisionMetricsCompatPlan",
+        "tags": [
+          "Disputes"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "address",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": false,
+          "schemaRef": "#/components/schemas/ReviewerClaimMetricsRequest",
+          "schemaName": "ReviewerClaimMetricsRequest",
+          "requiredFields": [],
+          "optionalFields": [
+            "disputeCaseObjectId",
+            "reviewerRegistryObjectId",
+            "reviewerEntryObjectId",
+            "disputeQuorumConfigObjectId"
+          ],
+          "propertyNames": [
+            "disputeCaseObjectId",
+            "reviewerRegistryObjectId",
+            "reviewerEntryObjectId",
+            "disputeQuorumConfigObjectId"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/TxPlanResponse",
+            "schemaName": "TxPlanResponse",
+            "requiredFields": [
+              "status",
+              "txBuilder",
+              "request"
+            ],
+            "optionalFields": [
+              "txMoveCall"
+            ],
+            "propertyNames": [
+              "status",
+              "txBuilder",
+              "request",
+              "txMoveCall"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
     "/orders/{orderId}/dispute-bond/fund": {
       "post": {
         "path": "/orders/{orderId}/dispute-bond/fund",
@@ -6842,8 +7414,6 @@
           ],
           "optionalFields": [
             "paymentCoinObjectId",
-            "marketingFundingCapObjectId",
-            "marketingFundingCustodyProof",
             "clockObjectId"
           ],
           "propertyNames": [
@@ -6852,8 +7422,6 @@
             "side",
             "amount",
             "paymentCoinObjectId",
-            "marketingFundingCapObjectId",
-            "marketingFundingCustodyProof",
             "clockObjectId"
           ]
         },
@@ -11653,8 +12221,6 @@
             "maxGasBudget",
             "reserve",
             "execute",
-            "platformFundedMarketing",
-            "onboardingIotaTopup",
             "recommendedGasBudgets"
           ],
           "propertyNames": [
@@ -11670,8 +12236,6 @@
             "maxGasBudget",
             "reserve",
             "execute",
-            "platformFundedMarketing",
-            "onboardingIotaTopup",
             "recommendedGasBudgets"
           ]
         }
@@ -11709,8 +12273,6 @@
             "maxGasBudget",
             "reserve",
             "execute",
-            "platformFundedMarketing",
-            "onboardingIotaTopup",
             "recommendedGasBudgets"
           ],
           "propertyNames": [
@@ -11726,8 +12288,6 @@
             "maxGasBudget",
             "reserve",
             "execute",
-            "platformFundedMarketing",
-            "onboardingIotaTopup",
             "recommendedGasBudgets"
           ]
         },
@@ -11847,8 +12407,6 @@
             "maxGasBudget",
             "reserve",
             "execute",
-            "platformFundedMarketing",
-            "onboardingIotaTopup",
             "recommendedGasBudgets"
           ],
           "propertyNames": [
@@ -11864,185 +12422,7 @@
             "maxGasBudget",
             "reserve",
             "execute",
-            "platformFundedMarketing",
-            "onboardingIotaTopup",
             "recommendedGasBudgets"
-          ]
-        }
-      }
-    },
-    "claimOnboardingIotaTopup": {
-      "path": "/onboarding/iota-topup",
-      "method": "post",
-      "tags": [
-        "Sponsor"
-      ],
-      "parameters": {
-        "path": [],
-        "query": [],
-        "header": []
-      },
-      "requestBody": null,
-      "responses": {
-        "200": {
-          "status": "200",
-          "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/OnboardingIotaTopupResponse",
-          "schemaName": "OnboardingIotaTopupResponse",
-          "requiredFields": [
-            "funded",
-            "amount",
-            "senderAddress",
-            "maxEligibleBalance"
-          ],
-          "optionalFields": [
-            "alreadyClaimed",
-            "pendingConfirmation",
-            "txDigest",
-            "completedAt",
-            "balanceBefore",
-            "detail"
-          ],
-          "propertyNames": [
-            "funded",
-            "alreadyClaimed",
-            "pendingConfirmation",
-            "amount",
-            "txDigest",
-            "senderAddress",
-            "completedAt",
-            "balanceBefore",
-            "maxEligibleBalance",
-            "detail"
-          ]
-        },
-        "201": {
-          "status": "201",
-          "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/OnboardingIotaTopupResponse",
-          "schemaName": "OnboardingIotaTopupResponse",
-          "requiredFields": [
-            "funded",
-            "amount",
-            "senderAddress",
-            "maxEligibleBalance"
-          ],
-          "optionalFields": [
-            "alreadyClaimed",
-            "pendingConfirmation",
-            "txDigest",
-            "completedAt",
-            "balanceBefore",
-            "detail"
-          ],
-          "propertyNames": [
-            "funded",
-            "alreadyClaimed",
-            "pendingConfirmation",
-            "amount",
-            "txDigest",
-            "senderAddress",
-            "completedAt",
-            "balanceBefore",
-            "maxEligibleBalance",
-            "detail"
-          ]
-        },
-        "202": {
-          "status": "202",
-          "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/OnboardingIotaTopupResponse",
-          "schemaName": "OnboardingIotaTopupResponse",
-          "requiredFields": [
-            "funded",
-            "amount",
-            "senderAddress",
-            "maxEligibleBalance"
-          ],
-          "optionalFields": [
-            "alreadyClaimed",
-            "pendingConfirmation",
-            "txDigest",
-            "completedAt",
-            "balanceBefore",
-            "detail"
-          ],
-          "propertyNames": [
-            "funded",
-            "alreadyClaimed",
-            "pendingConfirmation",
-            "amount",
-            "txDigest",
-            "senderAddress",
-            "completedAt",
-            "balanceBefore",
-            "maxEligibleBalance",
-            "detail"
-          ]
-        },
-        "401": {
-          "status": "401",
-          "reusableResponseRef": "#/components/responses/Unauthorized",
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        },
-        "403": {
-          "status": "403",
-          "reusableResponseRef": "#/components/responses/Forbidden",
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        },
-        "409": {
-          "status": "409",
-          "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        },
-        "502": {
-          "status": "502",
-          "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        },
-        "503": {
-          "status": "503",
-          "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
           ]
         }
       }
@@ -13036,7 +13416,6 @@
         "optionalFields": [
           "description",
           "category",
-          "promotionPolicy",
           "expiresAtMs",
           "communicationPolicy",
           "listingDepositObjectId",
@@ -13048,7 +13427,6 @@
           "title",
           "description",
           "category",
-          "promotionPolicy",
           "currency",
           "budgetAmount",
           "expiresAtMs",
@@ -13078,7 +13456,6 @@
           ],
           "optionalFields": [
             "category",
-            "promotionPolicy",
             "communicationPolicy",
             "listingDepositObjectId",
             "listingDepositTxDigest",
@@ -13094,7 +13471,6 @@
             "title",
             "description",
             "category",
-            "promotionPolicy",
             "currency",
             "budgetAmount",
             "milestones",
@@ -13413,7 +13789,6 @@
           ],
           "optionalFields": [
             "category",
-            "promotionPolicy",
             "communicationPolicy",
             "listingDepositObjectId",
             "listingDepositTxDigest",
@@ -13429,7 +13804,6 @@
             "title",
             "description",
             "category",
-            "promotionPolicy",
             "currency",
             "budgetAmount",
             "milestones",
@@ -13566,7 +13940,6 @@
           ],
           "optionalFields": [
             "category",
-            "promotionPolicy",
             "communicationPolicy",
             "listingDepositObjectId",
             "listingDepositTxDigest",
@@ -13582,7 +13955,6 @@
             "title",
             "description",
             "category",
-            "promotionPolicy",
             "currency",
             "budgetAmount",
             "milestones",
@@ -14722,7 +15094,6 @@
             "disputeBondPolicy",
             "disputeBondState",
             "disputeBondActivatedAt",
-            "marketingCampaignId",
             "deadlineMs",
             "status",
             "createdAt",
@@ -14742,7 +15113,6 @@
             "disputeBondPolicy",
             "disputeBondState",
             "disputeBondActivatedAt",
-            "marketingCampaignId",
             "deadlineMs",
             "status",
             "createdAt",
@@ -15216,7 +15586,6 @@
             "disputeBondPolicy",
             "disputeBondState",
             "disputeBondActivatedAt",
-            "marketingCampaignId",
             "deadlineMs",
             "status",
             "createdAt",
@@ -15236,7 +15605,6 @@
             "disputeBondPolicy",
             "disputeBondState",
             "disputeBondActivatedAt",
-            "marketingCampaignId",
             "deadlineMs",
             "status",
             "createdAt",
@@ -15977,7 +16345,6 @@
             "disputeBondPolicy",
             "disputeBondState",
             "disputeBondActivatedAt",
-            "marketingCampaignId",
             "deadlineMs",
             "status",
             "createdAt",
@@ -15997,7 +16364,6 @@
             "disputeBondPolicy",
             "disputeBondState",
             "disputeBondActivatedAt",
-            "marketingCampaignId",
             "deadlineMs",
             "status",
             "createdAt",
@@ -16105,7 +16471,6 @@
             "disputeBondPolicy",
             "disputeBondState",
             "disputeBondActivatedAt",
-            "marketingCampaignId",
             "deadlineMs",
             "status",
             "createdAt",
@@ -16125,7 +16490,6 @@
             "disputeBondPolicy",
             "disputeBondState",
             "disputeBondActivatedAt",
-            "marketingCampaignId",
             "deadlineMs",
             "status",
             "createdAt",
@@ -16692,7 +17056,6 @@
             "disputeBondPolicy",
             "disputeBondState",
             "disputeBondActivatedAt",
-            "marketingCampaignId",
             "deadlineMs",
             "status",
             "createdAt",
@@ -16712,7 +17075,6 @@
             "disputeBondPolicy",
             "disputeBondState",
             "disputeBondActivatedAt",
-            "marketingCampaignId",
             "deadlineMs",
             "status",
             "createdAt",
@@ -16828,7 +17190,6 @@
             "disputeBondPolicy",
             "disputeBondState",
             "disputeBondActivatedAt",
-            "marketingCampaignId",
             "deadlineMs",
             "status",
             "createdAt",
@@ -16848,7 +17209,6 @@
             "disputeBondPolicy",
             "disputeBondState",
             "disputeBondActivatedAt",
-            "marketingCampaignId",
             "deadlineMs",
             "status",
             "createdAt",
@@ -17153,6 +17513,673 @@
         }
       }
     },
+    "proposeDeadlineExtensionPlan": {
+      "path": "/orders/{orderId}/deadline-ext/propose",
+      "method": "post",
+      "tags": [
+        "Orders"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/DeadlineExtProposeRequest",
+        "schemaName": "DeadlineExtProposeRequest",
+        "requiredFields": [
+          "deadlineExtRegistryObjectId",
+          "escrowId",
+          "currentDeadlineMs",
+          "proposedDeadlineMs"
+        ],
+        "optionalFields": [
+          "clockObjectId"
+        ],
+        "propertyNames": [
+          "deadlineExtRegistryObjectId",
+          "escrowId",
+          "currentDeadlineMs",
+          "proposedDeadlineMs",
+          "clockObjectId"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/TxPlanResponse",
+          "schemaName": "TxPlanResponse",
+          "requiredFields": [
+            "status",
+            "txBuilder",
+            "request"
+          ],
+          "optionalFields": [
+            "txMoveCall"
+          ],
+          "propertyNames": [
+            "status",
+            "txBuilder",
+            "request",
+            "txMoveCall"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "acceptDeadlineExtensionPlan": {
+      "path": "/deadline-ext/{extensionObjectId}/accept",
+      "method": "post",
+      "tags": [
+        "Orders"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "extensionObjectId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/DeadlineExtActionRequest",
+        "schemaName": "DeadlineExtActionRequest",
+        "requiredFields": [
+          "deadlineExtRegistryObjectId"
+        ],
+        "optionalFields": [
+          "clockObjectId"
+        ],
+        "propertyNames": [
+          "deadlineExtRegistryObjectId",
+          "clockObjectId"
+        ]
+      },
+      "responses": {
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "rejectDeadlineExtensionPlan": {
+      "path": "/deadline-ext/{extensionObjectId}/reject",
+      "method": "post",
+      "tags": [
+        "Orders"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "extensionObjectId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/DeadlineExtActionRequest",
+        "schemaName": "DeadlineExtActionRequest",
+        "requiredFields": [
+          "deadlineExtRegistryObjectId"
+        ],
+        "optionalFields": [
+          "clockObjectId"
+        ],
+        "propertyNames": [
+          "deadlineExtRegistryObjectId",
+          "clockObjectId"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/TxPlanResponse",
+          "schemaName": "TxPlanResponse",
+          "requiredFields": [
+            "status",
+            "txBuilder",
+            "request"
+          ],
+          "optionalFields": [
+            "txMoveCall"
+          ],
+          "propertyNames": [
+            "status",
+            "txBuilder",
+            "request",
+            "txMoveCall"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "requestMutualCancelPlan": {
+      "path": "/orders/{orderId}/cancel/request",
+      "method": "post",
+      "tags": [
+        "Orders"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/MutualCancelRequest",
+        "schemaName": "MutualCancelRequest",
+        "requiredFields": [
+          "escrowId",
+          "buyerRefundBps",
+          "amount"
+        ],
+        "optionalFields": [
+          "clockObjectId"
+        ],
+        "propertyNames": [
+          "escrowId",
+          "buyerRefundBps",
+          "amount",
+          "clockObjectId"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/TxPlanResponse",
+          "schemaName": "TxPlanResponse",
+          "requiredFields": [
+            "status",
+            "txBuilder",
+            "request"
+          ],
+          "optionalFields": [
+            "txMoveCall"
+          ],
+          "propertyNames": [
+            "status",
+            "txBuilder",
+            "request",
+            "txMoveCall"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": "#/components/responses/Conflict",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "acceptMutualCancelPlan": {
+      "path": "/cancel-requests/{cancelRequestObjectId}/accept",
+      "method": "post",
+      "tags": [
+        "Orders"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "cancelRequestObjectId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/MutualCancelActionRequest",
+        "schemaName": "MutualCancelActionRequest",
+        "requiredFields": [],
+        "optionalFields": [
+          "clockObjectId"
+        ],
+        "propertyNames": [
+          "clockObjectId"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/TxPlanResponse",
+          "schemaName": "TxPlanResponse",
+          "requiredFields": [
+            "status",
+            "txBuilder",
+            "request"
+          ],
+          "optionalFields": [
+            "txMoveCall"
+          ],
+          "propertyNames": [
+            "status",
+            "txBuilder",
+            "request",
+            "txMoveCall"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "rejectMutualCancelPlan": {
+      "path": "/cancel-requests/{cancelRequestObjectId}/reject",
+      "method": "post",
+      "tags": [
+        "Orders"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "cancelRequestObjectId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/TxPlanResponse",
+          "schemaName": "TxPlanResponse",
+          "requiredFields": [
+            "status",
+            "txBuilder",
+            "request"
+          ],
+          "optionalFields": [
+            "txMoveCall"
+          ],
+          "propertyNames": [
+            "status",
+            "txBuilder",
+            "request",
+            "txMoveCall"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
     "markOrderDisputed": {
       "path": "/orders/{orderId}/mark-disputed",
       "method": "post",
@@ -17192,7 +18219,6 @@
             "disputeBondPolicy",
             "disputeBondState",
             "disputeBondActivatedAt",
-            "marketingCampaignId",
             "deadlineMs",
             "status",
             "createdAt",
@@ -17212,7 +18238,6 @@
             "disputeBondPolicy",
             "disputeBondState",
             "disputeBondActivatedAt",
-            "marketingCampaignId",
             "deadlineMs",
             "status",
             "createdAt",
@@ -18170,6 +19195,103 @@
         }
       }
     },
+    "claimReviewerDecisionMetricsCompatPlan": {
+      "path": "/reviewers/{address}/claim-metrics",
+      "method": "post",
+      "tags": [
+        "Disputes"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": false,
+        "schemaRef": "#/components/schemas/ReviewerClaimMetricsRequest",
+        "schemaName": "ReviewerClaimMetricsRequest",
+        "requiredFields": [],
+        "optionalFields": [
+          "disputeCaseObjectId",
+          "reviewerRegistryObjectId",
+          "reviewerEntryObjectId",
+          "disputeQuorumConfigObjectId"
+        ],
+        "propertyNames": [
+          "disputeCaseObjectId",
+          "reviewerRegistryObjectId",
+          "reviewerEntryObjectId",
+          "disputeQuorumConfigObjectId"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/TxPlanResponse",
+          "schemaName": "TxPlanResponse",
+          "requiredFields": [
+            "status",
+            "txBuilder",
+            "request"
+          ],
+          "optionalFields": [
+            "txMoveCall"
+          ],
+          "propertyNames": [
+            "status",
+            "txBuilder",
+            "request",
+            "txMoveCall"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
     "fundDisputeBondPlan": {
       "path": "/orders/{orderId}/dispute-bond/fund",
       "method": "post",
@@ -18199,8 +19321,6 @@
         ],
         "optionalFields": [
           "paymentCoinObjectId",
-          "marketingFundingCapObjectId",
-          "marketingFundingCustodyProof",
           "clockObjectId"
         ],
         "propertyNames": [
@@ -18209,8 +19329,6 @@
           "side",
           "amount",
           "paymentCoinObjectId",
-          "marketingFundingCapObjectId",
-          "marketingFundingCustodyProof",
           "clockObjectId"
         ]
       },
@@ -23101,7 +24219,6 @@
         "title",
         "description",
         "category",
-        "promotionPolicy",
         "currency",
         "budgetAmount",
         "expiresAtMs",
@@ -23121,7 +24238,6 @@
       "optionalFields": [
         "description",
         "category",
-        "promotionPolicy",
         "expiresAtMs",
         "communicationPolicy",
         "listingDepositObjectId",
@@ -23161,12 +24277,6 @@
     },
     "ListingBrowseMode": {
       "name": "ListingBrowseMode",
-      "propertyNames": [],
-      "requiredFields": [],
-      "optionalFields": []
-    },
-    "ListingPromotionPolicy": {
-      "name": "ListingPromotionPolicy",
       "propertyNames": [],
       "requiredFields": [],
       "optionalFields": []
@@ -23392,8 +24502,6 @@
         "maxGasBudget",
         "reserve",
         "execute",
-        "platformFundedMarketing",
-        "onboardingIotaTopup",
         "recommendedGasBudgets"
       ],
       "requiredFields": [],
@@ -23410,38 +24518,7 @@
         "maxGasBudget",
         "reserve",
         "execute",
-        "platformFundedMarketing",
-        "onboardingIotaTopup",
         "recommendedGasBudgets"
-      ]
-    },
-    "OnboardingIotaTopupResponse": {
-      "name": "OnboardingIotaTopupResponse",
-      "propertyNames": [
-        "funded",
-        "alreadyClaimed",
-        "pendingConfirmation",
-        "amount",
-        "txDigest",
-        "senderAddress",
-        "completedAt",
-        "balanceBefore",
-        "maxEligibleBalance",
-        "detail"
-      ],
-      "requiredFields": [
-        "funded",
-        "amount",
-        "senderAddress",
-        "maxEligibleBalance"
-      ],
-      "optionalFields": [
-        "alreadyClaimed",
-        "pendingConfirmation",
-        "txDigest",
-        "completedAt",
-        "balanceBefore",
-        "detail"
       ]
     },
     "SponsorReserveRequest": {
@@ -23926,8 +25003,6 @@
         "side",
         "amount",
         "paymentCoinObjectId",
-        "marketingFundingCapObjectId",
-        "marketingFundingCustodyProof",
         "clockObjectId"
       ],
       "requiredFields": [
@@ -23938,26 +25013,8 @@
       ],
       "optionalFields": [
         "paymentCoinObjectId",
-        "marketingFundingCapObjectId",
-        "marketingFundingCustodyProof",
         "clockObjectId"
       ]
-    },
-    "MarketingFundingCustodyProofRequest": {
-      "name": "MarketingFundingCustodyProofRequest",
-      "propertyNames": [
-        "jobId",
-        "approvalMode",
-        "approverA",
-        "approverB"
-      ],
-      "requiredFields": [
-        "jobId",
-        "approvalMode",
-        "approverA",
-        "approverB"
-      ],
-      "optionalFields": []
     },
     "DisputeOpenRequest": {
       "name": "DisputeOpenRequest",
@@ -25445,6 +26502,65 @@
         "clockObjectId"
       ]
     },
+    "DeadlineExtProposeRequest": {
+      "name": "DeadlineExtProposeRequest",
+      "propertyNames": [
+        "deadlineExtRegistryObjectId",
+        "escrowId",
+        "currentDeadlineMs",
+        "proposedDeadlineMs",
+        "clockObjectId"
+      ],
+      "requiredFields": [
+        "deadlineExtRegistryObjectId",
+        "escrowId",
+        "currentDeadlineMs",
+        "proposedDeadlineMs"
+      ],
+      "optionalFields": [
+        "clockObjectId"
+      ]
+    },
+    "DeadlineExtActionRequest": {
+      "name": "DeadlineExtActionRequest",
+      "propertyNames": [
+        "deadlineExtRegistryObjectId",
+        "clockObjectId"
+      ],
+      "requiredFields": [
+        "deadlineExtRegistryObjectId"
+      ],
+      "optionalFields": [
+        "clockObjectId"
+      ]
+    },
+    "MutualCancelRequest": {
+      "name": "MutualCancelRequest",
+      "propertyNames": [
+        "escrowId",
+        "buyerRefundBps",
+        "amount",
+        "clockObjectId"
+      ],
+      "requiredFields": [
+        "escrowId",
+        "buyerRefundBps",
+        "amount"
+      ],
+      "optionalFields": [
+        "clockObjectId"
+      ]
+    },
+    "MutualCancelActionRequest": {
+      "name": "MutualCancelActionRequest",
+      "propertyNames": [
+        "clockObjectId"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "clockObjectId"
+      ]
+    },
     "AuthClaims": {
       "name": "AuthClaims",
       "propertyNames": [
@@ -25479,7 +26595,6 @@
         "title",
         "description",
         "category",
-        "promotionPolicy",
         "currency",
         "budgetAmount",
         "milestones",
@@ -25507,7 +26622,6 @@
       ],
       "optionalFields": [
         "category",
-        "promotionPolicy",
         "communicationPolicy",
         "listingDepositObjectId",
         "listingDepositTxDigest",
@@ -25674,7 +26788,6 @@
         "policy",
         "selectionMode",
         "userAmountChoiceRequired",
-        "platformOperatorFunding",
         "supportedPrincipalAssets",
         "selectedPrincipalAsset",
         "currentMinPerSideAmount",
@@ -25690,7 +26803,6 @@
         "policy",
         "selectionMode",
         "userAmountChoiceRequired",
-        "platformOperatorFunding",
         "supportedPrincipalAssets",
         "selectedPrincipalAsset",
         "currentMinPerSideAmount",
@@ -25718,7 +26830,6 @@
         "disputeBondPolicy",
         "disputeBondState",
         "disputeBondActivatedAt",
-        "marketingCampaignId",
         "deadlineMs",
         "status",
         "createdAt",
@@ -25739,7 +26850,6 @@
         "disputeBondPolicy",
         "disputeBondState",
         "disputeBondActivatedAt",
-        "marketingCampaignId",
         "deadlineMs",
         "status",
         "createdAt",

@@ -28,8 +28,8 @@
         "If only one keystore entry exists, ensure-auth can work without --alias. If multiple entries exist, stop and choose one alias instead of asking for a raw JWT.",
         "clawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json",
         "clawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Optional if you want Telegram push: clawnera-help notifications init telegram --preset <seller|buyer|all> --auth-state-file ~/.config/clawnera/auth-state.json",
-        "If you do not have Telegram credentials, switch consciously to polling and use clawnera-help show polling before the first live write.",
+        "Optional if you want the wallet inbox delivered into Telegram: clawnera-help notifications init telegram --preset <seller|buyer|all> --auth-state-file ~/.config/clawnera/auth-state.json",
+        "If you do not have Telegram credentials, switch consciously to polling and use clawnera-help show polling before the first live write so the wallet inbox still has a wake-up path.",
         "If you configured Telegram, finish with clawnera-help notifications doctor"
       ],
       "examples": [

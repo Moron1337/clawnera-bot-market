@@ -436,6 +436,7 @@ function buildFullHelpJson(topics, journeys, recipes) {
       "path",
       "wallet-init",
       "wallet-list",
+      "wallet-inbox",
       "auth-login",
       "ensure-auth",
       "units",
@@ -559,6 +560,7 @@ function printUsageAll() {
   console.log("  clawnera-help path                        Print repository path");
   console.log("  clawnera-help wallet-init [options]       Create a local IOTA keystore entry without the IOTA CLI");
   console.log("  clawnera-help wallet-list [options]       List local wallet aliases and addresses");
+  console.log("  clawnera-help wallet-inbox [options]      Show the canonical wallet wake-up path for events, Telegram, and polling");
   console.log("  clawnera-help auth-login [options]        Create JWT + refresh token from local IOTA keystore");
   console.log("  clawnera-help ensure-auth [options]       Reuse or create a saved auth-state from the local wallet");
   console.log(`  clawnera-help units [options]             Show ${SUPPORTED_MARKET_ASSET_SYMBOLS.join("/")} decimals and atomic-unit examples`);
@@ -3727,6 +3729,26 @@ function notificationsUsageLines() {
   ];
 }
 
+function walletInboxUsageLines() {
+  return [
+    "Wallet inbox helper",
+    "",
+    "Usage:",
+    "  clawnera-help wallet-inbox [--preset seller|buyer|all|mailbox] [--event-types <csv>] [--auth-state-file <file>] [--api-base <url>]",
+    "  clawnera-help wallet-inbox --json",
+    "",
+    "Purpose:",
+    "  Show the canonical wallet wake-up path for actor-visible marketplace events.",
+    "  The on-chain order mailbox stays order-scoped after accept.",
+    "",
+    "Examples:",
+    "  clawnera-help wallet-inbox --preset seller",
+    "  clawnera-help wallet-inbox --preset buyer --auth-state-file ~/.config/clawnera/auth-state.json",
+    "  clawnera-help notifications init telegram --preset all --auth-state-file ~/.config/clawnera/auth-state.json",
+    "  clawnera-help wallet-inbox --preset custom --event-types bid.created,mailbox.signal_acked --json"
+  ];
+}
+
 function writeModeForPath(targetPath) {
   return targetPath.endsWith(".service") ? 0o644 : 0o600;
 }
@@ -4502,6 +4524,113 @@ async function runNotifications(commandArgs) {
     readyToStart,
     warnings: readyToStart ? [] : ["missing_telegram_credentials"],
     commands: readyToStart ? buildNotificationServiceCommands(serviceOut) : []
+  };
+}
+
+function runWalletInbox(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: walletInboxUsageLines()
+    };
+  }
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals
+    };
+  }
+
+  const requestedPreset =
+    typeof options.preset === "string" && options.preset.trim() ? String(options.preset).trim() : "all";
+  const resolved = resolveNotificationEventTypes({
+    preset: requestedPreset,
+    eventTypes: options["event-types"]
+  });
+  if (resolved.invalidPreset) {
+    return {
+      ok: false,
+      error: "invalid_notification_preset",
+      invalidPreset: resolved.invalidPreset
+    };
+  }
+  if (resolved.invalidEventTypes.length > 0) {
+    return {
+      ok: false,
+      error: "invalid_notification_event_types",
+      invalidEventTypes: resolved.invalidEventTypes
+    };
+  }
+  if (resolved.eventTypes.length === 0) {
+    return {
+      ok: false,
+      error: "missing_notification_event_types"
+    };
+  }
+
+  const preset = resolved.preset || CUSTOM_NOTIFICATION_PRESET;
+  const authStateFile =
+    typeof options["auth-state-file"] === "string" && options["auth-state-file"].trim()
+      ? path.resolve(String(options["auth-state-file"]).trim())
+      : defaultAuthStatePath();
+  const apiBase = normalizeApiBase(options["api-base"] || process.env.CLAWNERA_API_BASE_URL) || DEFAULT_CLAWNERA_API_BASE;
+  const eventFeedPath = `/events?scope=all&type=${encodeURIComponent(resolved.eventTypes.join(","))}`;
+
+  const telegramCommandParts = [
+    "clawnera-help",
+    "notifications",
+    "init",
+    "telegram",
+    "--preset",
+    shellQuote(preset),
+    "--auth-state-file",
+    shellQuote(authStateFile),
+    "--api-base",
+    shellQuote(apiBase),
+    "--event-types",
+    shellQuote(resolved.eventTypes.join(","))
+  ];
+
+  const pollingCommands = [
+    `clawnera-help request GET ${shellQuote(eventFeedPath)} --auth-state-file ${shellQuote(authStateFile)}`
+  ];
+  if (preset === "seller" || preset === "all") {
+    pollingCommands.push(
+      `clawnera-help request GET /listings/{listingId}/bids --auth-state-file ${shellQuote(authStateFile)}`
+    );
+  }
+  if (preset === "buyer" || preset === "all") {
+    pollingCommands.push(
+      `clawnera-help request GET /orders?role=buyer --auth-state-file ${shellQuote(authStateFile)}`
+    );
+    pollingCommands.push(
+      `clawnera-help request GET /listings/{listingId}/bids --auth-state-file ${shellQuote(authStateFile)}`
+    );
+  }
+  pollingCommands.push(`clawnera-help mailbox-events --order-id <order-id> --auth-state-file ${shellQuote(authStateFile)}`);
+
+  return {
+    ok: true,
+    mode: "wallet-inbox",
+    preset,
+    description:
+      preset !== CUSTOM_NOTIFICATION_PRESET && NOTIFICATION_PRESETS[preset]
+        ? NOTIFICATION_PRESETS[preset].description
+        : "Custom wallet inbox selection for actor-visible marketplace events.",
+    apiBase,
+    authStateFile,
+    eventTypes: resolved.eventTypes,
+    eventFeedPath,
+    telegramInitCommand: telegramCommandParts.join(" "),
+    pollingCommands,
+    notes: [
+      "Every wallet should choose a wake-up path before the first live write, including bidder-only wallets that need to notice `order.accepted`.",
+      "Pre-order wake-up signals come from actor-visible events and webhooks, not from the on-chain order mailbox.",
+      "The on-chain order mailbox stays order-scoped and starts after order accept."
+    ]
   };
 }
 
@@ -14319,6 +14448,8 @@ const aliasCommands = new Map([
   ["amount-examples", "units"],
   ["wallets", "wallet-list"],
   ["wallet-ls", "wallet-list"],
+  ["inbox", "wallet-inbox"],
+  ["actor-inbox", "wallet-inbox"],
   ["categories", "listing-categories"],
   ["listing-cats", "listing-categories"],
   ["listing-deposit", "listing-deposit-create"],
@@ -14658,6 +14789,43 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`wallet_list_error: ${result.error}`);
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "wallet-inbox") {
+  const result = runWalletInbox(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok && result.mode === "wallet-inbox") {
+    console.log("wallet_inbox_ok");
+    console.log(`preset=${result.preset}`);
+    console.log(`event_types=${result.eventTypes.join(",")}`);
+    console.log(`event_feed_path=${result.eventFeedPath}`);
+    console.log(`auth_state_file=${result.authStateFile}`);
+    console.log("Notes:");
+    for (const note of result.notes) {
+      console.log(`- ${note}`);
+    }
+    console.log("Telegram:");
+    console.log(`- ${result.telegramInitCommand}`);
+    console.log("Polling:");
+    for (const command of result.pollingCommands) {
+      console.log(`- ${command}`);
+    }
+  } else {
+    console.error(`wallet_inbox_error: ${result.error}`);
+    if (result.invalidPreset) {
+      console.error(`invalid_preset=${result.invalidPreset}`);
+    }
+    if (Array.isArray(result.invalidEventTypes) && result.invalidEventTypes.length > 0) {
+      console.error(`invalid_event_types=${result.invalidEventTypes.join(",")}`);
+    }
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {

@@ -159,6 +159,7 @@ test("help all json output includes full inventory", () => {
   assert.ok(payload.commands.includes("recipe"));
   assert.ok(payload.commands.includes("wallet-init"));
   assert.ok(payload.commands.includes("wallet-list"));
+  assert.ok(payload.commands.includes("wallet-inbox"));
   assert.ok(payload.commands.includes("ensure-auth"));
   assert.ok(payload.commands.includes("units"));
   assert.ok(payload.commands.includes("request"));
@@ -1338,6 +1339,47 @@ test("notifications init help prints usage", () => {
   assert.match(result.stdout, /Notifications helper/);
   assert.match(result.stdout, /notifications init telegram/);
   assert.match(result.stdout, /notifications presets/);
+});
+
+test("wallet inbox help prints usage", () => {
+  const result = runCli(["wallet-inbox", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Wallet inbox helper/);
+  assert.match(result.stdout, /notifications init telegram/);
+  assert.match(result.stdout, /The on-chain order mailbox stays order-scoped after accept/);
+});
+
+test("wallet inbox json output is parseable", () => {
+  const result = runCli(["wallet-inbox", "--json"]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.mode, "wallet-inbox");
+  assert.equal(payload.preset, "all");
+  assert.ok(Array.isArray(payload.eventTypes));
+  assert.ok(payload.eventTypes.includes("bid.created"));
+  assert.ok(payload.eventTypes.includes("order.accepted"));
+  assert.match(payload.eventFeedPath, /^\/events\?scope=all&type=/);
+  assert.match(payload.telegramInitCommand, /notifications init telegram/);
+  assert.ok(Array.isArray(payload.pollingCommands));
+  assert.ok(payload.pollingCommands.some((line) => line.includes("/listings/{listingId}/bids")));
+  assert.ok(payload.pollingCommands.some((line) => line.includes("/orders?role=buyer")));
+});
+
+test("wallet inbox custom event selection stays explicit", () => {
+  const result = runCli([
+    "wallet-inbox",
+    "--preset",
+    "custom",
+    "--event-types",
+    "bid.created,mailbox.signal_acked",
+    "--json"
+  ]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.preset, "custom");
+  assert.deepEqual(payload.eventTypes, ["bid.created", "mailbox.signal_acked"]);
 });
 
 test("notifications init telegram scaffolds env and service files from existing auth state", () => {

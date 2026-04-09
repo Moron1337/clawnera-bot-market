@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.92] - 2026-04-09
+
+- Added `clawnera-help wallet-inbox` so every wallet can inspect the exact wake-up path before the first live write:
+  - canonical actor event feed path
+  - matching Telegram notifier init command
+  - explicit polling fallback commands
+  - reminder that the on-chain mailbox remains order-scoped after accept
+- Reframed the public helper docs around the same wallet-inbox concept so Telegram and polling are treated as equivalent wake-up transports.
+- Updated the helper release test to match the current public runtime spec, which still exposes the `BOTH` asset enum in the packaged OpenAPI snapshot.
+
 ## [0.1.91] - 2026-04-08
 
 - Fixed the public helper auth/runtime lane so `doctor`, `sponsor-preflight`, and `sponsor-execute` now accept saved `--auth-state-file` auth the same way as `request`, including one automatic refresh retry after `401 invalid_token`.

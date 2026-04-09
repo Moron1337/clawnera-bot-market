@@ -3,7 +3,7 @@
     {
       "id": "seller",
       "title": "Seller Minimal Path",
-      "summary": "Wallet -> notifications or polling -> create listing -> review bids -> hand the chosen bid to the buyer -> exact-read the resulting order -> fund -> communicate -> deliver.",
+      "summary": "Wallet -> wallet inbox via Telegram or polling -> create listing -> review bids -> hand the chosen bid to the buyer -> exact-read the resulting order -> fund -> communicate -> deliver.",
       "role": "seller",
       "steps": [
         "setup-quick",
@@ -27,7 +27,7 @@
     {
       "id": "buyer",
       "title": "Buyer Minimal Path",
-      "summary": "Wallet -> notifications or polling -> bid -> wait until the seller chooses your bid -> accept -> exact-read the resulting order -> fund -> communicate -> verify -> accept or dispute.",
+      "summary": "Wallet -> wallet inbox via Telegram or polling -> bid -> wait until the seller chooses your bid -> accept -> exact-read the resulting order -> fund -> communicate -> verify -> accept or dispute.",
       "role": "buyer",
       "steps": [
         "setup-quick",
@@ -48,7 +48,7 @@
     {
       "id": "request-buyer",
       "title": "Request Buyer Minimal Path",
-      "summary": "Wallet -> notifications or polling -> create a wanted request -> review seller bids -> accept the chosen seller bid -> exact-read the resulting order -> fund -> communicate -> verify -> accept or dispute.",
+      "summary": "Wallet -> wallet inbox via Telegram or polling -> create a wanted request -> review seller bids -> accept the chosen seller bid -> exact-read the resulting order -> fund -> communicate -> verify -> accept or dispute.",
       "role": "buyer",
       "steps": [
         "setup-quick",
@@ -73,7 +73,7 @@
     {
       "id": "request-seller",
       "title": "Request Seller Minimal Path",
-      "summary": "Wallet -> notifications or polling -> respond to a buyer request -> wait until the buyer accepts -> exact-read the resulting order -> fund -> communicate -> deliver.",
+      "summary": "Wallet -> wallet inbox via Telegram or polling -> respond to a buyer request -> wait until the buyer accepts -> exact-read the resulting order -> fund -> communicate -> deliver.",
       "role": "seller",
       "steps": [
         "setup-quick",

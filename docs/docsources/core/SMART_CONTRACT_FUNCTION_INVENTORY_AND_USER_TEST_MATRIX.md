@@ -168,6 +168,85 @@ Runtime `private`:
 - `destroy_fee_config_for_testing`
 - `destroy_for_testing<T>`
 
+### deadline_ext.move
+Runtime `public entry`:
+- `propose_extension_guarded`
+- `accept_extension_with_escrow_guarded`
+- `reject_extension`
+- `expire_extension`
+- `delete_settled_extension`
+
+Runtime `public`:
+- none
+
+Runtime `public(package)`:
+- none
+
+Runtime `private`:
+- `init`
+- `extension_count_for_escrow`
+- `has_pending_extension`
+- `clear_pending_extension_or_abort`
+- `set_extension_count`
+- `accept_extension_with_escrow_internal<T>`
+
+`#[test_only]`:
+- `assert_non_empty_with_max`
+- `propose_extension_internal`
+- `init_for_testing`
+- `extension_count_for_escrow_for_testing`
+- `has_pending_extension_for_testing`
+- `propose_extension_for_testing`
+- `accept_extension_for_testing`
+- `accept_extension_with_escrow_for_testing<T>`
+- `destroy_for_testing`
+
+### onchain_asset_lane_manager.move
+Runtime `public`:
+- none
+
+Runtime `public(package)`:
+- `is_claw_order_typed_asset`
+- `is_usdx_order_typed_asset`
+- `is_supported_order_typed_non_iota_asset`
+- `supported_order_typed_non_iota_asset_bytes`
+- `matches_supported_order_typed_non_iota_asset_bytes`
+- `same_supported_order_typed_non_iota_asset`
+- `is_supported_dispute_bond_typed_non_iota_asset`
+- `supported_dispute_bond_typed_non_iota_asset_bytes`
+
+Runtime `private`:
+- `exact_type_bytes`
+- `matches_exact_type<T>`
+
+### order_payment_assets.move
+Runtime `public`:
+- none
+
+Runtime `public(package)`:
+- `is_supported_order_payment_iota_type`
+- `is_supported_order_payment_claw_coin_type`
+- `is_supported_order_payment_usdx_coin_type`
+- `is_supported_order_payment_typed_coin_type`
+
+Runtime `private`:
+- `is_supported_experimental_order_payment_typed_coin_type<T>`
+
+### payment_assets.move
+Runtime `public`:
+- none
+
+Runtime `public(package)`:
+- `is_iota_type`
+- `is_claw_coin_type`
+- `is_supported_order_typed_coin_type`
+- `is_supported_dispute_bond_typed_coin_type`
+- `is_supported_reviewer_stake_typed_coin_type`
+- `typed_order_payment_matches_dispute_bond_asset`
+
+Runtime `private`:
+- none
+
 ### listing_deposit.move
 Runtime `public entry`:
 - `create_listing_deposit_iota_entry`
@@ -179,9 +258,9 @@ Runtime `public`:
 - `cancel_pending_listing_deposit_policy_update`
 - `apply_listing_deposit_policy_update`
 - `create_listing_deposit_iota`
-- `refund_listing_deposit_full`
-- `forfeit_listing_deposit_by_policy`
-- `forfeit_listing_deposit_with_refund_bps`
+- `refund_listing_deposit_full_and_unbind`
+- `forfeit_listing_deposit_by_policy_and_unbind`
+- `forfeit_listing_deposit_with_refund_bps_and_unbind`
 - `active_state`
 - `refunded_state`
 - `forfeited_state`
@@ -199,7 +278,7 @@ Runtime `public`:
 - `pending_treasury_approved`
 
 Runtime `public(package)`:
-- `refund_listing_deposit_owner_cancel`
+- `refund_listing_deposit_owner_cancel_and_unbind`
 
 Runtime `private`:
 - `assert_valid_config`

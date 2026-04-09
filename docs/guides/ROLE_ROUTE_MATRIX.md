@@ -57,9 +57,6 @@
 | `POST /orders/{orderId}/deadline-ext/propose` | `order.deadline_ext.propose` | buyer/seller only | Escrow-Match zur Order wird geprueft. |
 | `POST /deadline-ext/{extensionObjectId}/accept` | `deadline_ext.accept` | deprecated / dark-disabled | Liefert aktuell `409 deadline_extension_accept_disabled`; on-chain existiert der kanonische guarded Apply-Pfad bereits, aber die public API bleibt bis zu einem expliziten owned-surface Retarget dunkel. |
 | `POST /deadline-ext/{extensionObjectId}/reject` | `deadline_ext.reject` | capability-only | API ohne `orderId`-Check; Gegenpartei-Auth wird on-chain erzwungen. |
-| `POST /orders/{orderId}/cancel/request` | `order.cancel.request` | buyer/seller only | Order darf nicht `COMPLETED`/`CANCELLED` sein; Escrow-Match wird geprueft. |
-| `POST /cancel-requests/{cancelRequestObjectId}/accept` | `cancel_request.accept` | capability-only | API ohne `orderId`-Check; Gegenpartei-Auth wird on-chain erzwungen. |
-| `POST /cancel-requests/{cancelRequestObjectId}/reject` | `cancel_request.reject` | capability-only | API ohne `orderId`-Check; Gegenpartei-Auth wird on-chain erzwungen. |
 | `POST /orders/{orderId}/reviews` | `order.review.post` | buyer/seller only | `rating` 1..5, `reviewHash` lower-hex(64). |
 | `POST /orders/{orderId}/mailbox` | `order.mailbox.set` | buyer/seller only | Mailbox-Snapshot wird on-chain verifiziert (order/participants/open). |
 | `POST /orders/{orderId}/mailbox/post-signal-plan` | `order.mailbox.post_signal.plan` | buyer/seller only | Gebundene offene Mailbox Pflicht; Bot-`signalIntent` wird auf on-chain Signaltyp gemappt. |
@@ -85,9 +82,6 @@
 | `POST /orders/{orderId}/deadline-ext/propose` | `order.deadline_ext.propose` | buyer/seller only | Verlaengerungsvorschlag fuer laufende Orders. |
 | `POST /deadline-ext/{extensionObjectId}/accept` | `deadline_ext.accept` | deprecated / dark-disabled | Liefert aktuell `409 deadline_extension_accept_disabled`; on-chain existiert der kanonische guarded Apply-Pfad bereits, aber die public API bleibt bis zu einem expliziten owned-surface Retarget dunkel. |
 | `POST /deadline-ext/{extensionObjectId}/reject` | `deadline_ext.reject` | capability-only | API ohne `orderId`-Check; Gegenpartei-Auth wird on-chain erzwungen. |
-| `POST /orders/{orderId}/cancel/request` | `order.cancel.request` | buyer/seller only | Kooperativer Cancel mit BPS-Split. |
-| `POST /cancel-requests/{cancelRequestObjectId}/accept` | `cancel_request.accept` | capability-only | API ohne `orderId`-Check; Gegenpartei-Auth wird on-chain erzwungen. |
-| `POST /cancel-requests/{cancelRequestObjectId}/reject` | `cancel_request.reject` | capability-only | API ohne `orderId`-Check; Gegenpartei-Auth wird on-chain erzwungen. |
 | `POST /orders/{orderId}/reviews` | `order.review.post` | buyer/seller only | Review erst nach terminalem on-chain Zustand sinnvoll. |
 | `POST /storage/uploads/presign` | `storage.upload.presign` | buyer/seller only fuer `orderId` | Typischer Seller-Delivery-Pfad fuer managed/byo Uploads. |
 
@@ -120,7 +114,6 @@
   - `POST /disputes/{id}/fallback/timeout`
   - `POST /disputes/{id}/resolve-escrow`
   - `POST /deadline-ext/{id}/reject`
-  - `POST /cancel-requests/{id}/accept|reject`
 
 ## 7) Nicht als API-Route exponiert (derzeit nur SDK/Move direkt)
 

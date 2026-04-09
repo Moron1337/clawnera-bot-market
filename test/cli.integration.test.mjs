@@ -2449,17 +2449,10 @@ test("sponsor preflight returns strategy and diagnostics", async () => {
               windowGasCap: 6000000
             },
             execute: {
-              idempotencyHeader: true,
+              idempotencyHeader: "idempotency-key",
               intentSupported: true,
-              intentRequiredForPlatformFundedMarketing: true,
-              intentSignatureRequiredForPlatformFundedMarketing: true
-            },
-            platformFundedMarketing: {
-              sponsorPreferred: true,
-              sponsorRequired: true,
-              selfPayFallback: false,
-              intentRequired: true,
-              intentSignatureRequired: true
+              intentRequired: false,
+              intentSignatureRequired: false
             },
             recommendedGasBudgets: {
               marketplace_write: {

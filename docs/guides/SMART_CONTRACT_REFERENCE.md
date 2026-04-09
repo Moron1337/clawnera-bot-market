@@ -97,16 +97,6 @@ Quellen:
 | `expire_extension` | Verfallene Extension expirieren | permissionless timeout path | extension timeout erreicht |
 | `delete_settled_extension` | settled extension cleanup | maintenance path | terminal state |
 
-### `mutual_cancel`
-
-| Funktion | Zweck | Typischer Aufrufer | Kern-Preconditions |
-| --- | --- | --- | --- |
-| `request_cancel` | Mutual cancel request erstellen | buyer/seller | order aktiv, refund bps + amount gueltig |
-| `accept_cancel` | Cancel request akzeptieren | counterparty | request pending |
-| `reject_cancel` | Cancel request ablehnen | counterparty | request pending |
-| `expire_cancel` | Request nach timeout expirieren | permissionless timeout path | timeout reached |
-| `delete_settled_cancel_request` | cleanup | maintenance path | terminal state |
-
 ### `order_mailbox` + `manifest_anchor` + `reputation`
 
 | Funktion | Zweck | Typischer Aufrufer | Kern-Preconditions |
@@ -140,9 +130,6 @@ Quellen:
 | `POST /orders/{orderId}/deadline-ext/propose` | `deadlineExt.propose` | `deadline_ext::propose_extension` |
 | `POST /deadline-ext/{id}/accept` | deprecated / dark-disabled | on-chain existiert jetzt ein kanonischer guarded Apply-Pfad, aber die public API bleibt bis zu einem expliziten owned-surface Retarget weiter auf `409 deadline_extension_accept_disabled` |
 | `POST /deadline-ext/{id}/reject` | `deadlineExt.reject` | `deadline_ext::reject_extension` |
-| `POST /orders/{orderId}/cancel/request` | `mutualCancel.request` | `mutual_cancel::request_cancel` |
-| `POST /cancel-requests/{id}/accept` | `mutualCancel.accept` | `mutual_cancel::accept_cancel` |
-| `POST /cancel-requests/{id}/reject` | `mutualCancel.reject` | `mutual_cancel::reject_cancel` |
 
 ## 4) Was fuer Bots typischerweise NICHT direkt relevant ist
 

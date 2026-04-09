@@ -19,6 +19,13 @@ Packages:
 - Addresses must be valid IOTA addresses.
 - Coin type tags must be valid Move type tags.
 - Use environment-matching `packageId` and config object IDs.
+- Before choosing payment/dispute assets, read:
+  - `GET /policy/assets` for lane truth and current asset-manager coverage.
+  - `GET /policy/fees` for fee amounts and the remaining IOTA-only lanes.
+  - `GET /policy/fees.policy.controlPlane` when the bot must distinguish between:
+    - `listingFee` as a runtime-/redeploy-controlled lane
+    - fully operator-managed fee lanes
+    - partially operator-managed `disputeEconomics`
 
 ## 2. Listing deposit and escrow examples
 
@@ -78,8 +85,6 @@ import {
   buildInitOrderDisputeBondTx,
   buildFundOrderDisputeBondAsBuyerTx,
   buildFundOrderDisputeBondAsSellerTx,
-  buildFundOrderDisputeBondAsBuyerWithMarketingCapTx,
-  buildFundOrderDisputeBondAsSellerWithMarketingCapTx,
   buildOpenMilestoneDisputeCaseTx,
   buildCommitDisputeVoteTx,
   buildRevealDisputeVoteTx,
@@ -90,8 +95,7 @@ import {
 Recommended sequence:
 1. `buildInitOrderDisputeBondTx`.
 2. Fund both sides (`buyer` and `seller`) with same `bondObjectId`.
-3. For `PLATFORM_FUNDED_MARKETING`, use `*WithMarketingCapTx` builders.
-4. Open case, commit/reveal votes, finalize/fallback.
+3. Open case, commit/reveal votes, finalize/fallback.
 
 ## 4. Other bot-relevant builder groups
 - Review:
@@ -103,12 +107,6 @@ Recommended sequence:
   - `buildRejectDeadlineExtensionTx`
   - `buildExpireDeadlineExtensionTx`
   - `buildDeleteSettledDeadlineExtensionTx`
-- Mutual cancel:
-  - `buildRequestCancelTx`
-  - `buildAcceptCancelTx`
-  - `buildRejectCancelTx`
-  - `buildExpireCancelTx`
-  - `buildDeleteSettledCancelRequestTx`
 - Mailbox and manifest anchor:
   - `buildInitOrderMailboxTx`
   - `buildPostOrderMailboxSignalTx`
@@ -187,7 +185,7 @@ await api.post("/sponsor/execute", {
   orderId,
   txBytesB64,
   userSig,
-  intent, // required for PLATFORM_FUNDED_MARKETING
+  intent, // only send when the deployment requires sponsor intent binding
   intentSig // required whenever intent is present
 });
 ```
@@ -201,10 +199,10 @@ Self-pay fallback build:
 - `packageId` and all object IDs match target environment.
 - Sender is correct actor for route/capability.
 - For sponsor execute, never reuse stale reservations.
-- For sponsor reserve/execute, always send canonical `orderId`; current production posture already runs with required mode.
+- For sponsor reserve/execute, always send canonical `orderId`; this keeps the flow compatible with stricter deployments.
 - For sponsor reserve, stay at `gasBudget >= 1_000_000` in live flows.
 - For sponsor execute, respect reservation TTL (`SPONSOR_RESERVATION_TTL_SEC`, default `120`) and target `<60s` between reserve and execute.
-- For marketing sponsor execute, ensure full intent tuple is exact:
+- If the deployment requires sponsor intent binding, ensure the full intent tuple is exact:
   - `network|orderId|reservationId|txDigest|expiresAt|purpose`.
 - Sign that exact canonical tuple with wallet personal-message signing and send as `intentSig`.
 - On `400 sponsor_order_id_required`, rebuild request with canonical `orderId` (do not retry unchanged payload).

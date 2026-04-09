@@ -227,6 +227,51 @@
         }
       }
     },
+    "/policy/assets": {
+      "get": {
+        "path": "/policy/assets",
+        "method": "get",
+        "operationId": "getAssetPolicy",
+        "tags": [
+          "Policy"
+        ],
+        "parameters": {
+          "path": [],
+          "query": [],
+          "header": []
+        },
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/AssetPolicy",
+            "schemaName": "AssetPolicy",
+            "requiredFields": [],
+            "optionalFields": [
+              "version",
+              "chainConfig",
+              "controlPlane",
+              "sponsorPaymentCoins",
+              "assetLaneTruth",
+              "sameAssetPolicy",
+              "liveAssets",
+              "experimentalAssets"
+            ],
+            "propertyNames": [
+              "version",
+              "chainConfig",
+              "controlPlane",
+              "sponsorPaymentCoins",
+              "assetLaneTruth",
+              "sameAssetPolicy",
+              "liveAssets",
+              "experimentalAssets"
+            ]
+          }
+        }
+      }
+    },
     "/policy/fees": {
       "get": {
         "path": "/policy/fees",
@@ -247,22 +292,26 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/FeePolicy",
             "schemaName": "FeePolicy",
-            "requiredFields": [
+            "requiredFields": [],
+            "optionalFields": [
               "version",
               "chainConfig",
+              "controlPlane",
               "escrowFeeBps",
               "listingFee",
               "listingDeposit",
-              "reputationInitFee"
+              "reputationInitFee",
+              "disputeEconomics"
             ],
-            "optionalFields": [],
             "propertyNames": [
               "version",
               "chainConfig",
+              "controlPlane",
               "escrowFeeBps",
               "listingFee",
               "listingDeposit",
-              "reputationInitFee"
+              "reputationInitFee",
+              "disputeEconomics"
             ]
           }
         }
@@ -5780,375 +5829,6 @@
             "clockObjectId"
           ]
         },
-        "responses": {
-          "200": {
-            "status": "200",
-            "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/TxPlanResponse",
-            "schemaName": "TxPlanResponse",
-            "requiredFields": [
-              "status",
-              "txBuilder",
-              "request"
-            ],
-            "optionalFields": [
-              "txMoveCall"
-            ],
-            "propertyNames": [
-              "status",
-              "txBuilder",
-              "request",
-              "txMoveCall"
-            ]
-          },
-          "400": {
-            "status": "400",
-            "reusableResponseRef": "#/components/responses/BadRequest",
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          },
-          "401": {
-            "status": "401",
-            "reusableResponseRef": "#/components/responses/Unauthorized",
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          },
-          "403": {
-            "status": "403",
-            "reusableResponseRef": "#/components/responses/Forbidden",
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          },
-          "404": {
-            "status": "404",
-            "reusableResponseRef": "#/components/responses/NotFound",
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          },
-          "503": {
-            "status": "503",
-            "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          }
-        }
-      }
-    },
-    "/orders/{orderId}/cancel/request": {
-      "post": {
-        "path": "/orders/{orderId}/cancel/request",
-        "method": "post",
-        "operationId": "requestMutualCancelPlan",
-        "tags": [
-          "Orders"
-        ],
-        "parameters": {
-          "path": [
-            {
-              "name": "orderId",
-              "in": "path",
-              "required": true
-            }
-          ],
-          "query": [],
-          "header": []
-        },
-        "requestBody": {
-          "required": true,
-          "schemaRef": "#/components/schemas/MutualCancelRequest",
-          "schemaName": "MutualCancelRequest",
-          "requiredFields": [
-            "escrowId",
-            "buyerRefundBps",
-            "amount"
-          ],
-          "optionalFields": [
-            "clockObjectId"
-          ],
-          "propertyNames": [
-            "escrowId",
-            "buyerRefundBps",
-            "amount",
-            "clockObjectId"
-          ]
-        },
-        "responses": {
-          "200": {
-            "status": "200",
-            "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/TxPlanResponse",
-            "schemaName": "TxPlanResponse",
-            "requiredFields": [
-              "status",
-              "txBuilder",
-              "request"
-            ],
-            "optionalFields": [
-              "txMoveCall"
-            ],
-            "propertyNames": [
-              "status",
-              "txBuilder",
-              "request",
-              "txMoveCall"
-            ]
-          },
-          "400": {
-            "status": "400",
-            "reusableResponseRef": "#/components/responses/BadRequest",
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          },
-          "401": {
-            "status": "401",
-            "reusableResponseRef": "#/components/responses/Unauthorized",
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          },
-          "403": {
-            "status": "403",
-            "reusableResponseRef": "#/components/responses/Forbidden",
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          },
-          "404": {
-            "status": "404",
-            "reusableResponseRef": "#/components/responses/NotFound",
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          },
-          "409": {
-            "status": "409",
-            "reusableResponseRef": "#/components/responses/Conflict",
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          },
-          "503": {
-            "status": "503",
-            "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          }
-        }
-      }
-    },
-    "/cancel-requests/{cancelRequestObjectId}/accept": {
-      "post": {
-        "path": "/cancel-requests/{cancelRequestObjectId}/accept",
-        "method": "post",
-        "operationId": "acceptMutualCancelPlan",
-        "tags": [
-          "Orders"
-        ],
-        "parameters": {
-          "path": [
-            {
-              "name": "cancelRequestObjectId",
-              "in": "path",
-              "required": true
-            }
-          ],
-          "query": [],
-          "header": []
-        },
-        "requestBody": {
-          "required": true,
-          "schemaRef": "#/components/schemas/MutualCancelActionRequest",
-          "schemaName": "MutualCancelActionRequest",
-          "requiredFields": [],
-          "optionalFields": [
-            "clockObjectId"
-          ],
-          "propertyNames": [
-            "clockObjectId"
-          ]
-        },
-        "responses": {
-          "200": {
-            "status": "200",
-            "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/TxPlanResponse",
-            "schemaName": "TxPlanResponse",
-            "requiredFields": [
-              "status",
-              "txBuilder",
-              "request"
-            ],
-            "optionalFields": [
-              "txMoveCall"
-            ],
-            "propertyNames": [
-              "status",
-              "txBuilder",
-              "request",
-              "txMoveCall"
-            ]
-          },
-          "400": {
-            "status": "400",
-            "reusableResponseRef": "#/components/responses/BadRequest",
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          },
-          "401": {
-            "status": "401",
-            "reusableResponseRef": "#/components/responses/Unauthorized",
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          },
-          "403": {
-            "status": "403",
-            "reusableResponseRef": "#/components/responses/Forbidden",
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          },
-          "404": {
-            "status": "404",
-            "reusableResponseRef": "#/components/responses/NotFound",
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          },
-          "503": {
-            "status": "503",
-            "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/ErrorResponse",
-            "schemaName": "ErrorResponse",
-            "requiredFields": [
-              "error"
-            ],
-            "optionalFields": [],
-            "propertyNames": [
-              "error"
-            ]
-          }
-        }
-      }
-    },
-    "/cancel-requests/{cancelRequestObjectId}/reject": {
-      "post": {
-        "path": "/cancel-requests/{cancelRequestObjectId}/reject",
-        "method": "post",
-        "operationId": "rejectMutualCancelPlan",
-        "tags": [
-          "Orders"
-        ],
-        "parameters": {
-          "path": [
-            {
-              "name": "cancelRequestObjectId",
-              "in": "path",
-              "required": true
-            }
-          ],
-          "query": [],
-          "header": []
-        },
-        "requestBody": null,
         "responses": {
           "200": {
             "status": "200",
@@ -12336,6 +12016,48 @@
         }
       }
     },
+    "getAssetPolicy": {
+      "path": "/policy/assets",
+      "method": "get",
+      "tags": [
+        "Policy"
+      ],
+      "parameters": {
+        "path": [],
+        "query": [],
+        "header": []
+      },
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/AssetPolicy",
+          "schemaName": "AssetPolicy",
+          "requiredFields": [],
+          "optionalFields": [
+            "version",
+            "chainConfig",
+            "controlPlane",
+            "sponsorPaymentCoins",
+            "assetLaneTruth",
+            "sameAssetPolicy",
+            "liveAssets",
+            "experimentalAssets"
+          ],
+          "propertyNames": [
+            "version",
+            "chainConfig",
+            "controlPlane",
+            "sponsorPaymentCoins",
+            "assetLaneTruth",
+            "sameAssetPolicy",
+            "liveAssets",
+            "experimentalAssets"
+          ]
+        }
+      }
+    },
     "getFeePolicy": {
       "path": "/policy/fees",
       "method": "get",
@@ -12354,22 +12076,26 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/FeePolicy",
           "schemaName": "FeePolicy",
-          "requiredFields": [
+          "requiredFields": [],
+          "optionalFields": [
             "version",
             "chainConfig",
+            "controlPlane",
             "escrowFeeBps",
             "listingFee",
             "listingDeposit",
-            "reputationInitFee"
+            "reputationInitFee",
+            "disputeEconomics"
           ],
-          "optionalFields": [],
           "propertyNames": [
             "version",
             "chainConfig",
+            "controlPlane",
             "escrowFeeBps",
             "listingFee",
             "listingDeposit",
-            "reputationInitFee"
+            "reputationInitFee",
+            "disputeEconomics"
           ]
         }
       }
@@ -17732,366 +17458,6 @@
           "clockObjectId"
         ]
       },
-      "responses": {
-        "200": {
-          "status": "200",
-          "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/TxPlanResponse",
-          "schemaName": "TxPlanResponse",
-          "requiredFields": [
-            "status",
-            "txBuilder",
-            "request"
-          ],
-          "optionalFields": [
-            "txMoveCall"
-          ],
-          "propertyNames": [
-            "status",
-            "txBuilder",
-            "request",
-            "txMoveCall"
-          ]
-        },
-        "400": {
-          "status": "400",
-          "reusableResponseRef": "#/components/responses/BadRequest",
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        },
-        "401": {
-          "status": "401",
-          "reusableResponseRef": "#/components/responses/Unauthorized",
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        },
-        "403": {
-          "status": "403",
-          "reusableResponseRef": "#/components/responses/Forbidden",
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        },
-        "404": {
-          "status": "404",
-          "reusableResponseRef": "#/components/responses/NotFound",
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        },
-        "503": {
-          "status": "503",
-          "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        }
-      }
-    },
-    "requestMutualCancelPlan": {
-      "path": "/orders/{orderId}/cancel/request",
-      "method": "post",
-      "tags": [
-        "Orders"
-      ],
-      "parameters": {
-        "path": [
-          {
-            "name": "orderId",
-            "in": "path",
-            "required": true
-          }
-        ],
-        "query": [],
-        "header": []
-      },
-      "requestBody": {
-        "required": true,
-        "schemaRef": "#/components/schemas/MutualCancelRequest",
-        "schemaName": "MutualCancelRequest",
-        "requiredFields": [
-          "escrowId",
-          "buyerRefundBps",
-          "amount"
-        ],
-        "optionalFields": [
-          "clockObjectId"
-        ],
-        "propertyNames": [
-          "escrowId",
-          "buyerRefundBps",
-          "amount",
-          "clockObjectId"
-        ]
-      },
-      "responses": {
-        "200": {
-          "status": "200",
-          "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/TxPlanResponse",
-          "schemaName": "TxPlanResponse",
-          "requiredFields": [
-            "status",
-            "txBuilder",
-            "request"
-          ],
-          "optionalFields": [
-            "txMoveCall"
-          ],
-          "propertyNames": [
-            "status",
-            "txBuilder",
-            "request",
-            "txMoveCall"
-          ]
-        },
-        "400": {
-          "status": "400",
-          "reusableResponseRef": "#/components/responses/BadRequest",
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        },
-        "401": {
-          "status": "401",
-          "reusableResponseRef": "#/components/responses/Unauthorized",
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        },
-        "403": {
-          "status": "403",
-          "reusableResponseRef": "#/components/responses/Forbidden",
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        },
-        "404": {
-          "status": "404",
-          "reusableResponseRef": "#/components/responses/NotFound",
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        },
-        "409": {
-          "status": "409",
-          "reusableResponseRef": "#/components/responses/Conflict",
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        },
-        "503": {
-          "status": "503",
-          "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        }
-      }
-    },
-    "acceptMutualCancelPlan": {
-      "path": "/cancel-requests/{cancelRequestObjectId}/accept",
-      "method": "post",
-      "tags": [
-        "Orders"
-      ],
-      "parameters": {
-        "path": [
-          {
-            "name": "cancelRequestObjectId",
-            "in": "path",
-            "required": true
-          }
-        ],
-        "query": [],
-        "header": []
-      },
-      "requestBody": {
-        "required": true,
-        "schemaRef": "#/components/schemas/MutualCancelActionRequest",
-        "schemaName": "MutualCancelActionRequest",
-        "requiredFields": [],
-        "optionalFields": [
-          "clockObjectId"
-        ],
-        "propertyNames": [
-          "clockObjectId"
-        ]
-      },
-      "responses": {
-        "200": {
-          "status": "200",
-          "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/TxPlanResponse",
-          "schemaName": "TxPlanResponse",
-          "requiredFields": [
-            "status",
-            "txBuilder",
-            "request"
-          ],
-          "optionalFields": [
-            "txMoveCall"
-          ],
-          "propertyNames": [
-            "status",
-            "txBuilder",
-            "request",
-            "txMoveCall"
-          ]
-        },
-        "400": {
-          "status": "400",
-          "reusableResponseRef": "#/components/responses/BadRequest",
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        },
-        "401": {
-          "status": "401",
-          "reusableResponseRef": "#/components/responses/Unauthorized",
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        },
-        "403": {
-          "status": "403",
-          "reusableResponseRef": "#/components/responses/Forbidden",
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        },
-        "404": {
-          "status": "404",
-          "reusableResponseRef": "#/components/responses/NotFound",
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        },
-        "503": {
-          "status": "503",
-          "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/ErrorResponse",
-          "schemaName": "ErrorResponse",
-          "requiredFields": [
-            "error"
-          ],
-          "optionalFields": [],
-          "propertyNames": [
-            "error"
-          ]
-        }
-      }
-    },
-    "rejectMutualCancelPlan": {
-      "path": "/cancel-requests/{cancelRequestObjectId}/reject",
-      "method": "post",
-      "tags": [
-        "Orders"
-      ],
-      "parameters": {
-        "path": [
-          {
-            "name": "cancelRequestObjectId",
-            "in": "path",
-            "required": true
-          }
-        ],
-        "query": [],
-        "header": []
-      },
-      "requestBody": null,
       "responses": {
         "200": {
           "status": "200",
@@ -26534,33 +25900,6 @@
         "clockObjectId"
       ]
     },
-    "MutualCancelRequest": {
-      "name": "MutualCancelRequest",
-      "propertyNames": [
-        "escrowId",
-        "buyerRefundBps",
-        "amount",
-        "clockObjectId"
-      ],
-      "requiredFields": [
-        "escrowId",
-        "buyerRefundBps",
-        "amount"
-      ],
-      "optionalFields": [
-        "clockObjectId"
-      ]
-    },
-    "MutualCancelActionRequest": {
-      "name": "MutualCancelActionRequest",
-      "propertyNames": [
-        "clockObjectId"
-      ],
-      "requiredFields": [],
-      "optionalFields": [
-        "clockObjectId"
-      ]
-    },
     "AuthClaims": {
       "name": "AuthClaims",
       "propertyNames": [
@@ -27449,25 +26788,92 @@
       ],
       "optionalFields": []
     },
+    "AssetPolicy": {
+      "name": "AssetPolicy",
+      "propertyNames": [
+        "version",
+        "chainConfig",
+        "controlPlane",
+        "sponsorPaymentCoins",
+        "assetLaneTruth",
+        "sameAssetPolicy",
+        "liveAssets",
+        "experimentalAssets"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "version",
+        "chainConfig",
+        "controlPlane",
+        "sponsorPaymentCoins",
+        "assetLaneTruth",
+        "sameAssetPolicy",
+        "liveAssets",
+        "experimentalAssets"
+      ]
+    },
+    "AssetPolicyAssetEntry": {
+      "name": "AssetPolicyAssetEntry",
+      "propertyNames": [
+        "symbol",
+        "displayName",
+        "decimals",
+        "fundingMode",
+        "feeMode",
+        "publicStatus",
+        "lanes",
+        "networks"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "symbol",
+        "displayName",
+        "decimals",
+        "fundingMode",
+        "feeMode",
+        "publicStatus",
+        "lanes",
+        "networks"
+      ]
+    },
+    "AssetPolicyNetworkFacts": {
+      "name": "AssetPolicyNetworkFacts",
+      "propertyNames": [
+        "packageId",
+        "typeTag",
+        "proofStatus"
+      ],
+      "requiredFields": [
+        "proofStatus"
+      ],
+      "optionalFields": [
+        "packageId",
+        "typeTag"
+      ]
+    },
     "FeePolicy": {
       "name": "FeePolicy",
       "propertyNames": [
         "version",
         "chainConfig",
+        "controlPlane",
         "escrowFeeBps",
         "listingFee",
         "listingDeposit",
-        "reputationInitFee"
+        "reputationInitFee",
+        "disputeEconomics"
       ],
-      "requiredFields": [
+      "requiredFields": [],
+      "optionalFields": [
         "version",
         "chainConfig",
+        "controlPlane",
         "escrowFeeBps",
         "listingFee",
         "listingDeposit",
-        "reputationInitFee"
-      ],
-      "optionalFields": []
+        "reputationInitFee",
+        "disputeEconomics"
+      ]
     },
     "RankedListing": {
       "name": "RankedListing",

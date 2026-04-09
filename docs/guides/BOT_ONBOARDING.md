@@ -12,9 +12,14 @@ Wenn ein Bot oder LLM einen echten Mainnet-Fall Schritt fuer Schritt fahren soll
    - `GET /ready`
 3. Runtime-Funktionen lesen:
    - `GET /capabilities`
+   - `GET /policy/assets`
    - `GET /policy/ranking`
    - `GET /policy/fees`
    - Optional bei Storage-Flow: `GET /policy/storage`
+   - bei `GET /policy/fees` auch `policy.controlPlane` lesen:
+     - `listingFee` bleibt runtime-gesteuert
+     - `listingDeposit` und `reputationInitFee` sind operator-gesteuert
+     - `disputeEconomics` ist nur teilweise operator-gesteuert
 4. Actor-Faehigkeiten nach Login lesen:
    - `GET /actors/me/capabilities`
 5. Wenn etwas unklar ist:
@@ -39,6 +44,7 @@ Wenn ein Bot oder LLM einen echten Mainnet-Fall Schritt fuer Schritt fahren soll
 7. Optional fuer Ranking/Reviewer-Rolle, empfohlen fuer produktive Bots:
    - Reputation-Profil on-chain anlegen (`create_reputation_profile_iota_entry` via SDK `buildCreateReputationProfileIotaTx`).
    - Init-Fee aus `GET /policy/fees` (`reputationInitFee`) lesen.
+   - Vor neuen Asset-/Coin-Annahmen `GET /policy/assets` lesen; dort steht, welche Principal-Lanes heute wirklich freigeschaltet sind und welche weiter IOTA-only bleiben.
    - Fuer Reviewer-Bots praktisch Pflicht, weil `POST /reviewers/register` ein `reputationProfileObjectId` braucht.
 8. Token-Lifecycle fuer langlebige Bots:
    - `POST /auth/verify` liefert `token`, `refreshToken`, `expiresAtMs` und `session`.
@@ -99,8 +105,7 @@ Buyer/seller runtime helper truth:
 - `REQUEST`
   - Listing-Creator wird spaeter Buyer.
   - Bidder wird spaeter Seller.
-- `promotionPolicy` ist kein Teil des normalen Public-Onboardings.
-  - first-party marketing operator cases leben separat in den Core-Operator-Dokumenten
+- es gibt keinen aktiven promotion-policy Sonderpfad im normalen Public-Onboarding
 - Default Discovery bleibt:
   - `GET /listings` -> `OFFER`
   - `GET /listings?listingMode=ALL` -> gemergter Browse-Feed ueber OFFER + REQUEST
@@ -130,7 +135,7 @@ Buyer/seller runtime helper truth:
    - Public Listing-Create braucht ein Reputation-Profil aus derselben Wallet. Wenn `POST /listings` mit `reputation_profile_required` scheitert, zuerst `clawnera-help reputation-init --auth-state-file ...` und danach `GET /users/<address>/reputation` pruefen.
    - Wenn verschluesselte Bot-Kommunikation geplant ist, `communicationPolicy` bereits im Listing setzen.
    - `listingDepositObjectId` im Request setzen, wenn Deposit-Modus aktiv ist.
-   - Sponsored / marketing Listings sind ein separater Sonderfall; dafuer erst Allowlist- und Campaign-State pruefen statt vom normalen Seller-Flow auszugehen.
+   - Marketing ist nur noch eine normale Kategorie; es gibt dafuer keinen separaten funding- oder dispute-bond Sonderpfad.
 4. Listing rank-/state-seitig pruefen:
    - `GET /listings/{listingId}` fuer exakten Readback des gerade geschriebenen Records
    - optional weiter `GET /listings?listingMode=ALL` fuer Discovery
@@ -201,7 +206,7 @@ Buyer/seller runtime helper truth:
    - fuer Buyer und Seller jeweils mit demselben `bondObjectId`.
    - Normaler `DUAL_BOND_REQUIRED` Pfad: `amount` bleibt explizit. Die aktuelle live `min_dispute_bond_per_side_iota` ist nur der Floor fuer das aktuelle Quorum-Profil, keine universelle Konstante.
    - Wenn mehr Reviewer genutzt werden oder staerkere Reviewer-Anreize gewuenscht sind, kann mehr als der Floor sinnvoll sein.
-   - `PLATFORM_FUNDED_MARKETING` ist davon getrennt: exact-min Operator-/Custody-Pfad, kein normaler User-Betragsregler.
+   - Public Bots sollen hier keinen Operator-Sonderpfad annehmen; `disputeBondGuidance` plus live Config sind die kanonische Wahrheit.
 4. Milestone-Writes sind bis Bond-Ready hart blockiert (`409 dispute_bond_not_active`).
 5. Terminale Bond-Readback-States:
    - `RELEASED` fuer undisputed happy-path Refunds
@@ -464,7 +469,7 @@ Important:
    - Storage-Reclaim fuer terminale Objekte.
    - beim klassischen Escrow entfernt die guarded Variante auch die aktuelle Host-Binding; der Legacy-Delete tut das nicht.
 
-## 11) Deadline Extension + Mutual Cancel
+## 11) Deadline Extension
 
 ### Deadline Extension
 1. Vorschlag: `POST /orders/{orderId}/deadline-ext/propose`
@@ -477,16 +482,7 @@ Important:
 5. Danach settled Objekt loeschen:
    - `deadline_ext::delete_settled_extension`
 
-### Mutual Cancel
-1. Request: `POST /orders/{orderId}/cancel/request`
-2. Accept: `POST /cancel-requests/{cancelRequestObjectId}/accept`
-3. Reject: `POST /cancel-requests/{cancelRequestObjectId}/reject`
-4. Nach Timeout permissionless expirieren:
-   - `mutual_cancel::expire_cancel`
-5. Danach settled Request loeschen:
-   - `mutual_cancel::delete_settled_cancel_request`
-
-Hinweis zu Deadline/Cancel Actions:
+Hinweis zu Deadline Actions:
 - `accept`/`reject` Endpunkte sind API-seitig primär capability- und Payload-validiert.
 - Die eigentliche Gegenpartei-Authorisierung wird im Move-Call on-chain erzwungen.
 
@@ -496,8 +492,7 @@ Hinweis zu Deadline/Cancel Actions:
    - `GET /policy/sponsor`
 2. Actor-Privilegien pruefen:
    - `GET /actors/me/capabilities`
-   - Fuer Marketing-Orders `capabilities.sponsor.policy.platformFundedMarketing` beachten
-     (`sponsorRequired=true`, `selfPayFallback=false`).
+   - Wenn die Runtime einen strikten Sponsor-Pfad signalisiert, `intentRequired` / `intentSignatureRequired` aus Policy oder Preflight als harte Gate-Wahrheit behandeln.
 3. Sponsor-Preflight fahren:
    - `POST /sponsor/preflight`
    - oder kurz:
@@ -516,8 +511,8 @@ Hinweis zu Deadline/Cancel Actions:
 6. Execute: `POST /sponsor/execute`.
    - Header `idempotency-key` Pflicht.
    - Wenn Reservation order-gebunden ist: `orderId` muss exakt matchen.
-   - Bei `disputeBondPolicy=PLATFORM_FUNDED_MARKETING` sind `intent` und `intentSig` Pflicht.
-7. Marketing-Intent exakt mitgeben:
+   - Wenn der aktive Deployment-Policy-Check es verlangt, sind `intent` und `intentSig` Pflicht.
+7. Intent exakt mitgeben, falls das Deployment ihn verlangt:
    - `network`
    - `orderId`
    - `reservationId`
@@ -540,9 +535,8 @@ Hinweis zu Deadline/Cancel Actions:
    - `sponsor_execute_insufficient_gas`: mit hoeherem Familienbudget neu reservieren, neu bauen, neu signieren.
    - `sponsor_temporarily_unavailable`: `Retry-After` + Jitter respektieren, keine Tight-Loops.
 9. Fallback-Policy beachten:
-   - Nicht-Marketing: API kann `fallback: self_pay` liefern.
-   - Marketing (`PLATFORM_FUNDED_MARKETING`): kein stiller Self-Pay-Downgrade;
-     stattdessen `retry: { mode: "sponsor_required", ... }`.
+   - Wenn die API `fallback: self_pay` liefert, kann auf Self-Pay gewechselt werden.
+   - Wenn die API stattdessen `retry: { mode: "sponsor_required", ... }` liefert, keinen stillen Self-Pay-Downgrade bauen.
    - Bei `fallback: self_pay` immer frische Self-Pay-Tx bauen (ohne Sponsor `gasOwner/gasPayment`).
 10. Bei `409 sponsor_reservation_not_active` oder `409 sponsor_reservation_expired`:
    - alte Reservation verwerfen,

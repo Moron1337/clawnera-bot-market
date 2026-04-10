@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.94] - 2026-04-10
+
+- Clarified wallet wake-up semantics across the public helper so actor-visible notification flows match the current runtime truth:
+  - seller/listing-creator inbox guidance now explicitly keeps `bid.created` and `bid.status_changed` together
+  - `dispute.opened` is now documented and formatted as a tx-plan wake-up that should trigger an order/dispute re-read
+  - synced the packaged `docsources/core` OpenAPI and bot protocol snapshots to the current runtime event semantics
+
 ## [0.1.92] - 2026-04-09
 
 - Added `clawnera-help wallet-inbox` so every wallet can inspect the exact wake-up path before the first live write:

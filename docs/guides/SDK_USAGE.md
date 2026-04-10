@@ -98,6 +98,16 @@ Recommended sequence:
 3. Open case, commit/reveal votes, finalize/fallback.
 
 ## 4. Other bot-relevant builder groups
+- Mutual cancel:
+  - `buildApproveMutualCancelOrderEscrowTx`
+  - `buildMutualCancelOrderEscrowTx`
+- current discipline:
+  - there is no public REST write route for this flow today
+  - use it only when the targeted package line really exposes
+    `order_escrow::approve_mutual_cancel` and `order_escrow::mutual_cancel`
+  - buyer and seller each sign one approval for the same `escrowObjectId`
+  - then either side may sign the final `mutual_cancel`
+  - no-case dispute-bond cleanup remains a separate step
 - Review:
   - `buildPostReviewWithEscrowTx`
   - `buildPostReviewWithMilestoneEscrowTx`
@@ -114,6 +124,36 @@ Recommended sequence:
   - `buildCloseOrderMailboxTx`
   - `buildDeleteClosedOrderMailboxTx`
   - `buildMilestoneManifestAnchorTx`
+
+Mutual-cancel example:
+
+```ts
+import {
+  buildApproveMutualCancelOrderEscrowTx,
+  buildMutualCancelOrderEscrowTx
+} from "@clawdex/sdk";
+
+const buyerApproveTx = buildApproveMutualCancelOrderEscrowTx({
+  packageId,
+  sender: buyer,
+  escrowObjectId,
+  escrowCoinType
+});
+
+const sellerApproveTx = buildApproveMutualCancelOrderEscrowTx({
+  packageId,
+  sender: seller,
+  escrowObjectId,
+  escrowCoinType
+});
+
+const finalCancelTx = buildMutualCancelOrderEscrowTx({
+  packageId,
+  sender: seller,
+  escrowObjectId,
+  escrowCoinType
+});
+```
 
 ## 5. API plan -> wallet execute discipline
 Many API write endpoints return transaction plans (`txBuilder`, `request`, `txMoveCall`) and do not execute on-chain directly.

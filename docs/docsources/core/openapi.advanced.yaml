@@ -464,6 +464,24 @@ paths:
                 type: object
                 required:
                   - policy
+  /policy/control-plane:
+    get:
+      tags:
+        - Policy
+      security: []
+      operationId: getMarketControlPlanePolicy
+      responses:
+        '200':
+          description: Joined read-only asset and fee control-plane truth.
+          content:
+            application/json:
+              schema:
+                properties:
+                  policy:
+                    $ref: '#/components/schemas/MarketControlPlanePolicy'
+                type: object
+                required:
+                  - policy
   /policy/sponsor:
     get:
       tags:
@@ -7490,7 +7508,6 @@ components:
           enum:
             - IOTA
             - CLAW
-            - BOTH
         budgetAmount:
           type: string
         milestones:
@@ -7708,7 +7725,6 @@ components:
           enum:
             - IOTA
             - CLAW
-            - BOTH
         budgetAmount:
           type: string
           pattern: ^[0-9]+$
@@ -8321,6 +8337,19 @@ components:
         - creatorAcceptsClaw
         - score
         - scoreBreakdown
+    MarketControlPlanePolicy:
+      properties:
+        version:
+          type: string
+        assets:
+          $ref: '#/components/schemas/AssetPolicy'
+        fees:
+          $ref: '#/components/schemas/FeePolicy'
+      type: object
+      required:
+        - version
+        - assets
+        - fees
     FeePolicy:
       properties:
         version:
@@ -8348,25 +8377,119 @@ components:
           type: object
         controlPlane:
           properties:
-            listingFee:
+            escrowFee:
               properties:
                 source:
                   type: string
                   enum:
-                    - runtime_env
+                    - onchain_config
                 updateMode:
                   type: string
                   enum:
-                    - worker_redeploy
-                envKeys:
+                    - admin_chain_plan
+                configObjectId:
+                  type: string
+                packageId:
+                  type: string
+                queueRouteId:
+                  type: string
+                approveRouteId:
+                  type: string
+                cancelRouteId:
+                  type: string
+                applyRouteId:
+                  type: string
+                managedFields:
                   type: array
                   items:
                     type: string
+                fixedFields:
+                  type: array
+                  items:
+                    type: string
+                sourceStatus:
+                  type: string
+                  enum:
+                    - live_onchain
+                    - not_configured
+                    - read_unavailable
+                detail:
+                  type: string
               type: object
               required:
                 - source
                 - updateMode
-                - envKeys
+                - queueRouteId
+                - approveRouteId
+                - cancelRouteId
+                - applyRouteId
+                - managedFields
+                - fixedFields
+                - sourceStatus
+            listingFee:
+              oneOf:
+                - properties:
+                    source:
+                      type: string
+                      enum:
+                        - runtime_env
+                    updateMode:
+                      type: string
+                      enum:
+                        - worker_redeploy
+                    envKeys:
+                      type: array
+                      items:
+                        type: string
+                  type: object
+                  required:
+                    - source
+                    - updateMode
+                    - envKeys
+                - properties:
+                    source:
+                      type: string
+                      enum:
+                        - onchain_config
+                    updateMode:
+                      type: string
+                      enum:
+                        - admin_chain_plan_seed_only
+                    configObjectId:
+                      type: string
+                    packageId:
+                      type: string
+                    seedRouteId:
+                      type: string
+                    managedFields:
+                      type: array
+                      items:
+                        type: string
+                    readOnlyFields:
+                      type: array
+                      items:
+                        type: string
+                    envKeys:
+                      type: array
+                      items:
+                        type: string
+                    sourceStatus:
+                      type: string
+                      enum:
+                        - live_onchain
+                        - not_configured
+                        - read_unavailable
+                    detail:
+                      type: string
+                  type: object
+                  required:
+                    - source
+                    - updateMode
+                    - seedRouteId
+                    - managedFields
+                    - readOnlyFields
+                    - envKeys
+                    - sourceStatus
             listingDeposit:
               properties:
                 source:
@@ -8377,6 +8500,10 @@ components:
                   type: string
                   enum:
                     - admin_chain_plan
+                configObjectId:
+                  type: string
+                packageId:
+                  type: string
                 queueRouteId:
                   type: string
                 approveRouteId:
@@ -8384,6 +8511,14 @@ components:
                 cancelRouteId:
                   type: string
                 applyRouteId:
+                  type: string
+                sourceStatus:
+                  type: string
+                  enum:
+                    - live_onchain
+                    - not_configured
+                    - read_unavailable
+                detail:
                   type: string
               type: object
               required:
@@ -8393,6 +8528,7 @@ components:
                 - approveRouteId
                 - cancelRouteId
                 - applyRouteId
+                - sourceStatus
             reputationInitFee:
               properties:
                 source:
@@ -8403,6 +8539,10 @@ components:
                   type: string
                   enum:
                     - admin_chain_plan
+                configObjectId:
+                  type: string
+                packageId:
+                  type: string
                 queueRouteId:
                   type: string
                 approveRouteId:
@@ -8410,6 +8550,14 @@ components:
                 cancelRouteId:
                   type: string
                 applyRouteId:
+                  type: string
+                sourceStatus:
+                  type: string
+                  enum:
+                    - live_onchain
+                    - not_configured
+                    - read_unavailable
+                detail:
                   type: string
               type: object
               required:
@@ -8419,6 +8567,7 @@ components:
                 - approveRouteId
                 - cancelRouteId
                 - applyRouteId
+                - sourceStatus
             disputeEconomics:
               properties:
                 source:
@@ -8449,6 +8598,14 @@ components:
                   type: array
                   items:
                     type: string
+                sourceStatus:
+                  type: string
+                  enum:
+                    - live_onchain
+                    - not_configured
+                    - read_unavailable
+                detail:
+                  type: string
               type: object
               required:
                 - source
@@ -8459,8 +8616,10 @@ components:
                 - applyRouteId
                 - managedFields
                 - readOnlyFields
+                - sourceStatus
           type: object
           required:
+            - escrowFee
             - listingFee
             - listingDeposit
             - reputationInitFee
@@ -8475,10 +8634,19 @@ components:
               type: integer
               minimum: 0
               maximum: 10000
+            sourceStatus:
+              type: string
+              enum:
+                - live_onchain
+                - not_configured
+                - read_unavailable
+            detail:
+              type: string
           type: object
           required:
             - IOTA
             - CLAW
+            - sourceStatus
         listingFee:
           properties:
             currency:
@@ -8541,6 +8709,18 @@ components:
               type: string
             enforceRefBinding:
               type: boolean
+            configObjectId:
+              type: string
+            packageId:
+              type: string
+            sourceStatus:
+              type: string
+              enum:
+                - live_onchain
+                - not_configured
+                - read_unavailable
+            detail:
+              type: string
             bindingRefFormat:
               type: string
               enum:
@@ -8561,6 +8741,7 @@ components:
             - refundMode
             - partialRefundBps
             - enforceRefBinding
+            - sourceStatus
             - bindingRefFormat
             - requiredCreateField
             - optionalCreateField
@@ -8597,6 +8778,14 @@ components:
               type: string
             packageId:
               type: string
+            sourceStatus:
+              type: string
+              enum:
+                - live_onchain
+                - not_configured
+                - read_unavailable
+            detail:
+              type: string
             requiredCreatePath:
               type: string
               enum:
@@ -8611,6 +8800,7 @@ components:
             - minAmount
             - maxAmount
             - updateCadenceSec
+            - sourceStatus
             - requiredCreatePath
         disputeEconomics:
           properties:
@@ -8619,6 +8809,14 @@ components:
             configObjectId:
               type: string
             packageId:
+              type: string
+            sourceStatus:
+              type: string
+              enum:
+                - live_onchain
+                - not_configured
+                - read_unavailable
+            detail:
               type: string
             reviewerStake:
               properties:
@@ -8722,11 +8920,10 @@ components:
               type:
                 - string
                 - 'null'
-            detail:
-              type: string
           type: object
           required:
             - available
+            - sourceStatus
             - reviewerStake
             - disputeBondPerSide
             - quorumVotes

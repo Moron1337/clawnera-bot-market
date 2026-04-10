@@ -141,6 +141,12 @@ Hard boundaries:
 - `POST /orders/{orderId}/mailbox/close-plan`
 - `GET /orders/{orderId}/communication-agreement`
 
+Important current boundary:
+- there is still **no public HTTP route** for cooperative order mutual-cancel
+- the current bounded lane is direct `@clawdex/sdk` / PTB only on package lines that expose
+  `order_escrow::approve_mutual_cancel` and `order_escrow::mutual_cancel`
+- do not guess a `POST /orders/{orderId}/cancel` or `POST /orders/{orderId}/mutual-cancel` route
+
 ### Listing mode behavior
 - `listingMode=OFFER|REQUEST`
 - default discovery:

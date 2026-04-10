@@ -26,6 +26,7 @@ Dieses Repo ist der bot-orientierte Knowledge-Layer.
 - `docs/docsources/core/openapi.reviewer-self.yaml`
 - `docs/docsources/core/apiContract.json`
 - `docs/docsources/core/callable_surface.snapshot`
+- `docs/docsources/core/SMART_CONTRACT_ARCHITECTURE_MAP.md`
 - `docs/docsources/core/BOT_QUICKSTART.md`
 - `docs/docsources/core/SMART_CONTRACT_FUNCTION_INVENTORY_AND_USER_TEST_MATRIX.md`
 - `docs/docsources/claw/CLAW_OPERATIONS_CURRENT.md`

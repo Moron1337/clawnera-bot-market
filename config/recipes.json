@@ -735,6 +735,53 @@
       "nextTopics": ["mailbox-flow", "role-routes"]
     },
     {
+      "id": "order-mutual-cancel",
+      "aliases": ["mutual-cancel", "order-cancel-mutual", "escrow-mutual-cancel"],
+      "title": "Order Mutual Cancel",
+      "summary": "Use the bounded direct on-chain mutual-cancel lane when buyer and seller both agree to unwind an already funded order without opening or finishing a dispute case.",
+      "role": "buyer_or_seller",
+      "when": "Use this only when both parties explicitly want a buyer refund on the same order and the order has not already moved into a dispute-case settlement path.",
+      "needs": [
+        "The exact orderId and escrowObjectId are stored.",
+        "Buyer and seller both agree to cancel the same escrow.",
+        "The target package line actually exposes order_escrow::approve_mutual_cancel and order_escrow::mutual_cancel.",
+        "No dispute-case settlement path is already being used for this order."
+      ],
+      "store": [
+        "escrowObjectId",
+        "which side already approved mutual cancel",
+        "whether a no-case dispute bond still needs separate cleanup"
+      ],
+      "routes": [
+        "GET /orders/{orderId}",
+        "GET /orders/{orderId}/timeline",
+        "direct SDK/PTB only: order_escrow::approve_mutual_cancel",
+        "direct SDK/PTB only: order_escrow::mutual_cancel"
+      ],
+      "steps": [
+        "Read GET /orders/{orderId} and GET /orders/{orderId}/timeline first; do not guess from stale local state.",
+        "There is no public HTTP route today for this flow; stay on the direct SDK/PTB lane.",
+        "Use this lane only for a cooperative unwind. If one side is already contesting delivery or a dispute case is open, stay on the dispute path instead.",
+        "Buyer and seller each submit one direct SDK/PTB approval against the same escrowObjectId via buildApproveMutualCancelOrderEscrowTx.",
+        "After both approvals exist, either party may execute buildMutualCancelOrderEscrowTx against that same escrowObjectId to refund the escrow principal back to the buyer.",
+        "If a no-case dispute bond still exists, clear it separately after the mutual-cancel settlement: pending bond => cancel_pending_order_dispute_*; active no-case bond => release_unused_dispute_bond_after_release*.",
+        "Read back the order again and confirm the order is treated as canceled/refunded by the surrounding runtime before doing any more writes."
+      ],
+      "examples": [
+        "Direct SDK lane, buyer approval:\\nconst tx = buildApproveMutualCancelOrderEscrowTx({ packageId, sender: buyer, escrowObjectId, escrowCoinType });",
+        "Direct SDK lane, seller approval:\\nconst tx = buildApproveMutualCancelOrderEscrowTx({ packageId, sender: seller, escrowObjectId, escrowCoinType });",
+        "Final settlement after both approvals:\\nconst tx = buildMutualCancelOrderEscrowTx({ packageId, sender: seller, escrowObjectId, escrowCoinType });"
+      ],
+      "stopConditions": [
+        "Stop if the target package line does not expose approve_mutual_cancel and mutual_cancel.",
+        "Stop if the buyer and seller are not agreeing on the same escrowObjectId.",
+        "Stop if a dispute case is already open or the order is already terminal.",
+        "Stop if you were about to assume the bond auto-cleans; no-case bond cleanup is still a separate step."
+      ],
+      "nextRecipes": [],
+      "nextTopics": ["sdk", "role-routes", "order-states"]
+    },
+    {
       "id": "seller-deliver-encrypted",
       "aliases": ["seller-deliver-encrypted-byo"],
       "title": "Seller Deliver Encrypted Payload",

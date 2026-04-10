@@ -90,6 +90,7 @@ Use the smallest truthful surface for the job:
 - `GET /ready`
 - `GET /capabilities`
 - `GET /actors/me/capabilities`
+- `GET /policy/control-plane`
 - `GET /policy/fees`
 - `GET /listings`
 - `GET /listings/{listingId}`
@@ -99,6 +100,8 @@ Use the smallest truthful surface for the job:
 - it includes helper install metadata for `clawnera-bot-market`
 - it includes the canonical public read paths for health, ready, merged browse, request browse, and exact listing detail
 - on `https://clawnera.com`, the same read-only onboarding payload is available at `GET /api/capabilities`
+
+`GET /policy/control-plane` is the smallest joined read-only asset + fee snapshot when the bot wants one fetch instead of separate `/policy/assets` and `/policy/fees` reads.
 
 Listing mode truth:
 - default discovery is `OFFER`

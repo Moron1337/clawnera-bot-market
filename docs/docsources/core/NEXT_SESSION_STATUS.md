@@ -1,4 +1,4 @@
-# Next Session Status (2026-03-31)
+# Next Session Status (2026-04-08)
 
 ## Purpose
 
@@ -17,18 +17,18 @@ Detailed historical evidence stays in `docs/reports/` and git history.
 
 | Item | Current value |
 | --- | --- |
-| Launch state | `HOLD` |
-| Active family | `MAN-RUN-01a (first bounded manual walkthrough)` |
-| Active family goal | use the now-green exact manual-test execution gate, the discovery precheck, the exact seller/buyer/reviewer actor-binding freeze, and the explicit phase-1 reviewer invite boundary to run the first bounded manual walkthrough while launch stays operator-held and while final hardware signer inputs remain intentionally deferred until the manual test phase is green and production go/no-go is affirmative |
+| Launch state | `OPEN` |
+| Active family | `LAUNCH-OPS-01 (first controlled browse_only live window)` |
+| Active family goal | keep the first explicit `browse_only` production window open on the green required-host bundle, watch the live soak, and stop short only of the remaining broader public-launch blocker: mandatory multisig |
 | Public edge truth | public API/web kernel probes are green, and the portal bot-discovery promotion is now live on `clawnera.com`: `GET /api/capabilities` is `200`, `GET /api/v1` and `GET /api/v1/*` return `portal_discovery_only`, `GET /how-it-works` is `200`, and the representative bid-inbox guess stays `403 portal_read_only`; see `docs/reports/api-launch-kernel-smoke-20260329.md` and `docs/reports/production-topology-boundary-20260328.md` |
-| Next operator decision point | the technical launch gate is now ready on `docs/reports/launch-window-evidence-20260330T202450Z`: `LO-01b` is edge-proven and `LO-01c` is open-eligible, so the next operator decision is whether to keep `HOLD` or explicitly open a `browse_only` window |
-| Current opening rule | keep `HOLD` until an explicit operator-owned `browse_only` call is made; the current required-host bundle is `machineGreen=true`, `controlledOpenPrecheck.present=true`, and `openEligible=true`, while `humanReady=false` still reflects that no named launch/rollback owners and no explicit open call have been recorded yet |
+| Next operator decision point | the active bundle `docs/reports/launch-window-evidence-20260408T114514Z` is now explicitly `OPEN` for `browse_only`; the next operator decision is whether the first live soak stays green enough to keep `OPEN` or whether the window should be paused again |
+| Current opening rule | the explicit operator-owned `browse_only` call is now recorded on `docs/reports/launch-window-evidence-20260408T114514Z`; `09_readiness-check.json` is `machineGreen=true`, `humanReady=true`, `openEligible=true`, the sponsor layer is now narrowed to `CLAW` only, `SPONSOR_ORDER_ID_MODE=required` is live and proven, and the window should stay within `browse_only` until a later explicit `EXPAND` or `PAUSE` decision |
 | Operator reality | one human owner runs the company today; Codex can prepare, verify, and document the launch path, but does not count as the missing human acknowledgement block; the only future hard separation already planned is the pair of hardware wallets for multisig |
-| Broad-launch blockers still truly open | final hardware-backed `2-of-3` multisig cutover and later `SPONSOR_ORDER_ID_MODE=required` |
+| Broad-launch blockers still truly open | final hardware-backed `2-of-3` multisig cutover |
 | Helper/npm state | `clawnera-bot-market@0.1.74` is published and current |
 | Paused families that should stay paused | `DEC-API-01`, `API-LAUNCH-01`, `surface-split`, `topology-boundary`, `TASK-MKT-009`, `TASK-MKT-010`, `TASK-MKT-011`, `TASK-MKT-013`, `STBL-01a` |
-| Operator-only waiting family | `LAUNCH-OPS-01` |
-| Human-input-bound family | `TASK-MKT-012` hardware execution after the now-green topology-bound handoff proof, but the final hardware signer inputs are intentionally deferred until `MAN-01` is green and production go/no-go is affirmative |
+| Operator-only waiting family | `none while the active browse_only window stays OPEN` |
+| Human-input-bound family | `TASK-MKT-012` hardware execution after the now-green topology-bound handoff proof; the remaining blocker is the still-missing final hardware signer inputs and the deliberate custody execution window |
 | Live-input-bound family | `TASK-MKT-014` |
 
 Rule: if the current launch-window evidence is stale, incomplete, copied, or not from the required runtime host, the state remains `HOLD`.
@@ -202,6 +202,9 @@ Keep it frozen unless one of these happens:
 - reliability, discovery, trust, and bot-helper families listed as paused in `docs/NEXT_FAMILY_QUEUE.md` are complete enough for now
 - the public helper/docs/npm lane is current at `clawnera-bot-market@0.1.74`
 - the canonical mainnet contract upgrade is now green on `C58DdoHtRSRjxXfukU7NYDLb5uveanwzEwQaRqtvg4fP`, post-upgrade `verify-source` is green against package `0x40562f9cd23cd35e598fa2b1f57f4161498cf193cdf6bc4f0c17e237c525d014`, and `CN-01e` proved that live Cloudflare, Hetzner indexer, and signing-queue runtime are aligned to that same package-derived truth
+- the required-host listing-expiry sweep is restored on Hetzner:
+  - `clawdex-listing-expiry-sweep.timer` is active/enabled
+  - one direct service run succeeded with `applied=true`, `expiredListings=1`, `rejectedBids=0`
 
 Use reports and git history for detailed proof history. This file keeps only the current live/operator truth.
 
@@ -262,7 +265,7 @@ Their current truth and evidence requirements live in:
 
 ## Decision
 
-Current decision: keep the system at `HOLD` while `LAUNCH-OPS-01` stays in operator-only waiting state on top of the fresh required-host bundle, the live scanner-path deny proof, and the now-green controlled-open dossier, while `MAN-01d` now freezes the real manual execution gate and points directly to `MAN-RUN-01a`, and while `TASK-MKT-012` keeps its final hardware signer inputs deferred until the intended manual-test phase is green and production go/no-go is affirmative.
+Current decision: keep the system at `OPEN` for the first controlled `browse_only` window while `LAUNCH-OPS-01` stays in live-soak posture on top of the green required-host bundle, the live scanner-path deny proof, the now-green controlled-open dossier, the completed `MAN-RUN-01a` bounded walkthrough, and the now-live `SPONSOR_ORDER_ID_MODE=required` proof; keep `TASK-MKT-012` deferred until the remaining hardware signer inputs are ready and an explicit custody execution window is chosen.
 
 That means:
 
@@ -271,4 +274,4 @@ That means:
 - no new frontend build
 - no hardware dry-run or mainnet custody execution until the real signer inputs arrive and the hardware-backed evidence path starts
 
-The next honest moves are: keep the launch bundle at `HOLD` unless you explicitly choose a `browse_only` window, start the bounded `MAN-RUN-01a` manual walkthrough from the frozen gate, and keep multisig custody frozen until the final hardware signer inputs are inserted into the real signer file only after the later manual-test phase is green and production go/no-go is affirmative.
+The next honest moves are: keep the active `browse_only` window green, decide later `EXPAND` versus `PAUSE` from real soak evidence, and keep multisig custody frozen until the final hardware signer inputs are inserted into the real signer file for the later hardware-backed cutover.

@@ -694,6 +694,8 @@ function compactRecipeCommand(recipe) {
       return `clawnera-help request GET /orders/<orderId> ${auth}`;
     case "mailbox-handshake":
       return `clawnera-help tx-plan-execute POST /orders/<orderId>/mailbox/init-plan ${auth} --body '{}' ; then bind POST /orders/<orderId>/mailbox with order_mailbox_object_id from the previous output`;
+    case "order-mutual-cancel":
+      return "local SDK/PTB only: buildApproveMutualCancelOrderEscrowTx(...) from buyer and seller, then buildMutualCancelOrderEscrowTx(...) from either party";
     case "seller-deliver-encrypted":
     case "seller-deliver-encrypted-byo":
       return `clawnera-help deliverable-encrypt --order-id <orderId> --milestone-id <milestoneId> --plaintext-file ./deliverable.bin ${auth}`;
@@ -735,6 +737,8 @@ function compactRecipeReadText(recipe) {
     case "creator-cancel-listing":
     case "creator-renew-listing":
       return "GET /listings for OFFER | GET /listings?listingMode=REQUEST for REQUEST";
+    case "order-mutual-cancel":
+      return "GET /orders/{orderId} | GET /orders/{orderId}/timeline";
     case "seller-deliver-encrypted":
     case "seller-deliver-encrypted-byo":
       return "GET /orders/{orderId}/milestones/{milestoneId}/anchor | GET /events?scope=all&type=mailbox.signal_posted";
@@ -756,6 +760,8 @@ function compactRecipeWriteText(recipe) {
       return "POST /orders/{orderId}/dispute-bond/fund | POST /orders/{orderId}/escrow/bind";
     case "mailbox-handshake":
       return "POST /orders/{orderId}/mailbox/init-plan | POST /orders/{orderId}/mailbox | POST /orders/{orderId}/mailbox/post-signal-plan";
+    case "order-mutual-cancel":
+      return "direct SDK/PTB only: order_escrow::approve_mutual_cancel x2 | order_escrow::mutual_cancel | optional no-case bond cleanup";
     case "seller-deliver-encrypted":
     case "seller-deliver-encrypted-byo":
       return "POST /storage/uploads/presign | POST /orders/{orderId}/milestones/{milestoneId}/submit | POST /orders/{orderId}/milestones/{milestoneId}/anchor";

@@ -78,7 +78,7 @@ test("reviewer and sponsor docs match the current runtime truth", () => {
   assert.match(runtimeChecks, /--order-id "<order-id>"/);
   assert.match(runtimeChecks, /SPONSOR_ORDER_ID_MODE=required/);
   assert.match(sdkUsage, /always send canonical `orderId`/);
-  assert.equal(publicSpec.includes("BOTH"), true, "public spec drifted away from the current runtime BOTH asset enum");
+  assert.equal(publicSpec.includes("BOTH"), false, "public spec still leaks retired BOTH asset enum");
 });
 
 test("core knowledge sources avoid stale bid accept path strings", () => {

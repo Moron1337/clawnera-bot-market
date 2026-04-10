@@ -56,6 +56,7 @@ On failed sponsor privilege checks, common errors:
 Call at startup and cache:
 - `GET /capabilities`
 - `GET /actors/me/capabilities`
+- `GET /policy/control-plane`
 - `GET /policy/fees`
 
 ## 4. Core read endpoints
@@ -64,6 +65,7 @@ Call at startup and cache:
 - `GET /capabilities`
 - `GET /actors/me/capabilities`
 - `GET /auth/session`
+- `GET /policy/control-plane`
 - `GET /policy/fees`
 - `GET /policy/ranking`
 - `GET /listings`
@@ -82,6 +84,9 @@ Call at startup and cache:
 - `GET /disputes/{objectId}`
 
 Current discovery semantics:
+- `GET /policy/control-plane` is the joined read-only asset + fee snapshot
+  - prefer it when the bot wants one machine-readable discovery fetch for both surfaces
+  - fall back to direct `GET /policy/assets` and `GET /policy/fees` when separate caching is better
 - `GET /listings` defaults to `listingMode=OFFER`
   - use `GET /listings?listingMode=ALL` for merged browse across both listing types
   - use `GET /listings?listingMode=REQUEST` to browse buyer-created requests
@@ -307,7 +312,6 @@ Reviewer lifecycle:
   - `POST /reviewers/deregister`
 - realize on-chain performance/decision metrics after a case:
   - `POST /reviewers/me/claim-metrics`
-  - treat `POST /reviewers/{reviewerAddress}/claim-metrics` as a compat-only old-client fallback
   - send the closed `disputeCaseObjectId`; the remaining reviewer self-context is auto-hydrated
   - if the case id is omitted, expect `400 dispute_case_object_id_required`
   - majority reviewer payouts happen at `finalize`

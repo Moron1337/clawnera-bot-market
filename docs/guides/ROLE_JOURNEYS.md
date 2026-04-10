@@ -50,6 +50,7 @@ If token budget is tight:
   - later if needed:
     - `creator-cancel-listing`
     - `creator-renew-listing`
+    - `order-mutual-cancel`
     - `dispute-evidence-supplemental-bundle`
 - `buyer`
   - `setup-quick`
@@ -58,6 +59,10 @@ If token budget is tight:
   - `fund-order`
   - `mailbox-handshake`
   - `buyer-accept-delivery`
+  - later if needed:
+    - `order-mutual-cancel`
+    - `buyer-reject-delivery`
+    - `dispute-evidence-supplemental-bundle`
 - `request-buyer`
   - `setup-quick`
   - `buyer-create-request`
@@ -67,6 +72,7 @@ If token budget is tight:
   - `mailbox-handshake`
   - `buyer-accept-delivery`
   - later if needed:
+    - `order-mutual-cancel`
     - `dispute-evidence-supplemental-bundle`
     - `creator-cancel-listing`
     - `creator-renew-listing`
@@ -77,6 +83,9 @@ If token budget is tight:
   - `fund-order`
   - `mailbox-handshake`
   - `seller-deliver-encrypted`
+  - later if needed:
+    - `order-mutual-cancel`
+    - `dispute-evidence-supplemental-bundle`
 - `reviewer`
   - `setup-quick`
   - `key-agreement-upsert`
@@ -106,5 +115,6 @@ If token budget is tight:
 - For listing create, choose expiry explicitly. Prefer `--expires-in-days`; use `--use-default-expiry` only to acknowledge the legacy 30-day runtime default.
 - For shorthand milestone bodies, always include `--milestone-due-dates`; otherwise the helper stops locally.
 - Listing creators can later use `creator-cancel-listing` or `creator-renew-listing`; the public runtime uses POST cancel/renew routes, not DELETE/PATCH listing edits.
+- Order parties can later use `order-mutual-cancel` only as a direct SDK/PTB lane when the targeted package actually exposes `approve_mutual_cancel` and `mutual_cancel`; there is no public HTTP route for this flow today.
 - One live write, one readback.
 - If a recipe says stop, stop and open the linked deeper topic.

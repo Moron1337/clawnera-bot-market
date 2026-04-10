@@ -15,13 +15,15 @@ Quellen:
 
 ## 2) Bot-kritische Entry-Funktionen nach Modulen
 
-### `escrow`
+### `order_escrow`
 
 | Funktion | Zweck | Typischer Aufrufer | Kern-Preconditions |
 | --- | --- | --- | --- |
 | `create_escrow_iota_entry` | IOTA Escrow erzeugen | buyer bot/wallet | valider seller, deadline, fee config, clock |
 | `create_escrow_coin_entry` | CLAW Escrow erzeugen | buyer bot/wallet | valider coin object + coin type |
 | `release` | Normale Auszahlung an seller | buyer | Escrow in releasable state |
+| `approve_mutual_cancel` | Partei bestaetigt kooperative Rueckabwicklung | buyer/seller | derselbe `escrowObjectId`, state noch cooperative-cancel-faehig |
+| `mutual_cancel` | Cooperative Rueckabwicklung mit Buyer-Refund | buyer/seller | buyer+seller haben beide dieselbe Mutual-Cancel-Approval fuer dasselbe Escrow gesetzt |
 | `open_dispute` | Escrow in Dispute ueberfuehren | buyer/seller | dispute-faehiger State, clock |
 | `claim_after_deadline` | Seller claimt nach Deadline | seller | deadline erreicht, kein final settlement |
 | `approve_settled_escrow_deletion` | Partei-Freigabe fuer Escrow-Cleanup | buyer/seller | Escrow terminal (`RELEASED`/`RESOLVED`) |
@@ -126,6 +128,7 @@ Quellen:
 | `POST /disputes/{id}/fallback/resolve` | `disputeQuorum.resolveFallback` | `dispute_quorum::resolve_case_with_platform_fallback` |
 | `POST /disputes/{id}/fallback/timeout` | `disputeQuorum.resolveTimeoutFallback` | `dispute_quorum::resolve_case_with_timeout_fallback` |
 | `POST /disputes/{id}/resolve-escrow` | `orderEscrow.resolveDisputeWithBinding` | `order_escrow::resolve_dispute_with_binding` |
+| `N/A (direct SDK/PTB only)` | `buildApproveMutualCancelOrderEscrowTx` / `buildMutualCancelOrderEscrowTx` | `order_escrow::approve_mutual_cancel` / `order_escrow::mutual_cancel` |
 | `POST /orders/{orderId}/reviews` | `review.postWithEscrow/postWithMilestoneEscrow` | `review::post_review_with_escrow` / `review::post_review_with_milestone_escrow` |
 | `POST /orders/{orderId}/deadline-ext/propose` | `deadlineExt.propose` | `deadline_ext::propose_extension` |
 | `POST /deadline-ext/{id}/accept` | deprecated / dark-disabled | on-chain existiert jetzt ein kanonischer guarded Apply-Pfad, aber die public API bleibt bis zu einem expliziten owned-surface Retarget weiter auf `409 deadline_extension_accept_disabled` |
@@ -145,3 +148,5 @@ Diese Funktionen bleiben fuer Operator-/Admin-Bots relevant, sind aber nicht Tei
   - `docs/docsources/core/SMART_CONTRACT_FUNCTION_INVENTORY_AND_USER_TEST_MATRIX.md`
 - Callable Snapshot (Regression Guard):
   - `docs/docsources/core/callable_surface.snapshot`
+- Architekturkarte:
+  - `docs/docsources/core/SMART_CONTRACT_ARCHITECTURE_MAP.md`

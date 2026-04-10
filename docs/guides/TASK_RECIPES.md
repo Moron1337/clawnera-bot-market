@@ -87,6 +87,10 @@ Auth note:
   - separate sponsor gas, bond, and escrow principal
   - read the live dispute-bond floor first; normal funding still needs an explicit amount choice
   - use the normal public bond flow; operator-only sponsor exceptions are intentionally out of scope here
+- `order-mutual-cancel`
+  - cooperative unwind for an already funded order when buyer and seller both want a buyer refund
+  - no public HTTP route today; use the direct SDK/PTB lane only when the targeted package exposes `approve_mutual_cancel` and `mutual_cancel`
+  - clear any no-case dispute bond separately after the escrow refund
 - `mailbox-handshake`
   - bind mailbox before the first seller milestone submit and use it only for signals/acks
   - common aliases: `mailbox-signal`, `mailbox-post-signal`, `mailbox-ack`

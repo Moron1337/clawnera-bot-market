@@ -226,6 +226,11 @@ Notes:
   - `IOTA` uses `9`
   - `CLAW` uses `6`
   - without `--display-values`, write helpers expect atomic integers
+- cooperative order unwind now exists as a bounded direct SDK/PTB lane:
+  - there is still no public HTTP `mutual cancel` route
+  - use it only when the targeted package exposes `order_escrow::approve_mutual_cancel` and `order_escrow::mutual_cancel`
+  - buyer and seller each approve the same `escrowObjectId`, then either side executes the final `mutual_cancel`
+  - no-case dispute-bond cleanup still stays separate
 - `clawnera-help listing-create` is fail-closed on milestone count:
   - live listings need `2` to `8` milestones
   - a single milestone now stops locally before the POST

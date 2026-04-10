@@ -623,7 +623,7 @@ test("journey compact output keeps only ids, handoffs, and next hints", () => {
   assert.match(result.stdout, /steps:setup-quick > reputation-init > seller-create-listing > seller-review-bids > buyer-accept-bid\[handoff,wait_for_buyer_accept]/);
   assert.match(
     result.stdout,
-    /later:creator-cancel-listing \| creator-renew-listing \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
+    /later:creator-cancel-listing \| creator-renew-listing \| order-mutual-cancel \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
   );
   assert.match(result.stdout, /next_if_not_setup:setup-quick/);
   assert.match(result.stdout, /next_if_setup:reputation-init/);
@@ -648,7 +648,7 @@ test("request journeys separate buyer-created requests from offer flow", () => {
   );
   assert.match(
     buyerResult.stdout,
-    /later:creator-cancel-listing \| creator-renew-listing \| buyer-reject-delivery \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
+    /later:creator-cancel-listing \| creator-renew-listing \| order-mutual-cancel \| buyer-reject-delivery \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
   );
   assert.match(
     buyerResult.stdout,
@@ -664,7 +664,7 @@ test("request journeys separate buyer-created requests from offer flow", () => {
   );
   assert.match(
     sellerResult.stdout,
-    /later:dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
+    /later:order-mutual-cancel \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
   );
 });
 
@@ -675,7 +675,7 @@ test("buyer compact journey does not suggest listing-creator maintenance actions
   assert.doesNotMatch(result.stdout, /creator-renew-listing/);
   assert.match(
     result.stdout,
-    /later:buyer-reject-delivery \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
+    /later:order-mutual-cancel \| buyer-reject-delivery \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
   );
 });
 
@@ -1163,6 +1163,16 @@ test("fund-order recipe clarifies seller identity for REQUEST mode", () => {
   assert.doesNotMatch(result.stdout, /"amount": "500000"/);
   assert.match(result.stdout, /Trust the bind response first/);
   assert.match(result.stdout, /immediate reads can lag briefly after escrow bind/);
+});
+
+test("order mutual cancel recipe stays on the direct sdk lane and warns about separate bond cleanup", () => {
+  const result = runCli(["recipe", "order-mutual-cancel"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /no public HTTP route today/i);
+  assert.match(result.stdout, /buildApproveMutualCancelOrderEscrowTx/);
+  assert.match(result.stdout, /buildMutualCancelOrderEscrowTx/);
+  assert.match(result.stdout, /pending bond => cancel_pending_order_dispute/);
+  assert.match(result.stdout, /active no-case bond => .*release_unused_dispute_bond_after_release/i);
 });
 
 test("creator cancel recipe shows exact listing readback guidance", () => {

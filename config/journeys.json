@@ -18,6 +18,7 @@
       "optional": [
         "creator-cancel-listing",
         "creator-renew-listing",
+        "order-mutual-cancel",
         "dispute-open",
         "dispute-evidence-linked-deliverable",
         "dispute-evidence-supplemental-bundle",
@@ -38,6 +39,7 @@
         "buyer-accept-delivery"
       ],
       "optional": [
+        "order-mutual-cancel",
         "buyer-reject-delivery",
         "dispute-open",
         "dispute-evidence-linked-deliverable",
@@ -63,6 +65,7 @@
       "optional": [
         "creator-cancel-listing",
         "creator-renew-listing",
+        "order-mutual-cancel",
         "buyer-reject-delivery",
         "dispute-open",
         "dispute-evidence-linked-deliverable",
@@ -84,6 +87,7 @@
         "seller-deliver-encrypted"
       ],
       "optional": [
+        "order-mutual-cancel",
         "dispute-open",
         "dispute-evidence-linked-deliverable",
         "dispute-evidence-supplemental-bundle",
@@ -135,6 +139,7 @@
         "buyer-create-request",
         "creator-cancel-listing",
         "creator-renew-listing",
+        "order-mutual-cancel",
         "buyer-place-bid",
         "seller-answer-request",
         "key-agreement-upsert",

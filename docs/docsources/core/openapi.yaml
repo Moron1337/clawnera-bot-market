@@ -394,6 +394,22 @@ paths:
                 properties:
                   policy:
                     $ref: "#/components/schemas/FeePolicy"
+  /policy/control-plane:
+    get:
+      tags: [Policy]
+      security: []
+      operationId: getMarketControlPlanePolicy
+      responses:
+        "200":
+          description: Joined read-only asset and fee control-plane truth.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [policy]
+                properties:
+                  policy:
+                    $ref: "#/components/schemas/MarketControlPlanePolicy"
   /policy/sponsor:
     get:
       tags: [Policy, Sponsor]
@@ -2689,41 +2705,6 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
-  /reviewers/{address}/claim-metrics:
-    post:
-      tags: [Disputes]
-      operationId: claimReviewerDecisionMetricsCompatPlan
-      x-clawnera-surface: compat-only
-      deprecated: true
-      summary: Compat alias for older reviewer-owned clients.
-      description: >-
-        Deprecated compat alias. Canonical reviewer-self route is
-        `POST /reviewers/me/claim-metrics`.
-      parameters:
-        - name: address
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ReviewerClaimMetricsRequest"
-      responses:
-        "200":
-          description: Transaction plan for `dispute_quorum::claim_decision_metrics`.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TxPlanResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
   /orders/{orderId}/dispute-bond/fund:
     post:
       tags: [Disputes]
@@ -4442,7 +4423,7 @@ components:
           $ref: "#/components/schemas/ListingCategory"
         currency:
           type: string
-          enum: [IOTA, CLAW, BOTH]
+          enum: [IOTA, CLAW]
         budgetAmount:
           type: string
           pattern: "^[0-9]+$"
@@ -7348,7 +7329,7 @@ components:
           $ref: "#/components/schemas/ListingCategory"
         currency:
           type: string
-          enum: [IOTA, CLAW, BOTH]
+          enum: [IOTA, CLAW]
         budgetAmount:
           type: string
         milestones:
@@ -8750,25 +8731,113 @@ components:
               type: string
         controlPlane:
           type: object
-          required: [listingFee, listingDeposit, reputationInitFee, disputeEconomics]
+          required: [escrowFee, listingFee, listingDeposit, reputationInitFee, disputeEconomics]
           properties:
-            listingFee:
+            escrowFee:
               type: object
-              required: [source, updateMode, envKeys]
+              required:
+                [
+                  source,
+                  updateMode,
+                  queueRouteId,
+                  approveRouteId,
+                  cancelRouteId,
+                  applyRouteId,
+                  managedFields,
+                  fixedFields,
+                  sourceStatus
+                ]
               properties:
                 source:
                   type: string
-                  enum: [runtime_env]
+                  enum: [onchain_config]
                 updateMode:
                   type: string
-                  enum: [worker_redeploy]
-                envKeys:
+                  enum: [admin_chain_plan]
+                configObjectId:
+                  type: string
+                packageId:
+                  type: string
+                queueRouteId:
+                  type: string
+                approveRouteId:
+                  type: string
+                cancelRouteId:
+                  type: string
+                applyRouteId:
+                  type: string
+                managedFields:
                   type: array
                   items:
                     type: string
+                fixedFields:
+                  type: array
+                  items:
+                    type: string
+                sourceStatus:
+                  type: string
+                  enum: [live_onchain, not_configured, read_unavailable]
+                detail:
+                  type: string
+            listingFee:
+              oneOf:
+                - type: object
+                  required: [source, updateMode, envKeys]
+                  properties:
+                    source:
+                      type: string
+                      enum: [runtime_env]
+                    updateMode:
+                      type: string
+                      enum: [worker_redeploy]
+                    envKeys:
+                      type: array
+                      items:
+                        type: string
+                - type: object
+                  required:
+                    [
+                      source,
+                      updateMode,
+                      seedRouteId,
+                      managedFields,
+                      readOnlyFields,
+                      envKeys,
+                      sourceStatus
+                    ]
+                  properties:
+                    source:
+                      type: string
+                      enum: [onchain_config]
+                    updateMode:
+                      type: string
+                      enum: [admin_chain_plan_seed_only]
+                    configObjectId:
+                      type: string
+                    packageId:
+                      type: string
+                    seedRouteId:
+                      type: string
+                    managedFields:
+                      type: array
+                      items:
+                        type: string
+                    readOnlyFields:
+                      type: array
+                      items:
+                        type: string
+                    envKeys:
+                      type: array
+                      items:
+                        type: string
+                    sourceStatus:
+                      type: string
+                      enum: [live_onchain, not_configured, read_unavailable]
+                    detail:
+                      type: string
             listingDeposit:
               type: object
-              required: [source, updateMode, queueRouteId, approveRouteId, cancelRouteId, applyRouteId]
+              required: [source, updateMode, queueRouteId, approveRouteId, cancelRouteId, applyRouteId, sourceStatus]
               properties:
                 source:
                   type: string
@@ -8776,6 +8845,10 @@ components:
                 updateMode:
                   type: string
                   enum: [admin_chain_plan]
+                configObjectId:
+                  type: string
+                packageId:
+                  type: string
                 queueRouteId:
                   type: string
                 approveRouteId:
@@ -8783,10 +8856,15 @@ components:
                 cancelRouteId:
                   type: string
                 applyRouteId:
+                  type: string
+                sourceStatus:
+                  type: string
+                  enum: [live_onchain, not_configured, read_unavailable]
+                detail:
                   type: string
             reputationInitFee:
               type: object
-              required: [source, updateMode, queueRouteId, approveRouteId, cancelRouteId, applyRouteId]
+              required: [source, updateMode, queueRouteId, approveRouteId, cancelRouteId, applyRouteId, sourceStatus]
               properties:
                 source:
                   type: string
@@ -8794,6 +8872,10 @@ components:
                 updateMode:
                   type: string
                   enum: [admin_chain_plan]
+                configObjectId:
+                  type: string
+                packageId:
+                  type: string
                 queueRouteId:
                   type: string
                 approveRouteId:
@@ -8801,6 +8883,11 @@ components:
                 cancelRouteId:
                   type: string
                 applyRouteId:
+                  type: string
+                sourceStatus:
+                  type: string
+                  enum: [live_onchain, not_configured, read_unavailable]
+                detail:
                   type: string
             disputeEconomics:
               type: object
@@ -8814,6 +8901,7 @@ components:
                   applyRouteId,
                   managedFields,
                   readOnlyFields,
+                  sourceStatus
                 ]
               properties:
                 source:
@@ -8842,9 +8930,14 @@ components:
                   type: array
                   items:
                     type: string
+                sourceStatus:
+                  type: string
+                  enum: [live_onchain, not_configured, read_unavailable]
+                detail:
+                  type: string
         escrowFeeBps:
           type: object
-          required: [IOTA, CLAW]
+          required: [IOTA, CLAW, sourceStatus]
           properties:
             IOTA:
               type: integer
@@ -8854,6 +8947,11 @@ components:
               type: integer
               minimum: 0
               maximum: 10000
+            sourceStatus:
+              type: string
+              enum: [live_onchain, not_configured, read_unavailable]
+            detail:
+              type: string
         listingFee:
           type: object
           required:
@@ -8903,6 +9001,7 @@ components:
               refundMode,
               partialRefundBps,
               enforceRefBinding,
+              sourceStatus,
               bindingRefFormat,
               requiredCreateField,
               optionalCreateField
@@ -8927,6 +9026,15 @@ components:
               type: string
             enforceRefBinding:
               type: boolean
+            configObjectId:
+              type: string
+            packageId:
+              type: string
+            sourceStatus:
+              type: string
+              enum: [live_onchain, not_configured, read_unavailable]
+            detail:
+              type: string
             bindingRefFormat:
               type: string
               enum: [sha256_hex_32_bytes_v1]
@@ -8948,6 +9056,7 @@ components:
               minAmount,
               maxAmount,
               updateCadenceSec,
+              sourceStatus,
               requiredCreatePath
             ]
           properties:
@@ -8980,6 +9089,11 @@ components:
               type: string
             packageId:
               type: string
+            sourceStatus:
+              type: string
+              enum: [live_onchain, not_configured, read_unavailable]
+            detail:
+              type: string
             requiredCreatePath:
               type: string
               enum: [reputation::create_reputation_profile_iota_entry]
@@ -8988,6 +9102,7 @@ components:
           required:
             [
               available,
+              sourceStatus,
               reviewerStake,
               disputeBondPerSide,
               quorumVotes,
@@ -9001,6 +9116,11 @@ components:
             configObjectId:
               type: string
             packageId:
+              type: string
+            sourceStatus:
+              type: string
+              enum: [live_onchain, not_configured, read_unavailable]
+            detail:
               type: string
             reviewerStake:
               type: object
@@ -9065,8 +9185,16 @@ components:
                   maximum: 10000
             platformFallbackSink:
               type: [string, "null"]
-            detail:
-              type: string
+    MarketControlPlanePolicy:
+      type: object
+      required: [version, assets, fees]
+      properties:
+        version:
+          type: string
+        assets:
+          $ref: "#/components/schemas/AssetPolicy"
+        fees:
+          $ref: "#/components/schemas/FeePolicy"
     RankedListing:
       type: object
       required: [listing, creatorTier, creatorAcceptsClaw, score, scoreBreakdown]

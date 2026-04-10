@@ -225,6 +225,32 @@ Buyer/seller runtime helper truth:
 5. Nach `POST /orders/{orderId}/escrow/bind` zuerst der Bind-Response vertrauen, dann `GET /orders/{orderId}` kurz nachpollen bis `status=IN_PROGRESS`.
    Ein direktes Readback kann kurz noch `AWAITING_DEPOSITS` zeigen, obwohl der Bind schon erfolgreich war.
 
+### 3e) Mutual Cancel (kooperativer Order-Abbruch)
+
+1. Nur verwenden, wenn buyer und seller denselben Order-/Escrow-Ref bewusst gemeinsam rueckabwickeln wollen.
+2. Das ist aktuell **kein** public HTTP-Route-Pfad.
+   - die bounded Lane ist direkter SDK/PTB-/Move-Aufruf
+   - sie darf nur genutzt werden, wenn die target package line wirklich
+     `order_escrow::approve_mutual_cancel` und `order_escrow::mutual_cancel` exposed
+3. Vorher immer exakt lesen:
+   - `GET /orders/{orderId}`
+   - `GET /orders/{orderId}/timeline`
+4. Ablauf:
+   - buyer sendet eine direkte PTB mit `buildApproveMutualCancelOrderEscrowTx`
+   - seller sendet dieselbe Approval-PTB fuer denselben `escrowObjectId`
+   - danach kann eine der beiden Parteien `buildMutualCancelOrderEscrowTx` fuer denselben `escrowObjectId` ausfuehren
+5. Ergebnis:
+   - der Escrow-Principal geht an den buyer zurueck
+   - es wird **kein** Dispute-Case geoeffnet
+6. Wichtiger Zusatz:
+   - ein no-case dispute bond wird dabei nicht automatisch komplett mitabgewickelt
+   - `PENDING` bond => separat ueber den existierenden pending-cancel path abbrechen
+   - `ACTIVE` no-case bond => nach dem mutual cancel separat ueber den existierenden release-unused path freigeben
+7. Nicht verwenden:
+   - wenn bereits ein Dispute-Case offen ist
+   - wenn ihr eigentlich Evidence/Reviewer/Fallback braucht
+   - wenn buyer und seller nicht auf denselben `escrowObjectId` schauen
+
 ## 4) Delivery + Milestone Flow
 
 1. Seller submit:

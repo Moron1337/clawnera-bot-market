@@ -159,6 +159,7 @@ test("help all json output includes full inventory", () => {
   assert.ok(payload.commands.includes("recipe"));
   assert.ok(payload.commands.includes("wallet-init"));
   assert.ok(payload.commands.includes("wallet-list"));
+  assert.ok(payload.commands.includes("wallet-inbox"));
   assert.ok(payload.commands.includes("ensure-auth"));
   assert.ok(payload.commands.includes("units"));
   assert.ok(payload.commands.includes("request"));
@@ -257,7 +258,6 @@ test("chain-config help explains live floor semantics", () => {
   assert.match(result.stdout, /Live chain config helper/);
   assert.match(result.stdout, /does not choose or fund the final bond amount/);
   assert.match(result.stdout, /Normal DUAL_BOND_REQUIRED funding still needs an explicit amount later/);
-  assert.match(result.stdout, /PLATFORM_FUNDED_MARKETING is a separate exact-min operator path/);
 });
 
 test("order-init-bond help explains init versus funding semantics", () => {
@@ -266,7 +266,6 @@ test("order-init-bond help explains init versus funding semantics", () => {
   assert.match(result.stdout, /Local order bond init helper/);
   assert.match(result.stdout, /does not fund the amount/);
   assert.match(result.stdout, /DUAL_BOND_REQUIRED funding still needs an explicit amount later/);
-  assert.match(result.stdout, /exact-min operator path/);
 });
 
 test("encrypted delivery helpers print usage", () => {
@@ -325,9 +324,8 @@ test("thin write helpers print usage", () => {
 test("listing-create help explains display values and categories", () => {
   const result = runCli(["listing-create", "--help"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /Valid category slugs: dev, design, marketing, ops, security, other/);
+  assert.match(result.stdout, /Valid category slugs: dev, design, ops, security, other/);
   assert.match(result.stdout, /clawnera-help listing-categories/);
-  assert.match(result.stdout, /--promotion-policy STANDARD\|PLATFORM_FUNDED_MARKETING/);
   assert.match(result.stdout, /--display-values/);
   assert.match(result.stdout, /IOTA uses 9 decimals/);
   assert.match(result.stdout, /CLAW uses 6 decimals/);
@@ -1162,8 +1160,6 @@ test("fund-order recipe clarifies seller identity for REQUEST mode", () => {
   assert.match(result.stdout, /In REQUEST mode the seller is the accepted bidder, not the request creator/);
   assert.match(result.stdout, /normal DUAL_BOND_REQUIRED path still needs an explicit per-side amount later/);
   assert.match(result.stdout, /Treat it as a floor for the current quorum profile/);
-  assert.match(result.stdout, /PLATFORM_FUNDED_MARKETING/);
-  assert.match(result.stdout, /exact-min operator funding flow/);
   assert.doesNotMatch(result.stdout, /"amount": "500000"/);
   assert.match(result.stdout, /Trust the bind response first/);
   assert.match(result.stdout, /immediate reads can lag briefly after escrow bind/);
@@ -1343,6 +1339,47 @@ test("notifications init help prints usage", () => {
   assert.match(result.stdout, /Notifications helper/);
   assert.match(result.stdout, /notifications init telegram/);
   assert.match(result.stdout, /notifications presets/);
+});
+
+test("wallet inbox help prints usage", () => {
+  const result = runCli(["wallet-inbox", "--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Wallet inbox helper/);
+  assert.match(result.stdout, /notifications init telegram/);
+  assert.match(result.stdout, /The on-chain order mailbox stays order-scoped after accept/);
+});
+
+test("wallet inbox json output is parseable", () => {
+  const result = runCli(["wallet-inbox", "--json"]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.mode, "wallet-inbox");
+  assert.equal(payload.preset, "all");
+  assert.ok(Array.isArray(payload.eventTypes));
+  assert.ok(payload.eventTypes.includes("bid.created"));
+  assert.ok(payload.eventTypes.includes("order.accepted"));
+  assert.match(payload.eventFeedPath, /^\/events\?scope=all&type=/);
+  assert.match(payload.telegramInitCommand, /notifications init telegram/);
+  assert.ok(Array.isArray(payload.pollingCommands));
+  assert.ok(payload.pollingCommands.some((line) => line.includes("/listings/{listingId}/bids")));
+  assert.ok(payload.pollingCommands.some((line) => line.includes("/orders?role=buyer")));
+});
+
+test("wallet inbox custom event selection stays explicit", () => {
+  const result = runCli([
+    "wallet-inbox",
+    "--preset",
+    "custom",
+    "--event-types",
+    "bid.created,mailbox.signal_acked",
+    "--json"
+  ]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.preset, "custom");
+  assert.deepEqual(payload.eventTypes, ["bid.created", "mailbox.signal_acked"]);
 });
 
 test("notifications init telegram scaffolds env and service files from existing auth state", () => {

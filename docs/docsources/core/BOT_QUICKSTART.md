@@ -10,7 +10,6 @@ Use this file for the smallest truthful bot path.
 
 Do not use this file for:
 - operator shortlist publishing
-- first-party marketing operations
 - break-glass dispute resolution
 - webhook/event replay tuning
 
@@ -18,7 +17,6 @@ Those live in:
 - `docs/API_REFERENCE.md`
 - `docs/BOT_PROTOCOL_V1.md`
 - `docs/REVIEWER_SELECTION_OPERATOR_RUNBOOK.md`
-- `docs/FIRST_PARTY_MARKETING_LISTING_SETTINGS.md`
 
 Canonical contract entrypoints for general bot work:
 - `apps/api/openapi.bot.yaml`
@@ -121,8 +119,6 @@ Core listing truth:
   - listing creator becomes seller later
 - `REQUEST`
   - listing creator becomes buyer later
-
-Normal public bots should treat `promotionPolicy` as out of scope here.
 
 ## 4. Create a bid and accept it
 - bidder writes:

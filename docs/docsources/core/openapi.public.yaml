@@ -161,6 +161,10 @@ paths:
                                 type: string
                               capabilitiesPath:
                                 type: string
+                              assetPolicyPath:
+                                type: string
+                              feePolicyPath:
+                                type: string
                               mergedListingsPath:
                                 type: string
                               requestListingsPath:
@@ -172,6 +176,8 @@ paths:
                               - healthPath
                               - readyPath
                               - capabilitiesPath
+                              - assetPolicyPath
+                              - feePolicyPath
                               - mergedListingsPath
                               - requestListingsPath
                               - listingDetailPathTemplate
@@ -182,6 +188,10 @@ paths:
                               readyPath:
                                 type: string
                               capabilitiesPath:
+                                type: string
+                              assetPolicyPath:
+                                type: string
+                              feePolicyPath:
                                 type: string
                               mergedListingsPath:
                                 type: string
@@ -196,6 +206,8 @@ paths:
                               - healthPath
                               - readyPath
                               - capabilitiesPath
+                              - assetPolicyPath
+                              - feePolicyPath
                               - mergedListingsPath
                               - requestListingsPath
                               - listingDetailPathTemplate
@@ -413,6 +425,24 @@ paths:
                 type: object
                 required:
                   - policy
+  /policy/assets:
+    get:
+      tags:
+        - Policy
+      security: []
+      operationId: getAssetPolicy
+      responses:
+        '200':
+          description: Public asset, lane, and control-plane policy for supported market coins.
+          content:
+            application/json:
+              schema:
+                properties:
+                  policy:
+                    $ref: '#/components/schemas/AssetPolicy'
+                type: object
+                required:
+                  - policy
   /policy/fees:
     get:
       tags:
@@ -450,54 +480,6 @@ paths:
                 type: object
                 required:
                   - policy
-  /onboarding/iota-topup:
-    post:
-      tags:
-        - Sponsor
-      operationId: claimOnboardingIotaTopup
-      responses:
-        '200':
-          description: Existing onboarding grant was already claimed for this actor.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingIotaTopupResponse'
-        '201':
-          description: IOTA onboarding topup submitted successfully.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingIotaTopupResponse'
-        '202':
-          description: IOTA onboarding topup is pending confirmation after an uncertain execution outcome.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingIotaTopupResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '409':
-          description: >-
-            Conflict. Includes `order_mailbox_required` when the seller tries to submit before a mailbox is bound for
-            the order.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '502':
-          description: Funding transaction failed.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '503':
-          description: Onboarding topup unavailable or misconfigured.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
   /policy/storage:
     get:
       tags:
@@ -991,8 +973,7 @@ paths:
       description: >-
         Create a public OFFER or REQUEST listing. `listingMode` is required and must be sent explicitly. Live runtimes
         with on-chain reputation config may reject missing creator reputation profiles with `409
-        reputation_profile_required`. `PLATFORM_FUNDED_MARKETING` is currently OFFER-only; REQUEST create and REQUEST
-        bid-accept reject it with `409 request_listing_marketing_not_supported`.
+        reputation_profile_required`.
       parameters:
         - name: idempotency-key
           in: header
@@ -2231,6 +2212,113 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /orders/{orderId}/deadline-ext/propose:
+    post:
+      tags:
+        - Orders
+      operationId: proposeDeadlineExtensionPlan
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeadlineExtProposeRequest'
+      responses:
+        '200':
+          description: Transaction plan for `deadline_ext::propose`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: Marketplace package not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /deadline-ext/{extensionObjectId}/accept:
+    post:
+      tags:
+        - Orders
+      operationId: acceptDeadlineExtensionPlan
+      deprecated: true
+      description: |
+        Deprecated. This route is dark-disabled and non-authoritative until an escrow deadline-apply path exists.
+      parameters:
+        - name: extensionObjectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeadlineExtActionRequest'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: >
+            Deadline extension accept is dark-disabled until an authoritative escrow deadline-apply path exists. Returns
+            `deadline_extension_accept_disabled`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /deadline-ext/{extensionObjectId}/reject:
+    post:
+      tags:
+        - Orders
+      operationId: rejectDeadlineExtensionPlan
+      parameters:
+        - name: extensionObjectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeadlineExtActionRequest'
+      responses:
+        '200':
+          description: Transaction plan for `deadline_ext::reject`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: On-chain validation unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /reviewers:
     get:
       tags:
@@ -2959,26 +3047,26 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
-    NotFound:
-      description: Resource not found.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-    BadRequest:
-      description: Bad request.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
     Forbidden:
       description: Caller is not allowed to perform this action.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     Unauthorized:
       description: Authentication required or token invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadRequest:
+      description: Bad request.
       content:
         application/json:
           schema:
@@ -3469,6 +3557,7 @@ components:
         - mailbox_signal
         - milestone_submit
         - review_post
+        - deadline_extension
         - dispute_bond
         - dispute_vote
         - dispute_resolution
@@ -3509,7 +3598,6 @@ components:
           enum:
             - claw_payment
             - bond
-            - onboarding
             - marketplace_tx
         gasCoins:
           type: array
@@ -3554,7 +3642,6 @@ components:
           enum:
             - claw_payment
             - bond
-            - onboarding
             - marketplace_tx
         gasBudget:
           type: integer
@@ -3977,25 +4064,6 @@ components:
                 - idempotency-key
             intentSupported:
               type: boolean
-            intentRequiredForPlatformFundedMarketing:
-              type: boolean
-            intentSignatureRequiredForPlatformFundedMarketing:
-              type: boolean
-          type: object
-          additionalProperties: false
-          required:
-            - idempotencyHeader
-            - intentSupported
-            - intentRequiredForPlatformFundedMarketing
-            - intentSignatureRequiredForPlatformFundedMarketing
-        platformFundedMarketing:
-          properties:
-            sponsorPreferred:
-              type: boolean
-            sponsorRequired:
-              type: boolean
-            selfPayFallback:
-              type: boolean
             intentRequired:
               type: boolean
             intentSignatureRequired:
@@ -4003,27 +4071,10 @@ components:
           type: object
           additionalProperties: false
           required:
-            - sponsorPreferred
-            - sponsorRequired
-            - selfPayFallback
+            - idempotencyHeader
+            - intentSupported
             - intentRequired
             - intentSignatureRequired
-        onboardingIotaTopup:
-          properties:
-            enabled:
-              type: boolean
-            amount:
-              type: string
-              pattern: ^[0-9]+$
-            maxEligibleBalance:
-              type: string
-              pattern: ^[0-9]+$
-          type: object
-          additionalProperties: false
-          required:
-            - enabled
-            - amount
-            - maxEligibleBalance
         recommendedGasBudgets:
           properties:
             marketplace_write:
@@ -4033,6 +4084,8 @@ components:
             milestone_submit:
               $ref: '#/components/schemas/SponsorGasEstimate'
             review_post:
+              $ref: '#/components/schemas/SponsorGasEstimate'
+            deadline_extension:
               $ref: '#/components/schemas/SponsorGasEstimate'
             dispute_bond:
               $ref: '#/components/schemas/SponsorGasEstimate'
@@ -4049,6 +4102,7 @@ components:
             - mailbox_signal
             - milestone_submit
             - review_post
+            - deadline_extension
             - dispute_bond
             - dispute_vote
             - dispute_resolution
@@ -4068,8 +4122,6 @@ components:
         - maxGasBudget
         - reserve
         - execute
-        - platformFundedMarketing
-        - onboardingIotaTopup
         - recommendedGasBudgets
     SponsorGasEstimate:
       properties:
@@ -4104,7 +4156,6 @@ components:
           enum:
             - claw_payment
             - bond
-            - onboarding
             - marketplace_tx
         paymentCoin:
           type: string
@@ -4418,14 +4469,9 @@ components:
           description: >-
             Per-side bond amount in atomic IOTA. For `DUAL_BOND_REQUIRED` orders this remains an explicit client choice
             inside the live on-chain min/max range, so read the current floor first and do not hardcode one universal
-            value. For `PLATFORM_FUNDED_MARKETING` orders, the configured platform operator must supply the exact live
-            minimum on the operator/custody path.
+            value.
         paymentCoinObjectId:
           type: string
-        marketingFundingCapObjectId:
-          type: string
-        marketingFundingCustodyProof:
-          $ref: '#/components/schemas/MarketingFundingCustodyProofRequest'
         clockObjectId:
           type: string
       type: object
@@ -4435,28 +4481,6 @@ components:
         - disputeQuorumConfigObjectId
         - side
         - amount
-    MarketingFundingCustodyProofRequest:
-      properties:
-        jobId:
-          type: string
-          minLength: 3
-          maxLength: 160
-        approvalMode:
-          type: string
-          enum:
-            - four_eyes
-            - multisig_2of3
-        approverA:
-          type: string
-        approverB:
-          type: string
-      type: object
-      additionalProperties: false
-      required:
-        - jobId
-        - approvalMode
-        - approverA
-        - approverB
     ReviewerPage:
       properties:
         limit:
@@ -4583,6 +4607,47 @@ components:
         - pendingNoshowCount
         - pendingSlashCount
         - pendingSlashBpsTotal
+    DeadlineExtActionRequest:
+      properties:
+        deadlineExtRegistryObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+      type: object
+      additionalProperties: false
+      required:
+        - deadlineExtRegistryObjectId
+    DeadlineExtProposeRequest:
+      properties:
+        deadlineExtRegistryObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        escrowId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        currentDeadlineMs:
+          type: string
+          pattern: ^[0-9]+$
+        proposedDeadlineMs:
+          type: string
+          pattern: ^[0-9]+$
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+      type: object
+      additionalProperties: false
+      required:
+        - deadlineExtRegistryObjectId
+        - escrowId
+        - currentDeadlineMs
+        - proposedDeadlineMs
     ReviewPostRequest:
       properties:
         reviewRegistryObjectId:
@@ -5221,8 +5286,6 @@ components:
         disputeBondActivatedAt:
           type: string
           format: date-time
-        marketingCampaignId:
-          type: string
         deadlineMs:
           type: integer
           format: int64
@@ -5263,7 +5326,6 @@ components:
       type: string
       enum:
         - DUAL_BOND_REQUIRED
-        - PLATFORM_FUNDED_MARKETING
     OrderEscrowBindRequest:
       properties:
         escrowObjectId:
@@ -5295,11 +5357,6 @@ components:
           description: >-
             True when the normal user path must still choose and submit an explicit amount on
             `/orders/{orderId}/dispute-bond/fund`.
-        platformOperatorFunding:
-          type: boolean
-          description: >-
-            True when the order uses the separate platform-funded marketing path instead of a normal user-selected
-            amount.
         supportedPrincipalAssets:
           type: array
           description: >-
@@ -5309,9 +5366,7 @@ components:
             type: string
         selectedPrincipalAsset:
           type: string
-          description: >-
-            Principal asset selected by current live policy semantics. Today this remains `iota` for both public and
-            platform-funded marketing bonds.
+          description: Principal asset selected by current live policy semantics.
         currentMinPerSideAmount:
           type: string
           nullable: true
@@ -5319,9 +5374,7 @@ components:
         currentMaxPerSideAmount:
           type: string
           nullable: true
-          description: >-
-            Current live maximum per-side bond amount for explicit-range funding, if known. Stays null on the exact-min
-            marketing path.
+          description: Current live maximum per-side bond amount for explicit-range funding, if known.
         defaultRequiredReviewerVotes:
           type: integer
           nullable: true
@@ -5344,7 +5397,6 @@ components:
         - policy
         - selectionMode
         - userAmountChoiceRequired
-        - platformOperatorFunding
         - supportedPrincipalAssets
         - selectedPrincipalAsset
         - currentMinPerSideAmount
@@ -5358,7 +5410,6 @@ components:
       type: string
       enum:
         - EXPLICIT_RANGE
-        - EXACT_MIN_PLATFORM_FUNDED
     OrderListResponse:
       properties:
         items:
@@ -5388,17 +5439,14 @@ components:
         disputeBondPolicy:
           allOf:
             - $ref: '#/components/schemas/OrderDisputeBondPolicy'
-          description: >-
-            Funding policy selected for the order. This tells clients whether the later funding step is explicit-range
-            or exact-min platform-funded; it does not select the final amount by itself.
+          description: Funding policy selected for the order.
         disputeBondGuidance:
           $ref: '#/components/schemas/DisputeBondGuidance'
         operationalWarnings:
           type: array
           description: >-
-            May include warning codes such as `order_requires_dual_bond_funding`,
-            `dispute_bond_amount_explicit_choice_required`, `platform_funded_marketing_operator_handoff_required`, and
-            `platform_marketing_dispute_bond_exact_min`.
+            May include warning codes such as `order_requires_dual_bond_funding` and
+            `dispute_bond_amount_explicit_choice_required`.
           items:
             $ref: '#/components/schemas/OperationalWarning'
       type: object
@@ -5633,7 +5681,6 @@ components:
       enum:
         - dev
         - design
-        - marketing
         - ops
         - security
         - other
@@ -5663,6 +5710,7 @@ components:
           enum:
             - IOTA
             - CLAW
+            - BOTH
         budgetAmount:
           type: string
         milestones:
@@ -5887,6 +5935,7 @@ components:
           enum:
             - IOTA
             - CLAW
+            - BOTH
         budgetAmount:
           type: string
           pattern: ^[0-9]+$
@@ -6279,46 +6328,19 @@ components:
         - creatorAcceptsClaw
         - score
         - scoreBreakdown
-    OnboardingIotaTopupResponse:
-      properties:
-        funded:
-          type: boolean
-        alreadyClaimed:
-          type: boolean
-        pendingConfirmation:
-          type: boolean
-        amount:
-          type: string
-          pattern: ^[0-9]+$
-        txDigest:
-          type: string
-        senderAddress:
-          type: string
-        completedAt:
-          type: string
-          format: date-time
-        balanceBefore:
-          type: string
-          pattern: ^[0-9]+$
-        maxEligibleBalance:
-          type: string
-          pattern: ^[0-9]+$
-        detail:
-          type: string
-      type: object
-      additionalProperties: false
-      required:
-        - funded
-        - amount
-        - senderAddress
-        - maxEligibleBalance
     FeePolicy:
       properties:
         version:
           type: string
         chainConfig:
           properties:
-            marketplacePackageId:
+            foundationPackageId:
+              type: string
+            settlementPackageId:
+              type: string
+            fulfillmentPackageId:
+              type: string
+            opsPackageId:
               type: string
             marketplaceFeeConfigObjectId:
               type: string
@@ -6331,6 +6353,125 @@ components:
             listingDepositConfigObjectId:
               type: string
           type: object
+        controlPlane:
+          properties:
+            listingFee:
+              properties:
+                source:
+                  type: string
+                  enum:
+                    - runtime_env
+                updateMode:
+                  type: string
+                  enum:
+                    - worker_redeploy
+                envKeys:
+                  type: array
+                  items:
+                    type: string
+              type: object
+              required:
+                - source
+                - updateMode
+                - envKeys
+            listingDeposit:
+              properties:
+                source:
+                  type: string
+                  enum:
+                    - onchain_config
+                updateMode:
+                  type: string
+                  enum:
+                    - admin_chain_plan
+                queueRouteId:
+                  type: string
+                approveRouteId:
+                  type: string
+                cancelRouteId:
+                  type: string
+                applyRouteId:
+                  type: string
+              type: object
+              required:
+                - source
+                - updateMode
+                - queueRouteId
+                - approveRouteId
+                - cancelRouteId
+                - applyRouteId
+            reputationInitFee:
+              properties:
+                source:
+                  type: string
+                  enum:
+                    - onchain_config
+                updateMode:
+                  type: string
+                  enum:
+                    - admin_chain_plan
+                queueRouteId:
+                  type: string
+                approveRouteId:
+                  type: string
+                cancelRouteId:
+                  type: string
+                applyRouteId:
+                  type: string
+              type: object
+              required:
+                - source
+                - updateMode
+                - queueRouteId
+                - approveRouteId
+                - cancelRouteId
+                - applyRouteId
+            disputeEconomics:
+              properties:
+                source:
+                  type: string
+                  enum:
+                    - onchain_config
+                updateMode:
+                  type: string
+                  enum:
+                    - admin_chain_plan_partial
+                configObjectId:
+                  type: string
+                packageId:
+                  type: string
+                queueRouteId:
+                  type: string
+                approveRouteId:
+                  type: string
+                cancelRouteId:
+                  type: string
+                applyRouteId:
+                  type: string
+                managedFields:
+                  type: array
+                  items:
+                    type: string
+                readOnlyFields:
+                  type: array
+                  items:
+                    type: string
+              type: object
+              required:
+                - source
+                - updateMode
+                - queueRouteId
+                - approveRouteId
+                - cancelRouteId
+                - applyRouteId
+                - managedFields
+                - readOnlyFields
+          type: object
+          required:
+            - listingFee
+            - listingDeposit
+            - reputationInitFee
+            - disputeEconomics
         escrowFeeBps:
           properties:
             IOTA:
@@ -6478,14 +6619,452 @@ components:
             - maxAmount
             - updateCadenceSec
             - requiredCreatePath
+        disputeEconomics:
+          properties:
+            available:
+              type: boolean
+            configObjectId:
+              type: string
+            packageId:
+              type: string
+            reviewerStake:
+              properties:
+                currency:
+                  type: string
+                  enum:
+                    - IOTA
+                minAmount:
+                  type:
+                    - string
+                    - 'null'
+                  pattern: ^[0-9]+$
+              type: object
+              required:
+                - currency
+                - minAmount
+            disputeBondPerSide:
+              properties:
+                currency:
+                  type: string
+                  enum:
+                    - IOTA
+                minAmount:
+                  type:
+                    - string
+                    - 'null'
+                  pattern: ^[0-9]+$
+                maxAmount:
+                  type:
+                    - string
+                    - 'null'
+                  pattern: ^[0-9]+$
+              type: object
+              required:
+                - currency
+                - minAmount
+                - maxAmount
+            quorumVotes:
+              properties:
+                defaultRequiredVotes:
+                  type:
+                    - integer
+                    - 'null'
+                minRequiredVotes:
+                  type:
+                    - integer
+                    - 'null'
+                maxRequiredVotes:
+                  type:
+                    - integer
+                    - 'null'
+              type: object
+              required:
+                - defaultRequiredVotes
+                - minRequiredVotes
+                - maxRequiredVotes
+            payoutsBps:
+              properties:
+                reviewer:
+                  type:
+                    - integer
+                    - 'null'
+                  minimum: 0
+                  maximum: 10000
+                platformFallback:
+                  type:
+                    - integer
+                    - 'null'
+                  minimum: 0
+                  maximum: 10000
+              type: object
+              required:
+                - reviewer
+                - platformFallback
+            reviewerSlashBps:
+              properties:
+                noshow:
+                  type:
+                    - integer
+                    - 'null'
+                  minimum: 0
+                  maximum: 10000
+                invalidReveal:
+                  type:
+                    - integer
+                    - 'null'
+                  minimum: 0
+                  maximum: 10000
+                overturn:
+                  type:
+                    - integer
+                    - 'null'
+                  minimum: 0
+                  maximum: 10000
+              type: object
+              required:
+                - noshow
+                - invalidReveal
+                - overturn
+            platformFallbackSink:
+              type:
+                - string
+                - 'null'
+            detail:
+              type: string
+          type: object
+          required:
+            - available
+            - reviewerStake
+            - disputeBondPerSide
+            - quorumVotes
+            - payoutsBps
+            - reviewerSlashBps
+            - platformFallbackSink
       type: object
       required:
         - version
         - chainConfig
+        - controlPlane
         - escrowFeeBps
         - listingFee
         - listingDeposit
         - reputationInitFee
+        - disputeEconomics
+    AssetPolicy:
+      properties:
+        version:
+          type: string
+        chainConfig:
+          properties:
+            foundationPackageId:
+              type: string
+            settlementPackageId:
+              type: string
+            fulfillmentPackageId:
+              type: string
+            opsPackageId:
+              type: string
+            governanceConfigObjectId:
+              type: string
+            assetLaneManagerPackageId:
+              type: string
+          type: object
+        controlPlane:
+          properties:
+            assetCatalog:
+              properties:
+                source:
+                  type: string
+                  enum:
+                    - repo_static_catalog
+                updateMode:
+                  type: string
+                  enum:
+                    - code_change
+              type: object
+              required:
+                - source
+                - updateMode
+            runtimeLaneTruth:
+              properties:
+                source:
+                  type: string
+                  enum:
+                    - runtime_overlay
+                updateMode:
+                  type: string
+                  enum:
+                    - worker_redeploy
+                envKeys:
+                  type: array
+                  items:
+                    type: string
+              type: object
+              required:
+                - source
+                - updateMode
+                - envKeys
+            sameAssetPolicy:
+              properties:
+                source:
+                  type: string
+                  enum:
+                    - runtime_overlay
+                updateMode:
+                  type: string
+                  enum:
+                    - worker_redeploy
+                envKeys:
+                  type: array
+                  items:
+                    type: string
+              type: object
+              required:
+                - source
+                - updateMode
+                - envKeys
+            assetManager:
+              properties:
+                source:
+                  type: string
+                  enum:
+                    - mixed
+                updateMode:
+                  type: string
+                  enum:
+                    - partial_onchain_partial_code
+                packageId:
+                  type: string
+                module:
+                  type: string
+                  enum:
+                    - onchain_asset_lane_manager
+                status:
+                  type: string
+                  enum:
+                    - partial
+                controlledLanes:
+                  type: array
+                  items:
+                    type: string
+                remainingFixedLanes:
+                  type: array
+                  items:
+                    type: string
+              type: object
+              required:
+                - source
+                - updateMode
+                - module
+                - status
+                - controlledLanes
+                - remainingFixedLanes
+          type: object
+          required:
+            - assetCatalog
+            - runtimeLaneTruth
+            - sameAssetPolicy
+            - assetManager
+        sponsorPaymentCoins:
+          type: array
+          items:
+            type: string
+        assetLaneTruth:
+          properties:
+            listingCurrency:
+              type: array
+              items:
+                type: string
+            bidCurrency:
+              type: array
+              items:
+                type: string
+            orderCurrency:
+              type: array
+              items:
+                type: string
+            typedOrderEscrowCreate:
+              type: array
+              items:
+                type: string
+            managedStorageFeePrincipal:
+              type: array
+              items:
+                type: string
+            disputeBondPrincipal:
+              type: array
+              items:
+                type: string
+            reviewerStakePrincipal:
+              type: array
+              items:
+                type: string
+            listingDepositPrincipal:
+              type: array
+              items:
+                type: string
+            reputationInitPrincipal:
+              type: array
+              items:
+                type: string
+          type: object
+          required:
+            - listingCurrency
+            - bidCurrency
+            - orderCurrency
+            - typedOrderEscrowCreate
+            - managedStorageFeePrincipal
+            - disputeBondPrincipal
+            - reviewerStakePrincipal
+            - listingDepositPrincipal
+            - reputationInitPrincipal
+        sameAssetPolicy:
+          properties:
+            orderAssetSource:
+              type: string
+              enum:
+                - accepted_bid
+            disputeBond:
+              type: string
+              enum:
+                - disabled
+                - independent
+                - must_match_order_asset
+            managedStorageFee:
+              type: string
+              enum:
+                - disabled
+                - independent
+                - must_match_order_asset
+            legacyBothAllowedSymbols:
+              type: array
+              items:
+                type: string
+          type: object
+          required:
+            - orderAssetSource
+            - disputeBond
+            - managedStorageFee
+            - legacyBothAllowedSymbols
+        liveAssets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetPolicyAssetEntry'
+        experimentalAssets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetPolicyAssetEntry'
+      type: object
+      required:
+        - version
+        - chainConfig
+        - controlPlane
+        - sponsorPaymentCoins
+        - assetLaneTruth
+        - sameAssetPolicy
+        - liveAssets
+        - experimentalAssets
+    AssetPolicyAssetEntry:
+      properties:
+        symbol:
+          type: string
+        displayName:
+          type: string
+        decimals:
+          type: integer
+        fundingMode:
+          type: string
+          enum:
+            - native_gas_split
+            - typed_coin
+        feeMode:
+          type: string
+          enum:
+            - iota_fee_path
+            - generic_zero_fee
+        publicStatus:
+          type: string
+          enum:
+            - live
+            - experimental
+        lanes:
+          properties:
+            listingCurrency:
+              type: boolean
+            bidCurrency:
+              type: boolean
+            orderCurrency:
+              type: boolean
+            typedOrderEscrowCreate:
+              type: boolean
+            managedStorageFee:
+              type: boolean
+            sponsorReserve:
+              type: boolean
+            sponsorExecute:
+              type: boolean
+            disputeBond:
+              type: boolean
+            reviewerStake:
+              type: boolean
+            listingDeposit:
+              type: boolean
+            reputationInit:
+              type: boolean
+            rewardsPayoutAccounting:
+              type: boolean
+            allowLegacyBoth:
+              type: boolean
+          type: object
+          required:
+            - listingCurrency
+            - bidCurrency
+            - orderCurrency
+            - typedOrderEscrowCreate
+            - managedStorageFee
+            - sponsorReserve
+            - sponsorExecute
+            - disputeBond
+            - reviewerStake
+            - listingDeposit
+            - reputationInit
+            - rewardsPayoutAccounting
+            - allowLegacyBoth
+        networks:
+          properties:
+            testnet:
+              $ref: '#/components/schemas/AssetPolicyNetworkFacts'
+            mainnet:
+              $ref: '#/components/schemas/AssetPolicyNetworkFacts'
+          type: object
+          required:
+            - testnet
+            - mainnet
+      type: object
+      required:
+        - symbol
+        - displayName
+        - decimals
+        - fundingMode
+        - feeMode
+        - publicStatus
+        - lanes
+        - networks
+    AssetPolicyNetworkFacts:
+      properties:
+        packageId:
+          type: string
+        typeTag:
+          type: string
+        proofStatus:
+          type: string
+          enum:
+            - none
+            - testnet_green
+            - mainnet_green
+      type: object
+      required:
+        - proofStatus
     RankingPolicy:
       properties:
         version:

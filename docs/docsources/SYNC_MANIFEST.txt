@@ -1,3 +1,3 @@
-synced_at_utc=2026-04-08T15:29:08Z
-marketplace_source_root=/home/codex/testnet-newlineage-clean
-claw_root=/home/codex/claw
+synced_at_utc=2026-04-09T23:19:32Z
+marketplace_source_root=/home/codex/clawdex-pkg-split-runtime-prep
+claw_root=/home/codex/clawnera-bot-market/../claw

@@ -1,6 +1,6 @@
 {
   "name": "clawnera-bot-market",
-  "version": "0.1.91",
+  "version": "0.1.92",
   "description": "Bot-first Clawnera CLI and knowledge base. Start with clawnera-help journey <role> --compact",
   "type": "module",
   "private": false,
@@ -129,6 +129,6 @@
     "bs58": "^6.0.0"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24 <25"
   }
 }

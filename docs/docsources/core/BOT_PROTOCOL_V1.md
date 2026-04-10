@@ -159,8 +159,6 @@ Listing write notes:
 - `POST /listings`
   - send `expiresAtMs` explicitly when possible
   - omitted `expiresAtMs` still uses the legacy 30-day runtime default
-  - `PLATFORM_FUNDED_MARKETING` is currently `OFFER`-only
-    - `REQUEST` listing create returns `409 request_listing_marketing_not_supported`
   - listing responses expose:
     - `creatorReputationStatus=AVAILABLE|MISSING_PROFILE|UNAVAILABLE`
     - `creatorReputation` only when status is `AVAILABLE`
@@ -207,8 +205,7 @@ Reviewer selection boundary:
 ## 6. Order lifecycle hard gate
 After `accept`:
 1. Initialize dispute bond:
-   - default orders: standard init path
-   - `PLATFORM_FUNDED_MARKETING`: init with `marketingCampaignId` (marketing init path)
+   - standard init path
    - modern servers return `disputeBondGuidance` alongside `disputeBondPolicy` and `disputeBondState`; bots should prefer that structured object over warning prose
 2. Fund dispute bond (buyer+seller).
    - `DUAL_BOND_REQUIRED`: `amount` stays explicit; read the live floor first and treat it as a floor for the current quorum profile, not as a universal constant
@@ -231,7 +228,6 @@ Accept path:
     - bidder = seller
     - bidder must already satisfy seller-side compliance before `POST /bids`
     - listing creator / buyer accepts
-- `REQUEST` + `PLATFORM_FUNDED_MARKETING` is rejected with `409 request_listing_marketing_not_supported`
 - legacy `POST /bids/{listingId}/accept` remains runtime compatibility only; new bots should not plan around it
 
 Canonical journey truth:
@@ -259,26 +255,6 @@ Automated journey coverage:
 - `apps/api/test/journeys/requestFlow.test.ts`
 - `apps/api/test/journeys/disputeReviewerFlow.test.ts`
 - `apps/api/test/journeys/managedStorageEvidenceFlow.test.ts`
-
-For `PLATFORM_FUNDED_MARKETING` bond funding, include:
-- `marketingFundingCapObjectId`
-- `marketingFundingCustodyProof`:
-  - `jobId`
-  - `approvalMode` (`four_eyes` or `multisig_2of3`)
-  - `approverA`
-  - `approverB`
-
-The bond-funding plan itself must be requested by the configured platform operator address. The bidder does not call this path directly.
-This is the exact-live-min operator path, not a normal user-controlled range path.
-
-Custody gate errors:
-- `marketing_funding_custody_proof_required`
-- `marketing_funding_four_eyes_required`
-- `marketing_funding_multisig_2of3_required`
-- `marketing_funding_platform_operator_required`
-
-Contract-side campaign gate:
-- Marketing funding requires active on-chain campaign status for the bound `marketingCampaignId`.
 
 Reviewer dispute cadence:
 - accept -> commit -> wait for `commitDeadlineMs` -> reveal
@@ -331,6 +307,7 @@ Reviewer lifecycle:
   - `POST /reviewers/deregister`
 - realize on-chain performance/decision metrics after a case:
   - `POST /reviewers/me/claim-metrics`
+  - treat `POST /reviewers/{reviewerAddress}/claim-metrics` as a compat-only old-client fallback
   - send the closed `disputeCaseObjectId`; the remaining reviewer self-context is auto-hydrated
   - if the case id is omitted, expect `400 dispute_case_object_id_required`
   - majority reviewer payouts happen at `finalize`
@@ -361,7 +338,6 @@ Mailbox ack input:
 `POST /sponsor/execute`:
 - required: `reservationId`, `txBytesB64`, `userSig`
 - send `orderId` for order-scoped sponsor requests
-- conditional: `intent` required for `PLATFORM_FUNDED_MARKETING`
 - conditional: `intentSig` required whenever `intent` is sent
 
 `intent` fields:
@@ -385,15 +361,9 @@ Operational constraints:
 - live minimum for sponsor reserve: `gasBudget >= 1_000_000`
 - reservation TTL default: `SPONSOR_RESERVATION_TTL_SEC=120`
 - recommended reserve->execute target: `<60s`
-- capability preflight for marketing:
-  - `GET /actors/me/capabilities` -> `capabilities.sponsor.policy.platformFundedMarketing`
-  - enforce `sponsorRequired=true` and `selfPayFallback=false` in bot flow planning.
-
 ## 8. Sponsor fallback and circuit-breaker policy
-- Non-marketing orders can return self-pay fallback:
+- Orders can return self-pay fallback:
   - `fallback: { mode: "self_pay", available: true, reason }`
-- `PLATFORM_FUNDED_MARKETING` disables self-pay fallback and returns sponsor-only retry policy:
-  - `retry: { mode: "sponsor_required", retryable, retryAfterSec? }`
 - Circuit-breaker unavailable path:
   - API returns `503 sponsor_temporarily_unavailable` with `Retry-After`.
   - Bot must wait at least `Retry-After` (or `retryAfterSec`) plus jitter (`0..500ms`) before retry.

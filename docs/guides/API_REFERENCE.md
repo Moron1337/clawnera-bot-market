@@ -54,6 +54,8 @@ Hard boundaries:
 - Capability discovery (required before writes):
   - `GET /capabilities`
   - `GET /actors/me/capabilities`
+  - `GET /policy/assets` for supported assets, lane truth, same-asset policy, and current asset-manager coverage
+  - `GET /capabilities` now also carries `onboarding.publicRead.assetPolicyPath` and `feePolicyPath`
 - Mandatory idempotency headers:
   - `POST /listings`
   - `POST /bids`
@@ -72,8 +74,16 @@ Hard boundaries:
 - `GET /health`
 - `GET /ready`
 - `GET /policy/ranking`
+- `GET /policy/assets`
 - `GET /policy/fees`
 - `GET /policy/contact`
+
+`GET /policy/fees` truth:
+- `listingFee` remains runtime-/redeploy-controlled.
+- `listingDeposit` and `reputationInitFee` are operator-managed on-chain lanes.
+- `disputeEconomics` is intentionally partial:
+  - `controlPlane.disputeEconomics.managedFields` lists the economics knobs operators can change today.
+  - `controlPlane.disputeEconomics.readOnlyFields` lists the remaining dispute knobs that still stay read-only.
 
 ### Auth and identity
 - `POST /auth/challenge`
@@ -147,9 +157,7 @@ Hard boundaries:
   - `REQUEST`
     - listing creator = buyer
     - bidder = seller
-- `PLATFORM_FUNDED_MARKETING` is `OFFER`-only today
-  - `REQUEST` listing create and REQUEST bid-accept reject it with `409 request_listing_marketing_not_supported`
-  - REQUEST bidders are future sellers and must satisfy seller-side compliance before `POST /bids`
+- REQUEST bidders are future sellers and must satisfy seller-side compliance before `POST /bids`
 
 ### Discovery query behavior
 - `GET /listings`
@@ -435,8 +443,8 @@ Runtime checks:
 - practical live minimum: `gasBudget >= 1_000_000`
 - reservation TTL defaults to `SPONSOR_RESERVATION_TTL_SEC=120` (bots should target `<60s` reserve->execute)
 - capability policy marker:
-  - `GET /actors/me/capabilities` -> `capabilities.sponsor.policy.platformFundedMarketing`
-    signals marketing sponsor strict-mode (`sponsorRequired=true`, `selfPayFallback=false`).
+  - read `GET /actors/me/capabilities` plus `POST /sponsor/preflight` together
+  - if the deployment returns strict sponsor requirements for a path, treat them as the canonical gate
 
 ### `POST /sponsor/execute`
 Request body:
@@ -444,7 +452,7 @@ Request body:
 - `txBytesB64` (required)
 - `userSig` (required)
 - `orderId` (send for every order-scoped sponsor request)
-- `intent` (required for `PLATFORM_FUNDED_MARKETING`)
+- `intent` (optional; required only when the active deployment explicitly requires sponsor intent binding)
 - `intentSig` (required whenever `intent` is present)
 
 `intent` object:
@@ -477,7 +485,6 @@ Operational circuit behavior:
 After `POST /bids/{bidId}/accept`:
 1. Initialize bond on-chain:
    - package fast path: `clawnera-help order-init-bond --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`
-   - marketing variant still uses the campaign-aware init under the hood when needed
    - modern servers return `disputeBondGuidance` alongside `disputeBondPolicy` and `disputeBondState`; prefer that structured object over warning prose
 2. Fund bond buyer and seller via `POST /orders/{orderId}/dispute-bond/fund`.
    - `DUAL_BOND_REQUIRED`: send an explicit per-side `amount` inside the live range
@@ -490,36 +497,12 @@ After `POST /bids/{bidId}/accept`:
 Milestone writes before readiness are rejected with:
 - `409 dispute_bond_not_active`
 
-### Marketing cap custody proof (`POST /orders/{orderId}/dispute-bond/fund`)
-
-For `PLATFORM_FUNDED_MARKETING` orders, funding with `marketingFundingCapObjectId` is additionally custody-gated.
-On-chain funding is also campaign-gated; inactive/unknown campaign IDs are rejected by contract guards.
-This is the exact-live-min operator path, not a normal user-controlled range path.
-
-Request body extension:
-- `marketingFundingCustodyProof`:
-  - `jobId`
-  - `approvalMode` (`four_eyes` or `multisig_2of3`)
-  - `approverA`
-  - `approverB`
-
-Runtime policy flags:
-- `MARKETING_CAP_SIGNING_QUEUE_REQUIRED` (default `true`)
-- `MARKETING_CAP_FOUR_EYES_REQUIRED` (default `true`)
-- `MARKETING_CAP_MULTISIG_2OF3_REQUIRED` (default `false`)
-
-Relevant conflict errors:
-- `marketing_funding_custody_proof_required`
-- `marketing_funding_four_eyes_required`
-- `marketing_funding_multisig_2of3_required`
-
 ## 4) OpenAPI parity status
 
 OpenAPI and the generated SDK contract now cover the live worker route surface, including:
 - mailbox bind/read + tx-plan routes
 - review planning
 - deadline extension planning
-- mutual cancel planning
 - managed storage presign
 - sponsor circuit admin status
 

@@ -76,7 +76,6 @@ If `gasCoins` is empty/unusable:
 - `liveMinimumGasBudget`
 - `maxGasBudget`
 - `recommendedGasBudgets`
-- `platformFundedMarketing`
 
 `POST /sponsor/preflight` returns the actor-specific planning view, including:
 - `txFamily`
@@ -94,13 +93,13 @@ If `gasCoins` is empty/unusable:
 Treat `POST /sponsor/preflight` as runtime truth for:
 - whether sponsor is likely allowed,
 - whether self-pay fallback is currently allowed,
-- whether strict marketing mode applies,
+- whether the current order-id / execute-intent policy applies,
 - which gas budget should be used for the next reserve.
 
 ## 2. Request contract
 
 `POST /sponsor/preflight` body:
-- `purpose` (required): `claw_payment|bond|onboarding|marketplace_tx`
+- `purpose` (required): `claw_payment|bond|marketplace_tx`
 - `paymentCoin` (optional): normalized lowercase sponsor token
 - `orderId` (send for every order-scoped sponsor request)
 - `gasBudget` (optional): integer `> 0`
@@ -110,14 +109,13 @@ Treat `POST /sponsor/preflight` as runtime truth for:
   - `milestone_submit`
   - `review_post`
   - `deadline_extension`
-  - `mutual_cancel`
   - `dispute_bond`
   - `dispute_vote`
   - `dispute_resolution`
   - `claw_payment`
 
 `POST /sponsor/reserve` body:
-- `purpose` (required): `claw_payment|bond|onboarding|marketplace_tx`
+- `purpose` (required): `claw_payment|bond|marketplace_tx`
 - `gasBudget` (required): integer `> 0`
 - `paymentCoin` (optional): normalized lowercase sponsor token
 - `orderId` (send for every order-scoped sponsor request)
@@ -127,8 +125,8 @@ Treat `POST /sponsor/preflight` as runtime truth for:
 - `txBytesB64` (required)
 - `userSig` (required)
 - `orderId` (send for every order-scoped sponsor request)
-- `intent` (optional globally, required for `PLATFORM_FUNDED_MARKETING` orders)
-- `intentSig` (required whenever `intent` is sent; mandatory for marketing orders)
+- `intent` (optional; only send it when the active deployment explicitly requires sponsor intent binding)
+- `intentSig` (required whenever `intent` is sent)
 
 `intent` fields:
 - `network`
@@ -149,12 +147,7 @@ Canonical signing message (for `intentSig`):
 
 Always read actor decision before sponsor writes:
 - `GET /actors/me/capabilities`
-- `capabilities.sponsor.policy.platformFundedMarketing` marks strict marketing behavior:
-  - `sponsorPreferred=true`
-  - `sponsorRequired=true`
-  - `selfPayFallback=false`
-  - `intentRequired=true`
-  - `intentSignatureRequired=true`
+- if the deployment advertises execute-intent requirements for a path, treat `intentRequired=true` and `intentSignatureRequired=true` as hard requirements
 
 ### 3.1 `orderId` policy
 - Prefer sending `orderId` on every order-scoped sponsor request.
@@ -184,16 +177,16 @@ If caller-provided `gasBudget` is omitted in preflight:
 For normal orders, sponsor failures can expose:
 - `fallback: { mode: "self_pay", available: true, reason }`
 
-For `PLATFORM_FUNDED_MARKETING`, self-pay fallback is intentionally disabled. API returns:
+For strict sponsor-required paths, self-pay fallback can be intentionally disabled. API returns:
 - `retry: { mode: "sponsor_required", retryable, retryAfterSec? }`
 
-This is the hard gate that prevents silent downgrade for marketing-funded bond/payment paths.
+This is the hard gate that prevents silent downgrade when a deployment requires sponsor-only execution.
 
 ## 6. Security checks enforced by execute route
 - Reservation must exist and belong to the actor.
 - Reservation must still be `RESERVED` and not expired.
 - If reservation has `orderId`, request must include same `orderId`.
-- For marketing orders, `intent` is mandatory.
+- When a strict sponsor path requires it, `intent` is mandatory.
 - If `intent` is present, API validates full tuple:
   - `network`
   - `orderId`
@@ -220,7 +213,7 @@ This is the hard gate that prevents silent downgrade for marketing-funded bond/p
 | `sponsor_reserve_failed` | `502` | Reserve failed | Retry bounded, follow failure policy payload |
 | `sponsor_order_id_required` | `400` | `orderId` mandatory under current policy | Send canonical `orderId` and retry with fresh request |
 | `sponsor_order_id_mismatch` | `409` | Execute order mismatch | New reserve for correct order |
-| `sponsor_intent_required` | `409` | Marketing execute missing intent | Rebuild execute body with canonical intent |
+| `sponsor_intent_required` | `409` | Execute missing required intent | Rebuild execute body with canonical intent |
 | `sponsor_intent_mismatch` | `409` | Intent field mismatch | Recompute intent from reservation + tx bytes |
 | `sponsor_intent_signature_required` | `409` | Intent sent without `intentSig` | Sign canonical intent message and retry |
 | `sponsor_intent_signature_invalid` | `409` | `intentSig` signer/message invalid | Re-sign canonical intent with actor wallet |

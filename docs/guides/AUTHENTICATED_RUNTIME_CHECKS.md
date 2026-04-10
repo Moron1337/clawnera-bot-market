@@ -147,7 +147,7 @@ Das prueft:
 - JWT ist fuer den Actor gueltig
 - `/sponsor/preflight` ist erreichbar
 - die Runtime liefert Strategie, Diagnostics und Gas-Empfehlungen
-- strict marketing mode vs. self-pay fallback ist klar
+- order-id- und eventuelle execute-intent-Policy ist klar
 - `minimumGasBudget` und `recommendedGasBudget` sind ohne echte Reservation sichtbar
 
 Aktuelle Production-Truth:

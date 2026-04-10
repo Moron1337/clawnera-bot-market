@@ -116,6 +116,16 @@ Runtime `public`:
 - `approve_pending_iota_fee_update`
 - `cancel_pending_iota_fee_update`
 - `apply_iota_fee_update`
+- `create_escrow_iota`
+- `create_escrow_coin<T>`
+- `create_escrow_claw`
+- `release<T>`
+- `open_dispute<T>`
+- `claim_after_deadline<T>`
+- `resolve_dispute_to_seller<T>`
+- `resolve_dispute_to_buyer<T>`
+- `resolve_dispute_after_timeout_to_seller<T>`
+- `resolve_dispute_after_timeout_split<T>`
 - `iota_fee_bps`
 - `iota_fee_recipient`
 - `fee_timelock_ms`
@@ -158,6 +168,85 @@ Runtime `private`:
 - `destroy_fee_config_for_testing`
 - `destroy_for_testing<T>`
 
+### deadline_ext.move
+Runtime `public entry`:
+- `propose_extension_guarded`
+- `accept_extension_with_escrow_guarded`
+- `reject_extension`
+- `expire_extension`
+- `delete_settled_extension`
+
+Runtime `public`:
+- none
+
+Runtime `public(package)`:
+- none
+
+Runtime `private`:
+- `init`
+- `extension_count_for_escrow`
+- `has_pending_extension`
+- `clear_pending_extension_or_abort`
+- `set_extension_count`
+- `accept_extension_with_escrow_internal<T>`
+
+`#[test_only]`:
+- `assert_non_empty_with_max`
+- `propose_extension_internal`
+- `init_for_testing`
+- `extension_count_for_escrow_for_testing`
+- `has_pending_extension_for_testing`
+- `propose_extension_for_testing`
+- `accept_extension_for_testing`
+- `accept_extension_with_escrow_for_testing<T>`
+- `destroy_for_testing`
+
+### onchain_asset_lane_manager.move
+Runtime `public`:
+- none
+
+Runtime `public(package)`:
+- `is_claw_order_typed_asset`
+- `is_usdx_order_typed_asset`
+- `is_supported_order_typed_non_iota_asset`
+- `supported_order_typed_non_iota_asset_bytes`
+- `matches_supported_order_typed_non_iota_asset_bytes`
+- `same_supported_order_typed_non_iota_asset`
+- `is_supported_dispute_bond_typed_non_iota_asset`
+- `supported_dispute_bond_typed_non_iota_asset_bytes`
+
+Runtime `private`:
+- `exact_type_bytes`
+- `matches_exact_type<T>`
+
+### order_payment_assets.move
+Runtime `public`:
+- none
+
+Runtime `public(package)`:
+- `is_supported_order_payment_iota_type`
+- `is_supported_order_payment_claw_coin_type`
+- `is_supported_order_payment_usdx_coin_type`
+- `is_supported_order_payment_typed_coin_type`
+
+Runtime `private`:
+- `is_supported_experimental_order_payment_typed_coin_type<T>`
+
+### payment_assets.move
+Runtime `public`:
+- none
+
+Runtime `public(package)`:
+- `is_iota_type`
+- `is_claw_coin_type`
+- `is_supported_order_typed_coin_type`
+- `is_supported_dispute_bond_typed_coin_type`
+- `is_supported_reviewer_stake_typed_coin_type`
+- `typed_order_payment_matches_dispute_bond_asset`
+
+Runtime `private`:
+- none
+
 ### listing_deposit.move
 Runtime `public entry`:
 - `create_listing_deposit_iota_entry`
@@ -187,6 +276,9 @@ Runtime `public`:
 - `pending_partial_refund_bps`
 - `pending_forfeit_sink`
 - `pending_treasury_approved`
+
+Runtime `public(package)`:
+- `refund_listing_deposit_owner_cancel_and_unbind`
 
 Runtime `private`:
 - `assert_valid_config`
@@ -373,13 +465,16 @@ Runtime `public`:
 - `FEE-10` New escrow before apply uses old fee, after apply uses new fee.
 
 ### C) Escrow Lifecycle (`escrow`)
-Historisch auf der fresh lineage entfernt.
 
-- Aktive Runtime-Lifecycle-Coverage liegt jetzt in:
-  - `order_escrow_tests`
-  - `milestone_escrow_tests`
-  - `dispute_quorum_tests`
-- `escrow.move` ist auf Fee-Config-/Governance-Host reduziert.
+- `ESC-01` `create_escrow_iota` happy path with fee computed from config.
+- `ESC-02` `create_escrow_coin<T>` happy path for non-IOTA coin.
+- `ESC-03` `create_escrow_claw` happy path.
+- `ESC-04` `create_escrow_coin<IOTA>` => abort `E_IOTA_REQUIRES_FEE_PATH`.
+- `ESC-05` amount 0 => abort `E_INVALID_AMOUNT`.
+- `ESC-06` `buyer != sender` => abort `E_NOT_AUTHORIZED`.
+- `ESC-07` `buyer == seller` => abort `E_SELF_DEAL_NOT_ALLOWED`.
+- `ESC-08` `deadline <= now` => abort `E_INVALID_DEADLINE`.
+- `ESC-09` Buyer releases in `CREATED` => state `RELEASED`, payout seller (+ fee if any).
 - `ESC-10` Release by non-buyer => abort `E_NOT_AUTHORIZED`.
 - `ESC-11` Release in non-`CREATED` => abort `E_INVALID_STATE`.
 - `ESC-12` Seller claim before deadline => abort `E_DEADLINE_NOT_REACHED`.
@@ -520,7 +615,7 @@ Historisch auf der fresh lineage entfernt.
 - `TIME-01` Fee-Apply exakt bei `now == pending_fee_effective_at_ms` => **muss** deterministisch sein (definiert als OK oder Abort, aber konsistent dokumentiert).
 - `TIME-02` Cap-Rotation Apply exakt bei `now == queued_at + timelock` => deterministisches Verhalten.
 - `TIME-03` Listing-Deposit Policy Apply exakt bei `now == pending_effective_at_ms` => deterministisches Verhalten.
-- `TIME-04` Order/Milestone Escrow: Deadline-/Dispute-Boundaries bleiben in den aktiven order-/milestone-scoped Modulen explizit getestet.
+- `TIME-04` Escrow: `claim_after_deadline` bei `now == deadline_ms` (Boundary) + `open_dispute` bei `now == deadline_ms` => klare, getestete Semantik.
 
 #### K3) Governance / Emergency Rotation Abuse-Tests (Design-Check)
 - `GOV-17` Emergency Rotation darf **nicht** als „Timelock/2nd-Approver Bypass“ missbraucht werden.

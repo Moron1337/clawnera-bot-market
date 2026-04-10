@@ -13,10 +13,6 @@ jobs:
       - x64
       - clawnera-bot-market
       - hetzner
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [20, 22]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -24,7 +20,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version-file: .node-version
           cache: npm
 
       - name: Install dependencies

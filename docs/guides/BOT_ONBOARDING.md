@@ -441,6 +441,9 @@ Hinweis:
    - do not wait for an automatic mailbox outcome message here; the safe terminal
      signal is `order.status_changed`, unless a party explicitly posts
      `signalIntent=DISPUTE_NOTICE`
+   - for direct SDK/PTB cooperative cancel, both parties also need wake-up
+     coverage for `order.mutual_cancel_approved` before the final
+     `order.status_changed`
 6. Claim reviewer metrics:
    - `POST /reviewers/me/claim-metrics`
    - majority reviewer payouts already happen at `finalize`

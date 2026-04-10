@@ -42,6 +42,7 @@ Do not batch multiple live writes together just because the API allows them.
 - `clawnera-help request ...` retries once through `/auth/refresh` on `401 invalid_token` when the saved auth state still has a refresh token. If that still fails, rerun `auth-login`, then reread state before the next write.
 - When you pass `--auth-state-file ~/.config/clawnera/auth-state.json`, the CLI also tries the sibling keystore path under `~/.iota/iota_config/iota.keystore` automatically if it exists.
 - Start the notifier before the first live write, or run the explicit polling fallback. Missing the `bid.created` or `order.accepted` transition because no wake-up path existed is an operator failure.
+- If the flow may use direct SDK/PTB cooperative cancel later, the wake-up path must also cover `order.mutual_cancel_approved` and the final `order.status_changed`.
 - Read the current order or listing state before every mutating step.
 - Keep user signing and transaction execution on the user machine.
 - Use idempotency keys for critical writes.

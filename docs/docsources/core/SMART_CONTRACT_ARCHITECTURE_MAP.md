@@ -439,6 +439,8 @@ Runtime counts exclude `*_for_testing` and all functions directly marked `#[test
     - `claim_after_deadline`
     - `approve_mutual_cancel`
     - `mutual_cancel`
+    - `approve_mutual_cancel` emits a bounded coordination signal that the runtime projects as `order.mutual_cancel_approved`
+    - `mutual_cancel` settles to buyer and ends on the same actor-visible completion lane as other escrow release paths (`order.status_changed`)
   - dispute-aware settlement:
     - `open_dispute_guarded`
     - `release_with_dispute_bond`

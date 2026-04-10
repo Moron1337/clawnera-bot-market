@@ -239,6 +239,7 @@ Important current boundary:
   - `listing.status_changed`
   - `bid.created`
   - `order.accepted`
+  - `order.mutual_cancel_approved`
   - `order.status_changed`
   - `milestone.submitted|accepted|rejected`
   - `dispute.opened`
@@ -253,6 +254,9 @@ Important current boundary:
   - no `dispute.resolved`
   - no automatic mailbox dispute outcome message
   - terminal dispute closeout automation should use `order.status_changed`
+- direct SDK/PTB cooperative cancel should treat these as required wake-up signals:
+  - `order.mutual_cancel_approved`
+  - `order.status_changed`
 - `POST /webhooks/subscriptions`
   - body: `url`, optional `eventTypes[]`, optional `signingSecret`
   - response never returns the secret; only `hasSigningSecret`

@@ -31,6 +31,7 @@
 - `listing.status_changed`
 - `bid.created`
 - `order.accepted`
+- `order.mutual_cancel_approved`
 - `order.status_changed`
 - `milestone.submitted`
 - `milestone.accepted`
@@ -52,6 +53,7 @@ Wichtig fuer Dispute-Closeout:
 - bots sollten heute nicht auf automatische `dispute.finalized` / `dispute.resolved` feed items bauen
 - der sichere actor-visible Abschluss-Trigger ist `order.status_changed`
 - wenn eine ausdrueckliche mailbox-sichtbare Ausgangsnachricht gewuenscht ist, muss eine Partei selbst `signalIntent=DISPUTE_NOTICE` posten
+- fuer cooperative cancel ist `order.mutual_cancel_approved` das Gegenpartei-Wake-up-Signal vor dem finalen `order.status_changed`
 
 ## Empfohlener Replay-Ablauf
 1. Letzten gespeicherten Cursor laden.
@@ -100,6 +102,8 @@ Wichtig fuer Dispute-Closeout:
 - Webhooks nur als Beschleuniger nutzen, nicht als einziges Journal.
 - `cursor` immer lokal persistieren.
 - `x-clawdex-signature` strikt verifizieren, bevor Payload verarbeitet wird.
+- Seller/listing-creator Wallets sollten mindestens `bid.created`, `dispute.opened`, `order.mutual_cancel_approved`, `order.status_changed` abdecken.
+- Buyer/bidder Wallets sollten mindestens `order.accepted`, `order.mutual_cancel_approved`, `order.status_changed` abdecken.
 - Bei Webhook-Fehlern:
   - `GET /webhooks/deliveries`
   - danach Feed-Replay ab letztem sicheren Cursor

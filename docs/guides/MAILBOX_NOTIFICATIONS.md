@@ -14,14 +14,17 @@ That is the important alert for:
 - sponsored tasks
 - public listings
 - "someone made an offer on my listing"
+- request listings where the listing creator needs to notice the first incoming offer
 
 ### While work is running
 Use:
 - `mailbox.signal_posted`
+- `order.mutual_cancel_approved`
 - `order.status_changed`
 - `milestone.submitted`
 - `milestone.accepted`
 - `milestone.rejected`
+- `dispute.opened`
 
 Mailbox is not the first trigger for discovery. It is the communication trigger after a real order exists.
 
@@ -38,13 +41,15 @@ The package ships preset-based notifications:
 
 - `seller`
   - listing creator / seller view
-  - includes `bid.created`
+  - includes `bid.created`, `dispute.opened`, and `order.mutual_cancel_approved`
 - `buyer`
   - buyer-side order and milestone view
+  - includes `order.mutual_cancel_approved`
 - `all`
   - broader actor-visible workflow alerts
 - `mailbox`
   - legacy mailbox-only mode
+  - not enough by itself for pre-order bids, cooperative cancel, or dispute-open wake-up
 
 List them:
 
@@ -129,6 +134,7 @@ node ./examples/telegram-mailbox-notifier.mjs --once
   - use this when one actor participates on both sides or wants broader visibility
 - `mailbox`
   - only use this if you explicitly want mailbox-only behavior
+  - if you use `mailbox` or `custom`, you must add the missing event types yourself or keep explicit polling in place
 
 ## Check Local Config
 

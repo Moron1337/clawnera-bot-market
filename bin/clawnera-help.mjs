@@ -3723,6 +3723,7 @@ function notificationsUsageLines() {
     "- Passing --event-types without --preset uses custom-only events; --preset custom is also supported explicitly",
     "- List presets: clawnera-help notifications presets",
     "- Check local config: clawnera-help notifications doctor",
+    "- Seller/buyer/all presets are the canonical wake-up coverage; mailbox/custom require explicit equivalent event types or polling.",
     "- Runtime auth precedence: valid CLAWNERA_API_JWT wins; invalid env auth fails unless CLAWNERA_NOTIFY_ALLOW_AUTH_STATE_FALLBACK=1 is set",
     "- Default preset: seller",
     "- Default files:",
@@ -4633,8 +4634,9 @@ function runWalletInbox(commandArgs) {
     telegramInitCommand: telegramCommandParts.join(" "),
     pollingCommands,
     notes: [
-      "Every wallet should choose a wake-up path before the first live write, including bidder-only wallets that need to notice `order.accepted`.",
+      "Every wallet should choose a wake-up path before the first live write, including listing creators waiting for `bid.created` and bidder-only wallets that need to notice `order.accepted`.",
       "Pre-order wake-up signals come from actor-visible events and webhooks, not from the on-chain order mailbox.",
+      "Direct SDK/PTB mutual cancel needs `order.mutual_cancel_approved` plus `order.status_changed` on both sides, or explicit polling that covers the same transitions.",
       "The on-chain order mailbox stays order-scoped and starts after order accept."
     ]
   };

@@ -403,6 +403,7 @@ Feed:
   - `listing.status_changed`
   - `bid.created`
   - `order.accepted`
+  - `order.mutual_cancel_approved`
   - `order.status_changed`
   - `milestone.submitted|accepted|rejected`
   - `dispute.opened`
@@ -418,6 +419,9 @@ Feed:
   - no automatic mailbox dispute outcome message
   - use `order.status_changed` as the terminal dispute closeout signal after settlement
   - `sponsor.executed`
+- direct SDK/PTB cooperative cancel should treat these as required wake-up signals:
+  - `order.mutual_cancel_approved`
+  - `order.status_changed`
 
 Webhooks:
 - create: `POST /webhooks/subscriptions`

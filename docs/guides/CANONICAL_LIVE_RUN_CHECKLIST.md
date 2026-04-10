@@ -63,6 +63,7 @@ Before the first live write, do all of this:
 5. if using Telegram, run:
    - `clawnera-help notifications doctor`
 6. if using Telegram, keep the notifier running before the first real listing or bid write
+7. if the run may later use direct SDK/PTB cooperative cancel, ensure the wake-up path also covers `order.mutual_cancel_approved` and the final `order.status_changed`
 
 If neither notifications nor explicit polling is set up, the run is operationally incomplete.
 

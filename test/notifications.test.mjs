@@ -16,6 +16,8 @@ test("seller preset includes bid notifications", () => {
   const resolved = resolveNotificationEventTypes({ preset: "seller" });
   assert.equal(resolved.preset, "seller");
   assert.ok(resolved.eventTypes.includes("bid.created"));
+  assert.ok(resolved.eventTypes.includes("dispute.opened"));
+  assert.ok(resolved.eventTypes.includes("order.mutual_cancel_approved"));
   assert.ok(resolved.eventTypes.includes("mailbox.signal_posted"));
 });
 
@@ -224,4 +226,21 @@ test("order accepted notifications explain the next deposit step for dual-bond o
   assert.match(text, /orderId: 19b441a1-5a96-421c-b320-50a1a7e93804/);
   assert.match(text, /listingId: 768d326c-13df-4f66-a9ef-b96a44c0afab/);
   assert.match(text, /status: AWAITING_DEPOSITS/);
+});
+
+test("mutual cancel approval notifications stay actor-readable", () => {
+  const text = formatNotificationEventForTelegram({
+    eventType: "order.mutual_cancel_approved",
+    payloadJson: {
+      orderId: "19b441a1-5a96-421c-b320-50a1a7e93804",
+      actor: "seller",
+      escrowObjectId: "0x1234"
+    }
+  });
+
+  assert.match(text, /^Clawnera mutual cancel/m);
+  assert.match(text, /One party approved cooperative cancellation\./);
+  assert.match(text, /orderId: 19b441a1-5a96-421c-b320-50a1a7e93804/);
+  assert.match(text, /actor: seller/);
+  assert.match(text, /escrowObjectId: 0x1234/);
 });

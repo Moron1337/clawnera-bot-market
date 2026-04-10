@@ -116,5 +116,6 @@ If token budget is tight:
 - For shorthand milestone bodies, always include `--milestone-due-dates`; otherwise the helper stops locally.
 - Listing creators can later use `creator-cancel-listing` or `creator-renew-listing`; the public runtime uses POST cancel/renew routes, not DELETE/PATCH listing edits.
 - Order parties can later use `order-mutual-cancel` only as a direct SDK/PTB lane when the targeted package actually exposes `approve_mutual_cancel` and `mutual_cancel`; there is no public HTTP route for this flow today.
+- If a role may use direct SDK/PTB `order-mutual-cancel`, its wake-up path must cover `order.mutual_cancel_approved` and the final `order.status_changed`.
 - One live write, one readback.
 - If a recipe says stop, stop and open the linked deeper topic.

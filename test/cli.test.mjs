@@ -1335,8 +1335,15 @@ test("notifications presets json output is parseable", () => {
   const allPreset = payload.presets.find((preset) => preset.id === "all");
   assert.ok(buyerPreset);
   assert.ok(allPreset);
+  const sellerPreset = payload.presets.find((preset) => preset.id === "seller");
+  assert.ok(sellerPreset);
+  assert.ok(sellerPreset.eventTypes.includes("bid.created"));
+  assert.ok(sellerPreset.eventTypes.includes("dispute.opened"));
+  assert.ok(sellerPreset.eventTypes.includes("order.mutual_cancel_approved"));
   assert.ok(buyerPreset.eventTypes.includes("order.status_changed"));
+  assert.ok(buyerPreset.eventTypes.includes("order.mutual_cancel_approved"));
   assert.ok(allPreset.eventTypes.includes("order.status_changed"));
+  assert.ok(allPreset.eventTypes.includes("order.mutual_cancel_approved"));
   assert.equal(buyerPreset.eventTypes.includes("dispute.finalized"), false);
   assert.equal(buyerPreset.eventTypes.includes("dispute.resolved"), false);
   assert.equal(allPreset.eventTypes.includes("dispute.finalized"), false);
@@ -1368,12 +1375,15 @@ test("wallet inbox json output is parseable", () => {
   assert.equal(payload.preset, "all");
   assert.ok(Array.isArray(payload.eventTypes));
   assert.ok(payload.eventTypes.includes("bid.created"));
+  assert.ok(payload.eventTypes.includes("dispute.opened"));
   assert.ok(payload.eventTypes.includes("order.accepted"));
+  assert.ok(payload.eventTypes.includes("order.mutual_cancel_approved"));
   assert.match(payload.eventFeedPath, /^\/events\?scope=all&type=/);
   assert.match(payload.telegramInitCommand, /notifications init telegram/);
   assert.ok(Array.isArray(payload.pollingCommands));
   assert.ok(payload.pollingCommands.some((line) => line.includes("/listings/{listingId}/bids")));
   assert.ok(payload.pollingCommands.some((line) => line.includes("/orders?role=buyer")));
+  assert.ok(payload.notes.some((line) => line.includes("order.mutual_cancel_approved")));
 });
 
 test("wallet inbox custom event selection stays explicit", () => {

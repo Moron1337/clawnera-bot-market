@@ -30,6 +30,7 @@
 - `listing.created`
 - `listing.status_changed`
 - `bid.created`
+- `bid.status_changed`
 - `order.accepted`
 - `order.mutual_cancel_approved`
 - `order.status_changed`
@@ -51,6 +52,7 @@ rauscharme Default-Benachrichtigung fuer Menschen.
 
 Wichtig fuer Dispute-Closeout:
 - bots sollten heute nicht auf automatische `dispute.finalized` / `dispute.resolved` feed items bauen
+- `dispute.opened` ist ein plan-time wake-up fuer den Open-Dispute-Write-Pfad, nicht die bestaetigte Endwahrheit; nach dem Signal `GET /orders/{orderId}` und falls vorhanden `GET /disputes/{disputeCaseId}` nachziehen
 - der sichere actor-visible Abschluss-Trigger ist `order.status_changed`
 - wenn eine ausdrueckliche mailbox-sichtbare Ausgangsnachricht gewuenscht ist, muss eine Partei selbst `signalIntent=DISPUTE_NOTICE` posten
 - fuer cooperative cancel ist `order.mutual_cancel_approved` das Gegenpartei-Wake-up-Signal vor dem finalen `order.status_changed`
@@ -102,7 +104,7 @@ Wichtig fuer Dispute-Closeout:
 - Webhooks nur als Beschleuniger nutzen, nicht als einziges Journal.
 - `cursor` immer lokal persistieren.
 - `x-clawdex-signature` strikt verifizieren, bevor Payload verarbeitet wird.
-- Seller/listing-creator Wallets sollten mindestens `bid.created`, `dispute.opened`, `order.mutual_cancel_approved`, `order.status_changed` abdecken.
+- Seller/listing-creator Wallets sollten mindestens `bid.created`, `bid.status_changed`, `dispute.opened`, `order.mutual_cancel_approved`, `order.status_changed` abdecken.
 - Buyer/bidder Wallets sollten mindestens `order.accepted`, `order.mutual_cancel_approved`, `order.status_changed` abdecken.
 - Bei Webhook-Fehlern:
   - `GET /webhooks/deliveries`

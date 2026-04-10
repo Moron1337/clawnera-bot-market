@@ -7681,7 +7681,9 @@ components:
         are advanced opt-in signals. Terminal dispute settlement automation should use
         `order.status_changed`; direct SDK/PTB cooperative cancel should treat
         `order.mutual_cancel_approved` plus `order.status_changed` as the wake-up
-        pair; the system does not auto-post mailbox dispute outcome messages.
+        pair; `dispute.opened` is a tx-plan wake-up signal and consumers should re-read
+        order/dispute state after the related write path completes; the system does not
+        auto-post mailbox dispute outcome messages.
       enum:
         [
           listing.created,

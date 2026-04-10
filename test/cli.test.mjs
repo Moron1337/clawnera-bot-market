@@ -1338,6 +1338,7 @@ test("notifications presets json output is parseable", () => {
   const sellerPreset = payload.presets.find((preset) => preset.id === "seller");
   assert.ok(sellerPreset);
   assert.ok(sellerPreset.eventTypes.includes("bid.created"));
+  assert.ok(sellerPreset.eventTypes.includes("bid.status_changed"));
   assert.ok(sellerPreset.eventTypes.includes("dispute.opened"));
   assert.ok(sellerPreset.eventTypes.includes("order.mutual_cancel_approved"));
   assert.ok(buyerPreset.eventTypes.includes("order.status_changed"));
@@ -1384,6 +1385,7 @@ test("wallet inbox json output is parseable", () => {
   assert.ok(payload.pollingCommands.some((line) => line.includes("/listings/{listingId}/bids")));
   assert.ok(payload.pollingCommands.some((line) => line.includes("/orders?role=buyer")));
   assert.ok(payload.notes.some((line) => line.includes("order.mutual_cancel_approved")));
+  assert.ok(payload.notes.some((line) => line.includes("dispute.opened")));
 });
 
 test("wallet inbox custom event selection stays explicit", () => {

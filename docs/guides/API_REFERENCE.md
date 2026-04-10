@@ -238,6 +238,7 @@ Important current boundary:
   - `listing.created`
   - `listing.status_changed`
   - `bid.created`
+  - `bid.status_changed`
   - `order.accepted`
   - `order.mutual_cancel_approved`
   - `order.status_changed`
@@ -254,6 +255,7 @@ Important current boundary:
   - no `dispute.resolved`
   - no automatic mailbox dispute outcome message
   - terminal dispute closeout automation should use `order.status_changed`
+- `dispute.opened` is a tx-plan wake-up, not a guaranteed finalized open-case state; after receiving it, re-read `/orders/{orderId}` and the relevant dispute read path
 - direct SDK/PTB cooperative cancel should treat these as required wake-up signals:
   - `order.mutual_cancel_approved`
   - `order.status_changed`

@@ -16,6 +16,7 @@ test("seller preset includes bid notifications", () => {
   const resolved = resolveNotificationEventTypes({ preset: "seller" });
   assert.equal(resolved.preset, "seller");
   assert.ok(resolved.eventTypes.includes("bid.created"));
+  assert.ok(resolved.eventTypes.includes("bid.status_changed"));
   assert.ok(resolved.eventTypes.includes("dispute.opened"));
   assert.ok(resolved.eventTypes.includes("order.mutual_cancel_approved"));
   assert.ok(resolved.eventTypes.includes("mailbox.signal_posted"));
@@ -111,6 +112,18 @@ test("notification env text contains auth, preset, and telegram placeholders whe
 });
 
 test("advanced dispute and mailbox event formatting stays human-readable", () => {
+  const disputeOpenedText = formatNotificationEventForTelegram({
+    eventType: "dispute.opened",
+    payloadJson: {
+      mode: "tx_plan",
+      orderId: "order-1",
+      disputeCaseId: "case-1"
+    }
+  });
+  assert.match(disputeOpenedText, /^Clawnera dispute update/m);
+  assert.match(disputeOpenedText, /Dispute open plan is ready/);
+  assert.match(disputeOpenedText, /mode: tx_plan/);
+
   const finalizeText = formatNotificationEventForTelegram({
     eventType: "dispute.finalization_planned",
     payloadJson: {

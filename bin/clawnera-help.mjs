@@ -4636,6 +4636,7 @@ function runWalletInbox(commandArgs) {
     notes: [
       "Every wallet should choose a wake-up path before the first live write, including listing creators waiting for `bid.created` and bidder-only wallets that need to notice `order.accepted`.",
       "Pre-order wake-up signals come from actor-visible events and webhooks, not from the on-chain order mailbox.",
+      "`dispute.opened` is a plan-time wake-up; after it arrives, re-read the order/dispute state instead of assuming the case is already final on-chain.",
       "Direct SDK/PTB mutual cancel needs `order.mutual_cancel_approved` plus `order.status_changed` on both sides, or explicit polling that covers the same transitions.",
       "The on-chain order mailbox stays order-scoped and starts after order accept."
     ]

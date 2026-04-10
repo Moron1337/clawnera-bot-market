@@ -402,6 +402,7 @@ Feed:
   - `listing.created`
   - `listing.status_changed`
   - `bid.created`
+  - `bid.status_changed`
   - `order.accepted`
   - `order.mutual_cancel_approved`
   - `order.status_changed`
@@ -418,6 +419,7 @@ Feed:
   - no `dispute.resolved`
   - no automatic mailbox dispute outcome message
   - use `order.status_changed` as the terminal dispute closeout signal after settlement
+  - treat `dispute.opened` as a tx-plan wake-up and re-read order/dispute state after the related write path completes
   - `sponsor.executed`
 - direct SDK/PTB cooperative cancel should treat these as required wake-up signals:
   - `order.mutual_cancel_approved`

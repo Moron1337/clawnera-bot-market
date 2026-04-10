@@ -8,13 +8,14 @@
 ## What To Notify
 
 ### Before work starts
-Use `bid.created`.
+Use `bid.created` and keep `bid.status_changed` in the same inbox path.
 
 That is the important alert for:
 - sponsored tasks
 - public listings
 - "someone made an offer on my listing"
 - request listings where the listing creator needs to notice the first incoming offer
+- bid withdrawals or other bidder-visible status flips that should wake the listing creator back up
 
 ### While work is running
 Use:
@@ -29,6 +30,7 @@ Use:
 Mailbox is not the first trigger for discovery. It is the communication trigger after a real order exists.
 
 For dispute closeout specifically:
+- treat `dispute.opened` as a plan-time wake-up and re-read order/dispute state after the related write path completes
 - do not assume the runtime auto-posts a mailbox outcome message when the case is finalized or the escrow is resolved
 - the safe actor-visible settlement trigger today is `order.status_changed`
 - if you need an explicit mailbox-visible dispute outcome, a buyer or seller must post `signalIntent=DISPUTE_NOTICE` intentionally
@@ -41,7 +43,7 @@ The package ships preset-based notifications:
 
 - `seller`
   - listing creator / seller view
-  - includes `bid.created`, `dispute.opened`, and `order.mutual_cancel_approved`
+  - includes `bid.created`, `bid.status_changed`, `dispute.opened`, and `order.mutual_cancel_approved`
 - `buyer`
   - buyer-side order and milestone view
   - includes `order.mutual_cancel_approved`

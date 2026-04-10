@@ -143,6 +143,12 @@ test("closeout docs do not promise automatic mailbox settlement messages", () =>
   for (const text of [readme, apiReference, onboarding, mailboxNotifications, eventFeed, orderStates]) {
     assert.match(text, /order\.status_changed/);
   }
+  for (const text of [apiReference, mailboxNotifications, eventFeed]) {
+    assert.match(text, /dispute\.opened/);
+  }
+  for (const text of [apiReference, mailboxNotifications, eventFeed]) {
+    assert.match(text, /plan-time wake-up|tx-plan wake-up/i);
+  }
   for (const text of [readme, apiReference, onboarding, mailboxNotifications, eventFeed]) {
     assert.match(text, /DISPUTE_NOTICE/);
   }

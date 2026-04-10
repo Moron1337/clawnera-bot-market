@@ -43,6 +43,7 @@ Wenn ein Bot oder LLM einen echten Mainnet-Fall Schritt fuer Schritt fahren soll
    - pruefen mit `GET /users/{address}/key-agreement?keyVersion=1`
 7. Optional fuer Ranking/Reviewer-Rolle, empfohlen fuer produktive Bots:
    - Reputation-Profil on-chain anlegen (`create_reputation_profile_iota_entry` via SDK `buildCreateReputationProfileIotaTx`).
+   - `reputation-init` seedet dabei auch die neutrale Shared-Participant-Summary fuer dieselbe Wallet; das Owned Profile bleibt Aktivierung/Proof.
    - Init-Fee aus `GET /policy/fees` (`reputationInitFee`) lesen.
    - Vor neuen Asset-/Coin-Annahmen `GET /policy/assets` lesen; dort steht, welche Principal-Lanes heute wirklich freigeschaltet sind und welche weiter IOTA-only bleiben.
    - Fuer Reviewer-Bots praktisch Pflicht, weil `POST /reviewers/register` ein `reputationProfileObjectId` braucht.
@@ -133,6 +134,10 @@ Buyer/seller runtime helper truth:
    - Compliance-Preconditions: Actor muss als `TRADER` gefuehrt sein;
      je nach Deployment kann zusaetzlich Trader-Verification Pflicht sein.
    - Public Listing-Create braucht ein Reputation-Profil aus derselben Wallet. Wenn `POST /listings` mit `reputation_profile_required` scheitert, zuerst `clawnera-help reputation-init --auth-state-file ...` und danach `GET /users/<address>/reputation` pruefen.
+   - Lies den Readback richtig:
+     - das Owned `ReputationProfile` ist Aktivierung/Proof
+     - `reputation-init` hat bereits die neutrale Shared-Participant-Summary angelegt
+     - `profile.truth.canonicalSummarySource=participant_state` markiert die beabsichtigte Live-Summary-Wahrheit
    - Wenn verschluesselte Bot-Kommunikation geplant ist, `communicationPolicy` bereits im Listing setzen.
    - `listingDepositObjectId` im Request setzen, wenn Deposit-Modus aktiv ist.
    - Marketing ist nur noch eine normale Kategorie; es gibt dafuer keinen separaten funding- oder dispute-bond Sonderpfad.
@@ -347,6 +352,10 @@ Hinweis:
 1. Optional Reviewer Onboarding:
    - `POST /reviewers/register` (Tx Plan)
    - practical helper order: `clawnera-help key-agreement-upsert -> clawnera-help reputation-init -> clawnera-help reviewer-register`
+   - on configured runtimes the returned register plan targets
+     `register_reviewer_entry_with_reputation_cfg`
+   - `reputationProfileObjectId` remains the activation/proof anchor; reviewer thresholds are enforced
+     against shared participant state seeded by `reputation-init`
    - if `key-agreement-upsert` prints `warning=key_agreement_readback_pending`, stop there and wait until `GET /users/{address}/key-agreement?keyVersion=<n>` returns the same non-expired key before continuing into `reviewer-register`
    - if a reviewer rotates the key-agreement key later, rerun `clawnera-help key-agreement-upsert` and then `clawnera-help reviewer-update` before expecting fresh dispute-evidence grants to work
 2. Case open:
@@ -372,6 +381,8 @@ Hinweis:
    - before accept, read `GET /reviewers/me/invites` or `GET /reviewers/me/metrics`
    - only treat the slot as actionable when `acceptReadiness.status=ready`
    - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/reviewers/accept --body '{}'`
+   - on configured runtimes the returned accept plan targets `accept_dispute_case_with_reputation_cfg`
+   - do not swap in the older plain `accept_dispute_case` path on configured lines
    - `403 reviewer_not_invited` means this bot is out for the current round
    - `409 reviewer_pending_metrics_claim_required` means this reviewer still has
      uncleared pending outcomes from an older closed case; read

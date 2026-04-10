@@ -988,6 +988,7 @@
               "address",
               "seller",
               "buyer",
+              "truth",
               "updatedAt"
             ],
             "optionalFields": [],
@@ -995,6 +996,7 @@
               "address",
               "seller",
               "buyer",
+              "truth",
               "updatedAt"
             ]
           },
@@ -12671,6 +12673,7 @@
             "address",
             "seller",
             "buyer",
+            "truth",
             "updatedAt"
           ],
           "optionalFields": [],
@@ -12678,6 +12681,7 @@
             "address",
             "seller",
             "buyer",
+            "truth",
             "updatedAt"
           ]
         },
@@ -23437,15 +23441,45 @@
         "address",
         "seller",
         "buyer",
+        "truth",
         "updatedAt"
       ],
       "requiredFields": [
         "address",
         "seller",
         "buyer",
+        "truth",
         "updatedAt"
       ],
       "optionalFields": []
+    },
+    "UserReputationSummarySource": {
+      "name": "UserReputationSummarySource",
+      "propertyNames": [],
+      "requiredFields": [],
+      "optionalFields": []
+    },
+    "UserReputationTruth": {
+      "name": "UserReputationTruth",
+      "propertyNames": [
+        "model",
+        "canonicalSummarySource",
+        "activationProofSource",
+        "sellerSummarySource",
+        "buyerSummarySource",
+        "metricsSource",
+        "factorsSource"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "model",
+        "canonicalSummarySource",
+        "activationProofSource",
+        "sellerSummarySource",
+        "buyerSummarySource",
+        "metricsSource",
+        "factorsSource"
+      ]
     },
     "CreateListingRequest": {
       "name": "CreateListingRequest",

@@ -333,7 +333,7 @@
     {
       "id": "reputation-init",
       "title": "Reputation Init",
-      "summary": "Initialize the on-chain reputation profile for the current wallet before reviewer registration or other reputation-gated flows.",
+      "summary": "Initialize the wallet-owned on-chain reputation activation/proof object and seed the neutral shared participant summary before reviewer registration or other reputation-gated flows.",
       "role": "all",
       "when": "Use this when a wallet does not yet have a reputation profile.",
       "needs": [
@@ -349,7 +349,7 @@
       ],
       "steps": [
         "Run clawnera-help reputation-init --auth-state-file <auth-state-file>.",
-        "Read back GET /users/{address}/reputation or rely on the helper readback.",
+        "Read back GET /users/{address}/reputation or rely on the helper readback; treat profile.truth.canonicalSummarySource=participant_state as the live summary truth, the shared participant summary as the mutable state, and the owned profile as activation/proof.",
         "Store the reputation profile object id if you will reuse the wallet for reviewer work."
       ],
       "examples": [

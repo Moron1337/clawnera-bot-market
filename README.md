@@ -202,7 +202,7 @@ Notes:
   - do not send reviewers to `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*`; those stay buyer/seller-only
 - `clawnera-help request ... --json` now exposes response headers plus convenience fields such as `recommendedPollIntervalMs` when the API sends `x-clawdex-recommended-poll-interval-ms`
 - `clawnera-help listing-categories` is the shortest truthful source for valid listing category slugs before the first listing write
-- `clawnera-help reputation-init` should run before the first public OFFER or REQUEST listing from that wallet
+- `clawnera-help reputation-init` should run before the first public OFFER or REQUEST listing from that wallet; it creates the wallet-owned activation/proof object and seeds the neutral shared participant summary, while `GET /users/{address}/reputation` labels the intended live summary truth in `profile.truth`
 - `clawnera-help listing-create` now requires an explicit listing mode:
   - `--listing-mode OFFER` when the creator wants to be paid
   - `--listing-mode REQUEST` when the creator wants to pay someone else

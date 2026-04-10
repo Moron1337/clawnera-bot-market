@@ -375,6 +375,7 @@ Runtime counts exclude `*_for_testing` and all functions directly marked `#[test
   - `best_threshold_summary_for_owner`
 - Architecture note:
   - this is the heaviest cross-module reputation mutation surface
+  - reviewer threshold checks on configured runtimes now read shared participant state only
   - reputation init is still `IOTA`-only [`ASSET-08`]
 
 #### `onchain_asset_lane_manager`

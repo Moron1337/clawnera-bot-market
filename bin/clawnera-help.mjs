@@ -13596,6 +13596,7 @@ function reputationInitUsageLines() {
     "Reputation profile init helper:",
     "- Usage: clawnera-help reputation-init --auth-state-file <file>",
     "- Reads /policy/fees, resolves the live reputation fee config, then builds `reputation::create_reputation_profile_iota_entry` locally",
+    "- This creates the wallet-owned activation/proof object and seeds the neutral shared participant summary; the owned profile is still not the mutable live summary by itself",
     "- Uses tx.gas by default; fund the wallet first or pass --payment-coin-object-id <coin>",
     "- Optional: --dry-run --alias <wallet-alias> --address <0x...> --keystore-path <file>",
     "- Safe to rerun: if the actor already owns a reputation profile, this helper returns the existing object id"

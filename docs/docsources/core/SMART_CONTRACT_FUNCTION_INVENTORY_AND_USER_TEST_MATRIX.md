@@ -533,39 +533,12 @@ Historisch auf der fresh lineage entfernt.
 - `BOND-09` Slash when not active => abort `E_INVALID_STATE`.
 - `BOND-10` Event payload assertions for create/state-change.
 
-### G) Tier Lock (`tier`)
+### G) Retired Historical Families
 
-- `TIER-01` Create lock with valid duration and amount.
-- `TIER-02` Duration < 1 day => abort `E_INVALID_LOCK_DURATION`.
-- `TIER-03` Amount 0 => abort `E_INVALID_AMOUNT`.
-- `TIER-04` Boundary test Tier 1: amount=5000, duration=7d => Tier 1.
-- `TIER-05` Boundary test Tier 2: amount=50000, duration=30d => Tier 2.
-- `TIER-06` Boundary test Tier 3: amount=500000, duration=90d => Tier 3.
-- `TIER-07` Boundary test Tier 4: amount=5000000, duration=180d => Tier 4.
-- `TIER-08` Just-below boundaries => lower tier/none.
-- `TIER-09` Release by non-owner => abort `E_NOT_AUTHORIZED`.
-- `TIER-10` Release before unlock => abort `E_LOCK_NOT_MATURED`.
-- `TIER-11` Release after unlock => state `RELEASED`.
-- `TIER-12` Release twice => abort `E_INVALID_STATE`.
-- `TIER-13` `ranking_boost_bps_for_tier(>4)` => abort `E_INVALID_TIER`.
-- `TIER-14` `gasless_quota_multiplier_bps_for_tier(>4)` => abort `E_INVALID_TIER`.
+- The older `tier` and `rewards` families are not part of the current monolith surface.
+- Their former abort codes and matrix entries are intentionally retired from the current coverage baseline.
 
-### H) Rewards (`rewards`)
-
-- `RWD-01` Init pool => epoch=1, status OPEN.
-- `RWD-02` Deposit iota fees in OPEN with amount>0 => totals update.
-- `RWD-03` Deposit with amount 0 => abort `E_INVALID_AMOUNT`.
-- `RWD-04` Record payout with amount 0 => abort `E_INVALID_AMOUNT`.
-- `RWD-05` Record payout in OPEN with amount>0 => totals update.
-- `RWD-06` Rotate epoch in OPEN => epoch+1, totals reset.
-- `RWD-07` Close pool from OPEN => CLOSED.
-- `RWD-08` Close pool again => abort `E_INVALID_REWARD_STATE`.
-- `RWD-09` Reopen pool from CLOSED => OPEN.
-- `RWD-10` Reopen while OPEN => abort `E_INVALID_REWARD_STATE`.
-- `RWD-11` Deposit/record/rotate while CLOSED => abort `E_INVALID_REWARD_STATE`.
-- `RWD-12` Event payload assertions for init/totals/state.
-
-### I) Manifest Anchoring (`manifest_anchor`)
+### H) Manifest Anchoring (`manifest_anchor`)
 
 - `MAN-01` Valid anchor tx emits `MilestoneManifestAnchored`.
 - `MAN-02` Sender != seller_address => abort `E_NOT_AUTHORIZED`.
@@ -817,15 +790,11 @@ Falls ihr in der Praxis viele „einvernehmliche“ Abbrueche erwartet, sind die
 | `E_NOT_AUTHORIZED` | `ESC-10` | `ESC-14`, `ESC-17`, `LDP-03`, `BOND-06`, `TIER-09`, `MAN-02` |
 | `E_INVALID_STATE` | `ESC-11` | `GOV-13`, `GOV-14`, `ESC-18`, `ESC-21`, `ESC-27`, `LDP-12`, `BOND-07`, `BOND-09`, `TIER-12`, `RWD-08` |
 | `E_DEADLINE_NOT_REACHED` | `ESC-12` | `ESC-22` |
-| `E_INVALID_AMOUNT` | `ESC-05` | `LDP-06`, `BOND-03`, `TIER-03`, `RWD-03`, `RWD-04` |
+| `E_INVALID_AMOUNT` | `ESC-05` | `LDP-06`, `BOND-03` |
 | `E_INVALID_DEADLINE` | `ESC-08` | (Boundary: `deadline == now` und `deadline < now` getrennt testen) |
 | `E_INVALID_KIND` | `BOND-04` | (via Test-Helper / invalid kind injection) |
 | `E_SELF_DEAL_NOT_ALLOWED` | `ESC-07` | (auch fuer create_escrow_* Varianten) |
 | `E_INVALID_FEE_CONFIG` | `FEE-02` | `FEE-03` |
-| `E_INVALID_LOCK_DURATION` | `TIER-02` | (Boundary: exakt 1d vs 1d-1ms, sofern ms-Aufloesung) |
-| `E_LOCK_NOT_MATURED` | `TIER-10` | (Boundary: exakt unlock time) |
-| `E_INVALID_TIER` | `TIER-13` | `TIER-14` |
-| `E_INVALID_REWARD_STATE` | `RWD-08` | `RWD-10`, `RWD-11` |
 | `E_IOTA_REQUIRES_FEE_PATH` | `ESC-04` | (create_escrow_coin<IOTA> ist immer verboten) |
 | `E_INVALID_MANIFEST_ANCHOR_INPUT` | `MAN-03` | `MAN-04..MAN-10` (diverse invalid inputs) |
 | `E_DISPUTE_TIMEOUT_NOT_REACHED` | `ESC-23` | `ESC-26` |

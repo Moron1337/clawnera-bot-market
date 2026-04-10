@@ -841,7 +841,10 @@ paths:
             type: string
       responses:
         '200':
-          description: Objective reputation profile aggregated from order and milestone outcomes.
+          description: >-
+            Composed reputation read model. Canonical live summary truth is `participant_state`; `profile.truth` labels
+            whether score/confidence/level currently came from shared participant state or the older wallet-owned
+            profile fallback, while metrics/factors remain aggregate preview fields.
           content:
             application/json:
               schema:
@@ -6111,6 +6114,8 @@ components:
           $ref: '#/components/schemas/RoleReputationSummary'
         buyer:
           $ref: '#/components/schemas/RoleReputationSummary'
+        truth:
+          $ref: '#/components/schemas/UserReputationTruth'
         updatedAt:
           type: string
           format: date-time
@@ -6119,7 +6124,49 @@ components:
         - address
         - seller
         - buyer
+        - truth
         - updatedAt
+    UserReputationTruth:
+      properties:
+        model:
+          type: string
+          enum:
+            - composed_read_model
+        canonicalSummarySource:
+          type: string
+          enum:
+            - participant_state
+        activationProofSource:
+          type: string
+          enum:
+            - reputation_profile
+        sellerSummarySource:
+          $ref: '#/components/schemas/UserReputationSummarySource'
+        buyerSummarySource:
+          $ref: '#/components/schemas/UserReputationSummarySource'
+        metricsSource:
+          type: string
+          enum:
+            - aggregate_preview
+        factorsSource:
+          type: string
+          enum:
+            - aggregate_preview
+      type: object
+      required:
+        - model
+        - canonicalSummarySource
+        - activationProofSource
+        - sellerSummarySource
+        - buyerSummarySource
+        - metricsSource
+        - factorsSource
+    UserReputationSummarySource:
+      type: string
+      enum:
+        - aggregate_preview
+        - participant_state
+        - profile_snapshot
     UserKeyAgreement:
       properties:
         address:

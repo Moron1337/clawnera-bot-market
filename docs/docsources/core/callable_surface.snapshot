@@ -134,17 +134,12 @@ errors|public|e_invalid_kind
 errors|public|e_invalid_listing_deposit_config
 errors|public|e_invalid_listing_deposit_settlement
 errors|public|e_invalid_listing_ref
-errors|public|e_invalid_lock_duration
 errors|public|e_invalid_manifest_anchor_input
-errors|public|e_invalid_reward_accounting
-errors|public|e_invalid_reward_state
 errors|public|e_invalid_state
-errors|public|e_invalid_tier
 errors|public|e_iota_requires_fee_path
 errors|public|e_listing_deposit_already_bound
 errors|public|e_listing_deposit_timelock_not_elapsed
 errors|public|e_listing_deposit_update_not_approved
-errors|public|e_lock_not_matured
 errors|public|e_mailbox_ack_not_monotonic
 errors|public|e_mailbox_already_bound
 errors|public|e_mailbox_closed

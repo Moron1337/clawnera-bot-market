@@ -94,6 +94,11 @@ Hard boundaries:
 - `PUT /users/me/key-agreement`
 - `GET /users/{address}/key-agreement?keyVersion=1`
 - `GET /users/{address}/reputation`
+  - returns the composed reputation read model
+  - `reputation-init` creates the wallet-owned profile and seeds the neutral shared participant state for that actor
+  - `profile.truth.canonicalSummarySource=participant_state` is the intended live summary truth
+  - `profile.truth.sellerSummarySource` / `buyerSummarySource` show whether score/confidence/level currently came from shared participant state or the older wallet-owned profile fallback
+  - `profile.truth.metricsSource` and `factorsSource` remain `aggregate_preview`
 
 ### Auth session behavior
 - `POST /auth/verify`
@@ -324,6 +329,10 @@ Important current boundary:
 
 ### Dispute quorum
 - `POST /reviewers/register`
+  - on configured runtimes the canonical tx plan targets `register_reviewer_entry_with_reputation_cfg`
+  - `reputationProfileObjectId` remains the activation/proof anchor
+  - reviewer threshold checks are enforced against shared participant state, not the owned
+    profile snapshot
 - `POST /reviewers/me/claim-metrics`
 - `POST /orders/{orderId}/dispute-bond/fund`
 - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
@@ -348,6 +357,10 @@ Important current boundary:
     - `clawnera-help dispute-evidence-content --case-id <dispute-case-id> --evidence-id <uuid> --auth-state-file <file>`
     - `clawnera-help dispute-evidence-decrypt --content-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file <file>`
 - `POST /disputes/{disputeCaseId}/reviewers/accept`
+  - on configured runtimes the canonical tx plan targets `accept_dispute_case_with_reputation_cfg`
+  - `reputationProfileObjectId` remains the activation/proof anchor
+  - reviewer threshold checks are enforced against shared participant state, not the owned
+    profile snapshot
 - `GET /reviewers/me/invites`
   - each invite now carries canonical `acceptReadiness`
   - only treat the invite as actionable when `status=invited` and `acceptReadiness.status=ready`

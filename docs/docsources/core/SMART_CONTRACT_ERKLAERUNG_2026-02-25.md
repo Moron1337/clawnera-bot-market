@@ -148,8 +148,7 @@ Hinweis:
 ### 4.6 Zusatzmodule
 1. Bond release durch Owner in `ACTIVE` -> `RELEASED`.
 2. Bond slash durch Admin in `ACTIVE` -> `SLASHED`.
-3. Tier lock release vor unlock -> Abort `E_LOCK_NOT_MATURED (10)`.
-4. Rewards-Updates bei geschlossenem Pool -> Abort `E_INVALID_REWARD_STATE (12)`.
+3. Historische `tier`-/`rewards`-Beispiele aus frueheren Ständen sind im aktuellen Monolith nicht mehr Teil der aktiven Surface.
 
 ## 5) Praktische Testphasen-Empfehlung
 - Phase A (Local deterministic): Move-Tests + SDK-Builder + API-Layer.

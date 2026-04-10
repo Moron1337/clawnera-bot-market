@@ -780,7 +780,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Objective reputation profile aggregated from order and milestone outcomes.
+          description: Composed reputation read model. Canonical live summary truth is `participant_state`; `profile.truth` labels whether score/confidence/level currently came from shared participant state or the older wallet-owned profile fallback, while metrics/factors remain aggregate preview fields.
           content:
             application/json:
               schema:
@@ -2449,7 +2449,7 @@ paths:
               $ref: "#/components/schemas/ReviewerRegisterRequest"
       responses:
         "200":
-          description: Transaction plan for `dispute_quorum::register_reviewer_entry`.
+          description: Transaction plan for canonical reviewer registration. On runtimes with reputation config this targets `dispute_quorum::register_reviewer_entry_with_reputation_cfg`; the provided `reputationProfileObjectId` remains the activation/proof anchor while reviewer thresholds are enforced against shared participant state.
           content:
             application/json:
               schema:
@@ -2975,7 +2975,7 @@ paths:
               $ref: "#/components/schemas/DisputeAcceptRequest"
       responses:
         "200":
-          description: Transaction plan for reviewer acceptance.
+          description: Transaction plan for canonical reviewer acceptance. On runtimes with reputation config this targets `dispute_quorum::accept_dispute_case_with_reputation_cfg`; the provided `reputationProfileObjectId` remains the activation/proof anchor while reviewer thresholds are enforced against shared participant state.
           content:
             application/json:
               schema:
@@ -4391,7 +4391,7 @@ components:
               minimum: 0
     UserReputationProfile:
       type: object
-      required: [address, seller, buyer, updatedAt]
+      required: [address, seller, buyer, truth, updatedAt]
       properties:
         address:
           type: string
@@ -4399,9 +4399,46 @@ components:
           $ref: "#/components/schemas/RoleReputationSummary"
         buyer:
           $ref: "#/components/schemas/RoleReputationSummary"
+        truth:
+          $ref: "#/components/schemas/UserReputationTruth"
         updatedAt:
           type: string
           format: date-time
+    UserReputationSummarySource:
+      type: string
+      enum: [aggregate_preview, participant_state, profile_snapshot]
+    UserReputationTruth:
+      type: object
+      required:
+        [
+          model,
+          canonicalSummarySource,
+          activationProofSource,
+          sellerSummarySource,
+          buyerSummarySource,
+          metricsSource,
+          factorsSource
+        ]
+      properties:
+        model:
+          type: string
+          enum: [composed_read_model]
+        canonicalSummarySource:
+          type: string
+          enum: [participant_state]
+        activationProofSource:
+          type: string
+          enum: [reputation_profile]
+        sellerSummarySource:
+          $ref: "#/components/schemas/UserReputationSummarySource"
+        buyerSummarySource:
+          $ref: "#/components/schemas/UserReputationSummarySource"
+        metricsSource:
+          type: string
+          enum: [aggregate_preview]
+        factorsSource:
+          type: string
+          enum: [aggregate_preview]
     CreateListingRequest:
       type: object
       additionalProperties: false

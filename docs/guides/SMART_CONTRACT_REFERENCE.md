@@ -63,7 +63,8 @@ Quellen:
 
 | Funktion | Zweck | Typischer Aufrufer | Kern-Preconditions |
 | --- | --- | --- | --- |
-| `register_reviewer_entry` | Reviewer registrieren + stake | reviewer | stake/min reward/keys gueltig |
+| `register_reviewer_entry` | Reviewer registrieren + stake | reviewer | legacy/plain path ohne reputation-config gating |
+| `register_reviewer_entry_with_reputation_cfg` | Reviewer registrieren + stake | reviewer | configured-runtime canonical path; `ReputationProfile` als activation/proof anchor, Thresholds aus shared participant state |
 | `update_reviewer` | Reviewer-Parameter aendern | reviewer | reviewer entry gehoert actor |
 | `deregister_reviewer` | Reviewer selbst deregistrieren + Stake zurueckholen | reviewer owner | reviewer `active=false` und keine aktiven Cases |
 | `init_order_dispute_bond` | Bond Objekt fuer Order erzeugen | order setup path | gueltige participants + quorum params |
@@ -71,7 +72,8 @@ Quellen:
 | `fund_bond_as_buyer` | Buyer Bond Funding | buyer | side/caller match |
 | `fund_bond_as_seller` | Seller Bond Funding | seller | side/caller match |
 | `open_milestone_dispute_case_entry` | Dispute Case eroefnen | buyer/seller | escrow + bond Bezug konsistent |
-| `accept_dispute_case` | Reviewer nimmt Case an | reviewer | aktive reviewer registry/entry |
+| `accept_dispute_case` | Reviewer nimmt Case an | reviewer | legacy/plain path ohne reputation-config gating |
+| `accept_dispute_case_with_reputation_cfg` | Reviewer nimmt Case an | reviewer | configured-runtime canonical path; `ReputationProfile` als activation/proof anchor, Thresholds aus shared participant state |
 | `commit_vote` | Commit Phase | reviewer | commit window offen |
 | `reveal_vote` | Reveal Phase | reviewer | reveal window offen + commit vorhanden |
 | `start_replacement_round` | Reviewer Replacement | buyer/seller path | replacement criteria erfuellt |
@@ -117,10 +119,10 @@ Quellen:
 | API Route | SDK Builder | Move Funktion |
 | --- | --- | --- |
 | `N/A (pre-listing on-chain step)` | `buildCreateListingDepositIotaTx` / `buildCreateListingDepositIotaSharedTx` | `listing_deposit::create_listing_deposit_iota_entry` / `listing_deposit::create_listing_deposit_iota_shared_entry` |
-| `POST /reviewers/register` | `disputeQuorum.registerReviewer` | `dispute_quorum::register_reviewer_entry` |
+| `POST /reviewers/register` | `disputeQuorum.registerReviewer` | `dispute_quorum::register_reviewer_entry_with_reputation_cfg` |
 | `POST /orders/{orderId}/dispute-bond/fund` | `disputeQuorum.fundBondAsBuyer/Seller` | `dispute_quorum::fund_bond_as_buyer/seller` |
 | `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` | `disputeQuorum.openMilestoneDisputeCase` | `dispute_quorum::open_milestone_dispute_case_entry` |
-| `POST /disputes/{id}/reviewers/accept` | `disputeQuorum.acceptDisputeCase` | `dispute_quorum::accept_dispute_case` |
+| `POST /disputes/{id}/reviewers/accept` | `disputeQuorum.acceptDisputeCase` | `dispute_quorum::accept_dispute_case_with_reputation_cfg` |
 | `POST /disputes/{id}/votes/commit` | `disputeQuorum.commitVote` | `dispute_quorum::commit_vote` |
 | `POST /disputes/{id}/votes/reveal` | `disputeQuorum.revealVote` | `dispute_quorum::reveal_vote` |
 | `POST /disputes/{id}/reviewers/replace` | `disputeQuorum.startReplacementRound` | `dispute_quorum::start_replacement_round` |

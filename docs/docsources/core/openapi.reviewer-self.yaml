@@ -24,7 +24,10 @@ paths:
               $ref: '#/components/schemas/ReviewerRegisterRequest'
       responses:
         '200':
-          description: Transaction plan for canonical reviewer registration. On runtimes with reputation config this targets `dispute_quorum::register_reviewer_entry_with_reputation_cfg`; the provided `reputationProfileObjectId` remains the activation/proof anchor while reviewer thresholds are enforced against shared participant state.
+          description: >-
+            Transaction plan for canonical reviewer registration. On runtimes with reputation config this targets
+            `dispute_quorum::register_reviewer_entry_with_reputation_cfg`; the provided `reputationProfileObjectId`
+            remains the activation/proof anchor while reviewer thresholds are enforced against shared participant state.
           content:
             application/json:
               schema:
@@ -188,7 +191,10 @@ paths:
               $ref: '#/components/schemas/DisputeAcceptRequest'
       responses:
         '200':
-          description: Transaction plan for canonical reviewer acceptance. On runtimes with reputation config this targets `dispute_quorum::accept_dispute_case_with_reputation_cfg`; the provided `reputationProfileObjectId` remains the activation/proof anchor while reviewer thresholds are enforced against shared participant state.
+          description: >-
+            Transaction plan for canonical reviewer acceptance. On runtimes with reputation config this targets
+            `dispute_quorum::accept_dispute_case_with_reputation_cfg`; the provided `reputationProfileObjectId` remains
+            the activation/proof anchor while reviewer thresholds are enforced against shared participant state.
           content:
             application/json:
               schema:

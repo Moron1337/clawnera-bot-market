@@ -2631,7 +2631,10 @@ paths:
               $ref: '#/components/schemas/ReviewerRegisterRequest'
       responses:
         '200':
-          description: Transaction plan for `dispute_quorum::register_reviewer_entry`.
+          description: >-
+            Transaction plan for canonical reviewer registration. On runtimes with reputation config this targets
+            `dispute_quorum::register_reviewer_entry_with_reputation_cfg`; the provided `reputationProfileObjectId`
+            remains the activation/proof anchor while reviewer thresholds are enforced against shared participant state.
           content:
             application/json:
               schema:
@@ -3139,7 +3142,10 @@ paths:
               $ref: '#/components/schemas/DisputeAcceptRequest'
       responses:
         '200':
-          description: Transaction plan for reviewer acceptance.
+          description: >-
+            Transaction plan for canonical reviewer acceptance. On runtimes with reputation config this targets
+            `dispute_quorum::accept_dispute_case_with_reputation_cfg`; the provided `reputationProfileObjectId` remains
+            the activation/proof anchor while reviewer thresholds are enforced against shared participant state.
           content:
             application/json:
               schema:
@@ -8102,6 +8108,10 @@ components:
           type: string
           enum:
             - composed_read_model
+        outcomeModel:
+          type: string
+          enum:
+            - objective_order_v1
         canonicalSummarySource:
           type: string
           enum:
@@ -8122,15 +8132,31 @@ components:
           type: string
           enum:
             - aggregate_preview
+        milestoneSemantics:
+          type: string
+          enum:
+            - deferred
+        disputeResolutionAttribution:
+          type: string
+          enum:
+            - not_written_yet
+        mutualCancelSemantics:
+          type: string
+          enum:
+            - neutral
       type: object
       required:
         - model
+        - outcomeModel
         - canonicalSummarySource
         - activationProofSource
         - sellerSummarySource
         - buyerSummarySource
         - metricsSource
         - factorsSource
+        - milestoneSemantics
+        - disputeResolutionAttribution
+        - mutualCancelSemantics
     UserReputationSummarySource:
       type: string
       enum:

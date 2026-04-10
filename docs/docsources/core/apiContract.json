@@ -23463,22 +23463,30 @@
       "name": "UserReputationTruth",
       "propertyNames": [
         "model",
+        "outcomeModel",
         "canonicalSummarySource",
         "activationProofSource",
         "sellerSummarySource",
         "buyerSummarySource",
         "metricsSource",
-        "factorsSource"
+        "factorsSource",
+        "milestoneSemantics",
+        "disputeResolutionAttribution",
+        "mutualCancelSemantics"
       ],
       "requiredFields": [],
       "optionalFields": [
         "model",
+        "outcomeModel",
         "canonicalSummarySource",
         "activationProofSource",
         "sellerSummarySource",
         "buyerSummarySource",
         "metricsSource",
-        "factorsSource"
+        "factorsSource",
+        "milestoneSemantics",
+        "disputeResolutionAttribution",
+        "mutualCancelSemantics"
       ]
     },
     "CreateListingRequest": {

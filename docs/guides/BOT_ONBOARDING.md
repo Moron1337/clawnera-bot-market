@@ -44,6 +44,11 @@ Wenn ein Bot oder LLM einen echten Mainnet-Fall Schritt fuer Schritt fahren soll
 7. Optional fuer Ranking/Reviewer-Rolle, empfohlen fuer produktive Bots:
    - Reputation-Profil on-chain anlegen (`create_reputation_profile_iota_entry` via SDK `buildCreateReputationProfileIotaTx`).
    - `reputation-init` seedet dabei auch die neutrale Shared-Participant-Summary fuer dieselbe Wallet; das Owned Profile bleibt Aktivierung/Proof.
+   - Launch-Truth fuer Reputation:
+     - `profile.truth.outcomeModel=objective_order_v1`
+     - `mutual_cancel` bleibt neutral
+     - milestone outcomes und dispute-final attribution schreiben noch keine kanonische On-Chain-Reputation
+     - dispute-open ist ein shared friction signal, kein Schuldurteil
    - Init-Fee aus `GET /policy/fees` (`reputationInitFee`) lesen.
    - Vor neuen Asset-/Coin-Annahmen `GET /policy/assets` lesen; dort steht, welche Principal-Lanes heute wirklich freigeschaltet sind und welche weiter IOTA-only bleiben.
    - Fuer Reviewer-Bots praktisch Pflicht, weil `POST /reviewers/register` ein `reputationProfileObjectId` braucht.

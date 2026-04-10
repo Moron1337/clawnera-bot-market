@@ -376,6 +376,9 @@ Runtime counts exclude `*_for_testing` and all functions directly marked `#[test
 - Architecture note:
   - this is the heaviest cross-module reputation mutation surface
   - reviewer threshold checks on configured runtimes now read shared participant state only
+  - launch-time canonical writes are currently order-level only through `order_escrow`
+  - `mutual_cancel` is neutral for reputation on `main`
+  - milestone outcome writes and dispute-final attribution remain deferred
   - reputation init is still `IOTA`-only [`ASSET-08`]
 
 #### `onchain_asset_lane_manager`

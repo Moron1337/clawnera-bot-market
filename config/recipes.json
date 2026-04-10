@@ -350,6 +350,7 @@
       "steps": [
         "Run clawnera-help reputation-init --auth-state-file <auth-state-file>.",
         "Read back GET /users/{address}/reputation or rely on the helper readback; treat profile.truth.canonicalSummarySource=participant_state as the live summary truth, the shared participant summary as the mutable state, and the owned profile as activation/proof.",
+        "Treat profile.truth.outcomeModel=objective_order_v1 as the launch write matrix: mutual cancel stays neutral, milestone outcomes stay deferred, and metrics/factors remain aggregate_preview rather than canonical on-chain counters.",
         "Store the reputation profile object id if you will reuse the wallet for reviewer work."
       ],
       "examples": [

@@ -4412,17 +4412,24 @@ components:
       required:
         [
           model,
+          outcomeModel,
           canonicalSummarySource,
           activationProofSource,
           sellerSummarySource,
           buyerSummarySource,
           metricsSource,
-          factorsSource
+          factorsSource,
+          milestoneSemantics,
+          disputeResolutionAttribution,
+          mutualCancelSemantics
         ]
       properties:
         model:
           type: string
           enum: [composed_read_model]
+        outcomeModel:
+          type: string
+          enum: [objective_order_v1]
         canonicalSummarySource:
           type: string
           enum: [participant_state]
@@ -4439,6 +4446,15 @@ components:
         factorsSource:
           type: string
           enum: [aggregate_preview]
+        milestoneSemantics:
+          type: string
+          enum: [deferred]
+        disputeResolutionAttribution:
+          type: string
+          enum: [not_written_yet]
+        mutualCancelSemantics:
+          type: string
+          enum: [neutral]
     CreateListingRequest:
       type: object
       additionalProperties: false

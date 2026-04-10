@@ -6132,6 +6132,10 @@ components:
           type: string
           enum:
             - composed_read_model
+        outcomeModel:
+          type: string
+          enum:
+            - objective_order_v1
         canonicalSummarySource:
           type: string
           enum:
@@ -6152,15 +6156,31 @@ components:
           type: string
           enum:
             - aggregate_preview
+        milestoneSemantics:
+          type: string
+          enum:
+            - deferred
+        disputeResolutionAttribution:
+          type: string
+          enum:
+            - not_written_yet
+        mutualCancelSemantics:
+          type: string
+          enum:
+            - neutral
       type: object
       required:
         - model
+        - outcomeModel
         - canonicalSummarySource
         - activationProofSource
         - sellerSummarySource
         - buyerSummarySource
         - metricsSource
         - factorsSource
+        - milestoneSemantics
+        - disputeResolutionAttribution
+        - mutualCancelSemantics
     UserReputationSummarySource:
       type: string
       enum:

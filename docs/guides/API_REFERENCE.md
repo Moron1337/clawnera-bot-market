@@ -97,6 +97,14 @@ Hard boundaries:
   - returns the composed reputation read model
   - `reputation-init` creates the wallet-owned profile and seeds the neutral shared participant state for that actor
   - `profile.truth.canonicalSummarySource=participant_state` is the intended live summary truth
+  - `profile.truth.outcomeModel=objective_order_v1` is the launch-time write model:
+    - buyer release => seller completed, buyer completed, buyer manual-review action
+    - seller claim after buyer inactivity => seller completed, buyer completed, buyer auto-release miss
+    - dispute open => seller disputed, buyer disputed, buyer manual-review action when the buyer opened
+    - buyer rescue after seller deadline => seller deadline miss
+  - `mutual_cancel` is neutral for reputation at launch
+  - milestone outcomes and dispute-final attribution are not written into the canonical on-chain summary yet
+  - dispute-open is a shared friction signal, not a blame verdict
   - `profile.truth.sellerSummarySource` / `buyerSummarySource` show whether score/confidence/level currently came from shared participant state or the older wallet-owned profile fallback
   - `profile.truth.metricsSource` and `factorsSource` remain `aggregate_preview`
 

@@ -667,7 +667,7 @@ function compactRecipeCommand(recipe) {
   const auth = "--auth-state-file ~/.config/clawnera/auth-state.json";
   switch (recipe.id) {
     case "setup-quick":
-      return "clawnera-help wallet-list && clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias> && clawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json";
+      return "clawnera-help wallet-list && clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias> && clawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json && clawnera-help request GET /bot/v1/discovery.json --api-base https://api.clawnera.com && clawnera-help request GET /policy/control-plane --api-base https://api.clawnera.com && clawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/clawnera/auth-state.json";
     case "ensure-auth":
       return "clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias>";
     case "key-agreement-upsert":
@@ -733,7 +733,7 @@ function compactRecipeCommand(recipe) {
 function compactRecipeReadText(recipe) {
   switch (recipe.id) {
     case "setup-quick":
-      return "GET /actors/me/capabilities | GET /ready";
+      return "GET /bot/v1/discovery.json | GET /policy/control-plane | GET /actors/me/capabilities";
     case "creator-cancel-listing":
     case "creator-renew-listing":
       return "GET /listings for OFFER | GET /listings?listingMode=REQUEST for REQUEST";

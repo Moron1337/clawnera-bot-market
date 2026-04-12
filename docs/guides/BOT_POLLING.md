@@ -8,6 +8,7 @@
 - Es gibt jetzt Event-Feed und Webhooks, aber Polling bleibt der Backstop.
 - `GET /orders` und `GET /listings/{listingId}/bids` sind actor-scoped; Bots brauchen weiter lokalen durable State fuer Reconciliation.
 - Startup und lange Idle-Phasen sollten zuerst ueber die gecachten Discovery-Routen laufen, nicht ueber Hot-Feeds.
+- Oeffentliche dynamische Reads teilen sich ein gemeinsames Hot-Read-Budget. Wenn ein Bot z. B. `/listings`, `/listings/{listingId}`, `/listings/categories`, `/rankings/listings`, `/capabilities`, `/bot/v1/discovery.json` oder `/policy/control-plane` aggressiv pollt, kann das auch andere Public-Reads frueher in Rate Limits druecken.
 
 ## Empfohlene Polling-Intervalle
 
@@ -29,6 +30,7 @@ Hinweis zu Live-Hints:
 - Wenn die API `x-clawdex-recommended-poll-interval-ms` sendet, ist das der erste Polling-Hinweis.
 - Wenn der Header fehlt, nutze `nextPollAfterMs` aus dem Response-Body.
 - Bei `discoverySnapshotOnlyMode=true` breite Discovery-/Policy-Reads bevorzugen und dynamische Public-Reads bewusst ausduennen.
+- Die Tabelle oben ist nur der Fallback. Wenn Discovery `readLanes` oder Response-Header engere Live-Hinweise liefern, gelten diese vor den statischen Default-Intervallen.
 
 ## Backoff-Regeln
 - `429` / `503`: Exponential Backoff mit Jitter.

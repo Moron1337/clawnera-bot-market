@@ -80,14 +80,14 @@ Do not batch multiple live writes together just because the API allows them.
    - escrow amount
 7. Do not assume sponsor gas also covers escrow value or bond value.
 
-## First-Party Promo Listing Rule
+## Funding Mode Rule
 
-For first-party promo / marketing listings:
+The earlier first-party promo / marketing dispute-bond funding lane is retired in the current public runtime.
 
-- platform funding can cover the dispute-bond flow
-- that does not automatically cover the buyer's CLAW escrow amount
+For current live runs:
 
-So a promo order can still stop at escrow funding if the buyer wallet does not hold the required CLAW amount.
+- assume dispute-bond principal and escrow principal are user-funded
+- do not plan around platform-funded dispute bonds unless the runtime publishes a new sponsor mode explicitly
 
 ## Managed Storage Rule
 
@@ -164,8 +164,6 @@ If the buyer rejects a milestone:
   - operator supplied a digest that did not match the latest finalized checkpoint at shortlist time
 - `409 dispute_bond_not_active`
   - bond flow is incomplete; do not push milestone writes yet
-- `409 marketing_funding_custody_proof_required`
-  - operator-side funding proof is missing for first-party promo funding
 - `409 manifest_anchor_required` or `409 manifest_anchor_not_confirmed`
   - storage submit/accept sequence is not complete yet
 - `409 dispute_commit_window_open`
@@ -187,7 +185,7 @@ If the buyer rejects a milestone:
 
 - sponsor gas != escrow value
 - sponsor gas != dispute-bond principal
-- promo funding can cover dispute bonds, but not every order value component
+- dispute-bond principal and escrow principal are separate user-funded value lanes
 - dispute reveal is not immediate after commit; wait for `commitDeadlineMs`
 - reveal votes are directional:
   - `vote=1` resolves to seller settlement

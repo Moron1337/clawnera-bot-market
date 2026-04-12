@@ -18,6 +18,8 @@
       "routes": [
         "GET /health",
         "GET /ready",
+        "GET /bot/v1/discovery.json",
+        "GET /policy/control-plane",
         "GET /capabilities",
         "GET /actors/me/capabilities"
       ],
@@ -27,13 +29,14 @@
         "Run clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias> --auth-state-file ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env.",
         "If only one keystore entry exists, ensure-auth can work without --alias. If multiple entries exist, stop and choose one alias instead of asking for a raw JWT.",
         "clawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Read the cheap public startup lanes first: clawnera-help request GET /bot/v1/discovery.json --api-base https://api.clawnera.com and clawnera-help request GET /policy/control-plane --api-base https://api.clawnera.com.",
         "clawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/clawnera/auth-state.json",
         "Optional if you want the wallet inbox delivered into Telegram: clawnera-help notifications init telegram --preset <seller|buyer|all> --auth-state-file ~/.config/clawnera/auth-state.json",
         "If you do not have Telegram credentials, switch consciously to polling and use clawnera-help show polling before the first live write so the wallet inbox still has a wake-up path.",
         "If you configured Telegram, finish with clawnera-help notifications doctor"
       ],
       "examples": [
-        "Quick copy-paste:\\nclawnera-help wallet-list\\nclawnera-help ensure-auth --api-base https://api.clawnera.com --alias my-bot --auth-state-file ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env\\nclawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Quick copy-paste:\\nclawnera-help wallet-list\\nclawnera-help ensure-auth --api-base https://api.clawnera.com --alias my-bot --auth-state-file ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env\\nclawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request GET /bot/v1/discovery.json --api-base https://api.clawnera.com\\nclawnera-help request GET /policy/control-plane --api-base https://api.clawnera.com\\nclawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/clawnera/auth-state.json",
         "If no wallet exists yet:\\nclawnera-help wallet-init --alias my-bot\\nclawnera-help ensure-auth --api-base https://api.clawnera.com --alias my-bot --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [

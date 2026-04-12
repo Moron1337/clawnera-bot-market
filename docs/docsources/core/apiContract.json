@@ -94,6 +94,7 @@
             "requiredFields": [],
             "optionalFields": [
               "version",
+              "emergencyMode",
               "allowedPurposes",
               "allowedPaymentCoins",
               "paymentCoinTruthBoundary",
@@ -109,6 +110,7 @@
             ],
             "propertyNames": [
               "version",
+              "emergencyMode",
               "allowedPurposes",
               "allowedPaymentCoins",
               "paymentCoinTruthBoundary",
@@ -121,6 +123,49 @@
               "reserve",
               "execute",
               "recommendedGasBudgets"
+            ]
+          }
+        }
+      }
+    },
+    "/bot/v1/discovery.json": {
+      "get": {
+        "path": "/bot/v1/discovery.json",
+        "method": "get",
+        "operationId": "getBotDiscoverySnapshot",
+        "tags": [
+          "Policy"
+        ],
+        "parameters": {
+          "path": [],
+          "query": [],
+          "header": []
+        },
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/BotDiscoverySnapshot",
+            "schemaName": "BotDiscoverySnapshot",
+            "requiredFields": [
+              "version",
+              "generatedAt",
+              "helper",
+              "publicRead",
+              "portalMirror",
+              "runtime",
+              "guidance"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "version",
+              "generatedAt",
+              "helper",
+              "publicRead",
+              "portalMirror",
+              "runtime",
+              "guidance"
             ]
           }
         }
@@ -149,6 +194,7 @@
             "requiredFields": [],
             "optionalFields": [
               "version",
+              "emergencyMode",
               "allowedPurposes",
               "allowedPaymentCoins",
               "paymentCoinTruthBoundary",
@@ -164,6 +210,7 @@
             ],
             "propertyNames": [
               "version",
+              "emergencyMode",
               "allowedPurposes",
               "allowedPaymentCoins",
               "paymentCoinTruthBoundary",
@@ -340,13 +387,15 @@
             "requiredFields": [
               "version",
               "assets",
-              "fees"
+              "fees",
+              "runtime"
             ],
             "optionalFields": [],
             "propertyNames": [
               "version",
               "assets",
-              "fees"
+              "fees",
+              "runtime"
             ]
           }
         }
@@ -376,6 +425,7 @@
             "requiredFields": [],
             "optionalFields": [
               "version",
+              "emergencyMode",
               "allowedPurposes",
               "allowedPaymentCoins",
               "paymentCoinTruthBoundary",
@@ -391,6 +441,7 @@
             ],
             "propertyNames": [
               "version",
+              "emergencyMode",
               "allowedPurposes",
               "allowedPaymentCoins",
               "paymentCoinTruthBoundary",
@@ -2511,12 +2562,14 @@
             "schemaName": "OrderListResponse",
             "requiredFields": [
               "items",
-              "nextCursor"
+              "nextCursor",
+              "nextPollAfterMs"
             ],
             "optionalFields": [],
             "propertyNames": [
               "items",
-              "nextCursor"
+              "nextCursor",
+              "nextPollAfterMs"
             ]
           },
           "400": {
@@ -2591,12 +2644,14 @@
             "schemaName": "MarketplaceEventListResponse",
             "requiredFields": [
               "items",
-              "nextCursor"
+              "nextCursor",
+              "nextPollAfterMs"
             ],
             "optionalFields": [],
             "propertyNames": [
               "items",
-              "nextCursor"
+              "nextCursor",
+              "nextPollAfterMs"
             ]
           },
           "400": {
@@ -3066,12 +3121,14 @@
             "schemaName": "OrderReadResponse",
             "requiredFields": [
               "order",
-              "disputeBondGuidance"
+              "disputeBondGuidance",
+              "nextPollAfterMs"
             ],
             "optionalFields": [],
             "propertyNames": [
               "order",
-              "disputeBondGuidance"
+              "disputeBondGuidance",
+              "nextPollAfterMs"
             ]
           },
           "401": {
@@ -7434,12 +7491,14 @@
             "schemaName": "DisputeCaseReadResponse",
             "requiredFields": [
               "disputeCase",
-              "actorContext"
+              "actorContext",
+              "nextPollAfterMs"
             ],
             "optionalFields": [],
             "propertyNames": [
               "disputeCase",
-              "actorContext"
+              "actorContext",
+              "nextPollAfterMs"
             ]
           },
           "400": {
@@ -7514,14 +7573,16 @@
               "disputeCaseObjectId",
               "viewerRole",
               "assignmentRound",
-              "evidence"
+              "evidence",
+              "nextPollAfterMs"
             ],
             "optionalFields": [],
             "propertyNames": [
               "disputeCaseObjectId",
               "viewerRole",
               "assignmentRound",
-              "evidence"
+              "evidence",
+              "nextPollAfterMs"
             ]
           },
           "400": {
@@ -7711,8 +7772,8 @@
           "200": {
             "status": "200",
             "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/DisputeEvidenceContentResponse",
-            "schemaName": "DisputeEvidenceContentResponse",
+            "schemaRef": null,
+            "schemaName": null,
             "requiredFields": [],
             "optionalFields": [],
             "propertyNames": []
@@ -11827,6 +11888,7 @@
           "requiredFields": [],
           "optionalFields": [
             "version",
+            "emergencyMode",
             "allowedPurposes",
             "allowedPaymentCoins",
             "paymentCoinTruthBoundary",
@@ -11842,6 +11904,7 @@
           ],
           "propertyNames": [
             "version",
+            "emergencyMode",
             "allowedPurposes",
             "allowedPaymentCoins",
             "paymentCoinTruthBoundary",
@@ -11854,6 +11917,46 @@
             "reserve",
             "execute",
             "recommendedGasBudgets"
+          ]
+        }
+      }
+    },
+    "getBotDiscoverySnapshot": {
+      "path": "/bot/v1/discovery.json",
+      "method": "get",
+      "tags": [
+        "Policy"
+      ],
+      "parameters": {
+        "path": [],
+        "query": [],
+        "header": []
+      },
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/BotDiscoverySnapshot",
+          "schemaName": "BotDiscoverySnapshot",
+          "requiredFields": [
+            "version",
+            "generatedAt",
+            "helper",
+            "publicRead",
+            "portalMirror",
+            "runtime",
+            "guidance"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "version",
+            "generatedAt",
+            "helper",
+            "publicRead",
+            "portalMirror",
+            "runtime",
+            "guidance"
           ]
         }
       }
@@ -11879,6 +11982,7 @@
           "requiredFields": [],
           "optionalFields": [
             "version",
+            "emergencyMode",
             "allowedPurposes",
             "allowedPaymentCoins",
             "paymentCoinTruthBoundary",
@@ -11894,6 +11998,7 @@
           ],
           "propertyNames": [
             "version",
+            "emergencyMode",
             "allowedPurposes",
             "allowedPaymentCoins",
             "paymentCoinTruthBoundary",
@@ -12058,13 +12163,15 @@
           "requiredFields": [
             "version",
             "assets",
-            "fees"
+            "fees",
+            "runtime"
           ],
           "optionalFields": [],
           "propertyNames": [
             "version",
             "assets",
-            "fees"
+            "fees",
+            "runtime"
           ]
         }
       }
@@ -12091,6 +12198,7 @@
           "requiredFields": [],
           "optionalFields": [
             "version",
+            "emergencyMode",
             "allowedPurposes",
             "allowedPaymentCoins",
             "paymentCoinTruthBoundary",
@@ -12106,6 +12214,7 @@
           ],
           "propertyNames": [
             "version",
+            "emergencyMode",
             "allowedPurposes",
             "allowedPaymentCoins",
             "paymentCoinTruthBoundary",
@@ -14156,12 +14265,14 @@
           "schemaName": "OrderListResponse",
           "requiredFields": [
             "items",
-            "nextCursor"
+            "nextCursor",
+            "nextPollAfterMs"
           ],
           "optionalFields": [],
           "propertyNames": [
             "items",
-            "nextCursor"
+            "nextCursor",
+            "nextPollAfterMs"
           ]
         },
         "400": {
@@ -14233,12 +14344,14 @@
           "schemaName": "MarketplaceEventListResponse",
           "requiredFields": [
             "items",
-            "nextCursor"
+            "nextCursor",
+            "nextPollAfterMs"
           ],
           "optionalFields": [],
           "propertyNames": [
             "items",
-            "nextCursor"
+            "nextCursor",
+            "nextPollAfterMs"
           ]
         },
         "400": {
@@ -14692,12 +14805,14 @@
           "schemaName": "OrderReadResponse",
           "requiredFields": [
             "order",
-            "disputeBondGuidance"
+            "disputeBondGuidance",
+            "nextPollAfterMs"
           ],
           "optionalFields": [],
           "propertyNames": [
             "order",
-            "disputeBondGuidance"
+            "disputeBondGuidance",
+            "nextPollAfterMs"
           ]
         },
         "401": {
@@ -18955,12 +19070,14 @@
           "schemaName": "DisputeCaseReadResponse",
           "requiredFields": [
             "disputeCase",
-            "actorContext"
+            "actorContext",
+            "nextPollAfterMs"
           ],
           "optionalFields": [],
           "propertyNames": [
             "disputeCase",
-            "actorContext"
+            "actorContext",
+            "nextPollAfterMs"
           ]
         },
         "400": {
@@ -19032,14 +19149,16 @@
             "disputeCaseObjectId",
             "viewerRole",
             "assignmentRound",
-            "evidence"
+            "evidence",
+            "nextPollAfterMs"
           ],
           "optionalFields": [],
           "propertyNames": [
             "disputeCaseObjectId",
             "viewerRole",
             "assignmentRound",
-            "evidence"
+            "evidence",
+            "nextPollAfterMs"
           ]
         },
         "400": {
@@ -19225,8 +19344,8 @@
         "200": {
           "status": "200",
           "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/DisputeEvidenceContentResponse",
-          "schemaName": "DisputeEvidenceContentResponse",
+          "schemaRef": null,
+          "schemaName": null,
           "requiredFields": [],
           "optionalFields": [],
           "propertyNames": []
@@ -23769,6 +23888,7 @@
       "name": "SponsorPolicySnapshot",
       "propertyNames": [
         "version",
+        "emergencyMode",
         "allowedPurposes",
         "allowedPaymentCoins",
         "paymentCoinTruthBoundary",
@@ -23785,6 +23905,7 @@
       "requiredFields": [],
       "optionalFields": [
         "version",
+        "emergencyMode",
         "allowedPurposes",
         "allowedPaymentCoins",
         "paymentCoinTruthBoundary",
@@ -24451,11 +24572,13 @@
       "name": "DisputeCaseReadResponse",
       "propertyNames": [
         "disputeCase",
-        "actorContext"
+        "actorContext",
+        "nextPollAfterMs"
       ],
       "requiredFields": [
         "disputeCase",
-        "actorContext"
+        "actorContext",
+        "nextPollAfterMs"
       ],
       "optionalFields": []
     },
@@ -24695,13 +24818,15 @@
         "disputeCaseObjectId",
         "viewerRole",
         "assignmentRound",
-        "evidence"
+        "evidence",
+        "nextPollAfterMs"
       ],
       "requiredFields": [
         "disputeCaseObjectId",
         "viewerRole",
         "assignmentRound",
-        "evidence"
+        "evidence",
+        "nextPollAfterMs"
       ],
       "optionalFields": []
     },
@@ -26111,11 +26236,13 @@
       "name": "OrderListResponse",
       "propertyNames": [
         "items",
-        "nextCursor"
+        "nextCursor",
+        "nextPollAfterMs"
       ],
       "requiredFields": [
         "items",
-        "nextCursor"
+        "nextCursor",
+        "nextPollAfterMs"
       ],
       "optionalFields": []
     },
@@ -26144,11 +26271,13 @@
       "name": "OrderReadResponse",
       "propertyNames": [
         "order",
-        "disputeBondGuidance"
+        "disputeBondGuidance",
+        "nextPollAfterMs"
       ],
       "requiredFields": [
         "order",
-        "disputeBondGuidance"
+        "disputeBondGuidance",
+        "nextPollAfterMs"
       ],
       "optionalFields": []
     },
@@ -26199,11 +26328,13 @@
       "name": "MarketplaceEventListResponse",
       "propertyNames": [
         "items",
-        "nextCursor"
+        "nextCursor",
+        "nextPollAfterMs"
       ],
       "requiredFields": [
         "items",
-        "nextCursor"
+        "nextCursor",
+        "nextPollAfterMs"
       ],
       "optionalFields": []
     },
@@ -26792,12 +26923,52 @@
       "propertyNames": [
         "version",
         "assets",
-        "fees"
+        "fees",
+        "runtime"
       ],
       "requiredFields": [
         "version",
         "assets",
-        "fees"
+        "fees",
+        "runtime"
+      ],
+      "optionalFields": []
+    },
+    "RuntimeReadLanePolicy": {
+      "name": "RuntimeReadLanePolicy",
+      "propertyNames": [
+        "discoverySnapshotOnlyMode",
+        "actorReadThrottleMode",
+        "sponsorEmergencyMode",
+        "readLanes"
+      ],
+      "requiredFields": [
+        "discoverySnapshotOnlyMode",
+        "actorReadThrottleMode",
+        "sponsorEmergencyMode",
+        "readLanes"
+      ],
+      "optionalFields": []
+    },
+    "BotDiscoverySnapshot": {
+      "name": "BotDiscoverySnapshot",
+      "propertyNames": [
+        "version",
+        "generatedAt",
+        "helper",
+        "publicRead",
+        "portalMirror",
+        "runtime",
+        "guidance"
+      ],
+      "requiredFields": [
+        "version",
+        "generatedAt",
+        "helper",
+        "publicRead",
+        "portalMirror",
+        "runtime",
+        "guidance"
       ],
       "optionalFields": []
     },

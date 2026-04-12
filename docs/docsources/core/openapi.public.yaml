@@ -159,11 +159,15 @@ paths:
                                 type: string
                               readyPath:
                                 type: string
+                              discoverySnapshotPath:
+                                type: string
                               capabilitiesPath:
                                 type: string
                               assetPolicyPath:
                                 type: string
                               feePolicyPath:
+                                type: string
+                              controlPlanePath:
                                 type: string
                               mergedListingsPath:
                                 type: string
@@ -175,9 +179,11 @@ paths:
                             required:
                               - healthPath
                               - readyPath
+                              - discoverySnapshotPath
                               - capabilitiesPath
                               - assetPolicyPath
                               - feePolicyPath
+                              - controlPlanePath
                               - mergedListingsPath
                               - requestListingsPath
                               - listingDetailPathTemplate
@@ -187,11 +193,15 @@ paths:
                                 type: string
                               readyPath:
                                 type: string
+                              discoverySnapshotPath:
+                                type: string
                               capabilitiesPath:
                                 type: string
                               assetPolicyPath:
                                 type: string
                               feePolicyPath:
+                                type: string
+                              controlPlanePath:
                                 type: string
                               mergedListingsPath:
                                 type: string
@@ -205,9 +215,11 @@ paths:
                             required:
                               - healthPath
                               - readyPath
+                              - discoverySnapshotPath
                               - capabilitiesPath
                               - assetPolicyPath
                               - feePolicyPath
+                              - controlPlanePath
                               - mergedListingsPath
                               - requestListingsPath
                               - listingDetailPathTemplate
@@ -219,6 +231,23 @@ paths:
                           - portalMirror
                       features:
                         properties:
+                          runtimeModes:
+                            properties:
+                              discoverySnapshotOnly:
+                                type: boolean
+                              actorReadThrottle:
+                                type: boolean
+                              sponsorEmergencyMode:
+                                type: string
+                                enum:
+                                  - normal
+                                  - preflight_only
+                                  - disabled
+                            type: object
+                            required:
+                              - discoverySnapshotOnly
+                              - actorReadThrottle
+                              - sponsorEmergencyMode
                           disputeQuorum:
                             type: boolean
                           orderMailbox:
@@ -228,6 +257,8 @@ paths:
                           managedStorage:
                             type: boolean
                           managedStorageAnchorEnforcedOnAccept:
+                            type: boolean
+                          managedStorageRetentionEnabled:
                             type: boolean
                           manualDispute:
                             type: boolean
@@ -265,17 +296,48 @@ paths:
                               - reviewerStakePrincipal
                               - listingDepositPrincipal
                               - reputationInitPrincipal
+                          sameAssetPolicy:
+                            properties:
+                              orderAssetSource:
+                                type: string
+                                enum:
+                                  - accepted_bid
+                              disputeBond:
+                                type: string
+                                enum:
+                                  - disabled
+                                  - independent
+                                  - must_match_order_asset
+                              managedStorageFee:
+                                type: string
+                                enum:
+                                  - disabled
+                                  - independent
+                                  - must_match_order_asset
+                              legacyBothAllowedSymbols:
+                                type: array
+                                items:
+                                  type: string
+                            type: object
+                            required:
+                              - orderAssetSource
+                              - disputeBond
+                              - managedStorageFee
+                              - legacyBothAllowedSymbols
                         type: object
                         required:
+                          - runtimeModes
                           - disputeQuorum
                           - orderMailbox
                           - listingDeposit
                           - managedStorage
                           - managedStorageAnchorEnforcedOnAccept
+                          - managedStorageRetentionEnabled
                           - manualDispute
                           - milestoneManifestStrict
                           - milestoneSigningContextStrict
                           - assetLaneTruth
+                          - sameAssetPolicy
                     type: object
                     required:
                       - version
@@ -287,6 +349,19 @@ paths:
                 type: object
                 required:
                   - capabilities
+  /bot/v1/discovery.json:
+    get:
+      tags:
+        - Policy
+      security: []
+      operationId: getBotDiscoverySnapshot
+      responses:
+        '200':
+          description: Cached machine-readable discovery snapshot for bot and helper clients.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotDiscoverySnapshot'
   /actors/me/capabilities:
     get:
       tags:
@@ -1383,6 +1458,11 @@ paths:
       responses:
         '200':
           description: Orders visible to the authenticated actor.
+          headers:
+            x-clawdex-recommended-poll-interval-ms:
+              description: Recommended poll interval in milliseconds for actor-scoped order reads.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -1405,6 +1485,11 @@ paths:
       responses:
         '200':
           description: Order by id.
+          headers:
+            x-clawdex-recommended-poll-interval-ms:
+              description: Recommended poll interval in milliseconds for hot actor-scoped order reads.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -1557,15 +1642,24 @@ paths:
       responses:
         '200':
           description: Bound on-chain mailbox object id for this order.
+          headers:
+            x-clawdex-recommended-poll-interval-ms:
+              description: Recommended poll interval in milliseconds for hot actor-scoped mailbox reads.
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 properties:
                   mailboxObjectId:
                     type: string
+                  nextPollAfterMs:
+                    type: integer
+                    minimum: 1
                 type: object
                 required:
                   - mailboxObjectId
+                  - nextPollAfterMs
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1789,15 +1883,24 @@ paths:
       responses:
         '200':
           description: Negotiated bot communication agreement for this order.
+          headers:
+            x-clawdex-recommended-poll-interval-ms:
+              description: Recommended poll interval in milliseconds for hot actor-scoped communication reads.
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 properties:
                   communicationAgreement:
                     $ref: '#/components/schemas/OrderCommunicationAgreement'
+                  nextPollAfterMs:
+                    type: integer
+                    minimum: 1
                 type: object
                 required:
                   - communicationAgreement
+                  - nextPollAfterMs
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1818,6 +1921,11 @@ paths:
       responses:
         '200':
           description: Order timeline with milestone rows.
+          headers:
+            x-clawdex-recommended-poll-interval-ms:
+              description: Recommended poll interval in milliseconds for hot actor-scoped order timeline reads.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -1828,10 +1936,14 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/OrderMilestone'
+                  nextPollAfterMs:
+                    type: integer
+                    minimum: 1
                 type: object
                 required:
                   - order
                   - milestones
+                  - nextPollAfterMs
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2552,6 +2664,11 @@ paths:
       responses:
         '200':
           description: On-chain dispute case snapshot.
+          headers:
+            x-clawdex-recommended-poll-interval-ms:
+              description: Recommended poll interval in milliseconds for hot actor-scoped dispute reads.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -4012,6 +4129,12 @@ components:
           type: string
           enum:
             - sponsor_policy.v2
+        emergencyMode:
+          type: string
+          enum:
+            - normal
+            - preflight_only
+            - disabled
         allowedPurposes:
           type: array
           items:
@@ -4132,6 +4255,7 @@ components:
       additionalProperties: false
       required:
         - version
+        - emergencyMode
         - allowedPurposes
         - allowedPaymentCoins
         - paymentCoinTruthBoundary
@@ -4268,10 +4392,14 @@ components:
           $ref: '#/components/schemas/DisputeCaseSnapshot'
         actorContext:
           $ref: '#/components/schemas/DisputeActorContext'
+        nextPollAfterMs:
+          type: integer
+          minimum: 1
       type: object
       required:
         - disputeCase
         - actorContext
+        - nextPollAfterMs
     DisputeActorContext:
       properties:
         viewerRole:
@@ -5363,10 +5491,14 @@ components:
           $ref: '#/components/schemas/Order'
         disputeBondGuidance:
           $ref: '#/components/schemas/DisputeBondGuidance'
+        nextPollAfterMs:
+          type: integer
+          minimum: 1
       type: object
       required:
         - order
         - disputeBondGuidance
+        - nextPollAfterMs
     DisputeBondGuidance:
       properties:
         policy:
@@ -5440,10 +5572,14 @@ components:
         nextCursor:
           type: string
           nullable: true
+        nextPollAfterMs:
+          type: integer
+          minimum: 1
       type: object
       required:
         - items
         - nextCursor
+        - nextPollAfterMs
     AcceptBidResponse:
       properties:
         order:
@@ -6419,11 +6555,75 @@ components:
           $ref: '#/components/schemas/AssetPolicy'
         fees:
           $ref: '#/components/schemas/FeePolicy'
+        runtime:
+          $ref: '#/components/schemas/RuntimeReadLanePolicy'
       type: object
       required:
         - version
         - assets
         - fees
+        - runtime
+    RuntimeReadLanePolicy:
+      properties:
+        discoverySnapshotOnlyMode:
+          type: boolean
+        actorReadThrottleMode:
+          type: boolean
+        sponsorEmergencyMode:
+          type: string
+          enum:
+            - normal
+            - preflight_only
+            - disabled
+        readLanes:
+          properties:
+            publicDynamic:
+              properties:
+                routeRateLimitPerMin:
+                  type: integer
+                  minimum: 1
+                recommendedPollIntervalMs:
+                  type: integer
+                  minimum: 1
+              type: object
+              required:
+                - routeRateLimitPerMin
+                - recommendedPollIntervalMs
+            actorRead:
+              properties:
+                routeRateLimitPerMin:
+                  type: integer
+                  minimum: 1
+                recommendedPollIntervalMs:
+                  type: integer
+                  minimum: 1
+              type: object
+              required:
+                - routeRateLimitPerMin
+                - recommendedPollIntervalMs
+            actorHotRead:
+              properties:
+                routeRateLimitPerMin:
+                  type: integer
+                  minimum: 1
+                recommendedPollIntervalMs:
+                  type: integer
+                  minimum: 1
+              type: object
+              required:
+                - routeRateLimitPerMin
+                - recommendedPollIntervalMs
+          type: object
+          required:
+            - publicDynamic
+            - actorRead
+            - actorHotRead
+      type: object
+      required:
+        - discoverySnapshotOnlyMode
+        - actorReadThrottleMode
+        - sponsorEmergencyMode
+        - readLanes
     FeePolicy:
       properties:
         version:
@@ -6528,12 +6728,18 @@ components:
                     updateMode:
                       type: string
                       enum:
-                        - admin_chain_plan_seed_only
+                        - admin_chain_plan
                     configObjectId:
                       type: string
                     packageId:
                       type: string
-                    seedRouteId:
+                    queueRouteId:
+                      type: string
+                    approveRouteId:
+                      type: string
+                    cancelRouteId:
+                      type: string
+                    applyRouteId:
                       type: string
                     managedFields:
                       type: array
@@ -6559,7 +6765,10 @@ components:
                   required:
                     - source
                     - updateMode
-                    - seedRouteId
+                    - queueRouteId
+                    - approveRouteId
+                    - cancelRouteId
+                    - applyRouteId
                     - managedFields
                     - readOnlyFields
                     - envKeys
@@ -7360,6 +7569,178 @@ components:
         - formula
         - tierRankingBoostBps
         - tierGaslessQuotaMultiplierBps
+    BotDiscoverySnapshot:
+      properties:
+        version:
+          type: string
+          enum:
+            - bot_discovery.v1
+        generatedAt:
+          type: string
+          format: date-time
+        helper:
+          properties:
+            packageName:
+              type: string
+            installCommand:
+              type: string
+            npmPackageUrl:
+              type: string
+              format: uri
+            repositoryUrl:
+              type: string
+              format: uri
+          type: object
+          required:
+            - packageName
+            - installCommand
+            - npmPackageUrl
+            - repositoryUrl
+        publicRead:
+          properties:
+            healthPath:
+              type: string
+            readyPath:
+              type: string
+            discoverySnapshotPath:
+              type: string
+            capabilitiesPath:
+              type: string
+            assetPolicyPath:
+              type: string
+            feePolicyPath:
+              type: string
+            controlPlanePath:
+              type: string
+            mergedListingsPath:
+              type: string
+            requestListingsPath:
+              type: string
+            listingDetailPathTemplate:
+              type: string
+          type: object
+          required:
+            - healthPath
+            - readyPath
+            - discoverySnapshotPath
+            - capabilitiesPath
+            - assetPolicyPath
+            - feePolicyPath
+            - controlPlanePath
+            - mergedListingsPath
+            - requestListingsPath
+            - listingDetailPathTemplate
+        portalMirror:
+          properties:
+            healthPath:
+              type: string
+            readyPath:
+              type: string
+            discoverySnapshotPath:
+              type: string
+            capabilitiesPath:
+              type: string
+            assetPolicyPath:
+              type: string
+            feePolicyPath:
+              type: string
+            controlPlanePath:
+              type: string
+            mergedListingsPath:
+              type: string
+            requestListingsPath:
+              type: string
+            listingDetailPathTemplate:
+              type: string
+            guidePath:
+              type: string
+          type: object
+          required:
+            - healthPath
+            - readyPath
+            - discoverySnapshotPath
+            - capabilitiesPath
+            - assetPolicyPath
+            - feePolicyPath
+            - controlPlanePath
+            - mergedListingsPath
+            - requestListingsPath
+            - listingDetailPathTemplate
+            - guidePath
+        runtime:
+          $ref: '#/components/schemas/RuntimeReadLanePolicy'
+        guidance:
+          properties:
+            discoveryFirst:
+              type: array
+              items:
+                type: string
+            actorFeeds:
+              properties:
+                eventsPath:
+                  type: string
+                ordersPath:
+                  type: string
+                orderTimelinePathTemplate:
+                  type: string
+                orderMailboxPathTemplate:
+                  type: string
+                disputePathTemplate:
+                  type: string
+              type: object
+              required:
+                - eventsPath
+                - ordersPath
+                - orderTimelinePathTemplate
+                - orderMailboxPathTemplate
+                - disputePathTemplate
+            sponsor:
+              properties:
+                emergencyMode:
+                  type: string
+                  enum:
+                    - normal
+                    - preflight_only
+                    - disabled
+                policy:
+                  $ref: '#/components/schemas/SponsorPolicySnapshot'
+                routes:
+                  properties:
+                    preflightPath:
+                      type: string
+                    reservePath:
+                      type: string
+                    executePath:
+                      type: string
+                  type: object
+                  required:
+                    - preflightPath
+                    - reservePath
+                    - executePath
+              type: object
+              required:
+                - emergencyMode
+                - policy
+                - routes
+            notes:
+              type: array
+              items:
+                type: string
+          type: object
+          required:
+            - discoveryFirst
+            - actorFeeds
+            - sponsor
+            - notes
+      type: object
+      required:
+        - version
+        - generatedAt
+        - helper
+        - publicRead
+        - portalMirror
+        - runtime
+        - guidance
     ComplianceFlags:
       properties:
         enableConsumers:

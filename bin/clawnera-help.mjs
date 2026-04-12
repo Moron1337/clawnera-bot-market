@@ -2273,6 +2273,13 @@ function extractResponseTimingHints(rawHeaders) {
   };
 }
 
+function extractBodyNextPollAfterMs(responseBody) {
+  if (!responseBody || typeof responseBody !== "object" || Array.isArray(responseBody)) {
+    return null;
+  }
+  return parsePositiveDeadlineMs(responseBody.nextPollAfterMs);
+}
+
 function parseListingMilestonesFromShorthand(rawValue) {
   const normalized = String(rawValue ?? "").trim();
   if (!normalized) {
@@ -5721,6 +5728,7 @@ async function runApiRequest(commandArgs) {
   const { context, apiBase, idempotencyKey, url, result } = apiCall;
   const txPlan = detectTxPlanPayload(result.body);
   const responseTimingHints = extractResponseTimingHints(result.headers);
+  const bodyNextPollAfterMs = extractBodyNextPollAfterMs(result.body);
   const responseOut = resolveOptionalPathOption(options["response-out"]);
   if (responseOut) {
     const responsePayload =
@@ -5743,7 +5751,8 @@ async function runApiRequest(commandArgs) {
     status: result.status,
     responseOut: responseOut || null,
     headers: result.headers || {},
-    recommendedPollIntervalMs: responseTimingHints.recommendedPollIntervalMs,
+    recommendedPollIntervalMs: responseTimingHints.recommendedPollIntervalMs ?? bodyNextPollAfterMs,
+    nextPollAfterMs: bodyNextPollAfterMs,
     retryAfterMs: responseTimingHints.retryAfterMs,
     response: result.body,
     txPlanDetected: Boolean(txPlan),

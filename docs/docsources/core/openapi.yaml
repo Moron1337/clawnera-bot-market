@@ -139,9 +139,11 @@ paths:
                               [
                                 healthPath,
                                 readyPath,
+                                discoverySnapshotPath,
                                 capabilitiesPath,
                                 assetPolicyPath,
                                 feePolicyPath,
+                                controlPlanePath,
                                 mergedListingsPath,
                                 requestListingsPath,
                                 listingDetailPathTemplate
@@ -151,11 +153,15 @@ paths:
                                 type: string
                               readyPath:
                                 type: string
+                              discoverySnapshotPath:
+                                type: string
                               capabilitiesPath:
                                 type: string
                               assetPolicyPath:
                                 type: string
                               feePolicyPath:
+                                type: string
+                              controlPlanePath:
                                 type: string
                               mergedListingsPath:
                                 type: string
@@ -169,9 +175,11 @@ paths:
                               [
                                 healthPath,
                                 readyPath,
+                                discoverySnapshotPath,
                                 capabilitiesPath,
                                 assetPolicyPath,
                                 feePolicyPath,
+                                controlPlanePath,
                                 mergedListingsPath,
                                 requestListingsPath,
                                 listingDetailPathTemplate,
@@ -182,11 +190,15 @@ paths:
                                 type: string
                               readyPath:
                                 type: string
+                              discoverySnapshotPath:
+                                type: string
                               capabilitiesPath:
                                 type: string
                               assetPolicyPath:
                                 type: string
                               feePolicyPath:
+                                type: string
+                              controlPlanePath:
                                 type: string
                               mergedListingsPath:
                                 type: string
@@ -200,17 +212,31 @@ paths:
                         type: object
                         required:
                           [
+                            runtimeModes,
                             disputeQuorum,
                             orderMailbox,
                             listingDeposit,
                             managedStorage,
                             managedStorageAnchorEnforcedOnAccept,
+                            managedStorageRetentionEnabled,
                             manualDispute,
                             milestoneManifestStrict,
                             milestoneSigningContextStrict,
-                            assetLaneTruth
+                            assetLaneTruth,
+                            sameAssetPolicy
                           ]
                         properties:
+                          runtimeModes:
+                            type: object
+                            required: [discoverySnapshotOnly, actorReadThrottle, sponsorEmergencyMode]
+                            properties:
+                              discoverySnapshotOnly:
+                                type: boolean
+                              actorReadThrottle:
+                                type: boolean
+                              sponsorEmergencyMode:
+                                type: string
+                                enum: [normal, preflight_only, disabled]
                           disputeQuorum:
                             type: boolean
                           orderMailbox:
@@ -220,6 +246,8 @@ paths:
                           managedStorage:
                             type: boolean
                           managedStorageAnchorEnforcedOnAccept:
+                            type: boolean
+                          managedStorageRetentionEnabled:
                             type: boolean
                           manualDispute:
                             type: boolean
@@ -259,6 +287,35 @@ paths:
                                 type: array
                                 items:
                                   type: string
+                          sameAssetPolicy:
+                            type: object
+                            required: [orderAssetSource, disputeBond, managedStorageFee, legacyBothAllowedSymbols]
+                            properties:
+                              orderAssetSource:
+                                type: string
+                                enum: [accepted_bid]
+                              disputeBond:
+                                type: string
+                                enum: [disabled, independent, must_match_order_asset]
+                              managedStorageFee:
+                                type: string
+                                enum: [disabled, independent, must_match_order_asset]
+                              legacyBothAllowedSymbols:
+                                type: array
+                                items:
+                                  type: string
+  /bot/v1/discovery.json:
+    get:
+      tags: [Policy]
+      security: []
+      operationId: getBotDiscoverySnapshot
+      responses:
+        "200":
+          description: Cached machine-readable discovery snapshot for bot and helper clients.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotDiscoverySnapshot"
   /actors/me/capabilities:
     get:
       tags: [Auth]
@@ -1316,6 +1373,11 @@ paths:
       responses:
         "200":
           description: Orders visible to the authenticated actor.
+          headers:
+            x-clawdex-recommended-poll-interval-ms:
+              description: Recommended poll interval in milliseconds for actor-scoped order reads.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -1360,6 +1422,11 @@ paths:
       responses:
         "200":
           description: Cursor-based marketplace event feed with public and actor-scoped visibility.
+          headers:
+            x-clawdex-recommended-poll-interval-ms:
+              description: Recommended poll interval in milliseconds for the current event feed lane.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -1518,6 +1585,11 @@ paths:
       responses:
         "200":
           description: Order by id.
+          headers:
+            x-clawdex-recommended-poll-interval-ms:
+              description: Recommended poll interval in milliseconds for hot actor-scoped order reads.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -1665,14 +1737,22 @@ paths:
       responses:
         "200":
           description: Bound on-chain mailbox object id for this order.
+          headers:
+            x-clawdex-recommended-poll-interval-ms:
+              description: Recommended poll interval in milliseconds for hot actor-scoped mailbox reads.
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 type: object
-                required: [mailboxObjectId]
+                required: [mailboxObjectId, nextPollAfterMs]
                 properties:
                   mailboxObjectId:
                     type: string
+                  nextPollAfterMs:
+                    type: integer
+                    minimum: 1
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -1888,14 +1968,22 @@ paths:
       responses:
         "200":
           description: Negotiated bot communication agreement for this order.
+          headers:
+            x-clawdex-recommended-poll-interval-ms:
+              description: Recommended poll interval in milliseconds for hot actor-scoped communication reads.
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 type: object
-                required: [communicationAgreement]
+                required: [communicationAgreement, nextPollAfterMs]
                 properties:
                   communicationAgreement:
                     $ref: "#/components/schemas/OrderCommunicationAgreement"
+                  nextPollAfterMs:
+                    type: integer
+                    minimum: 1
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -1915,11 +2003,16 @@ paths:
       responses:
         "200":
           description: Order timeline with milestone rows.
+          headers:
+            x-clawdex-recommended-poll-interval-ms:
+              description: Recommended poll interval in milliseconds for hot actor-scoped order timeline reads.
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 type: object
-                required: [order, milestones]
+                required: [order, milestones, nextPollAfterMs]
                 properties:
                   order:
                     $ref: "#/components/schemas/Order"
@@ -1927,6 +2020,9 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/OrderMilestone"
+                  nextPollAfterMs:
+                    type: integer
+                    minimum: 1
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -2833,6 +2929,11 @@ paths:
       responses:
         "200":
           description: On-chain dispute case snapshot.
+          headers:
+            x-clawdex-recommended-poll-interval-ms:
+              description: Recommended poll interval in milliseconds for hot actor-scoped dispute reads.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -2857,6 +2958,11 @@ paths:
       responses:
         "200":
           description: Dispute-scoped evidence summaries visible to buyer, seller, assigned reviewers, and currently invited reviewers.
+          headers:
+            x-clawdex-recommended-poll-interval-ms:
+              description: Recommended poll interval in milliseconds for hot actor-scoped dispute evidence reads.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -2936,10 +3042,22 @@ paths:
       responses:
         "200":
           description: Dispute-scoped reviewer or party content access using the immutable evidence snapshot, not the normal two-party order artifact route. The resolved payload is actor-scoped and returns only the caller's own wrap.
+          headers:
+            x-clawdex-recommended-poll-interval-ms:
+              description: Recommended poll interval in milliseconds for hot actor-scoped dispute evidence content reads.
+              schema:
+                type: string
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DisputeEvidenceContentResponse"
+                allOf:
+                  - type: object
+                    required: [nextPollAfterMs]
+                    properties:
+                      nextPollAfterMs:
+                        type: integer
+                        minimum: 1
+                  - $ref: "#/components/schemas/DisputeEvidenceContentResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -4782,6 +4900,7 @@ components:
       required:
         [
           version,
+          emergencyMode,
           allowedPurposes,
           allowedPaymentCoins,
           paymentCoinTruthBoundary,
@@ -4799,6 +4918,9 @@ components:
         version:
           type: string
           enum: [sponsor_policy.v2]
+        emergencyMode:
+          type: string
+          enum: [normal, preflight_only, disabled]
         allowedPurposes:
           type: array
           items:
@@ -5849,12 +5971,15 @@ components:
           format: int64
     DisputeCaseReadResponse:
       type: object
-      required: [disputeCase, actorContext]
+      required: [disputeCase, actorContext, nextPollAfterMs]
       properties:
         disputeCase:
           $ref: "#/components/schemas/DisputeCaseSnapshot"
         actorContext:
           $ref: "#/components/schemas/DisputeActorContext"
+        nextPollAfterMs:
+          type: integer
+          minimum: 1
     DisputeEvidenceStatus:
       type: string
       enum: [ACTIVE, CLOSED, SUPERSEDED, EXPIRED]
@@ -6108,7 +6233,7 @@ components:
           additionalProperties: true
     DisputeEvidenceListResponse:
       type: object
-      required: [disputeCaseObjectId, viewerRole, assignmentRound, evidence]
+      required: [disputeCaseObjectId, viewerRole, assignmentRound, evidence, nextPollAfterMs]
       properties:
         disputeCaseObjectId:
           type: string
@@ -6121,6 +6246,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DisputeEvidenceItem"
+        nextPollAfterMs:
+          type: integer
+          minimum: 1
     DisputeEvidenceContentResponse:
       oneOf:
         - $ref: "#/components/schemas/DisputeLinkedDeliverableEvidenceContentResponse"
@@ -7682,7 +7810,7 @@ components:
           format: date-time
     OrderListResponse:
       type: object
-      required: [items, nextCursor]
+      required: [items, nextCursor, nextPollAfterMs]
       properties:
         items:
           type: array
@@ -7691,6 +7819,9 @@ components:
         nextCursor:
           type: string
           nullable: true
+        nextPollAfterMs:
+          type: integer
+          minimum: 1
     AcceptBidResponse:
       type: object
       required: [order, disputeBondRequired, disputeBondState, disputeBondPolicy, disputeBondGuidance]
@@ -7717,12 +7848,15 @@ components:
             $ref: "#/components/schemas/OperationalWarning"
     OrderReadResponse:
       type: object
-      required: [order, disputeBondGuidance]
+      required: [order, disputeBondGuidance, nextPollAfterMs]
       properties:
         order:
           $ref: "#/components/schemas/Order"
         disputeBondGuidance:
           $ref: "#/components/schemas/DisputeBondGuidance"
+        nextPollAfterMs:
+          type: integer
+          minimum: 1
     MarketplaceEventFeedScope:
       type: string
       enum: [public, actor, all]
@@ -7788,7 +7922,7 @@ components:
           format: date-time
     MarketplaceEventListResponse:
       type: object
-      required: [items, nextCursor]
+      required: [items, nextCursor, nextPollAfterMs]
       properties:
         items:
           type: array
@@ -7797,6 +7931,9 @@ components:
         nextCursor:
           type: string
           nullable: true
+        nextPollAfterMs:
+          type: integer
+          minimum: 1
     CreateWebhookSubscriptionRequest:
       type: object
       required: [url]
@@ -8856,7 +8993,10 @@ components:
                     [
                       source,
                       updateMode,
-                      seedRouteId,
+                      queueRouteId,
+                      approveRouteId,
+                      cancelRouteId,
+                      applyRouteId,
                       managedFields,
                       readOnlyFields,
                       envKeys,
@@ -8868,12 +9008,18 @@ components:
                       enum: [onchain_config]
                     updateMode:
                       type: string
-                      enum: [admin_chain_plan_seed_only]
+                      enum: [admin_chain_plan]
                     configObjectId:
                       type: string
                     packageId:
                       type: string
-                    seedRouteId:
+                    queueRouteId:
+                      type: string
+                    approveRouteId:
+                      type: string
+                    cancelRouteId:
+                      type: string
+                    applyRouteId:
                       type: string
                     managedFields:
                       type: array
@@ -9244,7 +9390,7 @@ components:
               type: [string, "null"]
     MarketControlPlanePolicy:
       type: object
-      required: [version, assets, fees]
+      required: [version, assets, fees, runtime]
       properties:
         version:
           type: string
@@ -9252,6 +9398,200 @@ components:
           $ref: "#/components/schemas/AssetPolicy"
         fees:
           $ref: "#/components/schemas/FeePolicy"
+        runtime:
+          $ref: "#/components/schemas/RuntimeReadLanePolicy"
+    RuntimeReadLanePolicy:
+      type: object
+      required: [discoverySnapshotOnlyMode, actorReadThrottleMode, sponsorEmergencyMode, readLanes]
+      properties:
+        discoverySnapshotOnlyMode:
+          type: boolean
+        actorReadThrottleMode:
+          type: boolean
+        sponsorEmergencyMode:
+          type: string
+          enum: [normal, preflight_only, disabled]
+        readLanes:
+          type: object
+          required: [publicDynamic, actorRead, actorHotRead]
+          properties:
+            publicDynamic:
+              type: object
+              required: [routeRateLimitPerMin, recommendedPollIntervalMs]
+              properties:
+                routeRateLimitPerMin:
+                  type: integer
+                  minimum: 1
+                recommendedPollIntervalMs:
+                  type: integer
+                  minimum: 1
+            actorRead:
+              type: object
+              required: [routeRateLimitPerMin, recommendedPollIntervalMs]
+              properties:
+                routeRateLimitPerMin:
+                  type: integer
+                  minimum: 1
+                recommendedPollIntervalMs:
+                  type: integer
+                  minimum: 1
+            actorHotRead:
+              type: object
+              required: [routeRateLimitPerMin, recommendedPollIntervalMs]
+              properties:
+                routeRateLimitPerMin:
+                  type: integer
+                  minimum: 1
+                recommendedPollIntervalMs:
+                  type: integer
+                  minimum: 1
+    BotDiscoverySnapshot:
+      type: object
+      required: [version, generatedAt, helper, publicRead, portalMirror, runtime, guidance]
+      properties:
+        version:
+          type: string
+          enum: [bot_discovery.v1]
+        generatedAt:
+          type: string
+          format: date-time
+        helper:
+          type: object
+          required: [packageName, installCommand, npmPackageUrl, repositoryUrl]
+          properties:
+            packageName:
+              type: string
+            installCommand:
+              type: string
+            npmPackageUrl:
+              type: string
+              format: uri
+            repositoryUrl:
+              type: string
+              format: uri
+        publicRead:
+          type: object
+          required:
+            [
+              healthPath,
+              readyPath,
+              discoverySnapshotPath,
+              capabilitiesPath,
+              assetPolicyPath,
+              feePolicyPath,
+              controlPlanePath,
+              mergedListingsPath,
+              requestListingsPath,
+              listingDetailPathTemplate
+            ]
+          properties:
+            healthPath:
+              type: string
+            readyPath:
+              type: string
+            discoverySnapshotPath:
+              type: string
+            capabilitiesPath:
+              type: string
+            assetPolicyPath:
+              type: string
+            feePolicyPath:
+              type: string
+            controlPlanePath:
+              type: string
+            mergedListingsPath:
+              type: string
+            requestListingsPath:
+              type: string
+            listingDetailPathTemplate:
+              type: string
+        portalMirror:
+          type: object
+          required:
+            [
+              healthPath,
+              readyPath,
+              discoverySnapshotPath,
+              capabilitiesPath,
+              assetPolicyPath,
+              feePolicyPath,
+              controlPlanePath,
+              mergedListingsPath,
+              requestListingsPath,
+              listingDetailPathTemplate,
+              guidePath
+            ]
+          properties:
+            healthPath:
+              type: string
+            readyPath:
+              type: string
+            discoverySnapshotPath:
+              type: string
+            capabilitiesPath:
+              type: string
+            assetPolicyPath:
+              type: string
+            feePolicyPath:
+              type: string
+            controlPlanePath:
+              type: string
+            mergedListingsPath:
+              type: string
+            requestListingsPath:
+              type: string
+            listingDetailPathTemplate:
+              type: string
+            guidePath:
+              type: string
+        runtime:
+          $ref: "#/components/schemas/RuntimeReadLanePolicy"
+        guidance:
+          type: object
+          required: [discoveryFirst, actorFeeds, sponsor, notes]
+          properties:
+            discoveryFirst:
+              type: array
+              items:
+                type: string
+            actorFeeds:
+              type: object
+              required:
+                [eventsPath, ordersPath, orderTimelinePathTemplate, orderMailboxPathTemplate, disputePathTemplate]
+              properties:
+                eventsPath:
+                  type: string
+                ordersPath:
+                  type: string
+                orderTimelinePathTemplate:
+                  type: string
+                orderMailboxPathTemplate:
+                  type: string
+                disputePathTemplate:
+                  type: string
+            sponsor:
+              type: object
+              required: [emergencyMode, policy, routes]
+              properties:
+                emergencyMode:
+                  type: string
+                  enum: [normal, preflight_only, disabled]
+                policy:
+                  $ref: "#/components/schemas/SponsorPolicySnapshot"
+                routes:
+                  type: object
+                  required: [preflightPath, reservePath, executePath]
+                  properties:
+                    preflightPath:
+                      type: string
+                    reservePath:
+                      type: string
+                    executePath:
+                      type: string
+            notes:
+              type: array
+              items:
+                type: string
     RankedListing:
       type: object
       required: [listing, creatorTier, creatorAcceptsClaw, score, scoreBreakdown]

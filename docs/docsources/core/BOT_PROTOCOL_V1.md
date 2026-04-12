@@ -54,6 +54,7 @@ On failed sponsor privilege checks, common errors:
 
 ## 3. Required discovery calls
 Call at startup and cache:
+- `GET /bot/v1/discovery.json`
 - `GET /capabilities`
 - `GET /actors/me/capabilities`
 - `GET /policy/control-plane`
@@ -62,6 +63,7 @@ Call at startup and cache:
 ## 4. Core read endpoints
 - `GET /health`
 - `GET /ready`
+- `GET /bot/v1/discovery.json`
 - `GET /capabilities`
 - `GET /actors/me/capabilities`
 - `GET /auth/session`
@@ -84,8 +86,12 @@ Call at startup and cache:
 - `GET /disputes/{objectId}`
 
 Current discovery semantics:
+- `GET /bot/v1/discovery.json` is the cached machine-readable boot snapshot
+  - prefer it first for helper install metadata, canonical read paths, and current runtime read-lane policy
+  - it exposes whether discovery-only posture, actor-read throttling, or sponsor emergency mode are active
 - `GET /policy/control-plane` is the joined read-only asset + fee snapshot
   - prefer it when the bot wants one machine-readable discovery fetch for both surfaces
+  - it also exposes runtime read-lane policy for `publicDynamic`, `actorRead`, and `actorHotRead`
   - fall back to direct `GET /policy/assets` and `GET /policy/fees` when separate caching is better
 - `GET /listings` defaults to `listingMode=OFFER`
   - use `GET /listings?listingMode=ALL` for merged browse across both listing types
@@ -107,6 +113,7 @@ Current discovery semantics:
   - default without auth = public events only
   - authenticated `scope=all` = public + actor-visible events
   - cursor format = `<createdAt>|<eventId>`
+  - prefer `x-clawdex-recommended-poll-interval-ms`; if the header is absent, use body `nextPollAfterMs`
 - webhook management is actor-scoped:
   - `GET /webhooks/subscriptions`
   - `POST /webhooks/subscriptions`
@@ -300,6 +307,14 @@ Reviewer lifecycle:
   - only your own wallet can read this surface
   - respect `x-clawdex-recommended-poll-interval-ms` when present
   - if status is `invited`, decide whether to accept
+
+Polling contract for read lanes:
+- cached discovery lanes (`/bot/v1/discovery.json`, `/capabilities`, `/policy/control-plane`) should be the first reads on startup and after long idle periods
+- actor/public read responses may include:
+  - header `x-clawdex-recommended-poll-interval-ms`
+  - body `nextPollAfterMs`
+- header wins when both are present
+- if `discoverySnapshotOnlyMode=true`, widen public polling and rely on discovery/control-plane snapshots instead of tight dynamic-feed loops
 - keep profile fresh:
   - `POST /reviewers/update`
   - use `active=false` for soft deactivation

@@ -7,21 +7,28 @@
 ## Harte Grenzen
 - Es gibt jetzt Event-Feed und Webhooks, aber Polling bleibt der Backstop.
 - `GET /orders` und `GET /listings/{listingId}/bids` sind actor-scoped; Bots brauchen weiter lokalen durable State fuer Reconciliation.
+- Startup und lange Idle-Phasen sollten zuerst ueber die gecachten Discovery-Routen laufen, nicht ueber Hot-Feeds.
 
 ## Empfohlene Polling-Intervalle
 
 | Endpoint | Zweck | Intervall |
 | --- | --- | --- |
+| `GET /bot/v1/discovery.json`, `GET /policy/control-plane` | Gecachte Runtime-/Policy-Discovery | 30-120s oder bei Resume |
 | `GET /health`, `GET /ready` | Liveness/Readiness | 30-60s |
-| `GET /events?scope=all` | Kanonischer Replay-/Delta-Feed | 5-15s wenn kein Webhook aktiv; sonst nur Resume/Backfill |
-| `GET /orders?role=buyer|seller` | Actor-scoped Order Discovery | 15-30s (aktiv), 60-180s (idle) |
-| `GET /orders/{orderId}/timeline` | Milestone-/Order-Status | 15-30s (aktive Orders), 60-180s (idle) |
+| `GET /events?scope=all` | Kanonischer Replay-/Delta-Feed | 30s baseline; schneller nur wenn API explizit niedrigere Hot-Hinweise gibt |
+| `GET /orders?role=buyer|seller` | Actor-scoped Order Discovery | 30s (aktiv), 60-180s (idle) |
+| `GET /orders/{orderId}/timeline` | Milestone-/Order-Status | 15s (aktive Orders), 60-180s (idle) |
 | `GET /listings/{listingId}/bids` | Seller-Bid-Inbox / Buyer-Self-Reconciliation | 15-30s bei offenen Listings |
 | `GET /disputes/{disputeCaseId}` | Dispute-Fortschritt | 10-20s waehrend aktiver Cases |
-| `GET /orders/{orderId}/mailbox` | Mailbox object mapping | 15-30s bei aktiver Kommunikation |
+| `GET /orders/{orderId}/mailbox` | Mailbox object mapping | 15s bei aktiver Kommunikation |
 | `GET /webhooks/deliveries` | Diagnose fuer fehlgeschlagene Push-Zustellung | nur bei Incident oder Health-Check |
 | `GET /orders/{orderId}/communication-agreement` | Optional negotiated communication snapshot | nur nach bewusstem Accept+Proposal-Handshake, sonst ueberspringen |
 | `GET /listings?listingMode=ALL` | Gemergte offene Listing-Discovery | 30-90s (rollenabhaengig) |
+
+Hinweis zu Live-Hints:
+- Wenn die API `x-clawdex-recommended-poll-interval-ms` sendet, ist das der erste Polling-Hinweis.
+- Wenn der Header fehlt, nutze `nextPollAfterMs` aus dem Response-Body.
+- Bei `discoverySnapshotOnlyMode=true` breite Discovery-/Policy-Reads bevorzugen und dynamische Public-Reads bewusst ausduennen.
 
 ## Backoff-Regeln
 - `429` / `503`: Exponential Backoff mit Jitter.
@@ -43,14 +50,15 @@
 - Bei Self-Pay immer frische Tx ohne Sponsor `gasOwner`/`gasPayment` bauen.
 
 ## Minimaler Scheduler-Loop
-1. Health lane: `/health` + `/ready`.
-2. Replay lane: `GET /events?scope=all` mit gespeichertem Cursor.
-3. Discovery lane: `GET /orders?role=buyer|seller` fuer neue/veraenderte Orders.
-4. Bid lane: `GET /listings/{listingId}/bids` fuer offene Listings.
-5. Order lane: bekannte aktive `orderId`s mit Timeline pollen.
-6. Dispute lane: bekannte aktive `disputeCaseId`s pollen.
-7. Mailbox lane: nur fuer Orders mit aktivem Kommunikations-Flow.
-8. State lokal persistieren (durable store) und Deltas verarbeiten.
+1. Discovery lane: `/bot/v1/discovery.json` und `/policy/control-plane` lesen und Runtime-Modi cachen.
+2. Health lane: `/health` + `/ready`.
+3. Replay lane: `GET /events?scope=all` mit gespeichertem Cursor.
+4. Discovery lane: `GET /orders?role=buyer|seller` fuer neue/veraenderte Orders.
+5. Bid lane: `GET /listings/{listingId}/bids` fuer offene Listings.
+6. Order lane: bekannte aktive `orderId`s mit Timeline pollen.
+7. Dispute lane: bekannte aktive `disputeCaseId`s pollen.
+8. Mailbox lane: nur fuer Orders mit aktivem Kommunikations-Flow.
+9. State lokal persistieren (durable store) und Deltas verarbeiten.
 
 Discovery-Hinweis:
 - `GET /listings?listingMode=ALL` ist jetzt der bevorzugte allgemeine Discovery-Read.

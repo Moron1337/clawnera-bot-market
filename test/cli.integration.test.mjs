@@ -3916,7 +3916,8 @@ test("request surfaces response headers and recommended poll interval hints", as
         "retry-after": "5"
       },
       body: {
-        invites: []
+        invites: [],
+        nextPollAfterMs: 45000
       }
     })
   });
@@ -3937,7 +3938,41 @@ test("request surfaces response headers and recommended poll interval hints", as
     assert.equal(payload.ok, true);
     assert.equal(payload.headers["x-clawdex-recommended-poll-interval-ms"], "30000");
     assert.equal(payload.recommendedPollIntervalMs, 30000);
+    assert.equal(payload.nextPollAfterMs, 45000);
     assert.equal(payload.retryAfterMs, 5000);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("request falls back to body nextPollAfterMs when the response header is absent", async () => {
+  const mock = await startMockServer({
+    "GET /orders": () => ({
+      status: 200,
+      body: {
+        items: [],
+        nextCursor: null,
+        nextPollAfterMs: 30000
+      }
+    })
+  });
+
+  try {
+    const result = await runCli([
+      "request",
+      "GET",
+      "/orders",
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      "test-jwt",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.recommendedPollIntervalMs, 30000);
+    assert.equal(payload.nextPollAfterMs, 30000);
   } finally {
     await mock.close();
   }

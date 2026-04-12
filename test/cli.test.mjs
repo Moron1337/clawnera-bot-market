@@ -841,7 +841,10 @@ test("setup-quick compact output uses ensure-auth", () => {
   assert.match(result.stdout, /^recipe:setup-quick/m);
   assert.match(result.stdout, /do:clawnera-help wallet-list && clawnera-help ensure-auth --api-base https:\/\/api\.clawnera\.com --alias <wallet-alias>/);
   assert.doesNotMatch(result.stdout, /^write:GET /m);
-  assert.match(result.stdout, /^read:GET \/actors\/me\/capabilities \| GET \/ready/m);
+  assert.match(
+    result.stdout,
+    /^read:GET \/bot\/v1\/discovery\.json \| GET \/policy\/control-plane \| GET \/actors\/me\/capabilities/m
+  );
 });
 
 test("ensure-auth recipe compact output uses the self-auth helper", () => {

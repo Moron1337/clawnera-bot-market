@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.95] - 2026-04-12
+
+- Synced the public helper's startup lane to the current `clawdex` discovery-first runtime truth:
+  - `setup-quick` compact output, recipe text, and README startup order now read `GET /bot/v1/discovery.json` and `GET /policy/control-plane` before the actor-scoped capabilities read
+  - packaged polling guidance now states that public dynamic reads share one hot-read budget and that live `readLanes` / poll headers override static fallback intervals
+- Retired stale first-party promo / marketing dispute-bond guidance from the active public live-flow docs so the shipped helper/docs surface matches the current user-funded runtime posture.
+
 ## [0.1.94] - 2026-04-10
 
 - Clarified wallet wake-up semantics across the public helper so actor-visible notification flows match the current runtime truth:

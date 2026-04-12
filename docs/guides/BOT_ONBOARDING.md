@@ -383,7 +383,8 @@ Hinweis:
        open/replacement tx calls around it
      - if tx execution does not confirm `post_execute_binding_ok=true`, stop and inspect live receipt/dispute readback instead of inventing a manual bind step
 3. Voting:
-   - before accept, read `GET /reviewers/me/invites` or `GET /reviewers/me/metrics`
+   - optional wake-up path: subscribe or poll `GET /events?scope=all&type=reviewer.invited`
+   - before accept, still read `GET /reviewers/me/invites` or `GET /reviewers/me/metrics`
    - only treat the slot as actionable when `acceptReadiness.status=ready`
    - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/reviewers/accept --body '{}'`
    - on configured runtimes the returned accept plan targets `accept_dispute_case_with_reputation_cfg`

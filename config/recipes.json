@@ -1283,6 +1283,7 @@
       ],
       "steps": [
         "Poll clawnera-help reviewer-invites and respect recommendedPollIntervalMs.",
+        "Optional wake-up lane: subscribe to GET /events?scope=all&type=reviewer.invited or use clawnera-help wallet-inbox --preset custom --event-types reviewer.invited, then confirm through reviewer-invites before accept.",
         "If you are unsure whether this reviewer is still cleanly eligible, read GET /reviewers/me/metrics first and stop when pendingDecisionMetricsClaimRequired=true.",
         "If status is invited, read GET /disputes/{disputeCaseId}.",
         "Run clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/reviewers/accept --auth-state-file <reviewer-auth-state-file> --body '{}' only if the case is still actionable.",

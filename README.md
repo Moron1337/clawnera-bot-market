@@ -239,6 +239,8 @@ Notes:
   - live listings need `2` to `8` milestones
   - a single milestone now stops locally before the POST
 - `clawnera-help reviewer-invites` is the shortest reviewer inbox read and surfaces the same poll hint directly
+- reviewer bots can also use `clawnera-help wallet-inbox --preset custom --event-types reviewer.invited`
+  as a wake-up signal, then confirm the live slot with `clawnera-help reviewer-invites` before accept
 - reviewer self-routes now pre-hydrate missing reviewer context for `accept`, `commit`, `reveal`, and `claim-metrics` before the first POST
 - `claim-metrics` still needs the closed `disputeCaseObjectId`; the CLI can infer it only when exactly one closed reviewer invite exists for that wallet
 - if multiple closed reviewer invites exist, the CLI now stops with `claim_metrics_dispute_case_ambiguous` and prints the candidate `disputeCaseObjectIds` you must choose from

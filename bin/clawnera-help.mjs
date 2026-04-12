@@ -3759,6 +3759,7 @@ function walletInboxUsageLines() {
     "  clawnera-help wallet-inbox --preset seller",
     "  clawnera-help wallet-inbox --preset buyer --auth-state-file ~/.config/clawnera/auth-state.json",
     "  clawnera-help notifications init telegram --preset all --auth-state-file ~/.config/clawnera/auth-state.json",
+    "  clawnera-help wallet-inbox --preset custom --event-types reviewer.invited --json",
     "  clawnera-help wallet-inbox --preset custom --event-types bid.created,mailbox.signal_acked --json"
   ];
 }

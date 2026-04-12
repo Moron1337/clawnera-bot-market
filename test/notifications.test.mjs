@@ -45,11 +45,12 @@ test("explicit advanced event types are accepted even when presets stay low-nois
   const resolved = resolveNotificationEventTypes({
     preset: "buyer",
     eventTypes:
-      "dispute.finalization_planned,dispute.escrow_resolution_planned,mailbox.bound,mailbox.signal_acked"
+      "dispute.finalization_planned,dispute.escrow_resolution_planned,reviewer.invited,mailbox.bound,mailbox.signal_acked"
   });
   assert.ok(resolved.eventTypes.includes("order.status_changed"));
   assert.ok(resolved.eventTypes.includes("dispute.finalization_planned"));
   assert.ok(resolved.eventTypes.includes("dispute.escrow_resolution_planned"));
+  assert.ok(resolved.eventTypes.includes("reviewer.invited"));
   assert.ok(resolved.eventTypes.includes("mailbox.bound"));
   assert.ok(resolved.eventTypes.includes("mailbox.signal_acked"));
   assert.deepEqual(resolved.invalidEventTypes, []);
@@ -147,6 +148,18 @@ test("advanced dispute and mailbox event formatting stays human-readable", () =>
   assert.match(ackText, /^Clawnera mailbox ack/m);
   assert.match(ackText, /Mailbox acknowledgement recorded/);
   assert.match(ackText, /ackedSeq: 4/);
+
+  const reviewerInviteText = formatNotificationEventForTelegram({
+    eventType: "reviewer.invited",
+    payloadJson: {
+      disputeCaseObjectId: "0xcase",
+      assignmentRound: "2",
+      invitedAtMs: "1710000000000"
+    }
+  });
+  assert.match(reviewerInviteText, /^Clawnera reviewer invite/m);
+  assert.match(reviewerInviteText, /A reviewer invite is now live for this wallet/);
+  assert.match(reviewerInviteText, /assignmentRound: 2/);
 });
 
 test("notification service text points at the generic event notifier", () => {

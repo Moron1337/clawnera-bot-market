@@ -20,6 +20,7 @@ When in doubt, optimize for:
 ## Cross-Repo Rules
 
 - If `clawdex` changes public routes, auth semantics, discovery behavior, helper-worthy flows, or SDK contracts, check whether this repo needs a sync.
+- If `clawdex` changes Move package ids, shared config object ids, cap inventory, event lineage, or split-package topology, start from `/home/codex/clawdex/docs/MOVE_CONTRACT_ROTATION_CHECKLIST.md` and decide whether the public helper lane needs docs/examples/npm release work.
 - Prefer canonical routes and thin helper commands over raw speculative HTTP examples.
 - Do not document unpublished endpoints or stale compat paths as primary truth.
 - When drift exists, `clawdex` runtime/OpenAPI/SDK truth wins.

@@ -1,11 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { IotaClient } from "@iota/iota-sdk/client";
 
 import {
   assertExecutionSuccess,
   buildClawdexTxFromPlan,
   buildCreateOrderEscrowTx,
   extractLatestEventByTypeSuffix,
+  resolveClawdexChainConfig,
   extractMailboxSignalAcked,
   extractMailboxSignalPosted,
   getExecutionFailure,
@@ -190,6 +192,81 @@ test("buildClawdexTxFromPlan allows bootstrap whitelist dispute open with an emp
   assert.equal(extractLastMoveCallFunction(tx), "open_milestone_dispute_case_entry");
 });
 
+test("resolveClawdexChainConfig prefers created reviewer registry object changes", async () => {
+  const packageId = addr("1");
+  const disputeQuorumConfigObjectId = addr("2");
+  const escrowFeeConfigObjectId = addr("3");
+  const governanceConfigObjectId = addr("4");
+  const staleReviewerRegistryObjectId = addr("5");
+  const reviewerRegistryObjectId = addr("6");
+  const initTxDigest = "A".repeat(44);
+  const originalGetObject = IotaClient.prototype.getObject;
+  const originalGetTransactionBlock = IotaClient.prototype.getTransactionBlock;
+
+  IotaClient.prototype.getObject = async function ({ id }) {
+    if (id === disputeQuorumConfigObjectId) {
+      return {
+        data: {
+          previousTransaction: initTxDigest,
+          content: {
+            fields: {
+              default_required_reviewer_votes: "5",
+              min_required_reviewer_votes: "3",
+              max_required_reviewer_votes: "7",
+              min_dispute_bond_per_side_iota: "900000",
+              max_dispute_bond_per_side_iota: "1800000",
+              reviewer_min_stake_iota: "1200000",
+            },
+          },
+        },
+      };
+    }
+    throw new Error(`unexpected_get_object:${id}`);
+  };
+
+  IotaClient.prototype.getTransactionBlock = async function ({ digest }) {
+    assert.equal(digest, initTxDigest);
+    return {
+      objectChanges: [
+        {
+          type: "unwrapped",
+          objectType: `${packageId}::dispute_quorum::ReviewerRegistry`,
+          objectId: staleReviewerRegistryObjectId,
+        },
+        {
+          type: "created",
+          objectType: `${packageId}::dispute_quorum::ReviewerRegistry`,
+          objectId: reviewerRegistryObjectId,
+        },
+      ],
+    };
+  };
+
+  try {
+    const config = await resolveClawdexChainConfig({
+      packageId,
+      rpcUrl: "https://rpc.example.test",
+      disputeQuorumConfigObjectId,
+      escrowFeeConfigObjectId,
+      governanceConfigObjectId,
+    });
+
+    assert.equal(config.packageId, packageId);
+    assert.equal(config.disputeQuorumConfigObjectId, disputeQuorumConfigObjectId);
+    assert.equal(config.escrowFeeConfigObjectId, escrowFeeConfigObjectId);
+    assert.equal(config.governanceConfigObjectId, governanceConfigObjectId);
+    assert.equal(config.reviewerRegistryObjectId, reviewerRegistryObjectId);
+    assert.equal(config.defaultRequiredReviewerVotes, 5n);
+    assert.equal(config.minRequiredReviewerVotes, 3n);
+    assert.equal(config.maxRequiredReviewerVotes, 7n);
+    assert.equal(config.minDisputeBondPerSideIota, 900000n);
+    assert.equal(config.maxDisputeBondPerSideIota, 1800000n);
+    assert.equal(config.reviewerMinStakeIota, 1200000n);
+  } finally {
+    IotaClient.prototype.getObject = originalGetObject;
+    IotaClient.prototype.getTransactionBlock = originalGetTransactionBlock;
+  }
+});
 test("execution helpers surface on-chain failure reasons from effects.status", () => {
   const executionResult = {
     result: {

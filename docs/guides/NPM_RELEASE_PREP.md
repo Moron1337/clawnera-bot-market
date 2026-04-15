@@ -92,10 +92,17 @@ Wichtig:
      - wer lokal publiziert hat
      - welche Version betroffen war
    - dieser Fallback ist ein dokumentierter Rescue-Pfad, nicht der Normalfall
-5. Verifikation:
+5. Registry-Truth verifizieren:
    - `npm view clawnera-bot-market version dist --json`
    - `npx clawnera-bot-market --help`
-6. Pflicht auf jedem Operator-Host, der `clawnera-help` direkt nutzt:
+6. Release-Paritaet pruefen:
+   - `bash ./scripts/release/verify-release-parity.sh <version>`
+   - Pflichtnachweise:
+     - npm-Registry fuehrt genau diese Version
+     - lokaler und entfernter Git-Tag `v<version>` existieren
+     - GitHub Release zu `v<version>` existiert
+     - globaler `clawnera-help` ist auf Operator-Hosts auf derselben Version
+7. Pflicht auf jedem Operator-Host, der `clawnera-help` direkt nutzt:
    - `npm run release:sync-global`
    - danach verifizieren:
      - `clawnera-help --help --all --json`
@@ -125,11 +132,12 @@ Erst nachdem der Trusted Publisher erfolgreich getestet wurde.
 ## 6) Post Release
 
 1. GitHub Release/Notes erstellen.
-2. Integratoren ueber neue Version informieren.
-3. Pflicht auf den lokalen Operator-Maschinen:
+2. Falls der Publish lokal als Rescue-Pfad lief, Tag + GitHub Release sofort nachziehen und danach erneut `bash ./scripts/release/verify-release-parity.sh <version>` fahren.
+3. Integratoren ueber neue Version informieren.
+4. Pflicht auf den lokalen Operator-Maschinen:
    - `npm run release:sync-global`
    - nur danach mit dem globalen `clawnera-help` weiterarbeiten
-4. Optional: vorherige Version als Rollback-Referenz dokumentieren.
+5. Optional: vorherige Version als Rollback-Referenz dokumentieren.
 
 ## 7) Abort / Containment
 

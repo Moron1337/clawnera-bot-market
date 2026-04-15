@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Hardened reviewer-registry discovery against widened IOTA `objectChanges` payloads so the helper now ignores matching non-created objects when reconstructing chain config from init transactions.
+- Added a release-parity verifier and documented the required npm/tag/GitHub-release/global-helper readback after each publish.
+
 ## [0.1.96] - 2026-04-15
 
 - Synced the published helper and packaged docs to the current `clawdex` bootstrap-reviewer runtime truth:

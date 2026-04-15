@@ -69,12 +69,9 @@ export function shouldWarnForNonMainnet(value) {
 export function shouldAutoInstallIotaCli(env = process.env) {
   const explicit = env.CLAWNERA_AUTO_INSTALL_IOTA_CLI;
   if (explicit !== undefined && String(explicit).trim() !== "") {
-    return isEnabledFlag(explicit, true);
+    return isEnabledFlag(explicit, false);
   }
-  if (isEnabledFlag(env.CI, false)) {
-    return false;
-  }
-  return String(env.npm_config_global || "").trim() === "true";
+  return false;
 }
 
 export function shouldAutoSwitchIotaMainnet(env = process.env) {
@@ -223,6 +220,7 @@ function maybeAutoInstallIotaCli() {
 
   if (!shouldAutoInstallIotaCli(process.env)) {
     info("IOTA CLI not detected (optional). Quick start without CLI: `clawnera-help wallet-init --alias <name>`.");
+    info("Verified auto-install is opt-in: set `CLAWNERA_AUTO_INSTALL_IOTA_CLI=1` to enable it.");
     return cliPath;
   }
 

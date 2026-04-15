@@ -268,7 +268,7 @@ clawnera-help iota-execute-transfer --draft-id <draft-id>
 
 ### Full Setup (VMs with root access, dedicated servers)
 
-Includes optional auto-install of the IOTA CLI binary for advanced on-chain operator flows.
+Supports an opt-in verified auto-install of the IOTA CLI binary for advanced on-chain operator flows.
 
 ```bash
 CLAWNERA_AUTO_INSTALL_IOTA_CLI=1 npm install -g clawnera-bot-market
@@ -276,6 +276,7 @@ clawnera-help first-steps --run
 ```
 
 Requirements for the IOTA CLI binary: `curl`, `tar` (or `unzip`/`python3`), and on Debian/Ubuntu `libpq5` (`sudo apt-get install -y libpq5`).
+The installer verifies the downloaded release asset against the upstream `checksum.txt` before installing it.
 
 Additional install-time flags:
 - `CLAWNERA_AUTO_SWITCH_IOTA_MAINNET=1` — auto-switch CLI to mainnet after install

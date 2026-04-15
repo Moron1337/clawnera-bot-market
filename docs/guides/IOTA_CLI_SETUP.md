@@ -2,7 +2,9 @@
 
 ## Install
 - Helper: `bash scripts/install-iota-cli.sh`
+- Auto-install bleibt standardmaessig aus; fuer den Bootstrap-Pfad bewusst aktivieren mit `bash scripts/bootstrap-iota-first-steps.sh --auto-install`
 - Danach pruefen: `iota --version`
+- Der Installer verifiziert das Release-Asset gegen die offizielle `checksum.txt`, bevor der Binary installiert wird.
 - Auf minimalen Linux-Containern kann der Upstream-Binary trotz erfolgreichem Download an fehlenden Shared Libraries scheitern.
   - Hauefiger Fall: `libpq.so.5`
   - Debian/Ubuntu-Beispiel: Paket `libpq5`
@@ -19,7 +21,9 @@
    - `bash scripts/bootstrap-iota-first-steps.sh`
 2. Mit Wallet-Init (erste Adresse erzeugen, falls leer):
    - `bash scripts/bootstrap-iota-first-steps.sh --init-wallet`
-3. Ohne Auto-Install:
+3. Mit verifiziertem Auto-Install:
+   - `bash scripts/bootstrap-iota-first-steps.sh --auto-install`
+4. Ohne Auto-Install:
    - `bash scripts/bootstrap-iota-first-steps.sh --no-auto-install`
 
 Wenn `bootstrap-iota-first-steps.sh` meldet, dass die CLI zwar gefunden, aber nicht nutzbar ist, pruefe zuerst:

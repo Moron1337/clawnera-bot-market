@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INSTALL_SCRIPT="$ROOT_DIR/scripts/install-iota-cli.sh"
 
-AUTO_INSTALL_FLAG="${IOTA_HELPER_AUTO_INSTALL_CLI:-1}"
+AUTO_INSTALL_FLAG="${IOTA_HELPER_AUTO_INSTALL_CLI:-0}"
 INIT_WALLET_FLAG="${IOTA_HELPER_INIT_WALLET:-0}"
 SET_MAINNET_FLAG="${IOTA_HELPER_SET_MAINNET:-1}"
 CLI_PATH="${IOTA_CLI_PATH:-iota}"
@@ -45,6 +45,9 @@ for arg in "$@"; do
     --no-auto-install)
       AUTO_INSTALL_FLAG="0"
       ;;
+    --auto-install)
+      AUTO_INSTALL_FLAG="1"
+      ;;
     --init-wallet)
       INIT_WALLET_FLAG="1"
       ;;
@@ -56,6 +59,7 @@ for arg in "$@"; do
 Usage: bash scripts/bootstrap-iota-first-steps.sh [options]
 
 Options:
+  --auto-install       opt in to verified IOTA CLI auto-install when missing
   --init-wallet        create first wallet address when keystore is empty
   --no-auto-install    do not auto-install IOTA CLI when missing
   --no-mainnet-switch  skip switching active env to mainnet
@@ -88,6 +92,7 @@ ensure_cli_available() {
 
   if [[ "$AUTO_INSTALL_FLAG" == "0" ]]; then
     echo "missing_iota_cli_and_auto_install_disabled" >&2
+    echo "next_step: rerun with --auto-install or install manually via bash scripts/install-iota-cli.sh" >&2
     return 1
   fi
 

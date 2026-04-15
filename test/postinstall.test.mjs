@@ -80,13 +80,13 @@ test("runCommand passes stdin through to spawned processes", () => {
   assert.equal(result.stdout, "mainnet");
 });
 
-test("shouldAutoInstallIotaCli defaults to global installs only", () => {
-  assert.equal(shouldAutoInstallIotaCli({ npm_config_global: "true" }), true);
+test("shouldAutoInstallIotaCli defaults to disabled unless explicitly enabled", () => {
+  assert.equal(shouldAutoInstallIotaCli({ npm_config_global: "true" }), false);
   assert.equal(shouldAutoInstallIotaCli({ npm_config_global: "false" }), false);
   assert.equal(shouldAutoInstallIotaCli({}), false);
 });
 
-test("shouldAutoInstallIotaCli disables default auto-install in CI unless explicitly enabled", () => {
+test("shouldAutoInstallIotaCli only enables auto-install via explicit opt-in", () => {
   assert.equal(shouldAutoInstallIotaCli({ npm_config_global: "true", CI: "1" }), false);
   assert.equal(shouldAutoInstallIotaCli({ npm_config_global: "false", CLAWNERA_AUTO_INSTALL_IOTA_CLI: "1" }), true);
   assert.equal(shouldAutoInstallIotaCli({ npm_config_global: "true", CLAWNERA_AUTO_INSTALL_IOTA_CLI: "0" }), false);

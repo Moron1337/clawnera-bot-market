@@ -17,6 +17,15 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
+HAS_SHA256SUM=0; HAS_SHASUM=0
+command -v sha256sum >/dev/null 2>&1 && HAS_SHA256SUM=1
+command -v shasum    >/dev/null 2>&1 && HAS_SHASUM=1
+if [[ "$HAS_SHA256SUM" == "0" && "$HAS_SHASUM" == "0" ]]; then
+  echo "preflight_failed: sha256sum or shasum is required to verify the downloaded release asset"
+  echo "install_hint: sudo apt-get install -y coreutils  (Debian/Ubuntu) | apk add coreutils  (Alpine)"
+  exit 1
+fi
+
 HAS_TAR=0; HAS_UNZIP=0; HAS_PY3=0
 command -v tar     >/dev/null 2>&1 && HAS_TAR=1
 command -v unzip   >/dev/null 2>&1 && HAS_UNZIP=1
@@ -28,6 +37,21 @@ if [[ "$HAS_TAR" == "0" && "$HAS_UNZIP" == "0" && "$HAS_PY3" == "0" ]]; then
 fi
 
 mkdir -p "$INSTALL_DIR"
+
+download_https() {
+  local url="$1"
+  local out_file="$2"
+  curl --proto '=https' --tlsv1.2 -fsSL "$url" -o "$out_file"
+}
+
+sha256_file() {
+  local file_path="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file_path" | awk '{print $1}'
+    return 0
+  fi
+  shasum -a 256 "$file_path" | awk '{print $1}'
+}
 
 print_missing_shared_libs() {
   local binary_path="$1"
@@ -64,8 +88,18 @@ ASSET_URL="$(printf '%s' "$JSON" \
   | grep -E '/download/.*(linux|Linux).*(x86_64|amd64).*(\.tar\.gz|\.tgz|\.zip)$' \
   | head -n 1 || true)"
 
+CHECKSUM_URL="$(printf '%s' "$JSON" \
+  | grep -Eo 'https://[^\"]+' \
+  | grep -E '/download/.*/checksum\.txt$' \
+  | head -n 1 || true)"
+
 if [[ -z "$ASSET_URL" ]]; then
   echo "failed_to_find_linux_asset"
+  echo "manual_fallback: https://github.com/${REPO}/releases"
+  exit 1
+fi
+if [[ -z "$CHECKSUM_URL" ]]; then
+  echo "failed_to_find_release_checksum"
   echo "manual_fallback: https://github.com/${REPO}/releases"
   exit 1
 fi
@@ -73,9 +107,29 @@ fi
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 ASSET_FILE="$TMP_DIR/asset"
+CHECKSUM_FILE="$TMP_DIR/checksum.txt"
+ASSET_BASENAME="$(basename "$ASSET_URL")"
 
 echo "downloading: $ASSET_URL"
-curl -fsSL "$ASSET_URL" -o "$ASSET_FILE"
+download_https "$ASSET_URL" "$ASSET_FILE"
+echo "downloading_checksums: $CHECKSUM_URL"
+download_https "$CHECKSUM_URL" "$CHECKSUM_FILE"
+
+EXPECTED_SHA256="$(awk -v asset="$ASSET_BASENAME" '$2 == asset {print $1; exit}' "$CHECKSUM_FILE" | tr -d '\r')"
+if [[ -z "$EXPECTED_SHA256" ]]; then
+  echo "failed_to_find_asset_checksum: $ASSET_BASENAME"
+  exit 1
+fi
+
+ACTUAL_SHA256="$(sha256_file "$ASSET_FILE")"
+if [[ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]]; then
+  echo "asset_checksum_mismatch"
+  echo "asset: $ASSET_BASENAME"
+  echo "expected_sha256: $EXPECTED_SHA256"
+  echo "actual_sha256: $ACTUAL_SHA256"
+  exit 1
+fi
+echo "verified_sha256: $EXPECTED_SHA256"
 
 if [[ "$ASSET_URL" == *.zip ]]; then
   if command -v unzip >/dev/null 2>&1; then

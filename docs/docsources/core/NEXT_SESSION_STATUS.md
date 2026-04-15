@@ -1,4 +1,4 @@
-# Next Session Status (2026-04-08)
+# Next Session Status (2026-04-14)
 
 ## Purpose
 
@@ -6,7 +6,7 @@ Use this file to answer:
 
 - what is true right now for the next launch/operator decision
 - which family is currently active versus intentionally paused
-- what must be refreshed before the next opening window
+- what must be refreshed before the next launch decision
 - which files remain canonical for live execution and sign-off
 
 Longer-horizon planning lives in `docs/PRODUCT_EXECUTION_BACKLOG.md`.
@@ -32,6 +32,14 @@ Detailed historical evidence stays in `docs/reports/` and git history.
 | Live-input-bound family | `TASK-MKT-014` |
 
 Rule: if the current launch-window evidence is stale, incomplete, copied, or not from the required runtime host, the state remains `HOLD`.
+
+## Immediate Follow-up Item
+
+- GitHub deploy-secret cleanup after the production deploy-path split:
+  - repo truth is now `production deploy = operator-only`, `GitHub Actions = CI + optional staging deploy`
+  - remove no-longer-needed production deploy secrets from GitHub Actions
+  - keep or later remove staging deploy secrets only by explicit decision, not by drift
+  - after cleanup, record the remaining GitHub secret boundary in the deploy runbook
 
 ## Recently Closed Family: `TASK-MKT-012b`
 
@@ -208,7 +216,7 @@ Keep it frozen unless one of these happens:
 
 Use reports and git history for detailed proof history. This file keeps only the current live/operator truth.
 
-## Before the next opening decision
+## Before the next launch decision
 
 Refresh these in order:
 
@@ -216,7 +224,7 @@ Refresh these in order:
 2. use the frozen rule specs and `09c_scanner-deny-before.json` as the current `LO-01b` baseline
 3. review `09d_scanner-deny-after.json`, `10_controlled-open-precheck.json`, and `09_readiness-check.json` as the current green technical gate
 4. assign launch/rollback ownership in the active bundle
-5. decide whether to keep `HOLD` or open the next controlled `browse_only` window
+5. decide whether to keep `OPEN`, deliberately `EXPAND`, or deliberately `PAUSE` from live soak evidence
 
 ## Current Branch State Rule
 
@@ -232,8 +240,12 @@ Do not treat the separate dirty main repo under `/home/codex/clawdex` as the act
 
 These are still the true broader-launch gates:
 
-1. later `SPONSOR_ORDER_ID_MODE=required`
-2. explicit operator-owned `browse_only` opening decision on top of the now-green scanner-path deny proof and controlled-open dossier
+1. final hardware-backed `2-of-3` multisig cutover
+
+These are already no longer blockers:
+
+- `SPONSOR_ORDER_ID_MODE=required` is live and proven
+- the first controlled `browse_only` production window is already open
 
 Their current truth and evidence requirements live in:
 

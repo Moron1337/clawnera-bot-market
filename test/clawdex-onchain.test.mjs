@@ -163,6 +163,33 @@ test("buildClawdexTxFromPlan keeps legacy quorum-ticket settlement as explicit c
   assert.equal(extractLastMoveCallFunction(tx), "resolve_dispute_with_quorum_ticket");
 });
 
+test("buildClawdexTxFromPlan allows bootstrap whitelist dispute open with an empty invite list", () => {
+  const tx = buildClawdexTxFromPlan({
+    txBuilder: "disputeQuorum.openMilestoneDisputeCase",
+    request: {
+      packageId: addr("1"),
+      sender: addr("a"),
+      milestoneId: "milestone-bootstrap-1",
+      escrowObjectId: addr("b"),
+      bondObjectId: addr("c"),
+      disputeQuorumConfigObjectId: addr("d"),
+      governanceConfigObjectId: addr("e"),
+      reputationFeeConfigObjectId: addr("f"),
+      openDisputeArgMode: "guarded_governance_and_clock",
+      escrowCoinType: `${addr("2")}::coin::COIN`,
+      invitedReviewerAddresses: [],
+    },
+  });
+
+  const data = tx.getData();
+  const firstCommand = data.commands[0];
+  const firstMoveCall = firstCommand && "MoveCall" in firstCommand ? firstCommand.MoveCall : null;
+
+  assert.equal(firstMoveCall?.function, "open_dispute_guarded");
+  assert.equal(firstMoveCall?.arguments?.length, 4);
+  assert.equal(extractLastMoveCallFunction(tx), "open_milestone_dispute_case_entry");
+});
+
 test("execution helpers surface on-chain failure reasons from effects.status", () => {
   const executionResult = {
     result: {

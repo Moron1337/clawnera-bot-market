@@ -147,7 +147,7 @@ Current discovery semantics:
   - `POST /reviewers/deregister`
   - `POST /reviewers/me/claim-metrics`
   - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
-    - requires `invitedReviewerAddresses[]`
+    - requires `invitedReviewerAddresses[]`; use `[]` for bootstrap allowlist rounds with no explicit reviewer invite set
     - if an operator already issued a selector receipt, also send the exact `reviewerSelectionReceiptId`
   - `POST /disputes/{caseId}/reviewers/accept`
     - returns `403 reviewer_not_invited` when the actor is not in the current invite set

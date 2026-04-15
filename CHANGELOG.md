@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.97] - 2026-04-15
+
 - Hardened reviewer-registry discovery against widened IOTA `objectChanges` payloads so the helper now ignores matching non-created objects when reconstructing chain config from init transactions.
 - Added a release-parity verifier and documented the required npm/tag/GitHub-release/global-helper readback after each publish.
 

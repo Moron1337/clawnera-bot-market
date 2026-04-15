@@ -4,11 +4,6 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-    inputs:
-      ref:
-        description: Git ref to publish from
-        required: false
-        default: main
 
 permissions:
   contents: read
@@ -16,12 +11,20 @@ permissions:
 
 jobs:
   publish:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
+
+      - name: Validate publish source
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${GITHUB_REF}" != "refs/heads/main" ]]; then
+            echo "workflow_dispatch publishes are restricted to main" >&2
+            exit 1
+          fi
 
       - name: Setup Node
         uses: actions/setup-node@v5

@@ -16,18 +16,15 @@ on:
 
 jobs:
   shellcheck:
-    runs-on:
-      - self-hosted
-      - linux
-      - x64
-      - clawnera-bot-market
-      - hetzner
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
       - name: Install ShellCheck
-        run: bash ./scripts/ci/install_shellcheck.sh
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
 
       - name: Run ShellCheck
         run: |

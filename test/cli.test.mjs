@@ -581,6 +581,26 @@ test("dispute tx plan error classifier maps commit abort code 49 to wait-until r
   assert.match(classified.nextCommandHint, /reviewer-shortlist --scope REPLACEMENT/);
 });
 
+test("dispute tx plan error classifier shell-quotes replacement hints", () => {
+  const classified = classifyDisputeTxPlanExecutionError({
+    errorMessage:
+      "transaction_execution_failed: Move Runtime Abort. Location: bc32::dispute_quorum::commit_vote (function index 104) at offset 76, Abort Code: 49 in command 0",
+    txBuilder: "disputeQuorum.commitVote",
+    rawPath: "/disputes/0xabc/votes/commit",
+    disputeCase: {
+      objectId: "0xabc'$(touch /tmp/pwn)",
+      state: 1,
+      revealDeadlineMs: 1774184857953,
+    },
+    nowMs: 1774171000000,
+  });
+
+  assert.equal(
+    classified.nextCommandHint,
+    "clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id '0xabc'\"'\"'$(touch /tmp/pwn)' --auth-state-file <operator-auth-state-file>",
+  );
+});
+
 test("dispute tx plan error classifier maps replacement abort code 55 to exact deadline wait", () => {
   const classified = classifyDisputeTxPlanExecutionError({
     errorMessage:
@@ -2674,6 +2694,14 @@ test("doctor json output is parseable", () => {
   assert.ok(payload.tools.node);
 });
 
+test("doctor returns structured errors for invalid timeout values", () => {
+  const result = runCli(["doctor", "--json", "--timeout-ms", "abc"]);
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, "invalid_timeout_ms");
+});
+
 test("triage command suggests sponsor docs", () => {
   const result = runCli(["triage", "sponsor execute failed"]);
   assert.equal(result.status, 0);
@@ -2698,6 +2726,23 @@ test("report-issue json output contains issue url", () => {
   assert.equal(payload.category, "integration-help");
   assert.match(payload.issueUrl, /github\.com\/Moron1337\/clawnera-bot-market\/issues\/new\/choose/);
   assert.match(payload.body, /managed storage issue/);
+});
+
+test("report-issue returns structured errors for invalid timeout values", () => {
+  const result = runCli([
+    "report-issue",
+    "--category",
+    "docs",
+    "--summary",
+    "timeout",
+    "--timeout-ms",
+    "abc",
+    "--json"
+  ]);
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, "invalid_timeout_ms");
 });
 
 test("version command matches package.json", () => {

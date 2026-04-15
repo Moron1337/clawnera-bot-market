@@ -13,6 +13,7 @@ import {
   defaultIotaKeystorePath,
   loadAuthState,
   loadKeystoreEntries,
+  parseEnvAssignmentValue,
   refreshAuthState,
   resolveKeystoreEntry,
   saveAuthState,
@@ -106,7 +107,6 @@ import {
   isPlaceholderNotificationValue,
   isValidTelegramBotToken,
   isValidTelegramChatId,
-  normalizeNotificationEnvValue,
   notificationPresetNames,
   NOTIFICATION_PRESETS,
   parsePositiveNotificationValue,
@@ -3826,7 +3826,7 @@ function parseSimpleEnvFile(raw) {
     if (commentIndex >= 0) {
       valuePart = valuePart.slice(0, commentIndex);
     }
-    const value = normalizeNotificationEnvValue(valuePart);
+    const value = parseEnvAssignmentValue(valuePart);
     if (key) {
       out[key] = value;
     }
@@ -3868,8 +3868,30 @@ function defaultGeneratedOutputDir({ relatedFile = "", authStateFile = "" } = {}
   return path.join(os.tmpdir(), "clawnera-help");
 }
 
+function sanitizeGeneratedFileName(fileName, fallback = "clawnera-artifact.json") {
+  const normalized = String(fileName || "").trim().replace(/[\\/]+/g, "-");
+  const sanitized = normalized
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^\.+/, "")
+    .replace(/^-+/, "")
+    .replace(/[.-]+$/g, "");
+  return sanitized || fallback;
+}
+
 function defaultGeneratedOutputPath(fileName, context = {}) {
-  return path.resolve(defaultGeneratedOutputDir(context), String(fileName || "").trim());
+  return path.resolve(defaultGeneratedOutputDir(context), sanitizeGeneratedFileName(fileName));
+}
+
+function generatedWorkingDirOutputPath(fileName, fallback = "clawnera-artifact.json") {
+  return path.resolve(process.cwd(), sanitizeGeneratedFileName(fileName, fallback));
+}
+
+function hasExplicitMailboxChainFallback(options = {}) {
+  return Boolean(
+    (typeof options?.["rpc-url"] === "string" && options["rpc-url"].trim()) ||
+      (typeof options?.network === "string" && options.network.trim())
+  );
 }
 
 function resolvePreferredKeystorePath(options = {}, context = {}) {
@@ -7533,7 +7555,7 @@ async function fetchMailboxEventsSnapshot(options, orderId, { timeoutMs, limit, 
 
   let events = postedEvents.concat(ackedEvents).sort((left, right) => mailboxEventSortKey(left) - mailboxEventSortKey(right));
   let fallbackUsed = null;
-  if (events.length === 0) {
+  if (events.length === 0 && hasExplicitMailboxChainFallback(options)) {
     try {
       const feesCall = await callApiRoute({
         method: "GET",
@@ -8623,18 +8645,25 @@ async function runTxPlanCommand(commandArgs, mode) {
     };
     } catch (error) {
       const rawError = normalizeTxPlanErrorMessage(error) || "tx_plan_execute_failed";
-      const compatFallback = await maybeExecuteResolveEscrowCompatFallback({
-        errorMessage: rawError,
-        txPlan,
-        rawPath,
-        options,
-        timeoutMs,
-        signer,
-        autoHydratedReviewerContext,
-        autoRetriedExecutionCount,
-        txBytesOut,
-        planOut,
-      });
+      let compatFallback = null;
+      let compatFallbackError = null;
+      try {
+        compatFallback = await maybeExecuteResolveEscrowCompatFallback({
+          errorMessage: rawError,
+          txPlan,
+          rawPath,
+          options,
+          timeoutMs,
+          signer,
+          autoHydratedReviewerContext,
+          autoRetriedExecutionCount,
+          txBytesOut,
+          planOut,
+        });
+      } catch (compatError) {
+        compatFallbackError =
+          normalizeTxPlanErrorMessage(compatError) || "resolve_escrow_compat_fallback_failed";
+      }
       if (compatFallback) {
         return compatFallback;
       }
@@ -8672,6 +8701,7 @@ async function runTxPlanCommand(commandArgs, mode) {
         retryable: classified?.retryable === true,
         autoRetriedExecutionCount,
         autoWaitUntilReadyCount,
+        compatFallbackError,
         txBuilder: txPlan.txBuilder,
         disputeCaseObjectId: classified?.disputeCaseObjectId || resolveDisputeCaseIdFromTxPlanPath(rawPath),
         waitUntilMs: classified?.waitUntilMs || null,
@@ -10306,7 +10336,7 @@ async function runDisputeEvidencePublish(commandArgs) {
     }
     const bodyOut =
       resolveOptionalPathOption(options["body-out"]) ||
-      path.resolve(process.cwd(), `clawnera-dispute-evidence-${orderId}-${milestoneId}.json`);
+      generatedWorkingDirOutputPath(`clawnera-dispute-evidence-${orderId}-${milestoneId}.json`);
     if (
       requestBody.kind === "supplemental_bundle" &&
       (!requestBody.manifestCid ||
@@ -11104,7 +11134,7 @@ async function runDisputeEvidenceContent(commandArgs) {
     const contentOut =
       resolveOptionalPathOption(options["content-out"]) ||
       resolveOptionalPathOption(options["response-out"]) ||
-      path.resolve(process.cwd(), `clawnera-dispute-evidence-content-${evidenceId}.json`);
+      generatedWorkingDirOutputPath(`clawnera-dispute-evidence-content-${evidenceId}.json`);
     writeOptionalOutputFile(contentOut, `${JSON.stringify(contentCall.result.body, null, 2)}\n`);
     return {
       ok: true,
@@ -12509,11 +12539,11 @@ async function runMilestoneReject(commandArgs) {
 }
 
 function defaultReviewerShortlistReceiptPath(orderId, milestoneId) {
-  return path.resolve(process.cwd(), `clawnera-reviewer-shortlist-${orderId}-${milestoneId}.json`);
+  return generatedWorkingDirOutputPath(`clawnera-reviewer-shortlist-${orderId}-${milestoneId}.json`);
 }
 
 function defaultReviewerShortlistPublishPath(orderId, milestoneId) {
-  return path.resolve(process.cwd(), `clawnera-dispute-open-${orderId}-${milestoneId}.json`);
+  return generatedWorkingDirOutputPath(`clawnera-dispute-open-${orderId}-${milestoneId}.json`);
 }
 
 function parseOrderContextFile(contextFilePath, expectedOrderId, expectedMilestoneId) {
@@ -13829,7 +13859,7 @@ function mailboxEventsUsageLines() {
     "- Reads the bound mailbox object id, then fetches mailbox.signal_posted and mailbox.signal_acked events for that order",
     "- Optional: --limit <n> --include-acked <true|false> --events-out <file>",
     "- If the wider event read times out transiently, the helper automatically retries with a smaller recent-event window",
-    "- When the API event feed is empty, the helper falls back to on-chain reads and infers the IOTA network from explicit --network/--rpc-url first, otherwise from runtime/auth API base",
+    "- When the API event feed is empty, the helper only falls back to on-chain reads if you explicitly pass --network or --rpc-url",
     "- Use this instead of guessing seq numbers from raw /events queries",
     "- If indexing is still catching up, use the mailbox_signal_posted_seq or mailbox_signal_acked_seq printed by tx-plan-execute as the temporary source of truth and re-read later"
   ];
@@ -14019,26 +14049,33 @@ async function runDoctorCommand(commandArgs) {
     ...doctorData()
   };
 
-  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 8000);
-  const runtimeContext = await resolveApiRuntimeContext({
-    ...options,
-    "timeout-ms": timeoutMs
-  });
+  try {
+    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 8000);
+    const runtimeContext = await resolveApiRuntimeContext({
+      ...options,
+      "timeout-ms": timeoutMs
+    });
 
-  if (runtimeContext.apiBase) {
-    report.remote = await collectRemoteDoctor(runtimeContext, timeoutMs);
-    report.ok = report.remote.ok;
-  } else {
-    report.remote = null;
+    if (runtimeContext.apiBase) {
+      report.remote = await collectRemoteDoctor(runtimeContext, timeoutMs);
+      report.ok = report.remote.ok;
+    } else {
+      report.remote = null;
+    }
+
+    report.authContext = {
+      envFile: runtimeContext.envFile,
+      authStateFile: runtimeContext.authStateFile,
+      authStateRefreshed: runtimeContext.authStateRefreshed
+    };
+
+    return report;
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "doctor_failed"
+    };
   }
-
-  report.authContext = {
-    envFile: runtimeContext.envFile,
-    authStateFile: runtimeContext.authStateFile,
-    authStateRefreshed: runtimeContext.authStateRefreshed
-  };
-
-  return report;
 }
 
 function printDoctorReport(report) {
@@ -14265,39 +14302,46 @@ async function runReportIssue(commandArgs) {
     `${ISSUE_CATEGORY_CONFIG[category].titlePrefix}: ${summary || "describe the problem"}`;
   const apiBase = normalizeApiBase(options["api-base"] || process.env.CLAWNERA_API_BASE_URL);
   const jwt = typeof options.jwt === "string" ? String(options.jwt).trim() : String(process.env.CLAWNERA_API_JWT || "").trim();
-  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 8000);
-  const includeDoctor = Boolean(options["include-doctor"]);
+  try {
+    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 8000);
+    const includeDoctor = Boolean(options["include-doctor"]);
 
-  const doctor = includeDoctor ? await runDoctorCommand([
-    ...(apiBase ? ["--api-base", apiBase] : []),
-    ...(jwt ? ["--jwt", jwt] : []),
-    "--timeout-ms",
-    String(timeoutMs)
-  ]) : null;
+    const doctor = includeDoctor ? await runDoctorCommand([
+      ...(apiBase ? ["--api-base", apiBase] : []),
+      ...(jwt ? ["--jwt", jwt] : []),
+      "--timeout-ms",
+      String(timeoutMs)
+    ]) : null;
 
-  const body = buildIssueBody({
-    category,
-    summary,
-    apiBase,
-    command: typeof options.command === "string" ? options.command.trim() : "",
-    error: typeof options.error === "string" ? options.error.trim() : "",
-    orderId: typeof options["order-id"] === "string" ? options["order-id"].trim() : "",
-    listingId: typeof options["listing-id"] === "string" ? options["listing-id"].trim() : "",
-    disputeCaseId: typeof options["dispute-case-id"] === "string" ? options["dispute-case-id"].trim() : "",
-    reservationId: typeof options["reservation-id"] === "string" ? options["reservation-id"].trim() : "",
-    doctor,
-    jwtIncluded: Boolean(jwt)
-  });
+    const body = buildIssueBody({
+      category,
+      summary,
+      apiBase,
+      command: typeof options.command === "string" ? options.command.trim() : "",
+      error: typeof options.error === "string" ? options.error.trim() : "",
+      orderId: typeof options["order-id"] === "string" ? options["order-id"].trim() : "",
+      listingId: typeof options["listing-id"] === "string" ? options["listing-id"].trim() : "",
+      disputeCaseId: typeof options["dispute-case-id"] === "string" ? options["dispute-case-id"].trim() : "",
+      reservationId: typeof options["reservation-id"] === "string" ? options["reservation-id"].trim() : "",
+      doctor,
+      jwtIncluded: Boolean(jwt)
+    });
 
-  return {
-    ok: true,
-    category,
-    title,
-    issueUrl: buildIssueUrl(category, title, body),
-    trackerUrl: ISSUE_TRACKER_URL,
-    body,
-    doctorIncluded: Boolean(doctor)
-  };
+    return {
+      ok: true,
+      category,
+      title,
+      issueUrl: buildIssueUrl(category, title, body),
+      trackerUrl: ISSUE_TRACKER_URL,
+      body,
+      doctorIncluded: Boolean(doctor)
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "report_issue_failed"
+    };
+  }
 }
 
 function parseArgs(argv) {
@@ -15346,6 +15390,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.error(`tx_plan_execute_error: ${result.error}`);
     if (result.rawError && result.rawError !== result.error) {
       console.error(`raw_error=${result.rawError}`);
+    }
+    if (result.compatFallbackError) {
+      console.error(`compat_fallback_error=${result.compatFallbackError}`);
     }
     if (result.txBuilder) {
       console.error(`tx_builder=${result.txBuilder}`);

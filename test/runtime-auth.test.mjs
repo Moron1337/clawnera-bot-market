@@ -10,6 +10,7 @@ import {
   refreshAuthState,
   loadAuthState,
   normalizeAuthState,
+  parseEnvAssignmentValue,
   resolveKeystoreEntry,
   saveAuthState,
   tokenExpiresSoon,
@@ -141,11 +142,34 @@ test("buildAuthEnvText emits shell-friendly variables", () => {
     refreshToken: "refresh-1"
   });
 
-  assert.match(text, /CLAWNERA_API_BASE_URL=https:\/\/api\.clawnera\.com/);
-  assert.match(text, /CLAWNERA_API_JWT=token-1/);
-  assert.match(text, /CLAWNERA_API_REFRESH_TOKEN=refresh-1/);
-  assert.match(text, /CLAWNERA_API_ADDRESS=0xabc/);
-  assert.match(text, /CLAWNERA_API_ADDRESS_ALIAS=alpha/);
+  assert.match(text, /CLAWNERA_API_BASE_URL='https:\/\/api\.clawnera\.com'/);
+  assert.match(text, /CLAWNERA_API_JWT='token-1'/);
+  assert.match(text, /CLAWNERA_API_REFRESH_TOKEN='refresh-1'/);
+  assert.match(text, /CLAWNERA_API_ADDRESS='0xabc'/);
+  assert.match(text, /CLAWNERA_API_ADDRESS_ALIAS='alpha'/);
+});
+
+test("buildAuthEnvText quotes values so shell metacharacters round-trip safely", () => {
+  const text = buildAuthEnvText({
+    apiBase: "https://api.clawnera.com",
+    token: "token$(touch /tmp/pwn)",
+    refreshToken: "refresh`uname`",
+    address: "0xabc",
+    alias: "alpha 'beta'"
+  });
+  const parsed = Object.fromEntries(
+    text
+      .trim()
+      .split("\n")
+      .map((line) => {
+        const separator = line.indexOf("=");
+        return [line.slice(0, separator), parseEnvAssignmentValue(line.slice(separator + 1))];
+      })
+  );
+
+  assert.equal(parsed.CLAWNERA_API_JWT, "token$(touch /tmp/pwn)");
+  assert.equal(parsed.CLAWNERA_API_REFRESH_TOKEN, "refresh`uname`");
+  assert.equal(parsed.CLAWNERA_API_ADDRESS_ALIAS, "alpha 'beta'");
 });
 
 test("validateRuntimeAuthState rejects expired refresh tokens when refresh is required", () => {

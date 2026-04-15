@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.96] - 2026-04-15
+
+- Synced the published helper and packaged docs to the current `clawdex` bootstrap-reviewer runtime truth:
+  - dispute-open planning now accepts `invitedReviewerAddresses: []` for bootstrap allowlist rounds instead of incorrectly requiring explicit reviewer invites
+  - the vendored order-escrow tx builder now routes empty-invite dispute-open plans through the correct no-invite entry path and preserves the guarded dispute-open argument shape
+  - packaged OpenAPI and API-reference docs now describe the required-but-empty invite-list semantics the same way as the live runtime
+
 ## [0.1.95] - 2026-04-12
 
 - Synced the public helper's startup lane to the current `clawdex` discovery-first runtime truth:

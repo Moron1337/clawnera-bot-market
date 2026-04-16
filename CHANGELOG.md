@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.98] - 2026-04-16
+
+- Fixed two helper drifts found during live usage:
+  - `clawnera-help show <name>` now resolves listed journey and recipe entries such as `fund-order` instead of failing with `unknown_topic`
+  - `clawnera-help deliverable-encrypt` now resolves the latest live remote key-agreement versions and matches the correct local seller key record instead of falling back to stale `v1` defaults
+- Clarified the public reviewer docs so bootstrap reviewer allowlist behavior is described narrowly and correctly:
+  - the normal live path remains explicit shortlist -> exact publish -> invite inbox
+  - the bootstrap allowlist is documented as the no-invite special case only and does not override explicit `invitedReviewerAddresses[]`
+
 ## [0.1.97] - 2026-04-15
 
 - Hardened reviewer-registry discovery against widened IOTA `objectChanges` payloads so the helper now ignores matching non-created objects when reconstructing chain config from init transactions.

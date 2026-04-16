@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.99] - 2026-04-16
+
+- Fixed reviewer transport-key resolution after key rotation in the normal default path:
+  - `clawnera-help reviewer-register` now auto-resolves the latest non-expired remote key-agreement version and matches the correct local private key record when `--transport-key-file` / `--transport-key-version` are omitted
+  - `clawnera-help reviewer-update` now follows the same latest-live-key resolution instead of falling back to stale local `v1` defaults
+  - added focused integration coverage for register/update auto-resolution across rotated local key files
+
 ## [0.1.98] - 2026-04-16
 
 - Fixed two helper drifts found during live usage:

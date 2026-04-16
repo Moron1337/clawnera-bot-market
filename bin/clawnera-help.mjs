@@ -8496,6 +8496,142 @@ async function ensureTransportKeyAgreementReadbackReady(input = {}) {
   };
 }
 
+async function resolveReviewerTransportKeyMaterial({
+  actorAddress,
+  commandName,
+  options,
+  timeoutMs,
+  authStateFile = "",
+} = {}) {
+  const reviewerAddress = normalizeIotaAddress(actorAddress || "");
+  if (!reviewerAddress) {
+    return {
+      ok: false,
+      error: "missing_actor_address",
+    };
+  }
+
+  const explicitKeyFile =
+    typeof options?.["transport-key-file"] === "string" && options["transport-key-file"].trim()
+      ? path.resolve(options["transport-key-file"].trim())
+      : typeof options?.["key-file"] === "string" && options["key-file"].trim()
+        ? path.resolve(options["key-file"].trim())
+        : "";
+  const hasExplicitKeyVersion = options?.["transport-key-version"] !== undefined;
+  const fallbackExpiresAtMs = Date.now() + 86_400_000;
+  let keyRecord;
+  let transportKeyVersion = null;
+  let remoteKeyAgreement = null;
+
+  try {
+    if (explicitKeyFile) {
+      keyRecord = await loadKeyAgreementRecord(explicitKeyFile, {
+        expectedAddress: reviewerAddress,
+        expectedKeyVersion: hasExplicitKeyVersion
+          ? parsePositiveIntOption(options["transport-key-version"], "transport_key_version", 1)
+          : undefined,
+        fallbackExpiresAtMs,
+      });
+      transportKeyVersion = keyRecord.keyVersion;
+    } else if (hasExplicitKeyVersion) {
+      transportKeyVersion = parsePositiveIntOption(options["transport-key-version"], "transport_key_version", 1);
+      keyRecord = await resolveLocalKeyAgreementRecord(reviewerAddress, transportKeyVersion, {
+        authStateFile,
+        fallbackExpiresAtMs,
+      });
+    } else {
+      const remoteResolution = await resolveActiveUserKeyAgreement(
+        options,
+        reviewerAddress,
+        timeoutMs,
+        undefined,
+        "transport_key_version",
+      );
+      if (!remoteResolution.ok) {
+        return {
+          ok: false,
+          error: remoteResolution.error,
+          status: remoteResolution.status,
+          response: remoteResolution.response,
+          keyAgreement: remoteResolution.keyAgreement,
+          hint: "run clawnera-help key-agreement-upsert first",
+        };
+      }
+      remoteKeyAgreement = remoteResolution.keyAgreement;
+      transportKeyVersion = remoteKeyAgreement.keyVersion;
+      const remoteExpiresAtMs =
+        remoteKeyAgreement && typeof remoteKeyAgreement.expiresAt === "string"
+          ? Date.parse(remoteKeyAgreement.expiresAt)
+          : Number.NaN;
+      keyRecord = await resolveLocalKeyAgreementRecord(reviewerAddress, transportKeyVersion, {
+        authStateFile,
+        expectedPublicKeyMultibase: remoteKeyAgreement.publicKeyMultibase,
+        fallbackExpiresAtMs:
+          Number.isFinite(remoteExpiresAtMs) && remoteExpiresAtMs > 0 ? remoteExpiresAtMs : fallbackExpiresAtMs,
+      });
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message === "local_key_agreement_record_not_found") {
+      return {
+        ok: false,
+        error: "missing_key_agreement_record",
+        keyVersion: transportKeyVersion,
+        keyAgreementDir: path.join(
+          inferHomeDirFromAuthStatePath(authStateFile) || os.homedir(),
+          ".config",
+          "clawnera",
+          "key-agreements",
+        ),
+        hint: explicitKeyFile
+          ? "run clawnera-help key-agreement-upsert first"
+          : "rerun clawnera-help key-agreement-upsert first or pass --transport-key-file with the matching local private key record",
+      };
+    }
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "missing_key_agreement_record",
+      keyVersion: transportKeyVersion,
+      keyFile: explicitKeyFile || "",
+      hint: "run clawnera-help key-agreement-upsert first",
+    };
+  }
+
+  if (
+    remoteKeyAgreement &&
+    remoteKeyAgreement.publicKeyMultibase !== keyRecord.publicKeyMultibase
+  ) {
+    return {
+      ok: false,
+      error: "transport_key_agreement_local_remote_mismatch",
+      keyVersion: transportKeyVersion,
+      keyFile: keyRecord.filePath,
+      remoteKeyAgreement,
+      hint: "rerun clawnera-help key-agreement-upsert for the reviewer wallet or pass --transport-key-file with the matching local private key record",
+    };
+  }
+
+  const transportKeyReadback = await ensureTransportKeyAgreementReadbackReady({
+    actorAddress: reviewerAddress,
+    commandName,
+    keyFile: keyRecord.filePath,
+    keyRecord,
+    keyVersion: transportKeyVersion,
+    options,
+    timeoutMs,
+  });
+  if (!transportKeyReadback.ok) {
+    return transportKeyReadback;
+  }
+
+  return {
+    ok: true,
+    keyRecord,
+    keyFile: keyRecord.filePath,
+    keyVersion: transportKeyVersion,
+    keyAgreement: transportKeyReadback.keyAgreement,
+  };
+}
+
 async function runChainConfig(commandArgs) {
   const { options, positionals } = parseLongOptions(commandArgs);
   if (options.help || options.h) {
@@ -9706,39 +9842,17 @@ async function runReviewerRegister(commandArgs) {
       };
     }
 
-    const transportKeyVersion = parsePositiveIntOption(options["transport-key-version"], "transport_key_version", 1);
-    const transportKeyFile = resolveKeyAgreementRecordPathOption(
-      actorAddress,
-      transportKeyVersion,
-      options["transport-key-file"] || options["key-file"],
-      runtimeContext.authStateFile,
-    );
-    let keyRecord;
-    try {
-      keyRecord = await loadKeyAgreementRecord(transportKeyFile, {
-        expectedAddress: actorAddress,
-        expectedKeyVersion: transportKeyVersion,
-      });
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "missing_key_agreement_record",
-        keyFile: transportKeyFile,
-        hint: "run clawnera-help key-agreement-upsert first",
-      };
-    }
-    const transportKeyReadback = await ensureTransportKeyAgreementReadbackReady({
+    const transportKeyMaterial = await resolveReviewerTransportKeyMaterial({
       actorAddress,
       commandName: "reviewer-register",
-      keyFile: transportKeyFile,
-      keyRecord,
-      keyVersion: transportKeyVersion,
       options,
       timeoutMs,
+      authStateFile: runtimeContext.authStateFile,
     });
-    if (!transportKeyReadback.ok) {
-      return transportKeyReadback;
+    if (!transportKeyMaterial.ok) {
+      return transportKeyMaterial;
     }
+    const keyRecord = transportKeyMaterial.keyRecord;
 
     const body = {
       reviewerRegistryObjectId: chainConfig.reviewerRegistryObjectId,
@@ -9912,39 +10026,17 @@ async function runReviewerUpdate(commandArgs) {
       ...iotaRuntime,
     });
 
-    const transportKeyVersion = parsePositiveIntOption(options["transport-key-version"], "transport_key_version", 1);
-    const transportKeyFile = resolveKeyAgreementRecordPathOption(
-      actorAddress,
-      transportKeyVersion,
-      options["transport-key-file"] || options["key-file"],
-      runtimeContext.authStateFile,
-    );
-    let keyRecord;
-    try {
-      keyRecord = await loadKeyAgreementRecord(transportKeyFile, {
-        expectedAddress: actorAddress,
-        expectedKeyVersion: transportKeyVersion,
-      });
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "missing_key_agreement_record",
-        keyFile: transportKeyFile,
-        hint: "run clawnera-help key-agreement-upsert first",
-      };
-    }
-    const transportKeyReadback = await ensureTransportKeyAgreementReadbackReady({
+    const transportKeyMaterial = await resolveReviewerTransportKeyMaterial({
       actorAddress,
       commandName: "reviewer-update",
-      keyFile: transportKeyFile,
-      keyRecord,
-      keyVersion: transportKeyVersion,
       options,
       timeoutMs,
+      authStateFile: runtimeContext.authStateFile,
     });
-    if (!transportKeyReadback.ok) {
-      return transportKeyReadback;
+    if (!transportKeyMaterial.ok) {
+      return transportKeyMaterial;
     }
+    const keyRecord = transportKeyMaterial.keyRecord;
 
     const currentMinCaseRewardIota =
       reviewer && reviewer.minCaseRewardIota !== undefined && reviewer.minCaseRewardIota !== null
@@ -13845,6 +13937,7 @@ function reviewerRegisterUsageLines() {
     "- Uses the actor key-agreement public key as reviewer transportPubkeyHex",
     "- Defaults: --min-case-reward-iota 1 and --stake-amount <live reviewer_min_stake_iota>",
     "- Optional: --transport-type <u8> --transport-key-file <file> --transport-key-version <int> --dry-run",
+    "- If transport key file/version are omitted, the helper resolves the latest non-expired remote key-agreement record and matches the local private key automatically",
     "- If key-agreement-upsert prints warning=key_agreement_readback_pending, wait until GET /users/{address}/key-agreement?keyVersion=<n> returns 200 with the same non-expired key before rerunning reviewer-register",
     "- Run `clawnera-help key-agreement-upsert` and `clawnera-help reputation-init` first when onboarding a fresh reviewer"
   ];
@@ -13898,6 +13991,7 @@ function reviewerUpdateUsageLines() {
     "- Stops if the same key version is not yet visible as a non-expired remote key-agreement record",
     "- Use this after `key-agreement-upsert --rotate`, after any key file replacement, or when reviewer-readable dispute evidence reports reviewer key-agreement drift",
     "- Optional: --transport-type <u8> --transport-key-file <file> --transport-key-version <int> --min-case-reward-iota <int> --active <true|false> --dry-run",
+    "- If transport key file/version are omitted, the helper resolves the latest non-expired remote key-agreement record and matches the local private key automatically",
     "- If the actor is not registered yet, stop and run `clawnera-help reviewer-register` first"
   ];
 }

@@ -7454,6 +7454,386 @@ test("reviewer-update stops before plan creation when the rotated transport key 
   }
 });
 
+test("reviewer-register auto-resolves the latest non-expired transport key when transport args are omitted", async () => {
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-register-latest-key-"));
+  const walletInit = await runCli(["wallet-init", "--alias", "reviewer", "--json"], { HOME: tempHome });
+  assert.equal(walletInit.status, 0);
+  const walletPayload = JSON.parse(walletInit.stdout);
+  const actorAddress = walletPayload.address;
+  const authStateFile = path.join(tempHome, ".config", "clawnera", "auth-state.json");
+  const keyDir = path.join(tempHome, ".config", "clawnera", "key-agreements");
+  mkdirSync(path.dirname(authStateFile), { recursive: true });
+  mkdirSync(keyDir, { recursive: true });
+
+  const staleKeys = generateKeyAgreementKeypair("u");
+  const currentKeys = generateKeyAgreementKeypair("u");
+  await saveKeyAgreementRecord({
+    address: actorAddress,
+    keyVersion: 1,
+    publicKeyMultibase: staleKeys.publicKeyMultibase,
+    privateKeyMultibase: staleKeys.privateKeyMultibase,
+    expiresAtMs: Date.now() + 86_400_000,
+    filePath: path.join(keyDir, `${actorAddress}.v1.json`),
+  });
+  await saveKeyAgreementRecord({
+    address: actorAddress,
+    keyVersion: 2,
+    publicKeyMultibase: currentKeys.publicKeyMultibase,
+    privateKeyMultibase: currentKeys.privateKeyMultibase,
+    expiresAtMs: Date.now() + 86_400_000,
+    filePath: path.join(keyDir, `${actorAddress}.v3.json`),
+  });
+
+  let registerCalls = 0;
+  const requestedKeyAgreementPaths = [];
+  const currentTransportPubkeyHex = Buffer.from(currentKeys.publicKeyMultibase.slice(1), "base64url").toString("hex");
+  const mock = await startMockServer({
+    "GET /reviewers/me/metrics": () => ({
+      status: 200,
+      body: {
+        registered: false,
+        runtime: {
+          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
+          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+        },
+      },
+    }),
+    "GET /policy/fees": () => ({
+      status: 200,
+      body: {
+        policy: {
+          chainConfig: {
+            marketplacePackageId: "0x1111111111111111111111111111111111111111111111111111111111111111",
+            disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+          },
+        },
+      },
+    }),
+    [`GET /users/${actorAddress}/key-agreement?keyVersion=1`]: () => {
+      requestedKeyAgreementPaths.push(`/users/${actorAddress}/key-agreement?keyVersion=1`);
+      return {
+        status: 200,
+        body: {
+          keyAgreement: {
+            address: actorAddress,
+            publicKeyMultibase: staleKeys.publicKeyMultibase,
+            keyVersion: 1,
+            expiresAt: "2001-01-01T00:00:00.000Z",
+            createdAt: "2000-01-01T00:00:00.000Z",
+            updatedAt: "2000-01-01T00:00:00.000Z",
+            isExpired: true,
+          },
+        },
+      };
+    },
+    [`GET /users/${actorAddress}/key-agreement?keyVersion=2`]: () => {
+      requestedKeyAgreementPaths.push(`/users/${actorAddress}/key-agreement?keyVersion=2`);
+      return {
+        status: 200,
+        body: {
+          keyAgreement: {
+            address: actorAddress,
+            publicKeyMultibase: currentKeys.publicKeyMultibase,
+            keyVersion: 2,
+            expiresAt: "2099-01-01T00:00:00.000Z",
+            createdAt: "2099-01-01T00:00:00.000Z",
+            updatedAt: "2099-01-01T00:00:00.000Z",
+            isExpired: false,
+          },
+        },
+      };
+    },
+    [`GET /users/${actorAddress}/key-agreement?keyVersion=3`]: () => {
+      requestedKeyAgreementPaths.push(`/users/${actorAddress}/key-agreement?keyVersion=3`);
+      return {
+        status: 404,
+        body: {
+          error: "key_agreement_not_found",
+        },
+      };
+    },
+    "POST /reviewers/register": (request) => {
+      registerCalls += 1;
+      assert.equal(request.body?.transportPubkeyHex, currentTransportPubkeyHex);
+      return {
+        status: 400,
+        body: {
+          error: "expected_plan_failure",
+        },
+      };
+    },
+    "POST /rpc": (request) => {
+      const method = request.body?.method;
+      if (method === "iota_getObject") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: {
+              data: {
+                objectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+                type: "0x1111111111111111111111111111111111111111111111111111111111111111::dispute_quorum::DisputeQuorumConfig",
+                previousTransaction: "init-reviewer-registry-1",
+                content: {
+                  fields: {
+                    default_required_reviewer_votes: "3",
+                    min_required_reviewer_votes: "3",
+                    min_dispute_bond_per_side_iota: "500000",
+                    reviewer_min_stake_iota: "500000",
+                  },
+                },
+              },
+            },
+          },
+        };
+      }
+      if (method === "iotax_getOwnedObjects") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: {
+              data: [
+                {
+                  data: {
+                    objectId: "0x4444444444444444444444444444444444444444444444444444444444444444",
+                  },
+                },
+              ],
+            },
+          },
+        };
+      }
+      throw new Error(`unexpected_rpc_method:${String(method)}`);
+    },
+  });
+
+  try {
+    writeFileSync(
+      authStateFile,
+      JSON.stringify(
+        {
+          apiBase: mock.baseUrl,
+          token: buildJwtWithExp(4102444800),
+          refreshToken: "refresh-token-1",
+          address: actorAddress,
+          alias: "reviewer",
+        },
+        null,
+        2,
+      ),
+    );
+    const result = await runCli(
+      [
+        "reviewer-register",
+        "--auth-state-file",
+        authStateFile,
+        "--rpc-url",
+        `${mock.baseUrl}/rpc`,
+        "--json",
+      ],
+      { HOME: tempHome },
+    );
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "expected_plan_failure");
+    assert.equal(payload.requestBody.transportPubkeyHex, currentTransportPubkeyHex);
+    assert.equal(registerCalls, 1);
+    assert.ok(requestedKeyAgreementPaths.includes(`/users/${actorAddress}/key-agreement?keyVersion=2`));
+  } finally {
+    await mock.close();
+  }
+});
+
+test("reviewer-update auto-resolves the latest non-expired transport key when transport args are omitted", async () => {
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-update-latest-key-"));
+  const walletInit = await runCli(["wallet-init", "--alias", "reviewer", "--json"], { HOME: tempHome });
+  assert.equal(walletInit.status, 0);
+  const walletPayload = JSON.parse(walletInit.stdout);
+  const actorAddress = walletPayload.address;
+  const authStateFile = path.join(tempHome, ".config", "clawnera", "auth-state.json");
+  const keyDir = path.join(tempHome, ".config", "clawnera", "key-agreements");
+  mkdirSync(path.dirname(authStateFile), { recursive: true });
+  mkdirSync(keyDir, { recursive: true });
+
+  const staleKeys = generateKeyAgreementKeypair("u");
+  const currentKeys = generateKeyAgreementKeypair("u");
+  await saveKeyAgreementRecord({
+    address: actorAddress,
+    keyVersion: 1,
+    publicKeyMultibase: staleKeys.publicKeyMultibase,
+    privateKeyMultibase: staleKeys.privateKeyMultibase,
+    expiresAtMs: Date.now() + 86_400_000,
+    filePath: path.join(keyDir, `${actorAddress}.v1.json`),
+  });
+  await saveKeyAgreementRecord({
+    address: actorAddress,
+    keyVersion: 2,
+    publicKeyMultibase: currentKeys.publicKeyMultibase,
+    privateKeyMultibase: currentKeys.privateKeyMultibase,
+    expiresAtMs: Date.now() + 86_400_000,
+    filePath: path.join(keyDir, `${actorAddress}.v3.json`),
+  });
+
+  let updateCalls = 0;
+  const requestedKeyAgreementPaths = [];
+  const currentTransportPubkeyHex = Buffer.from(currentKeys.publicKeyMultibase.slice(1), "base64url").toString("hex");
+  const mock = await startMockServer({
+    [`GET /reviewers/${actorAddress}`]: () => ({
+      status: 200,
+      body: {
+        reviewer: {
+          objectId: "0x5555555555555555555555555555555555555555555555555555555555555555",
+          owner: actorAddress,
+          active: true,
+          transportType: 0,
+          minCaseRewardIota: "1",
+        },
+      },
+    }),
+    "GET /reviewers/me/metrics": () => ({
+      status: 200,
+      body: {
+        registered: true,
+        runtime: {
+          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
+          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+        },
+      },
+    }),
+    "GET /policy/fees": () => ({
+      status: 200,
+      body: {
+        policy: {
+          chainConfig: {
+            marketplacePackageId: "0x1111111111111111111111111111111111111111111111111111111111111111",
+            disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+          },
+        },
+      },
+    }),
+    [`GET /users/${actorAddress}/key-agreement?keyVersion=1`]: () => {
+      requestedKeyAgreementPaths.push(`/users/${actorAddress}/key-agreement?keyVersion=1`);
+      return {
+        status: 200,
+        body: {
+          keyAgreement: {
+            address: actorAddress,
+            publicKeyMultibase: staleKeys.publicKeyMultibase,
+            keyVersion: 1,
+            expiresAt: "2001-01-01T00:00:00.000Z",
+            createdAt: "2000-01-01T00:00:00.000Z",
+            updatedAt: "2000-01-01T00:00:00.000Z",
+            isExpired: true,
+          },
+        },
+      };
+    },
+    [`GET /users/${actorAddress}/key-agreement?keyVersion=2`]: () => {
+      requestedKeyAgreementPaths.push(`/users/${actorAddress}/key-agreement?keyVersion=2`);
+      return {
+        status: 200,
+        body: {
+          keyAgreement: {
+            address: actorAddress,
+            publicKeyMultibase: currentKeys.publicKeyMultibase,
+            keyVersion: 2,
+            expiresAt: "2099-01-01T00:00:00.000Z",
+            createdAt: "2099-01-01T00:00:00.000Z",
+            updatedAt: "2099-01-01T00:00:00.000Z",
+            isExpired: false,
+          },
+        },
+      };
+    },
+    [`GET /users/${actorAddress}/key-agreement?keyVersion=3`]: () => {
+      requestedKeyAgreementPaths.push(`/users/${actorAddress}/key-agreement?keyVersion=3`);
+      return {
+        status: 404,
+        body: {
+          error: "key_agreement_not_found",
+        },
+      };
+    },
+    "POST /reviewers/update": (request) => {
+      updateCalls += 1;
+      assert.equal(request.body?.transportPubkeyHex, currentTransportPubkeyHex);
+      return {
+        status: 400,
+        body: {
+          error: "expected_plan_failure",
+        },
+      };
+    },
+    "POST /rpc": (request) => {
+      const method = request.body?.method;
+      if (method === "iota_getObject") {
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: {
+              data: {
+                objectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+                type: "0x1111111111111111111111111111111111111111111111111111111111111111::dispute_quorum::DisputeQuorumConfig",
+                previousTransaction: "init-reviewer-registry-1",
+                content: {
+                  fields: {
+                    default_required_reviewer_votes: "3",
+                    min_required_reviewer_votes: "3",
+                    min_dispute_bond_per_side_iota: "500000",
+                    reviewer_min_stake_iota: "500000",
+                  },
+                },
+              },
+            },
+          },
+        };
+      }
+      throw new Error(`unexpected_rpc_method:${String(method)}`);
+    },
+  });
+
+  try {
+    writeFileSync(
+      authStateFile,
+      JSON.stringify(
+        {
+          apiBase: mock.baseUrl,
+          token: buildJwtWithExp(4102444800),
+          refreshToken: "refresh-token-1",
+          address: actorAddress,
+          alias: "reviewer",
+        },
+        null,
+        2,
+      ),
+    );
+    const result = await runCli(
+      [
+        "reviewer-update",
+        "--auth-state-file",
+        authStateFile,
+        "--rpc-url",
+        `${mock.baseUrl}/rpc`,
+        "--json",
+      ],
+      { HOME: tempHome },
+    );
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "expected_plan_failure");
+    assert.equal(payload.requestBody.transportPubkeyHex, currentTransportPubkeyHex);
+    assert.equal(updateCalls, 1);
+    assert.ok(requestedKeyAgreementPaths.includes(`/users/${actorAddress}/key-agreement?keyVersion=2`));
+  } finally {
+    await mock.close();
+  }
+});
+
 test("deliverable-encrypt retries transient reads and writes the payload beside the plaintext file by default", async () => {
   const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-deliverable-encrypt-"));
   const plaintextDir = path.join(tempHome, "artifacts");

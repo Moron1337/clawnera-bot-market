@@ -55,7 +55,6 @@
 | `POST /disputes/{disputeCaseId}/evidence` | bearer | buyer/seller only | Buyer/Seller publishen dispute-scoped `linked_deliverable` oder `supplemental_bundle`; `supplemental_bundle` erzwingt den exakten Live-Empfaengersatz buyer + seller + assigned reviewers des aktiven Round. |
 | `POST /disputes/{disputeCaseId}/reviewers/replace` | `dispute.reviewers.replace` | buyer/seller only | Nur sinnvoll bei Reviewer-Scarcity/No-Show. |
 | `POST /orders/{orderId}/deadline-ext/propose` | `order.deadline_ext.propose` | buyer/seller only | Escrow-Match zur Order wird geprueft. |
-| `POST /deadline-ext/{extensionObjectId}/accept` | `deadline_ext.accept` | deprecated / dark-disabled | Liefert aktuell `409 deadline_extension_accept_disabled`; on-chain existiert der kanonische guarded Apply-Pfad bereits, aber die public API bleibt bis zu einem expliziten owned-surface Retarget dunkel. |
 | `POST /deadline-ext/{extensionObjectId}/reject` | `deadline_ext.reject` | capability-only | API ohne `orderId`-Check; Gegenpartei-Auth wird on-chain erzwungen. |
 | `POST /orders/{orderId}/reviews` | `order.review.post` | buyer/seller only | `rating` 1..5, `reviewHash` lower-hex(64). |
 | `POST /orders/{orderId}/mailbox` | `order.mailbox.set` | buyer/seller only | Mailbox-Snapshot wird on-chain verifiziert (order/participants/open). |
@@ -80,7 +79,6 @@
 | `POST /orders/{orderId}/dispute-bond/fund` | `order.dispute_bond.fund` | buyer/seller only; `side` muss passen | Side-Mismatch wird API-seitig blockiert. |
 | `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` | `order.dispute.open` | buyer/seller only | Wie Buyer-Flow: Milestone-State + Escrow-Match erforderlich. |
 | `POST /orders/{orderId}/deadline-ext/propose` | `order.deadline_ext.propose` | buyer/seller only | Verlaengerungsvorschlag fuer laufende Orders. |
-| `POST /deadline-ext/{extensionObjectId}/accept` | `deadline_ext.accept` | deprecated / dark-disabled | Liefert aktuell `409 deadline_extension_accept_disabled`; on-chain existiert der kanonische guarded Apply-Pfad bereits, aber die public API bleibt bis zu einem expliziten owned-surface Retarget dunkel. |
 | `POST /deadline-ext/{extensionObjectId}/reject` | `deadline_ext.reject` | capability-only | API ohne `orderId`-Check; Gegenpartei-Auth wird on-chain erzwungen. |
 | `POST /orders/{orderId}/reviews` | `order.review.post` | buyer/seller only | Review erst nach terminalem on-chain Zustand sinnvoll. |
 | `POST /storage/uploads/presign` | `storage.upload.presign` | buyer/seller only fuer `orderId` | Typischer Seller-Delivery-Pfad fuer managed/byo Uploads. |
@@ -90,7 +88,7 @@
 | Route | Capability | API-Rollencheck | Kritische Preconditions / Hinweise |
 | --- | --- | --- | --- |
 | `POST /reviewers/register` | `reviewer.register` | address == auth via JWT | Reputation-Profil + Stake + Transport-Key notwendig. |
-| `POST /reviewers/me/claim-metrics` | `reviewer.claim_metrics` | reviewer self | Majority-Payouts passieren bereits bei `finalize`; dieser Schritt zieht Score-Updates, Slashes und Pending-Outcome-Cleanup nach. Geschlossene `disputeCaseObjectId` mitsenden; nur im Single-Closed-Invite-Fall darf die CLI sie automatisch ableiten. Die alte address-scoped Compat-Route ist retirert; kanonisch bleibt nur `/reviewers/me/claim-metrics`. |
+| `POST /reviewers/me/claim-metrics` | `reviewer.claim_metrics` | reviewer self | Majority-Payouts passieren bereits bei `finalize`; dieser Schritt zieht Score-Updates, Slashes und Pending-Outcome-Cleanup nach. Geschlossene `disputeCaseObjectId` mitsenden; nur im Single-Closed-Invite-Fall darf die CLI sie automatisch ableiten. |
 | `POST /disputes/{disputeCaseId}/reviewers/accept` | `dispute.reviewer.accept` | Buyer/Seller explizit verboten | Reviewer muss gueltige Reviewer-Objekte liefern. |
 | `POST /disputes/{disputeCaseId}/votes/commit` | `dispute.vote.commit` | keine Partei-Pruefung im Handler | On-chain prueft Reviewer-Berechtigung/Fenster. |
 | `POST /disputes/{disputeCaseId}/votes/reveal` | `dispute.vote.reveal` | keine Partei-Pruefung im Handler | Vote/NONCE-Formate API-seitig, finale Regeln on-chain. |

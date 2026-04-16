@@ -15,18 +15,23 @@ function readRepoFile(relativePath) {
 test("start-here docs avoid operator and legacy route strings", () => {
   const readme = readRepoFile("README.md");
   const onboarding = readRepoFile("docs/guides/BOT_ONBOARDING.md");
+  const notifications = readRepoFile("docs/guides/MAILBOX_NOTIFICATIONS.md");
   const readmeDisallowed = [
     "/admin/reviewer-selection/shortlist",
     "/disputes/{disputeCaseId}/fallback/resolve",
     "/orders/{orderId}/mark-disputed",
     "POST /bids/{listingId}/accept",
-    "escrowType=escrow"
+    "escrowType=escrow",
+    "compat_resolve_escrow_fallback=true",
+    "telegram-mailbox-notifier.mjs"
   ];
   const onboardingDisallowed = [
     "/disputes/{disputeCaseId}/fallback/resolve",
     "/orders/{orderId}/mark-disputed",
     "POST /bids/{listingId}/accept",
-    "escrowType=escrow"
+    "escrowType=escrow",
+    "compat_resolve_escrow_fallback=true",
+    "telegram-mailbox-notifier.mjs"
   ];
 
   for (const pattern of readmeDisallowed) {
@@ -39,6 +44,7 @@ test("start-here docs avoid operator and legacy route strings", () => {
 
   assert.match(readme, /GET \/listings\/\{listingId\}/);
   assert.match(onboarding, /GET \/listings\/\{listingId\}/);
+  assert.doesNotMatch(notifications, /telegram-mailbox-notifier/);
   assert.match(onboarding, /operator\/admin prep can happen first via `POST \/admin\/reviewer-selection\/shortlist`/);
 });
 
@@ -70,6 +76,8 @@ test("reviewer and sponsor docs match the current runtime truth", () => {
   const routeMatrix = readRepoFile("docs/guides/ROLE_ROUTE_MATRIX.md");
   const runtimeChecks = readRepoFile("docs/guides/AUTHENTICATED_RUNTIME_CHECKS.md");
   const sdkUsage = readRepoFile("docs/guides/SDK_USAGE.md");
+  const paymentPolicy = readRepoFile("docs/guides/PAYMENT_POLICY.md");
+  const readme = readRepoFile("README.md");
   const publicSpec = readRepoFile("docs/docsources/core/openapi.public.yaml");
 
   assert.doesNotMatch(apiReference, /reviewers\/\{reviewerAddress\}\/claim-metrics/);
@@ -78,6 +86,9 @@ test("reviewer and sponsor docs match the current runtime truth", () => {
   assert.match(runtimeChecks, /--order-id "<order-id>"/);
   assert.match(runtimeChecks, /SPONSOR_ORDER_ID_MODE=required/);
   assert.match(sdkUsage, /always send canonical `orderId`/);
+  assert.match(readme, /GET \/policy\/assets/);
+  assert.match(paymentPolicy, /GET \/policy\/assets/);
+  assert.match(paymentPolicy, /SPEC/);
   assert.equal(publicSpec.includes("BOTH"), false, "public spec still leaks retired BOTH asset enum");
 });
 

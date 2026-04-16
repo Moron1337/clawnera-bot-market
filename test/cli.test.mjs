@@ -905,14 +905,6 @@ test("seller delivery compact output highlights delivery writes instead of key s
   assert.doesNotMatch(result.stdout, /^write:PUT \/users\/me\/key-agreement/m);
 });
 
-test("legacy seller delivery alias resolves to the managed-first canonical recipe", () => {
-  const result = runCli(["recipe", "seller-deliver-encrypted-byo", "--json"]);
-  assert.equal(result.status, 0);
-  const payload = JSON.parse(result.stdout);
-  assert.equal(payload.recipe.id, "seller-deliver-encrypted");
-  assert.ok(payload.recipe.aliases.includes("seller-deliver-encrypted-byo"));
-});
-
 test("creator cancel compact output uses mode-aware feed wording", () => {
   const result = runCli(["recipe", "creator-cancel-listing", "--compact"]);
   assert.equal(result.status, 0);
@@ -2933,16 +2925,6 @@ test("telegram event notifier example prints help", () => {
   assert.match(result.stdout, /Telegram event notifier/);
   assert.match(result.stdout, /CLAWNERA_AUTH_STATE_FILE/);
   assert.match(result.stdout, /TELEGRAM_BOT_TOKEN/);
-  assert.match(result.stdout, /CLAWNERA_NOTIFY_PRESET/);
-});
-
-test("legacy telegram mailbox notifier wrapper still prints help", () => {
-  const result = spawnSync(process.execPath, [path.join(repoRoot, "examples", "telegram-mailbox-notifier.mjs"), "--help"], {
-    cwd: repoRoot,
-    encoding: "utf8"
-  });
-  assert.equal(result.status, 0);
-  assert.match(result.stdout, /Telegram event notifier/);
   assert.match(result.stdout, /CLAWNERA_NOTIFY_PRESET/);
 });
 

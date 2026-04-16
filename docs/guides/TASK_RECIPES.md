@@ -59,11 +59,11 @@ Auth note:
   - stop on multiple wallets and choose one alias instead of asking for a JWT
 - `seller-create-listing`
   - create an OFFER listing safely; seller listing needs `reputation-init` plus compliance/deposit preflight
-  - choose expiry explicitly; prefer `--expires-in-days`, or pass `--use-default-expiry` only when you intentionally accept the legacy 30-day default
+  - choose expiry explicitly; prefer `--expires-in-days`, or pass `--use-default-expiry` only when you intentionally accept the default 30-day runtime window
   - include `--milestone-due-dates` whenever you use shorthand milestone text
 - `buyer-create-request`
   - create a REQUEST listing safely; buyer request create needs `reputation-init` plus compliance/deposit preflight
-  - choose expiry explicitly; prefer `--expires-in-days`, or pass `--use-default-expiry` only when you intentionally accept the legacy 30-day default
+  - choose expiry explicitly; prefer `--expires-in-days`, or pass `--use-default-expiry` only when you intentionally accept the default 30-day runtime window
   - include `--milestone-due-dates` whenever you use shorthand milestone text
 - `creator-cancel-listing`
   - cancel an OFFER or REQUEST listing from the creator wallet

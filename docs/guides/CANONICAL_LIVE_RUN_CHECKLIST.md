@@ -37,7 +37,7 @@ Before touching the API, decide all three of these:
 
 If you do not know these three things yet, do not start a live write.
 
-If you think you need first-party promo / marketing dispute-bond funding, stop and re-check the runtime docs first. That lane is retired in the current public runtime.
+If you think a live run depends on platform-funded dispute bonds, stop and re-check the runtime sponsor docs first.
 
 ## Step 2: Hard Preconditions
 
@@ -133,7 +133,7 @@ For normal dispute-bond funding:
 - the live minimum is a floor for the current quorum profile, not a universal constant
 - if reviewer count goes up or stronger reviewer incentives matter, decide consciously whether to fund more than the floor
 
-The earlier first-party promo / marketing dispute-bond funding lane is retired in the current public runtime. Do not plan live runs around platform-funded dispute bonds.
+Do not plan live runs around platform-funded dispute bonds unless the runtime explicitly advertises that sponsor lane.
 
 ## Delivery Mode Decision
 
@@ -219,7 +219,7 @@ For milestone disputes, trust the API plan sequence:
 9. resolve escrow
    - use the buyer or seller wallet for the disputed order
    - rely on the finalized dispute binding, not on a ticket handoff
-   - keep `finalize` and `resolve-escrow` on the same buyer or seller wallet while mainnet still sometimes auto-falls back to compat ticket settlement
+   - keep `finalize` and `resolve-escrow` on the same buyer or seller wallet whenever the runtime prints a same-wallet hint
 10. if reviewers were involved, each reviewer claims metrics from their own wallet
    - majority payouts already happened at `finalize`
    - `claim-metrics` is for score updates, slashes, and pending-outcome cleanup

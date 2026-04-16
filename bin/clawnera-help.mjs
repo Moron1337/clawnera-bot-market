@@ -697,7 +697,6 @@ function compactRecipeCommand(recipe) {
     case "order-mutual-cancel":
       return "local SDK/PTB only: buildApproveMutualCancelOrderEscrowTx(...) from buyer and seller, then buildMutualCancelOrderEscrowTx(...) from either party";
     case "seller-deliver-encrypted":
-    case "seller-deliver-encrypted-byo":
       return `clawnera-help deliverable-encrypt --order-id <orderId> --milestone-id <milestoneId> --plaintext-file ./deliverable.bin ${auth}`;
     case "buyer-accept-delivery":
       return `clawnera-help request GET /orders/<orderId>/milestones/<milestoneId>/artifact-manifest/content ${auth} --response-out ./resolved-manifest.json`;
@@ -740,7 +739,6 @@ function compactRecipeReadText(recipe) {
     case "order-mutual-cancel":
       return "GET /orders/{orderId} | GET /orders/{orderId}/timeline";
     case "seller-deliver-encrypted":
-    case "seller-deliver-encrypted-byo":
       return "GET /orders/{orderId}/milestones/{milestoneId}/anchor | GET /events?scope=all&type=mailbox.signal_posted";
     case "reviewer-inspect-evidence":
       return "GET /disputes/{disputeCaseId}/evidence | GET /disputes/{disputeCaseId}/evidence/{evidenceId}/content";
@@ -763,7 +761,6 @@ function compactRecipeWriteText(recipe) {
     case "order-mutual-cancel":
       return "direct SDK/PTB only: order_escrow::approve_mutual_cancel x2 | order_escrow::mutual_cancel | optional no-case bond cleanup";
     case "seller-deliver-encrypted":
-    case "seller-deliver-encrypted-byo":
       return "POST /storage/uploads/presign | POST /orders/{orderId}/milestones/{milestoneId}/submit | POST /orders/{orderId}/milestones/{milestoneId}/anchor";
     case "dispute-open":
       return "buyer/seller publish: POST /orders/{orderId}/milestones/{milestoneId}/disputes/open";
@@ -5102,7 +5099,7 @@ function classifyRetiredTxPlanRoute(method, rawPath, apiBase = "") {
   if (/^\/reviewers\/0x[a-f0-9]+\/claim-metrics$/i.test(pathname)) {
     return {
       error: "reviewer_claim_metrics_path_retired",
-      hint: "Use POST /reviewers/me/claim-metrics with the reviewer auth state instead of the old address-scoped path.",
+      hint: "Use POST /reviewers/me/claim-metrics with the reviewer auth state.",
     };
   }
   return null;
@@ -5913,7 +5910,7 @@ function listingCreateUsageLines() {
     "- Without --display-values, milestone and budget numbers must already be atomic integers",
     "- If you are unsure, run: clawnera-help units",
     "- Thin wrapper over POST /listings that infers creatorAddress from the saved auth state when possible",
-    "- The helper does not silently guess listing expiry: choose an explicit expiry or pass --use-default-expiry to acknowledge the legacy 30-day runtime default",
+    "- The helper does not silently guess listing expiry: choose an explicit expiry or pass --use-default-expiry to acknowledge the default 30-day runtime window",
     "- REQUEST means the listing creator is the future buyer and later accepts the chosen seller bid",
     "- Public listing create should be treated as: explicit listingMode + reputation-init + compliance/deposit preflight",
     "- If /policy/fees shows listingDeposit.enabled=true, run clawnera-help listing-deposit-create first and pass its object id into listing-create",
@@ -6540,9 +6537,9 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
     case "missing_listing_expiry_choice":
       return [
         "cause=listing_expiry_choice_required",
-        "detail=choose_an_explicit_expiry_or_acknowledge_the_legacy_30_day_default_before_posting",
+        "detail=choose_an_explicit_expiry_or_acknowledge_the_default_30_day_runtime_window_before_posting",
         "next_hint=add --expires-in-days <1-30> to listing-create",
-        "next_hint=or pass --use-default-expiry if you intentionally want the legacy 30-day runtime default",
+        "next_hint=or pass --use-default-expiry if you intentionally want the default 30-day runtime window",
       ];
     case "multiple_listing_expiry_inputs":
       return [
@@ -6558,7 +6555,7 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
     case "listing_expiry_days_too_large":
       return [
         "cause=listing_expiry_days_too_large",
-        `detail=helper_caps_expires-in-days_at_${MAX_LISTING_EXPIRY_DAYS}_to_match_the_legacy_runtime_default_window`,
+        `detail=helper_caps_expires-in-days_at_${MAX_LISTING_EXPIRY_DAYS}_to_match_the_default_runtime_window`,
         `next_hint=retry_with --expires-in-days <1-${MAX_LISTING_EXPIRY_DAYS}> or an earlier --expires-at`,
       ];
     default:
@@ -7195,7 +7192,7 @@ function classifyTxPlanRouteFailure({
         parsePositiveDeadlineMs(body.challengeDeadlineMs) ||
         (Number.isSafeInteger(retryAfterMs) && retryAfterMs >= 0 ? Date.now() + retryAfterMs : null);
       hint =
-        "Settlement is not ready yet. Wait for the printed settlement-ready or challenge deadline hint, then rerun the same resolve-escrow command from the same buyer or seller wallet that finalized when compat fallback is still active.";
+        "Settlement is not ready yet. Wait for the printed settlement-ready or challenge deadline hint, then rerun the same resolve-escrow command from the same buyer or seller wallet used for finalize whenever the runtime still requires same-wallet closeout.";
       break;
     case "reviewer_vote_commit_window_closed":
       waitUntilMs =
@@ -15332,12 +15329,12 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
       console.log(`dispute_case_object_id=${result.disputeCaseObjectId}`);
     }
     if (result.compatResolveEscrowFallback?.used === true) {
-      console.log("compat_resolve_escrow_fallback=true");
+      console.log("resolve_escrow_same_wallet_hint=true");
       if (result.compatResolveEscrowFallback.finalizeTxDigest) {
-        console.log(`compat_finalize_tx_digest=${result.compatResolveEscrowFallback.finalizeTxDigest}`);
+        console.log(`resolve_escrow_reference_tx_digest=${result.compatResolveEscrowFallback.finalizeTxDigest}`);
       }
       if (result.compatResolveEscrowFallback.finalizeSignerAddress) {
-        console.log(`compat_finalize_signer_address=${result.compatResolveEscrowFallback.finalizeSignerAddress}`);
+        console.log(`resolve_escrow_reference_signer_address=${result.compatResolveEscrowFallback.finalizeSignerAddress}`);
       }
     }
     if (result.keepSameWalletForResolve === true) {

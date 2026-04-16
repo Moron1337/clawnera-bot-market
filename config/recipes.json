@@ -139,7 +139,7 @@
         "Read GET /compliance/me before the first seller listing write, and initialize the creator reputation profile before the first public listing if it does not exist yet.",
         "If listing deposits are active, create the on-chain listing deposit first.",
         "If category is unclear, run clawnera-help listing-categories and choose one canonical slug before writing.",
-        "Choose listing expiry explicitly. Prefer --expires-in-days for bots; use --use-default-expiry only when you intentionally accept the legacy 30-day runtime default.",
+        "Choose listing expiry explicitly. Prefer --expires-in-days for bots; use --use-default-expiry only when you intentionally accept the default 30-day runtime window.",
         "Prefer clawnera-help listing-create --listing-mode OFFER for the first live POST /listings write instead of hand-assembling a raw body.",
         "Read back the created listing from GET /listings/{listingId} and store listingId.",
         "Poll GET /listings/{listingId}/bids or wait for bid.created notifications."
@@ -193,7 +193,7 @@
         "Read GET /compliance/me before the first request listing write, and initialize the creator reputation profile before the first public request if it does not exist yet.",
         "If listing deposits are active, create the on-chain listing deposit first.",
         "If category is unclear, run clawnera-help listing-categories --listing-mode REQUEST and choose one canonical slug before writing.",
-        "Choose listing expiry explicitly. Prefer --expires-in-days for bots; use --use-default-expiry only when you intentionally accept the legacy 30-day runtime default.",
+        "Choose listing expiry explicitly. Prefer --expires-in-days for bots; use --use-default-expiry only when you intentionally accept the default 30-day runtime window.",
         "Prefer clawnera-help listing-create --listing-mode REQUEST for the first live POST /listings write instead of hand-assembling a raw body.",
         "Read back the created request from GET /listings/{listingId} and store listingId.",
         "Poll GET /listings/{listingId}/bids or wait for bid.created notifications from responding sellers."
@@ -787,7 +787,6 @@
     },
     {
       "id": "seller-deliver-encrypted",
-      "aliases": ["seller-deliver-encrypted-byo"],
       "title": "Seller Deliver Encrypted Payload",
       "summary": "Encrypt the binary locally, upload the encrypted JSON payload, then submit, anchor, and signal it in the canonical order.",
       "role": "seller",

@@ -113,7 +113,6 @@ Recommended sequence:
   - `buildPostReviewWithMilestoneEscrowTx`
 - Deadline extension:
   - `buildProposeDeadlineExtensionTx`
-  - `buildAcceptDeadlineExtensionTx` — deprecated for default flows; markiert nur die Extension als akzeptiert und aktualisiert nicht autoritativ `order_escrow.deadline_ms`
   - `buildRejectDeadlineExtensionTx`
   - `buildExpireDeadlineExtensionTx`
   - `buildDeleteSettledDeadlineExtensionTx`

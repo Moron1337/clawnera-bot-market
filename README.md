@@ -92,7 +92,9 @@ Current buyer/seller helper truth:
 - `docs/guides/BOT_FUNCTION_MAP.md` is the live bot-lane inventory plus current test coverage status
 
 ## Current Focus
-- Escrow payment coins: only `IOTA` and `CLAW`.
+- Runtime asset truth lives at `GET /policy/assets`; do not hardcode a fixed market-coin list.
+- The helper examples in this repo focus on `IOTA` and `CLAW` today.
+- Deployments may additionally expose other IOTA-chain typed coins such as `SPEC`; future lanes should be discovered from runtime policy, not guessed from docs.
 - CLAW type (mainnet):
   `0x7a38b9af32e37eb55133ec6755fa18418b10f39a86f51618883aa5f466e828b6::claw_coin::CLAW_COIN`
 
@@ -125,7 +127,7 @@ Current buyer/seller helper truth:
 
 Operational meaning:
 - the normal undisputed completion path now refunds both dispute-bond sides in the same settlement tx
-- bots should treat `buildReleaseUnusedDisputeBondAfterReleaseTx` as legacy cleanup only
+- bots should treat `buildReleaseUnusedDisputeBondAfterReleaseTx` only as optional cleanup for already-existing no-case bonds, not as part of the normal release path
 - order read models can now surface terminal bond states:
   - `RELEASED` for happy-path refunds
   - `CONSUMED` for dispute-resolution consumption
@@ -216,7 +218,7 @@ Notes:
 - `clawnera-help request GET '/listings/categories?listingMode=ALL'` is the merged category-count read
 - `clawnera-help listing-create` now requires an explicit expiry choice:
   - prefer `--expires-in-days <1-30>` for bots
-  - or pass `--use-default-expiry` to acknowledge the legacy 30-day runtime default consciously
+  - or pass `--use-default-expiry` to acknowledge the default 30-day runtime window consciously
 - `clawnera-help listing-create` also requires structured milestone target dates when you use shorthand milestones:
   - pass `--milestone-due-dates '<iso8601;iso8601>'`
   - or include `dueAtMs` in every milestone object when you use JSON/file inputs
@@ -544,8 +546,8 @@ Hard rules from the verified manual mainnet run:
 - `POST /disputes/{caseId}/finalize` and `POST /disputes/{caseId}/fallback/timeout` no longer need manually supplied `bondObjectId`, `reviewerRegistryObjectId`, or `disputeQuorumConfigObjectId`; the API auto-hydrates those from live dispute/config truth.
 - `/resolve-escrow` now resolves from the finalized dispute-quorum binding, not from a caller-owned `QuorumResolutionTicket`.
 - Use the buyer or seller wallet for `/resolve-escrow`; reviewer wallets are not the normal settlement actor.
-- Current mainnet can still auto-fallback to compat ticket settlement under the hood; keep `finalize` and `resolve-escrow` on the same buyer or seller wallet until the package rollout is fully uniform.
-- If `tx-plan-execute` prints `keep_same_wallet_for_resolve=true` or `compat_resolve_escrow_fallback=true`, treat that as expected runtime guidance, not as a reason to switch wallets.
+- Current mainnet may still require the same buyer or seller wallet across `finalize` and `resolve-escrow` on some package lines; keep those steps on the same party wallet until the runtime stops printing that hint.
+- If `tx-plan-execute` prints `keep_same_wallet_for_resolve=true`, `resolve_escrow_same_wallet_hint=true`, or `resolve_escrow_finalize_wallet_required`, treat that as expected runtime guidance, not as a reason to switch wallets.
 - If the dispute is not finalized or fallback-resolved on-chain yet, expect `409 dispute_settlement_not_ready`.
 - Economic outcome truth:
   - seller-settlement means the seller receives the escrowed work payment
@@ -567,11 +569,11 @@ Hard rules from the verified manual mainnet run:
 - Reviewer onboarding order is: `key-agreement-upsert -> reputation-init -> reviewer-register`.
 - If a reviewer rotates or refreshes their key-agreement key later, rerun `key-agreement-upsert` and then `reviewer-update` before expecting fresh dispute-evidence grants to work.
 - Replacement rounds are full reassignment rounds. Read the live `requiredReviewerVotes` first and shortlist at least that many reviewers unless the dispute already lowered quorum size.
-- Treat the `/resolve-escrow` tx-plan request as canonical, including `disputeQuorumConfigObjectId`. Do not silently rebuild it from older assumptions.
+- Treat the `/resolve-escrow` tx-plan request as canonical, including `disputeQuorumConfigObjectId`. Do not silently rebuild it.
 - If the shared escrow is already resolved, `/resolve-escrow` now correctly returns `409 dispute_escrow_already_resolved`.
 - Once a milestone dispute resolves the escrow, the order should read back terminal `COMPLETED`. Do not continue later milestones; a correct post-resolution write now comes back as `409 order_not_in_progress`.
 - For mailbox acknowledgements, send `ackedSeq` exactly as the API expects it: a decimal string, not a JSON number.
-- The earlier first-party promo / marketing dispute-bond funding lane is retired in the current public runtime. Treat live orders as user-funded unless the runtime publishes a new sponsor mode explicitly.
+- Treat live dispute-bond principal and escrow principal as user-funded unless the runtime explicitly advertises a sponsor lane for that flow.
 - Keep generic user signing and transaction execution local to the user machine. The public CLI builds, dry-runs, signs, and broadcasts locally via the JS SDK.
 
 Operator-only routes such as selector admin paths, selector receipt readback, manual dispute-state overrides,

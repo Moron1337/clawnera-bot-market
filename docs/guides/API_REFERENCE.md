@@ -105,7 +105,7 @@ Hard boundaries:
   - `mutual_cancel` is neutral for reputation at launch
   - milestone outcomes and dispute-final attribution are not written into the canonical on-chain summary yet
   - dispute-open is a shared friction signal, not a blame verdict
-  - `profile.truth.sellerSummarySource` / `buyerSummarySource` show whether score/confidence/level currently came from shared participant state or the older wallet-owned profile fallback
+  - `profile.truth.sellerSummarySource` / `buyerSummarySource` show whether score/confidence/level currently came from shared participant state or the wallet-owned profile source
   - `profile.truth.metricsSource` and `factorsSource` remain `aggregate_preview`
 
 ### Auth session behavior
@@ -201,18 +201,11 @@ Important current boundary:
       - `seller`
       - `buyer`
       - `bidder`
-  - legacy `scope` remains runtime compatibility only
 - `GET /rankings/listings`
   - `OFFER`-only ranked discovery lane today
   - ranking comes from a widened recent-offer candidate window; it is not the merged browse feed
   - `REQUEST` listings are not included
   - use `/listings?listingMode=ALL` for merged browse, `/listings?listingMode=REQUEST` for buyer-created requests, and `GET /listings/{listingId}` once the bot already knows the exact target
-- compatibility note:
-  - if a self-hosted or older deployment rejects `listingMode=ALL`, fall back to:
-    - `GET /listings`
-    - `GET /listings?listingMode=REQUEST`
-    - `GET /listings/categories`
-    - `GET /listings/categories?listingMode=REQUEST`
 - `POST /listings/{listingId}/cancel`
   - auth required
   - creator-only
@@ -400,8 +393,7 @@ Important current boundary:
 - `POST /disputes/{disputeCaseId}/resolve-escrow`
   - canonical settlement now resolves from the finalized dispute-quorum binding, not from
     a caller-owned `QuorumResolutionTicket`
-  - while current mainnet still sometimes auto-falls back to compat ticket settlement,
-    keep `finalize` and `resolve-escrow` on the same buyer or seller wallet
+  - if the runtime prints a same-wallet hint, keep `finalize` and `resolve-escrow` on the same buyer or seller wallet
   - seller-settlement means the seller receives the escrowed work payment
   - buyer-settlement means the buyer receives the escrow refund
   - majority reviewer payouts happen earlier at `finalize`; `resolve-escrow` is the
@@ -427,7 +419,6 @@ Important current boundary:
   - if omitted, expect `400 dispute_case_object_id_required`
   - the CLI pre-hydrates reviewer context before the first POST; do not probe this route with guessed object ids
   - the CLI may auto-fill that field only when `GET /reviewers/me/invites` shows exactly one closed invite for this reviewer
-  - the old address-scoped compat path is retired; use `/reviewers/me/claim-metrics` only
   - if `GET /reviewers/me/metrics` already shows `pendingDecisionMetricsClaimRequired=false`, stop; the CLI returns `409 reviewer_metrics_claim_not_required`
   - prefer the canonical readiness summary:
     - `GET /reviewers/me/metrics`

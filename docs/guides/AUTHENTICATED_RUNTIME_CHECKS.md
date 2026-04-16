@@ -81,7 +81,7 @@ Worauf du achten solltest:
 
 Wenn du den CLI-Weg benutzt:
 - `clawnera-help auth-login ... --state-out ...` schreibt ein Auth-State-File mit Access- und Refresh-Token.
-- Langlaufende Hilfen wie `telegram-mailbox-notifier.mjs` koennen dieses File direkt lesen und Tokens selbst rotieren.
+- Langlaufende Hilfen wie `telegram-event-notifier.mjs` koennen dieses File direkt lesen und Tokens selbst rotieren.
 
 Session-Zustand direkt lesen:
 

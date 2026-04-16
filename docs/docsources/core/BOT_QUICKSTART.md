@@ -149,7 +149,6 @@ Bid feed truth:
 - new clients should read:
   - `accessScope`
   - `viewerRole`
-- legacy `scope` is compatibility-only
 
 Role resolution:
 - `OFFER`

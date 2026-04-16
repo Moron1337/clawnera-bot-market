@@ -50,7 +50,7 @@ The package ships preset-based notifications:
 - `all`
   - broader actor-visible workflow alerts
 - `mailbox`
-  - legacy mailbox-only mode
+  - mailbox-focused mode
   - not enough by itself for pre-order bids, cooperative cancel, or dispute-open wake-up
 
 List them:
@@ -107,12 +107,6 @@ node ./examples/telegram-event-notifier.mjs --once
 node ./examples/telegram-event-notifier.mjs
 ```
 
-Legacy mailbox wrapper:
-
-```bash
-node ./examples/telegram-mailbox-notifier.mjs --once
-```
-
 ## What The Notifier Does
 - polls `GET /events?scope=all`
 - keeps one local cursor
@@ -155,4 +149,3 @@ This checks:
 - `examples/telegram-event-notifier.mjs`
 - `examples/telegram-event-notifier.env.example`
 - `examples/telegram-event-notifier.service.example`
-- `examples/telegram-mailbox-notifier.mjs`

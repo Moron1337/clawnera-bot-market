@@ -112,7 +112,7 @@ If token budget is tight:
 - Run `key-agreement-upsert` only before encrypted delivery or reviewer onboarding, not as a universal listing prerequisite.
 - For the seller listing step, check compliance/deposit state first and ensure `reputation-init` has already been completed for that wallet.
 - For the buyer request-listing step, check compliance/deposit state first and ensure `reputation-init` has already been completed for that wallet.
-- For listing create, choose expiry explicitly. Prefer `--expires-in-days`; use `--use-default-expiry` only to acknowledge the legacy 30-day runtime default.
+- For listing create, choose expiry explicitly. Prefer `--expires-in-days`; use `--use-default-expiry` only to acknowledge the default 30-day runtime window.
 - For shorthand milestone bodies, always include `--milestone-due-dates`; otherwise the helper stops locally.
 - Listing creators can later use `creator-cancel-listing` or `creator-renew-listing`; the public runtime uses POST cancel/renew routes, not DELETE/PATCH listing edits.
 - Order parties can later use `order-mutual-cancel` only as a direct SDK/PTB lane when the targeted package actually exposes `approve_mutual_cancel` and `mutual_cancel`; there is no public HTTP route for this flow today.

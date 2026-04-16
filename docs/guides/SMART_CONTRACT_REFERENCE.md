@@ -7,9 +7,11 @@ Quellen:
 
 ## 1) Wichtige Architekturregeln fuer Bots
 
-- Escrow Payments sind bewusst eingeschraenkt:
+- Runtime asset truth fuer Markt-/Escrow-Lanes kommt aus `GET /policy/assets`.
+- Die Helper-/Beispiel-Lane in diesem Repo fokussiert aktuell `IOTA` und `CLAW`; Deployments koennen zusaetzliche Typed-Coin-Lanes wie `SPEC` ausrollen.
+- Escrow Payments bleiben pfadgebunden:
   - IOTA nur ueber `escrow::create_escrow_iota_entry` (Fee Path).
-  - Generic Coin Escrow ist effektiv auf CLAW begrenzt.
+  - Typed-Coin Escrow ueber `create_escrow_coin_entry` fuer genau die Lane, die dein Zielsystem aktiviert.
 - Viele API Write Calls bauen nur PTB-Plans; Bots muessen selbst signieren/ausfuehren.
 - State-Machine Regeln strikt beachten (single settlement, time gates, role checks).
 
@@ -27,7 +29,6 @@ Quellen:
 | `open_dispute` | Escrow in Dispute ueberfuehren | buyer/seller | dispute-faehiger State, clock |
 | `claim_after_deadline` | Seller claimt nach Deadline | seller | deadline erreicht, kein final settlement |
 | `approve_settled_escrow_deletion` | Partei-Freigabe fuer Escrow-Cleanup | buyer/seller | Escrow terminal (`RELEASED`/`RESOLVED`) |
-| `delete_settled_escrow` | Legacy Escrow-Delete / Storage reclaim | buyer/seller | terminal + **beide** Delete-Approvals gesetzt; laesst alte Binding unter dem Host weiterliegen |
 | `delete_settled_escrow_guarded` | bevorzugter Escrow-Delete / Storage reclaim | buyer/seller | terminal + **beide** Delete-Approvals gesetzt + korrektes `FeeConfig`-Hostobjekt fuer die aktuelle Binding |
 | `resolve_dispute_to_seller` | Arb-Cap Resolution seller | arb/admin path | ArbCap, disputed state |
 | `resolve_dispute_to_buyer` | Arb-Cap Resolution buyer | arb/admin path | ArbCap, disputed state |
@@ -56,14 +57,11 @@ Quellen:
 | `create_listing_deposit_iota_shared_entry` | Listing-Deposit erzeugen (shared) | listing creator | wie oben; shared fuer admin/keeper settlement paths |
 | `refund_listing_deposit_full_and_unbind` | Bevorzugter kompletter Refund + Binding-Cleanup | admin/keeper | Deposit `ACTIVE`, AdminCap path, entfernt die aktuelle `listing_ref`-Binding atomar |
 | `forfeit_listing_deposit_by_policy_and_unbind` | Bevorzugter Policy-Forfeit + Binding-Cleanup | admin/keeper | Deposit `ACTIVE`, Policy-Cfg + Forfeit-Sink gesetzt, entfernt die aktuelle `listing_ref`-Binding atomar |
-| `refund_listing_deposit_full` | Legacy kompletter Refund | admin/keeper | Deposit `ACTIVE`, AdminCap path; laesst die bisherige Binding absichtlich bestehen |
-| `forfeit_listing_deposit_by_policy` | Legacy Policy-Forfeit | admin/keeper | Deposit `ACTIVE`, Policy-Cfg + Forfeit-Sink gesetzt; laesst die bisherige Binding absichtlich bestehen |
 
 ### `dispute_quorum`
 
 | Funktion | Zweck | Typischer Aufrufer | Kern-Preconditions |
 | --- | --- | --- | --- |
-| `register_reviewer_entry` | Reviewer registrieren + stake | reviewer | legacy/plain path ohne reputation-config gating |
 | `register_reviewer_entry_with_reputation_cfg` | Reviewer registrieren + stake | reviewer | configured-runtime canonical path; `ReputationProfile` als activation/proof anchor, Thresholds aus shared participant state |
 | `update_reviewer` | Reviewer-Parameter aendern | reviewer | reviewer entry gehoert actor |
 | `deregister_reviewer` | Reviewer selbst deregistrieren + Stake zurueckholen | reviewer owner | reviewer `active=false` und keine aktiven Cases |
@@ -72,7 +70,6 @@ Quellen:
 | `fund_bond_as_buyer` | Buyer Bond Funding | buyer | side/caller match |
 | `fund_bond_as_seller` | Seller Bond Funding | seller | side/caller match |
 | `open_milestone_dispute_case_entry` | Dispute Case eroefnen | buyer/seller | escrow + bond Bezug konsistent |
-| `accept_dispute_case` | Reviewer nimmt Case an | reviewer | legacy/plain path ohne reputation-config gating |
 | `accept_dispute_case_with_reputation_cfg` | Reviewer nimmt Case an | reviewer | configured-runtime canonical path; `ReputationProfile` als activation/proof anchor, Thresholds aus shared participant state |
 | `commit_vote` | Commit Phase | reviewer | commit window offen |
 | `reveal_vote` | Reveal Phase | reviewer | reveal window offen + commit vorhanden |
@@ -109,7 +106,6 @@ Quellen:
 | `post_signal` | verschluesseltes Signal posten | buyer/seller | mailbox offen + signal payload valid |
 | `ack_signal` | monotones ack setzen | buyer/seller | ack seq nur steigend |
 | `close_order_mailbox` | mailbox-schliessen approven | buyer/seller | mailbox offen; final geschlossen erst nach buyer+seller approval |
-| `delete_closed_mailbox` | Legacy mailbox cleanup / storage reclaim | buyer/seller | mailbox `closed=true`; laesst alte Binding unter dem Host weiterliegen |
 | `delete_closed_mailbox_guarded` | bevorzugtes mailbox cleanup / storage reclaim | buyer/seller | mailbox `closed=true` + korrektes `GovernanceConfig`-Hostobjekt fuer die aktuelle Binding |
 | `anchor_milestone_manifest` | Manifest kryptographisch verankern | seller | cid/hash/signature refs gueltig |
 | `create_reputation_profile_iota_entry` | Reputation profil erzeugen | actor | fee config + init fee coin |
@@ -133,7 +129,6 @@ Quellen:
 | `N/A (direct SDK/PTB only)` | `buildApproveMutualCancelOrderEscrowTx` / `buildMutualCancelOrderEscrowTx` | `order_escrow::approve_mutual_cancel` / `order_escrow::mutual_cancel` |
 | `POST /orders/{orderId}/reviews` | `review.postWithEscrow/postWithMilestoneEscrow` | `review::post_review_with_escrow` / `review::post_review_with_milestone_escrow` |
 | `POST /orders/{orderId}/deadline-ext/propose` | `deadlineExt.propose` | `deadline_ext::propose_extension` |
-| `POST /deadline-ext/{id}/accept` | deprecated / dark-disabled | on-chain existiert jetzt ein kanonischer guarded Apply-Pfad, aber die public API bleibt bis zu einem expliziten owned-surface Retarget weiter auf `409 deadline_extension_accept_disabled` |
 | `POST /deadline-ext/{id}/reject` | `deadlineExt.reject` | `deadline_ext::reject_extension` |
 
 ## 4) Was fuer Bots typischerweise NICHT direkt relevant ist

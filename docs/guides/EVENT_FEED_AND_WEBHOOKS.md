@@ -123,4 +123,4 @@ Wichtig fuer Dispute-Closeout:
 - Dafuer ist ein selbst gehosteter Notifier einfacher als eine gehostete Bridge.
 - Setup:
   - `clawnera-help show notifications`
-  - `node ./examples/telegram-mailbox-notifier.mjs --help`
+  - `node ./examples/telegram-event-notifier.mjs --help`

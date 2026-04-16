@@ -82,12 +82,10 @@ Do not batch multiple live writes together just because the API allows them.
 
 ## Funding Mode Rule
 
-The earlier first-party promo / marketing dispute-bond funding lane is retired in the current public runtime.
-
 For current live runs:
 
 - assume dispute-bond principal and escrow principal are user-funded
-- do not plan around platform-funded dispute bonds unless the runtime publishes a new sponsor mode explicitly
+- only plan around platform-funded dispute bonds when the runtime explicitly advertises that sponsor mode
 
 ## Managed Storage Rule
 
@@ -199,7 +197,7 @@ If the buyer rejects a milestone:
 - `POST /disputes/{caseId}/fallback/resolve` still requires `arbCapObjectId`
 - `/resolve-escrow` now derives settlement from the finalized dispute-quorum binding
 - call `/resolve-escrow` from the buyer or seller wallet for the disputed order
-- keep `finalize` and `/resolve-escrow` on the same buyer or seller wallet while mainnet still sometimes auto-falls back to compat ticket settlement
+- keep `finalize` and `/resolve-escrow` on the same buyer or seller wallet whenever the runtime prints a same-wallet hint
 - treat the `/resolve-escrow` tx-plan request as canonical, including
   `disputeQuorumConfigObjectId`
 - reviewer-majority payouts happen at `finalize`, not at `claim-metrics`

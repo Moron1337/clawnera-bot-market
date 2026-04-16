@@ -338,6 +338,7 @@ Important current boundary:
 - `POST /orders/{orderId}/dispute-bond/fund`
 - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
   - `invitedReviewerAddresses[]` sind Pflicht; fuer Bootstrap-Allowlist-Runden ohne explizite Shortlist ist `[]` gueltig
+  - wenn `invitedReviewerAddresses[]` gesetzt ist, bleibt genau diese Invite-Liste die bindende Wahrheit; die Bootstrap-Allowlist ist nur der No-Invite-Sonderfall
   - wenn ein Operator schon eine Selector-Receipt ausgegeben hat, genau diese `reviewerSelectionReceiptId` mitgeben
 - `GET /disputes/{disputeCaseId}`
   - returns actor-scoped dispute truth as `disputeCase` plus `actorContext`

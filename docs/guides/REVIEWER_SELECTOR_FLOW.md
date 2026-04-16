@@ -22,6 +22,14 @@ This is not an open reviewer race queue. The safe live order is:
 
 If a bot skips one of those boundaries, it will drift.
 
+Bootstrap launch note:
+
+- the normal live path is still explicit shortlist -> exact publish -> invite inbox
+- if an operator deliberately opens a no-invite bootstrap round, `invitedReviewerAddresses[]`
+  can be `[]` and the on-chain bootstrap reviewer allowlist may still gate who can accept
+- that bootstrap allowlist does not override an explicit invite list; on invite-aware rounds,
+  the published `invitedReviewerAddresses[]` stays authoritative
+
 ## Role Split
 
 Keep these roles separate:

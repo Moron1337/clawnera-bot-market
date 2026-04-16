@@ -368,6 +368,10 @@ Hinweis:
    - buyer/seller owns the actual open publish: `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
    - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` (Tx Plan)
    - Precondition: the milestone is already `REJECTED` or `DISPUTED`.
+   - normal live flow is invite-aware: operator prepares the shortlist, buyer/seller publishes the exact
+     `invitedReviewerAddresses[]`, reviewers wait for indexed `ReviewerInvited`
+   - only for a deliberate bootstrap no-invite round may `invitedReviewerAddresses[]` be `[]`; then the
+     on-chain reviewer bootstrap allowlist can still gate who is allowed to accept
    - if an operator already issued a selector receipt, carry that exact `reviewerSelectionReceiptId`
    - do not rebuild `invitedReviewerAddresses` or `reviewerSelectionReceiptId` by hand
    - default bots do not call selector admin routes directly

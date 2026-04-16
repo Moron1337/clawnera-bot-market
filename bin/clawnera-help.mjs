@@ -548,7 +548,7 @@ function printUsageAll() {
   console.log("  clawnera-help journeys                    List all role-based minimal paths");
   console.log("  clawnera-help journey <id>                Show one role-based minimal path");
   console.log("  clawnera-help recipes                     List all minimal task recipes");
-  console.log("  clawnera-help show <topic>                Show one topic document");
+  console.log("  clawnera-help show <topic|recipe|journey>  Show one topic document or print one recipe/journey");
   console.log("  clawnera-help recipe <id>                 Show one minimal task recipe");
   console.log("  clawnera-help next <recipe|journey-id>    Show the compact next action for a recipe or role path");
   console.log("  clawnera-help search <keyword>            Search keyword in curated docs");
@@ -1168,26 +1168,50 @@ function resolveTopic(topics, key) {
   );
 }
 
-function showTopic(topics, key) {
+function resolveShowEntry(topics, recipes, journeys, key) {
+  const topic = resolveTopic(topics, key);
+  if (topic) {
+    return { kind: "topic", entry: topic };
+  }
+  const recipe = resolveRecipe(recipes, key);
+  if (recipe) {
+    return { kind: "recipe", entry: recipe };
+  }
+  const journey = resolveJourney(journeys, key);
+  if (journey) {
+    return { kind: "journey", entry: journey };
+  }
+  return null;
+}
+
+function showEntry(topics, recipes, journeys, key) {
   if (!key) {
     console.error("missing_topic_argument");
     process.exitCode = 1;
     return;
   }
-  const topic = resolveTopic(topics, key);
-  if (!topic) {
+  const showEntryResult = resolveShowEntry(topics, recipes, journeys, key);
+  if (!showEntryResult) {
     console.error(`unknown_topic: ${key}`);
     process.exitCode = 1;
     return;
   }
-  const docPath = path.join(repoRoot, topic.file);
-  if (!fs.existsSync(docPath)) {
-    console.error(`missing_doc: ${topic.file}`);
-    process.exitCode = 1;
+  if (showEntryResult.kind === "topic") {
+    const docPath = path.join(repoRoot, showEntryResult.entry.file);
+    if (!fs.existsSync(docPath)) {
+      console.error(`missing_doc: ${showEntryResult.entry.file}`);
+      process.exitCode = 1;
+      return;
+    }
+    const content = fs.readFileSync(docPath, "utf8");
+    console.log(content);
     return;
   }
-  const content = fs.readFileSync(docPath, "utf8");
-  console.log(content);
+  if (showEntryResult.kind === "recipe") {
+    printRecipe(showEntryResult.entry);
+    return;
+  }
+  printJourney(showEntryResult.entry, recipes);
 }
 
 function walkMarkdownFiles(dir) {
@@ -5026,6 +5050,98 @@ function resolveKeyAgreementRecordPathOption(address, keyVersion, value, authSta
   return defaultKeyAgreementRecordPath(address, keyVersion, inferredHome || undefined);
 }
 
+function listKeyAgreementRecordCandidatePaths(address, authStateFile = "", keyVersion = null) {
+  const inferredHome = inferHomeDirFromAuthStatePath(authStateFile);
+  const normalizedAddress = normalizeIotaAddress(address || "");
+  if (!normalizedAddress) {
+    return [];
+  }
+  const candidatePaths = [];
+  const seen = new Set();
+  if (Number.isSafeInteger(keyVersion) && keyVersion > 0) {
+    const defaultPath = resolveKeyAgreementRecordPathOption(normalizedAddress, keyVersion, "", authStateFile);
+    candidatePaths.push(defaultPath);
+    seen.add(defaultPath);
+  }
+  const keyAgreementDir = path.join(inferredHome || os.homedir(), ".config", "clawnera", "key-agreements");
+  if (!fs.existsSync(keyAgreementDir)) {
+    return candidatePaths;
+  }
+  const filenamePrefix = `${normalizedAddress.toLowerCase()}.`;
+  for (const entry of fs.readdirSync(keyAgreementDir, { withFileTypes: true })) {
+    if (!entry.isFile()) {
+      continue;
+    }
+    const entryName = entry.name.toLowerCase();
+    if (!entryName.startsWith(filenamePrefix) || !entryName.endsWith(".json")) {
+      continue;
+    }
+    const fullPath = path.join(keyAgreementDir, entry.name);
+    if (seen.has(fullPath)) {
+      continue;
+    }
+    candidatePaths.push(fullPath);
+    seen.add(fullPath);
+  }
+  return candidatePaths;
+}
+
+function keyAgreementRecordRecency(record) {
+  const updatedAtMs =
+    typeof record?.updatedAt === "string" ? Date.parse(record.updatedAt) : Number.NaN;
+  if (Number.isFinite(updatedAtMs)) {
+    return updatedAtMs;
+  }
+  const createdAtMs =
+    typeof record?.createdAt === "string" ? Date.parse(record.createdAt) : Number.NaN;
+  if (Number.isFinite(createdAtMs)) {
+    return createdAtMs;
+  }
+  return 0;
+}
+
+async function resolveLocalKeyAgreementRecord(address, keyVersion, {
+  value = "",
+  authStateFile = "",
+  expectedPublicKeyMultibase = "",
+  fallbackExpiresAtMs = undefined,
+} = {}) {
+  if (typeof value === "string" && value.trim()) {
+    return loadKeyAgreementRecord(path.resolve(value.trim()), {
+      expectedAddress: address,
+      expectedKeyVersion: keyVersion,
+      fallbackExpiresAtMs,
+    });
+  }
+  const candidates = [];
+  for (const candidatePath of listKeyAgreementRecordCandidatePaths(address, authStateFile, keyVersion)) {
+    if (!fs.existsSync(candidatePath)) {
+      continue;
+    }
+    let record;
+    try {
+      record = await loadKeyAgreementRecord(candidatePath, {
+        expectedAddress: address,
+        fallbackExpiresAtMs,
+      });
+    } catch {
+      continue;
+    }
+    if (record.keyVersion !== keyVersion) {
+      continue;
+    }
+    if (expectedPublicKeyMultibase && record.publicKeyMultibase !== expectedPublicKeyMultibase) {
+      continue;
+    }
+    candidates.push(record);
+  }
+  if (candidates.length === 0) {
+    throw new Error("local_key_agreement_record_not_found");
+  }
+  candidates.sort((left, right) => keyAgreementRecordRecency(right) - keyAgreementRecordRecency(left));
+  return candidates[0];
+}
+
 function buildTxPlanNextCommandHint(method, rawPath, { body, bodyFile, bodySelect } = {}) {
   const parts = ["clawnera-help", "tx-plan-execute", method, shellQuote(rawPath)];
   if (bodyFile) {
@@ -8025,6 +8141,66 @@ async function resolveLatestUserKeyAgreement(options, address, timeoutMs, maxKey
   };
 }
 
+async function resolveActiveUserKeyAgreement(options, address, timeoutMs, rawKeyVersion, fieldName) {
+  if (rawKeyVersion === undefined) {
+    return resolveLatestUserKeyAgreement(options, address, timeoutMs);
+  }
+  const keyVersion = parsePositiveIntOption(rawKeyVersion, fieldName, 1);
+  const keyAgreementCall = await callApiRouteWithTransientRetry({
+    method: "GET",
+    rawPath: `/users/${address}/key-agreement?keyVersion=${keyVersion}`,
+    options,
+    timeoutMs: Math.min(timeoutMs, 8_000),
+  });
+  if (!keyAgreementCall.result.ok) {
+    return {
+      ok: false,
+      error: summarizeApiFailure(keyAgreementCall.result),
+      status: keyAgreementCall.result.status,
+      response: keyAgreementCall.result.body,
+    };
+  }
+  const keyAgreement = keyAgreementCall.result.body?.keyAgreement;
+  const publicKeyMultibase =
+    typeof keyAgreement?.publicKeyMultibase === "string" ? keyAgreement.publicKeyMultibase.trim() : "";
+  if (!publicKeyMultibase) {
+    return {
+      ok: false,
+      error: "key_agreement_not_found",
+      address,
+      keyVersion,
+    };
+  }
+  const expiresAt = typeof keyAgreement?.expiresAt === "string" ? keyAgreement.expiresAt.trim() : "";
+  const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+  const isExpired =
+    keyAgreement?.isExpired === true || (Number.isFinite(expiresAtMs) ? expiresAtMs <= Date.now() : false);
+  if (isExpired) {
+    return {
+      ok: false,
+      error: "key_agreement_expired",
+      address,
+      keyAgreement: {
+        address,
+        keyVersion,
+        publicKeyMultibase,
+        expiresAt: expiresAt || null,
+        isExpired: true,
+      },
+    };
+  }
+  return {
+    ok: true,
+    keyAgreement: {
+      address,
+      keyVersion,
+      publicKeyMultibase,
+      expiresAt: expiresAt || null,
+      isExpired: false,
+    },
+  };
+}
+
 async function resolveReviewerEvidenceKeyAgreement(options, reviewerAddress, timeoutMs, maxKeyVersion = 8) {
   const perKeyTimeoutMs = Math.min(timeoutMs, 8_000);
   const reviewerCall = await callApiRouteWithTransientRetry({
@@ -9947,40 +10123,61 @@ async function runDeliverableEncrypt(commandArgs) {
       };
     }
 
-    const sellerKeyVersion = parsePositiveIntOption(options["seller-key-version"], "seller_key_version", 1);
-    const sellerKeyFile = resolveKeyAgreementRecordPathOption(
-      sellerAddress,
-      sellerKeyVersion,
-      options["seller-key-file"],
-      runtimeContext.authStateFile,
-    );
-    const sellerKeyRead = await callApiRouteWithTransientRetry({
-      method: "GET",
-      rawPath: `/users/${sellerAddress}/key-agreement?keyVersion=${sellerKeyVersion}`,
+    const sellerKeyResolution = await resolveActiveUserKeyAgreement(
       options,
+      sellerAddress,
       timeoutMs,
-    });
-    if (!sellerKeyRead.result.ok) {
+      options["seller-key-version"],
+      "seller_key_version",
+    );
+    if (!sellerKeyResolution.ok) {
       return {
         ok: false,
-        error: summarizeApiFailure(sellerKeyRead.result),
-        status: sellerKeyRead.result.status,
-        response: sellerKeyRead.result.body,
+        error:
+          sellerKeyResolution.error === "key_agreement_not_found" || sellerKeyResolution.error === "key_agreement_expired"
+            ? `seller_${sellerKeyResolution.error}`
+            : sellerKeyResolution.error,
+        status: sellerKeyResolution.status,
+        response: sellerKeyResolution.response,
+        keyAgreement: sellerKeyResolution.keyAgreement,
       };
     }
-    const sellerRemoteKeyAgreement = sellerKeyRead.result.body?.keyAgreement;
+    const sellerRemoteKeyAgreement = sellerKeyResolution.keyAgreement;
     const sellerRemoteExpiresAtMs =
       sellerRemoteKeyAgreement && typeof sellerRemoteKeyAgreement.expiresAt === "string"
         ? Date.parse(sellerRemoteKeyAgreement.expiresAt)
         : null;
-    const sellerKeyRecord = await loadKeyAgreementRecord(sellerKeyFile, {
-      expectedAddress: sellerAddress,
-      expectedKeyVersion: sellerKeyVersion,
-      fallbackExpiresAtMs:
-        Number.isSafeInteger(sellerRemoteExpiresAtMs) && sellerRemoteExpiresAtMs > 0
-          ? sellerRemoteExpiresAtMs
-          : Date.now() + 86_400_000
-    });
+    const sellerKeyVersion = sellerRemoteKeyAgreement.keyVersion;
+    let sellerKeyRecord;
+    try {
+      sellerKeyRecord = await resolveLocalKeyAgreementRecord(sellerAddress, sellerKeyVersion, {
+        value: options["seller-key-file"],
+        authStateFile: runtimeContext.authStateFile,
+        expectedPublicKeyMultibase: sellerRemoteKeyAgreement.publicKeyMultibase,
+        fallbackExpiresAtMs:
+          Number.isSafeInteger(sellerRemoteExpiresAtMs) && sellerRemoteExpiresAtMs > 0
+            ? sellerRemoteExpiresAtMs
+            : Date.now() + 86_400_000,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "local_key_agreement_record_not_found") {
+        return {
+          ok: false,
+          error: "seller_local_key_agreement_record_not_found",
+          sellerAddress,
+          sellerKeyVersion,
+          keyAgreementDir: path.join(
+            inferHomeDirFromAuthStatePath(runtimeContext.authStateFile) || os.homedir(),
+            ".config",
+            "clawnera",
+            "key-agreements",
+          ),
+          hint: "rerun key-agreement-upsert for the seller wallet or pass --seller-key-file with the matching local private key record",
+        };
+      }
+      throw error;
+    }
+    const sellerKeyFile = sellerKeyRecord.filePath;
     if (sellerKeyRecord.address !== sellerAddress) {
       return {
         ok: false,
@@ -9995,28 +10192,27 @@ async function runDeliverableEncrypt(commandArgs) {
       };
     }
 
-    const buyerKeyVersion = parsePositiveIntOption(options["buyer-key-version"], "buyer_key_version", 1);
-    const buyerKeyRead = await callApiRouteWithTransientRetry({
-      method: "GET",
-      rawPath: `/users/${buyerAddress}/key-agreement?keyVersion=${buyerKeyVersion}`,
+    const buyerKeyResolution = await resolveActiveUserKeyAgreement(
       options,
+      buyerAddress,
       timeoutMs,
-    });
-    if (!buyerKeyRead.result.ok) {
+      options["buyer-key-version"],
+      "buyer_key_version",
+    );
+    if (!buyerKeyResolution.ok) {
       return {
         ok: false,
-        error: summarizeApiFailure(buyerKeyRead.result),
-        status: buyerKeyRead.result.status,
-        response: buyerKeyRead.result.body,
+        error:
+          buyerKeyResolution.error === "key_agreement_not_found" || buyerKeyResolution.error === "key_agreement_expired"
+            ? `buyer_${buyerKeyResolution.error}`
+            : buyerKeyResolution.error,
+        status: buyerKeyResolution.status,
+        response: buyerKeyResolution.response,
+        keyAgreement: buyerKeyResolution.keyAgreement,
       };
     }
-    const buyerKeyAgreement = buyerKeyRead.result.body?.keyAgreement;
-    if (!buyerKeyAgreement?.publicKeyMultibase) {
-      return {
-        ok: false,
-        error: "buyer_key_agreement_missing",
-      };
-    }
+    const buyerKeyAgreement = buyerKeyResolution.keyAgreement;
+    const buyerKeyVersion = buyerKeyAgreement.keyVersion;
 
     const plaintext = fs.readFileSync(plaintextFile);
     const plaintextLabel =
@@ -13712,6 +13908,7 @@ function deliverableEncryptUsageLines() {
     "- Usage: clawnera-help deliverable-encrypt --order-id <id> --milestone-id <id> --plaintext-file <file> --auth-state-file <file>",
     "- Reads seller + buyer key-agreement records, encrypts the file locally, and writes one managed payload JSON",
     "- Optional: --label <display-name> --payload-out <file> --seller-key-file <file> --seller-key-version <int> --buyer-key-version <int>",
+    "- If key versions are omitted, the helper resolves the latest non-expired remote key-agreement records and matches the seller local private key automatically",
     "- The payload JSON is the file you upload next, preferably with managed storage if application/json is allowed"
   ];
 }
@@ -14621,27 +14818,42 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   }
 } else if (effectiveCommand === "show") {
   if (flags.json) {
-    const topic = resolveTopic(topics, commandArgs[0]);
-    if (!topic) {
+    const showEntryResult = resolveShowEntry(topics, recipes, journeys, commandArgs[0]);
+    if (!showEntryResult) {
       printJson({ ok: false, error: `unknown_topic: ${String(commandArgs[0])}` });
       process.exitCode = 1;
     } else {
-      const docPath = path.join(repoRoot, topic.file);
-      if (!fs.existsSync(docPath)) {
-        printJson({ ok: false, error: `missing_doc: ${topic.file}` });
-        process.exitCode = 1;
+      if (showEntryResult.kind === "topic") {
+        const docPath = path.join(repoRoot, showEntryResult.entry.file);
+        if (!fs.existsSync(docPath)) {
+          printJson({ ok: false, error: `missing_doc: ${showEntryResult.entry.file}` });
+          process.exitCode = 1;
+        } else {
+          printJson({
+            ok: true,
+            kind: "topic",
+            topic: showEntryResult.entry.id,
+            title: showEntryResult.entry.title,
+            file: showEntryResult.entry.file,
+            content: fs.readFileSync(docPath, "utf8")
+          });
+        }
+      } else if (showEntryResult.kind === "recipe") {
+        printJson({
+          ok: true,
+          kind: "recipe",
+          recipe: buildRecipeJson(showEntryResult.entry)
+        });
       } else {
         printJson({
           ok: true,
-          topic: topic.id,
-          title: topic.title,
-          file: topic.file,
-          content: fs.readFileSync(docPath, "utf8")
+          kind: "journey",
+          journey: buildJourneyJson(showEntryResult.entry)
         });
       }
     }
   } else {
-    showTopic(topics, commandArgs[0]);
+    showEntry(topics, recipes, journeys, commandArgs[0]);
   }
 } else if (effectiveCommand === "journey") {
   const target = commandArgs[0];

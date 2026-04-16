@@ -7615,6 +7615,209 @@ test("deliverable-encrypt retries transient reads and writes the payload beside 
   }
 });
 
+test("deliverable-encrypt auto-resolves the latest non-expired key-agreement versions and matching local seller key", async () => {
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-deliverable-encrypt-rotated-"));
+  const plaintextDir = path.join(tempHome, "artifacts");
+  mkdirSync(plaintextDir, { recursive: true });
+  const plaintextFile = path.join(plaintextDir, "deliverable.txt");
+  writeFileSync(plaintextFile, "hello rotated world", "utf8");
+
+  const sellerKeys = generateKeyAgreementKeypair("u");
+  const staleSellerKeys = generateKeyAgreementKeypair("u");
+  const buyerKeys = generateKeyAgreementKeypair("u");
+  const staleBuyerKeys = generateKeyAgreementKeypair("u");
+  const sellerAddress = `0x${"a".repeat(64)}`;
+  const buyerAddress = `0x${"b".repeat(64)}`;
+  const orderId = "99999999-2222-4333-8444-555555555555";
+  const milestoneId = "eeeeeeee-7777-4888-8999-aaaaaaaaaaaa";
+
+  const authStateFile = path.join(tempHome, ".config", "clawnera", "auth-state.json");
+  mkdirSync(path.dirname(authStateFile), { recursive: true });
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        jwt: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+        refreshToken: "refresh-token",
+        actorAddress: sellerAddress,
+        apiBase: "http://127.0.0.1:1"
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
+
+  const sellerKeyDir = path.join(tempHome, ".config", "clawnera", "key-agreements");
+  mkdirSync(sellerKeyDir, { recursive: true });
+  const sellerKeyFile = path.join(sellerKeyDir, `${sellerAddress}.v3.json`);
+  await saveKeyAgreementRecord({
+    address: sellerAddress,
+    keyVersion: 2,
+    publicKeyMultibase: sellerKeys.publicKeyMultibase,
+    privateKeyMultibase: sellerKeys.privateKeyMultibase,
+    expiresAtMs: Date.now() + 86_400_000,
+    filePath: sellerKeyFile
+  });
+
+  const requestedKeyAgreementPaths = [];
+  const mock = await startMockServer({
+    [`GET /orders/${orderId}`]: () => ({
+      status: 200,
+      body: {
+        order: {
+          orderId,
+          sellerAddress,
+          buyerAddress
+        }
+      }
+    }),
+    [`GET /users/${sellerAddress}/key-agreement?keyVersion=1`]: () => {
+      requestedKeyAgreementPaths.push(`/users/${sellerAddress}/key-agreement?keyVersion=1`);
+      return {
+        status: 200,
+        body: {
+          keyAgreement: {
+            address: sellerAddress,
+            publicKeyMultibase: staleSellerKeys.publicKeyMultibase,
+            keyVersion: 1,
+            expiresAt: "2001-01-01T00:00:00.000Z",
+            createdAt: "2000-01-01T00:00:00.000Z",
+            updatedAt: "2000-01-01T00:00:00.000Z",
+            isExpired: true
+          }
+        }
+      };
+    },
+    [`GET /users/${sellerAddress}/key-agreement?keyVersion=2`]: () => {
+      requestedKeyAgreementPaths.push(`/users/${sellerAddress}/key-agreement?keyVersion=2`);
+      return {
+        status: 200,
+        body: {
+          keyAgreement: {
+            address: sellerAddress,
+            publicKeyMultibase: sellerKeys.publicKeyMultibase,
+            keyVersion: 2,
+            expiresAt: "2099-01-01T00:00:00.000Z",
+            createdAt: "2099-01-01T00:00:00.000Z",
+            updatedAt: "2099-01-01T00:00:00.000Z",
+            isExpired: false
+          }
+        }
+      };
+    },
+    [`GET /users/${sellerAddress}/key-agreement?keyVersion=3`]: () => {
+      requestedKeyAgreementPaths.push(`/users/${sellerAddress}/key-agreement?keyVersion=3`);
+      return {
+        status: 404,
+        body: {
+          error: "key_agreement_not_found"
+        }
+      };
+    },
+    [`GET /users/${buyerAddress}/key-agreement?keyVersion=1`]: () => {
+      requestedKeyAgreementPaths.push(`/users/${buyerAddress}/key-agreement?keyVersion=1`);
+      return {
+        status: 200,
+        body: {
+          keyAgreement: {
+            address: buyerAddress,
+            publicKeyMultibase: staleBuyerKeys.publicKeyMultibase,
+            keyVersion: 1,
+            expiresAt: "2001-01-01T00:00:00.000Z",
+            createdAt: "2000-01-01T00:00:00.000Z",
+            updatedAt: "2000-01-01T00:00:00.000Z",
+            isExpired: true
+          }
+        }
+      };
+    },
+    [`GET /users/${buyerAddress}/key-agreement?keyVersion=2`]: () => {
+      requestedKeyAgreementPaths.push(`/users/${buyerAddress}/key-agreement?keyVersion=2`);
+      return {
+        status: 200,
+        body: {
+          keyAgreement: {
+            address: buyerAddress,
+            publicKeyMultibase: buyerKeys.publicKeyMultibase,
+            keyVersion: 2,
+            expiresAt: "2099-01-01T00:00:00.000Z",
+            createdAt: "2099-01-01T00:00:00.000Z",
+            updatedAt: "2099-01-01T00:00:00.000Z",
+            isExpired: false
+          }
+        }
+      };
+    },
+    [`GET /users/${buyerAddress}/key-agreement?keyVersion=3`]: () => {
+      requestedKeyAgreementPaths.push(`/users/${buyerAddress}/key-agreement?keyVersion=3`);
+      return {
+        status: 404,
+        body: {
+          error: "key_agreement_not_found"
+        }
+      };
+    },
+    "GET /policy/storage": () => ({
+      status: 200,
+      body: {
+        policy: {
+          modes: {
+            managed: {
+              enabled: true,
+              allowedMimeTypes: ["application/json"]
+            }
+          }
+        }
+      }
+    })
+  });
+
+  try {
+    writeFileSync(
+      authStateFile,
+      JSON.stringify(
+        {
+          jwt: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+          refreshToken: "refresh-token",
+          actorAddress: sellerAddress,
+          apiBase: mock.baseUrl
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+
+    const result = await runCli(
+      [
+        "deliverable-encrypt",
+        "--order-id",
+        orderId,
+        "--milestone-id",
+        milestoneId,
+        "--plaintext-file",
+        plaintextFile,
+        "--auth-state-file",
+        authStateFile,
+        "--json"
+      ],
+      { HOME: tempHome }
+    );
+    assert.equal(result.status, 0, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.sellerKeyVersion, 2);
+    assert.equal(payload.buyerKeyVersion, 2);
+    assert.ok(existsSync(payload.payloadOut));
+    assert.ok(requestedKeyAgreementPaths.includes(`/users/${sellerAddress}/key-agreement?keyVersion=2`));
+    assert.ok(requestedKeyAgreementPaths.includes(`/users/${buyerAddress}/key-agreement?keyVersion=2`));
+    assert.doesNotMatch(payload.payloadOut, /\.v1\.json/);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("request tx-plan hint preserves original request body", async () => {
   const mock = await startMockServer({
     "POST /orders/test/dispute-bond/fund": (request) => {

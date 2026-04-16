@@ -2672,6 +2672,14 @@ test("show with unknown topic fails", () => {
   assert.match(result.stderr, /unknown_topic/);
 });
 
+test("show resolves listed recipes such as fund-order", () => {
+  const result = runCli(["show", "fund-order"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /# Fund Bond And Escrow/);
+  assert.match(result.stdout, /recipeId: fund-order/);
+  assert.match(result.stdout, /In REQUEST mode the seller is the accepted bidder, not the request creator/);
+});
+
 test("validate strict succeeds", () => {
   const result = runCli(["validate", "--strict"]);
   assert.equal(result.status, 0, `validate failed\\nstdout:\\n${result.stdout}\\nstderr:\\n${result.stderr}`);

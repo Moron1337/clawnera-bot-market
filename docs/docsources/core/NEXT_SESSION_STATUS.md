@@ -25,7 +25,7 @@ Detailed historical evidence stays in `docs/reports/` and git history.
 | Current opening rule | the explicit operator-owned `browse_only` call is now recorded on `docs/reports/launch-window-evidence-20260408T114514Z`; `09_readiness-check.json` is `machineGreen=true`, `humanReady=true`, `openEligible=true`, the sponsor layer is now narrowed to `CLAW` only, `SPONSOR_ORDER_ID_MODE=required` is live and proven, and the window should stay within `browse_only` until a later explicit `EXPAND` or `PAUSE` decision |
 | Operator reality | one human owner runs the company today; Codex can prepare, verify, and document the launch path, but does not count as the missing human acknowledgement block; the only future hard separation already planned is the pair of hardware wallets for multisig |
 | Broad-launch blockers still truly open | final hardware-backed `2-of-3` multisig cutover |
-| Helper/npm state | `clawnera-bot-market@0.1.99` is the next helper release prepared from the reviewed transport-key rotation fix |
+| Helper/npm state | `clawnera-bot-market@0.1.100` is the current helper release line after the dispute-bond recommendation sync |
 | Paused families that should stay paused | `DEC-API-01`, `API-LAUNCH-01`, `surface-split`, `topology-boundary`, `TASK-MKT-009`, `TASK-MKT-010`, `TASK-MKT-011`, `TASK-MKT-013`, `STBL-01a` |
 | Operator-only waiting family | `none while the active browse_only window stays OPEN` |
 | Human-input-bound family | `TASK-MKT-012` hardware execution after the now-green topology-bound handoff proof; the remaining blocker is the still-missing final hardware signer inputs and the deliberate custody execution window |
@@ -213,7 +213,7 @@ Keep it frozen unless one of these happens:
 - `admin`, `portal`, `bot`, and `reviewer-self` boundary contracts are frozen
 - the admin timeout fallback route-level live canary was completed and rolled back to dark-by-allowlist cleanly
 - reliability, discovery, trust, and bot-helper families listed as paused in `docs/NEXT_FAMILY_QUEUE.md` are complete enough for now
-- the public helper/docs/npm lane is prepared for `clawnera-bot-market@0.1.99` with the reviewer transport-key rotation default-path fix
+- the public helper/docs/npm lane is prepared for `clawnera-bot-market@0.1.100`, including the dispute-bond recommendation sync on top of the reviewer transport-key rotation default-path fix
 - the canonical mainnet contract upgrade is now green on `C58DdoHtRSRjxXfukU7NYDLb5uveanwzEwQaRqtvg4fP`, post-upgrade `verify-source` is green against package `0x40562f9cd23cd35e598fa2b1f57f4161498cf193cdf6bc4f0c17e237c525d014`, and `CN-01e` proved that live Cloudflare, Hetzner indexer, and signing-queue runtime are aligned to that same package-derived truth
 - the required-host listing-expiry sweep is restored on Hetzner:
   - `clawdex-listing-expiry-sweep.timer` is active/enabled

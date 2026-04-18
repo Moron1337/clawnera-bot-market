@@ -84,6 +84,8 @@ Hard boundaries:
 - `disputeEconomics` is intentionally partial:
   - `controlPlane.disputeEconomics.managedFields` lists the economics knobs operators can change today.
   - `controlPlane.disputeEconomics.readOnlyFields` lists the remaining dispute knobs that still stay read-only.
+  - `disputeEconomics.recommendation` is the additive runtime overlay for per-asset dispute-bond guidance.
+  - `assetProfiles[]` expose the currently configured recommendation inputs, but they do not replace the hard live order-level min/max gates.
 
 ### Auth and identity
 - `POST /auth/challenge`
@@ -511,9 +513,11 @@ After `POST /bids/{bidId}/accept`:
 1. Initialize bond on-chain:
    - package fast path: `clawnera-help order-init-bond --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`
    - modern servers return `disputeBondGuidance` alongside `disputeBondPolicy` and `disputeBondState`; prefer that structured object over warning prose
+   - read `selectedPrincipalAsset`, `currentMinPerSideAmount`, `currentMaxPerSideAmount`, and `recommendation.*` before choosing a funding amount
 2. Fund bond buyer and seller via `POST /orders/{orderId}/dispute-bond/fund`.
    - `DUAL_BOND_REQUIRED`: send an explicit per-side `amount` inside the live range
-   - read the live minimum first and treat it as a floor for the current quorum profile, not as a universal constant
+   - read the live min/max first and treat them as the hard range for the current order + principal-asset path, not as universal constants
+   - if `recommendation.status=configured`, treat `recommendedPerSideAmount` as the default starting point and `warningBelowPerSideAmount` as the reviewer-incentive warning floor
    - if reviewer count goes up while bond stays fixed, per-reviewer incentive strength falls
 3. Create/fund escrow on-chain:
    - package fast path: `clawnera-help order-create-escrow --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`

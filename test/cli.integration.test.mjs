@@ -5748,13 +5748,28 @@ test("bid-accept prints structured dispute bond guidance when the API returns it
           selectionMode: "EXPLICIT_RANGE",
           userAmountChoiceRequired: true,
           platformOperatorFunding: false,
+          supportedPrincipalAssets: ["iota", "claw"],
+          selectedPrincipalAsset: "claw",
           currentMinPerSideAmount: "500000",
           currentMaxPerSideAmount: "5000000",
           defaultRequiredReviewerVotes: 3,
           minRequiredReviewerVotes: 3,
           maxRequiredReviewerVotes: 7,
           selectedRequiredReviewerVotes: null,
-          selectedRequiredReviewerVotesFloor: null
+          selectedRequiredReviewerVotesFloor: null,
+          recommendation: {
+            status: "configured",
+            source: "runtime_overlay",
+            model: "hybrid_target_reviewer_payout_clamped",
+            priceDependency: "none",
+            requiredReviewerVotesUsed: 3,
+            hardMinPerSideAmount: "500000",
+            hardMaxPerSideAmount: "5000000",
+            recommendedPerSideAmount: "500000",
+            warningBelowPerSideAmount: "500000",
+            exactLaneCollapsed: false,
+            reasonCodes: ["same_asset_only", "default_reviewer_votes"]
+          }
         }
       }
     })
@@ -5776,9 +5791,16 @@ test("bid-accept prints structured dispute bond guidance when the API returns it
     assert.match(result.stdout, /bond_amount_selection_mode=EXPLICIT_RANGE/);
     assert.match(result.stdout, /user_amount_choice_required=true/);
     assert.match(result.stdout, /platform_operator_funding=false/);
-    assert.match(result.stdout, /guidance_current_min_dispute_bond_per_side_iota=500000/);
-    assert.match(result.stdout, /guidance_current_max_dispute_bond_per_side_iota=5000000/);
+    assert.match(result.stdout, /guidance_supported_principal_assets=iota,claw/);
+    assert.match(result.stdout, /guidance_selected_principal_asset=claw/);
+    assert.match(result.stdout, /guidance_current_min_dispute_bond_per_side=500000/);
+    assert.match(result.stdout, /guidance_current_max_dispute_bond_per_side=5000000/);
     assert.match(result.stdout, /guidance_max_required_reviewer_votes=7/);
+    assert.match(result.stdout, /guidance_recommendation_status=configured/);
+    assert.match(result.stdout, /guidance_recommendation_model=hybrid_target_reviewer_payout_clamped/);
+    assert.match(result.stdout, /guidance_recommendation_recommended_per_side_amount=500000/);
+    assert.match(result.stdout, /guidance_recommendation_warning_below_per_side_amount=500000/);
+    assert.match(result.stdout, /guidance_recommendation_reason_codes=same_asset_only,default_reviewer_votes/);
   } finally {
     await mock.close();
   }

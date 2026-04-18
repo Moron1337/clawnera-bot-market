@@ -13848,6 +13848,9 @@ function printDisputeBondGuidanceLines(guidance) {
   if (!guidance || typeof guidance !== "object") {
     return;
   }
+  const selectedPrincipalAsset =
+    typeof guidance.selectedPrincipalAsset === "string" ? guidance.selectedPrincipalAsset.trim() : "";
+  const normalizedSelectedPrincipalAsset = selectedPrincipalAsset.toUpperCase();
   if (guidance.policy) {
     console.log(`dispute_bond_policy=${guidance.policy}`);
   }
@@ -13860,11 +13863,86 @@ function printDisputeBondGuidanceLines(guidance) {
   if (guidance.platformOperatorFunding !== undefined && guidance.platformOperatorFunding !== null) {
     console.log(`platform_operator_funding=${guidance.platformOperatorFunding}`);
   }
+  if (Array.isArray(guidance.supportedPrincipalAssets) && guidance.supportedPrincipalAssets.length > 0) {
+    console.log(`guidance_supported_principal_assets=${guidance.supportedPrincipalAssets.join(",")}`);
+  }
+  if (selectedPrincipalAsset) {
+    console.log(`guidance_selected_principal_asset=${selectedPrincipalAsset}`);
+  }
   if (guidance.currentMinPerSideAmount !== undefined && guidance.currentMinPerSideAmount !== null) {
-    console.log(`guidance_current_min_dispute_bond_per_side_iota=${guidance.currentMinPerSideAmount}`);
+    console.log(`guidance_current_min_dispute_bond_per_side=${guidance.currentMinPerSideAmount}`);
+    if (!selectedPrincipalAsset || normalizedSelectedPrincipalAsset === "IOTA") {
+      console.log(`guidance_current_min_dispute_bond_per_side_iota=${guidance.currentMinPerSideAmount}`);
+    }
   }
   if (guidance.currentMaxPerSideAmount !== undefined && guidance.currentMaxPerSideAmount !== null) {
-    console.log(`guidance_current_max_dispute_bond_per_side_iota=${guidance.currentMaxPerSideAmount}`);
+    console.log(`guidance_current_max_dispute_bond_per_side=${guidance.currentMaxPerSideAmount}`);
+    if (!selectedPrincipalAsset || normalizedSelectedPrincipalAsset === "IOTA") {
+      console.log(`guidance_current_max_dispute_bond_per_side_iota=${guidance.currentMaxPerSideAmount}`);
+    }
+  }
+  const recommendation =
+    guidance.recommendation && typeof guidance.recommendation === "object" ? guidance.recommendation : null;
+  if (recommendation?.status) {
+    console.log(`guidance_recommendation_status=${recommendation.status}`);
+  }
+  if (recommendation?.source) {
+    console.log(`guidance_recommendation_source=${recommendation.source}`);
+  }
+  if (recommendation?.model) {
+    console.log(`guidance_recommendation_model=${recommendation.model}`);
+  }
+  if (recommendation?.priceDependency) {
+    console.log(`guidance_recommendation_price_dependency=${recommendation.priceDependency}`);
+  }
+  if (
+    recommendation?.requiredReviewerVotesUsed !== undefined &&
+    recommendation.requiredReviewerVotesUsed !== null
+  ) {
+    console.log(
+      `guidance_recommendation_required_reviewer_votes_used=${recommendation.requiredReviewerVotesUsed}`
+    );
+  }
+  if (
+    recommendation?.hardMinPerSideAmount !== undefined &&
+    recommendation.hardMinPerSideAmount !== null
+  ) {
+    console.log(
+      `guidance_recommendation_hard_min_per_side_amount=${recommendation.hardMinPerSideAmount}`
+    );
+  }
+  if (
+    recommendation?.hardMaxPerSideAmount !== undefined &&
+    recommendation.hardMaxPerSideAmount !== null
+  ) {
+    console.log(
+      `guidance_recommendation_hard_max_per_side_amount=${recommendation.hardMaxPerSideAmount}`
+    );
+  }
+  if (
+    recommendation?.recommendedPerSideAmount !== undefined &&
+    recommendation.recommendedPerSideAmount !== null
+  ) {
+    console.log(
+      `guidance_recommendation_recommended_per_side_amount=${recommendation.recommendedPerSideAmount}`
+    );
+  }
+  if (
+    recommendation?.warningBelowPerSideAmount !== undefined &&
+    recommendation.warningBelowPerSideAmount !== null
+  ) {
+    console.log(
+      `guidance_recommendation_warning_below_per_side_amount=${recommendation.warningBelowPerSideAmount}`
+    );
+  }
+  if (
+    recommendation?.exactLaneCollapsed !== undefined &&
+    recommendation.exactLaneCollapsed !== null
+  ) {
+    console.log(`guidance_recommendation_exact_lane_collapsed=${recommendation.exactLaneCollapsed}`);
+  }
+  if (Array.isArray(recommendation?.reasonCodes) && recommendation.reasonCodes.length > 0) {
+    console.log(`guidance_recommendation_reason_codes=${recommendation.reasonCodes.join(",")}`);
   }
   if (guidance.defaultRequiredReviewerVotes !== undefined && guidance.defaultRequiredReviewerVotes !== null) {
     console.log(`guidance_default_required_reviewer_votes=${guidance.defaultRequiredReviewerVotes}`);

@@ -207,15 +207,20 @@ Buyer/seller runtime helper truth:
      - `clawnera-help chain-config --auth-state-file ~/.config/clawnera/auth-state.json`
      - `clawnera-help order-init-bond --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`
    - `bondObjectId` lokal persistieren.
-   - Wenn `disputeBondGuidance` vorhanden ist, zuerst dieses strukturierte API-Objekt lesen. `chain-config` und `order-init-bond` bleiben lokale Fallback-/Companion-Tools fuer Live-Config und PTB-Building.
+   - Wenn `disputeBondGuidance` vorhanden ist, zuerst dieses strukturierte API-Objekt lesen:
+     - `selectedPrincipalAsset` und `supportedPrincipalAssets` zeigen die aktuelle same-asset Lane fuer diesen Orderpfad
+     - `currentMinPerSideAmount` / `currentMaxPerSideAmount` bleiben die harten Live-Gates fuer diesen Orderkontext
+     - `recommendation.recommendedPerSideAmount` und `recommendation.warningBelowPerSideAmount` sind additive Runtime-Hinweise, keine automatische Funding-Entscheidung
+   - `chain-config` und `order-init-bond` bleiben lokale Fallback-/Companion-Tools fuer Live-Config und PTB-Building.
    - `chain-config` liest nur live Floor + aktuelle Quorum-Defaults. `order-init-bond` erstellt nur Bond-Objekt + Reviewer-Vote-Policy. Keiner dieser Schritte waehlt oder fundet schon den finalen Bond-Betrag.
 3. Bond funding:
    - `POST /orders/{orderId}/dispute-bond/fund` (Tx Plan)
    - danach lokal ausfuehren:
      - `clawnera-help tx-plan-execute POST /orders/{orderId}/dispute-bond/fund --auth-state-file ~/.config/clawnera/auth-state.json --body '{"bondObjectId":"<bond-object-id>","disputeQuorumConfigObjectId":"<dispute-quorum-config-object-id>","side":"buyer|seller","amount":"<chosen-per-side-bond-amount>"}'`
    - fuer Buyer und Seller jeweils mit demselben `bondObjectId`.
-   - Normaler `DUAL_BOND_REQUIRED` Pfad: `amount` bleibt explizit. Die aktuelle live `min_dispute_bond_per_side_iota` ist nur der Floor fuer das aktuelle Quorum-Profil, keine universelle Konstante.
-   - Wenn mehr Reviewer genutzt werden oder staerkere Reviewer-Anreize gewuenscht sind, kann mehr als der Floor sinnvoll sein.
+   - Normaler `DUAL_BOND_REQUIRED` Pfad: `amount` bleibt explizit. Lies zuerst `disputeBondGuidance.currentMinPerSideAmount/currentMaxPerSideAmount` und behandle diese Werte als den harten Live-Rahmen fuer den aktuell gewaehlten Principal Asset.
+   - Wenn `disputeBondGuidance.recommendation.status=configured`, nutze `recommendedPerSideAmount` als Startpunkt und `warningBelowPerSideAmount` als Untergrenze fuer schwache Reviewer-Anreize.
+   - Wenn mehr Reviewer genutzt werden oder staerkere Reviewer-Anreize gewuenscht sind, kann mehr als der Floor oder sogar mehr als die Recommendation sinnvoll sein.
    - Public Bots sollen hier keinen Operator-Sonderpfad annehmen; `disputeBondGuidance` plus live Config sind die kanonische Wahrheit.
 4. Milestone-Writes sind bis Bond-Ready hart blockiert (`409 dispute_bond_not_active`).
 5. Terminale Bond-Readback-States:

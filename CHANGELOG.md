@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.100] - 2026-04-18
+
+- Synced the public helper to the now-live dispute-bond recommendation surface:
+  - `clawnera-help bid-accept` now prints asset-aware `disputeBondGuidance` recommendation fields, including selected principal asset, recommended amount, warning floor, and reason codes
+  - public helper guides now explain the difference between the hard live min/max range and the additive runtime recommendation overlay
+
 ## [0.1.99] - 2026-04-16
 
 - Fixed reviewer transport-key resolution after key rotation in the normal default path:

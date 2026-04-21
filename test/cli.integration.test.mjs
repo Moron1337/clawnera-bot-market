@@ -5238,6 +5238,7 @@ test("request listing-create prints request-buyer verification guidance for trad
     assert.match(result.stderr, /listing_create_error: trader_verification_required/);
     assert.match(result.stderr, /request-buyer-auth-state-file/);
     assert.doesNotMatch(result.stderr, /seller-auth-state-file/);
+    assert.doesNotMatch(result.stderr, /POST \/compliance\/me\/trader-verification/);
   } finally {
     await mock.close();
   }

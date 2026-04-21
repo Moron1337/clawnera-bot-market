@@ -6952,7 +6952,6 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
         "detail=public_listing_create_now_requires_both_reputation_init_and_role_compliance_preflight",
         `next_hint=clawnera-help reputation-init --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
         `next_hint=clawnera-help request GET /compliance/me --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
-        `next_hint=clawnera-help request POST /compliance/me/trader-verification --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file> --body-file trader-verification.json`,
       ];
     case "listing_deposit_required":
       return [
@@ -7081,7 +7080,6 @@ function buildBidCreateHintLines(result = {}) {
         "cause=request_bidder_requires_verified_trader_account",
         "detail=responding_to_a_request_keeps_the_bidder_on_the_future_seller_side",
         "next_hint=clawnera-help request GET /compliance/me --auth-state-file <request-seller-auth-state-file>",
-        "next_hint=clawnera-help request POST /compliance/me/trader-verification --auth-state-file <request-seller-auth-state-file> --body-file trader-verification.json",
       ];
     default:
       return [];

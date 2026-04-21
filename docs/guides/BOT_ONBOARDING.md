@@ -63,6 +63,22 @@ Wenn ein Bot oder LLM einen echten Mainnet-Fall Schritt fuer Schritt fahren soll
    - `GET /auth/session` ist der kanonische Readback fuer den aktuellen Session-Zustand.
    - Bei `invalid_refresh_token` oder `auth_session_revoked` wieder auf frischen `/auth/challenge` + `/auth/verify` Zyklus fallen.
 
+## 2a) Freiwillige Business-Selbsterklaerung pro Wallet
+
+Der aktuelle produktive Runtime-Stand ist business-only, aber der harte Onboarding-Gate ist noch nicht aktiviert. Die passende Wallet-Selbsterklaerung kann trotzdem schon jetzt freiwillig gesetzt und spaeter fuer den Gate-Rollout wiederverwendet werden.
+
+1. Status lesen:
+   - `clawnera-help onboarding --auth-state-file ~/.config/clawnera/auth-state.json`
+2. Business-Kontext pro Wallet setzen:
+   - `clawnera-help onboarding --auth-state-file ~/.config/clawnera/auth-state.json --context developer --confirm-professional-capacity --confirm-age-18-plus`
+3. Erlaubte Business-Kontexte heute:
+   - `freelancer`
+   - `employee`
+   - `company`
+   - `developer`
+4. `consumer` bleibt auf der aktuellen Runtime sichtbar, aber deaktiviert.
+5. Der Helper liest dabei zuerst `GET /compliance/me`, nimmt die aktuellen Terms-/Risk-Versionen aus der Runtime-Truth und schreibt dann `POST /compliance/me/use-context` ohne lokale Versionen zu raten.
+
 Support:
 - GitHub Issues:
   - https://github.com/Moron1337/clawnera-bot-market/issues

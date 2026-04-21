@@ -383,6 +383,7 @@ const DEFAULT_MINIMAL_HELP = Object.freeze({
   ]),
   nextCommands: Object.freeze([
     "clawnera-help show onboarding",
+    "clawnera-help onboarding --auth-state-file ~/.config/clawnera/auth-state.json",
     "clawnera-help show http-examples",
     "clawnera-help show canonical-flow",
     "clawnera-help search <keyword>"
@@ -439,6 +440,7 @@ function buildFullHelpJson(topics, journeys, recipes) {
       "wallet-inbox",
       "auth-login",
       "ensure-auth",
+      "onboarding",
       "units",
       "request",
       "listing-categories",
@@ -563,6 +565,7 @@ function printUsageAll() {
   console.log("  clawnera-help wallet-inbox [options]      Show the canonical wallet wake-up path for events, Telegram, and polling");
   console.log("  clawnera-help auth-login [options]        Create JWT + refresh token from local IOTA keystore");
   console.log("  clawnera-help ensure-auth [options]       Reuse or create a saved auth-state from the local wallet");
+  console.log("  clawnera-help onboarding [options]        Read or submit the voluntary per-wallet business declaration");
   console.log(`  clawnera-help units [options]             Show ${SUPPORTED_MARKET_ASSET_SYMBOLS.join("/")} decimals and atomic-unit examples`);
   console.log("  clawnera-help request <METHOD> <path>     Call Clawnera API with auth/env shortcuts");
   console.log("  clawnera-help listing-categories          Show the canonical listing category slugs");
@@ -3360,6 +3363,316 @@ async function runEnsureAuth(commandArgs) {
       keystorePath
     };
   }
+}
+
+function normalizeBusinessOnboardingContext(rawValue) {
+  const normalized = String(rawValue || "").trim().toLowerCase();
+  if (!normalized) {
+    return "";
+  }
+  if (normalized === "freelancer") {
+    return "FREELANCER";
+  }
+  if (normalized === "employee") {
+    return "EMPLOYEE";
+  }
+  if (normalized === "company" || normalized === "business") {
+    return "COMPANY";
+  }
+  if (normalized === "developer") {
+    return "DEVELOPER";
+  }
+  if (normalized === "consumer") {
+    return "CONSUMER";
+  }
+  return "";
+}
+
+function buildBusinessOnboardingNextHint(input) {
+  const authStateFile =
+    typeof input?.authStateFile === "string" && input.authStateFile.trim() ? input.authStateFile.trim() : "";
+  const apiBase = typeof input?.apiBase === "string" && input.apiBase.trim() ? input.apiBase.trim() : "";
+  const base = authStateFile
+    ? `clawnera-help onboarding --auth-state-file ${shellQuote(authStateFile)}`
+    : apiBase
+      ? `clawnera-help onboarding --api-base ${shellQuote(apiBase)} --jwt <token>`
+      : "clawnera-help onboarding";
+  return `${base} --context developer --confirm-professional-capacity --confirm-age-18-plus`;
+}
+
+async function runBusinessOnboarding(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: businessOnboardingUsageLines()
+    };
+  }
+
+  if (positionals.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_positional_arguments",
+      details: positionals
+    };
+  }
+
+  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+  let runtimeContext;
+  try {
+    runtimeContext = await resolveApiRuntimeContext({
+      ...options,
+      "timeout-ms": timeoutMs
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "invalid_runtime_context",
+      hint: "run clawnera-help ensure-auth --api-base <url> first, or set --api-base with --jwt / --env-file / --auth-state-file"
+    };
+  }
+
+  const apiBase = runtimeContext.apiBase;
+  if (!apiBase) {
+    return {
+      ok: false,
+      error: "missing_or_invalid_api_base",
+      hint: "set --api-base or CLAWNERA_API_BASE_URL"
+    };
+  }
+
+  if (!runtimeContext.jwt) {
+    return {
+      ok: false,
+      error: "missing_jwt",
+      hint: "set --auth-state-file / --env-file or provide --jwt"
+    };
+  }
+
+  const { result: readResult } = await requestJsonWithRuntimeContext({
+    runtimeContext,
+    url: `${apiBase}/compliance/me`,
+    method: "GET",
+    timeoutMs
+  });
+
+  if (!readResult.ok) {
+    return {
+      ok: false,
+      error: summarizeApiFailure(readResult),
+      status: readResult.status,
+      response: readResult.body
+    };
+  }
+
+  const envelope = readResult.body && typeof readResult.body === "object" && !Array.isArray(readResult.body) ? readResult.body : {};
+  const profile = envelope.profile && typeof envelope.profile === "object" && !Array.isArray(envelope.profile) ? envelope.profile : {};
+  const documentVersions =
+    envelope.documentVersions && typeof envelope.documentVersions === "object" && !Array.isArray(envelope.documentVersions)
+      ? envelope.documentVersions
+      : {};
+  const ownerSurface =
+    envelope.ownerSurface && typeof envelope.ownerSurface === "object" && !Array.isArray(envelope.ownerSurface)
+      ? envelope.ownerSurface
+      : {};
+  const layer2 =
+    ownerSurface.layer2 && typeof ownerSurface.layer2 === "object" && !Array.isArray(ownerSurface.layer2)
+      ? ownerSurface.layer2
+      : {};
+  const businessOnboarding =
+    layer2.businessOnboarding && typeof layer2.businessOnboarding === "object" && !Array.isArray(layer2.businessOnboarding)
+      ? layer2.businessOnboarding
+      : null;
+
+  if (!businessOnboarding) {
+    return {
+      ok: false,
+      error: "missing_business_onboarding_surface",
+      response: envelope
+    };
+  }
+
+  const contexts = Array.isArray(businessOnboarding.contexts) ? businessOnboarding.contexts : [];
+  const confirmations = Array.isArray(businessOnboarding.confirmations) ? businessOnboarding.confirmations : [];
+  const normalizedContext = normalizeBusinessOnboardingContext(options.context);
+  const currentAck =
+    profile.professionalAcknowledgement &&
+    typeof profile.professionalAcknowledgement === "object" &&
+    !Array.isArray(profile.professionalAcknowledgement)
+      ? profile.professionalAcknowledgement
+      : null;
+  const currentTermsVersion =
+    typeof documentVersions.termsVersion === "string" && documentVersions.termsVersion.trim()
+      ? documentVersions.termsVersion.trim()
+      : "";
+  const currentRiskDisclosureVersion =
+    typeof documentVersions.riskDisclosureVersion === "string" && documentVersions.riskDisclosureVersion.trim()
+      ? documentVersions.riskDisclosureVersion.trim()
+      : "";
+  if (!currentTermsVersion || !currentRiskDisclosureVersion) {
+    return {
+      ok: false,
+      error: "missing_live_document_versions",
+      response: envelope
+    };
+  }
+  const isAlreadyCurrent =
+    Boolean(normalizedContext) &&
+    profile.useContext === normalizedContext &&
+    profile.accountType === "TRADER" &&
+    currentAck &&
+    currentAck.termsVersion === currentTermsVersion &&
+    currentAck.riskDisclosureVersion === currentRiskDisclosureVersion;
+
+  if (!normalizedContext) {
+    return {
+      ok: true,
+      mode: "status",
+      state: businessOnboarding.state || null,
+      actorBinding: businessOnboarding.actorBinding || null,
+      preconditionStatus: businessOnboarding.preconditionStatus ?? null,
+      currentAccountType: profile.accountType || null,
+      currentUseContext: profile.useContext || null,
+      currentAcknowledgedAt: currentAck?.acknowledgedAt || null,
+      documentVersions: {
+        termsVersion: currentTermsVersion || null,
+        riskDisclosureVersion: currentRiskDisclosureVersion || null
+      },
+      requiredForRoutes: Array.isArray(businessOnboarding.requiredForRoutes) ? businessOnboarding.requiredForRoutes : [],
+      contexts: contexts.map((entry) => ({
+        key: entry?.key || null,
+        label: entry?.label || null,
+        enabled: entry?.enabled === true,
+        description: entry?.description || null
+      })),
+      confirmations: confirmations.map((entry) => ({
+        key: entry?.key || null,
+        label: entry?.label || null
+      })),
+      nextHint: buildBusinessOnboardingNextHint({
+        authStateFile: runtimeContext.authStateFile,
+        apiBase
+      }),
+      response: envelope
+    };
+  }
+
+  const selectedContext = contexts.find((entry) => entry?.key === normalizedContext);
+  if (!selectedContext) {
+    return {
+      ok: false,
+      error: "unsupported_business_context",
+      supportedContexts: contexts.map((entry) => entry?.key).filter(Boolean)
+    };
+  }
+
+  if (selectedContext.enabled !== true) {
+    return {
+      ok: false,
+      error: "business_context_not_enabled",
+      context: normalizedContext,
+      detail: selectedContext.description || null
+    };
+  }
+
+  const confirmedProfessionalCapacity = parseBooleanOption(options["confirm-professional-capacity"], false);
+  const confirmedAge18Plus = parseBooleanOption(options["confirm-age-18-plus"], false);
+  if (!confirmedProfessionalCapacity || !confirmedAge18Plus) {
+    return {
+      ok: false,
+      error: "missing_required_confirmations",
+      context: normalizedContext,
+      requiredConfirmations: confirmations.map((entry) => ({
+        key: entry?.key || null,
+        label: entry?.label || null
+      })),
+      hint: buildBusinessOnboardingNextHint({
+        authStateFile: runtimeContext.authStateFile,
+        apiBase
+      })
+    };
+  }
+
+  if (isAlreadyCurrent) {
+    return {
+      ok: true,
+      mode: "already_current",
+      state: businessOnboarding.state || null,
+      actorBinding: businessOnboarding.actorBinding || null,
+      currentAccountType: profile.accountType || null,
+      currentUseContext: profile.useContext || null,
+      currentAcknowledgedAt: currentAck?.acknowledgedAt || null,
+      documentVersions: {
+        termsVersion: currentTermsVersion || null,
+        riskDisclosureVersion: currentRiskDisclosureVersion || null
+      },
+      nextHint: "business self-declaration already matches the current live document versions",
+      response: envelope
+    };
+  }
+
+  const requestBody = {
+    useContext: normalizedContext,
+    professionalAcknowledgement: {
+      confirmedProfessionalCapacity: true,
+      confirmedAge18Plus: true,
+      termsVersion: currentTermsVersion,
+      riskDisclosureVersion: currentRiskDisclosureVersion
+    }
+  };
+
+  const { result: writeResult } = await requestJsonWithRuntimeContext({
+    runtimeContext,
+    url: `${apiBase}/compliance/me/use-context`,
+    method: "POST",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(requestBody),
+    timeoutMs
+  });
+
+  if (!writeResult.ok) {
+    return {
+      ok: false,
+      error: summarizeApiFailure(writeResult),
+      status: writeResult.status,
+      response: writeResult.body
+    };
+  }
+
+  const updatedEnvelope =
+    writeResult.body && typeof writeResult.body === "object" && !Array.isArray(writeResult.body) ? writeResult.body : {};
+  const updatedProfile =
+    updatedEnvelope.profile && typeof updatedEnvelope.profile === "object" && !Array.isArray(updatedEnvelope.profile)
+      ? updatedEnvelope.profile
+      : {};
+  const updatedAck =
+    updatedProfile.professionalAcknowledgement &&
+    typeof updatedProfile.professionalAcknowledgement === "object" &&
+    !Array.isArray(updatedProfile.professionalAcknowledgement)
+      ? updatedProfile.professionalAcknowledgement
+      : null;
+
+  return {
+    ok: true,
+    mode: "updated",
+    state: businessOnboarding.state || null,
+    actorBinding: businessOnboarding.actorBinding || null,
+    currentAccountType: updatedProfile.accountType || null,
+    currentUseContext: updatedProfile.useContext || normalizedContext,
+    currentAcknowledgedAt: updatedAck?.acknowledgedAt || null,
+    documentVersions: {
+      termsVersion: currentTermsVersion || null,
+      riskDisclosureVersion: currentRiskDisclosureVersion || null
+    },
+    requiredForRoutes: Array.isArray(businessOnboarding.requiredForRoutes) ? businessOnboarding.requiredForRoutes : [],
+    nextHint: runtimeContext.authStateFile
+      ? `clawnera-help request GET /compliance/me --auth-state-file ${shellQuote(runtimeContext.authStateFile)}`
+      : "clawnera-help request GET /compliance/me --api-base <url> --jwt <token>",
+    response: updatedEnvelope
+  };
 }
 
 async function runWalletInit(commandArgs) {
@@ -13717,6 +14030,19 @@ function apiRequestUsageLines() {
   ];
 }
 
+function businessOnboardingUsageLines() {
+  return [
+    "Business onboarding helper:",
+    "- Usage: clawnera-help onboarding [--auth-state-file <file>] [--context freelancer|employee|company|developer]",
+    "- With no --context, reads GET /compliance/me and prints the current business-onboarding status for this wallet",
+    "- To submit an acknowledgement, also pass --confirm-professional-capacity and --confirm-age-18-plus",
+    "- Preferred auth bootstrap: clawnera-help ensure-auth --api-base <url> --alias <wallet-alias>",
+    "- Optional auth shortcuts: --auth-state-file <file> or --env-file <file>",
+    "- Optional explicit auth: --api-base <url> --jwt <token>",
+    "- Current live posture keeps this flow voluntary; protected-write gating stays off until the runtime flag is enabled"
+  ];
+}
+
 function chainConfigUsageLines() {
   return [
     "Live chain config helper:",
@@ -14873,6 +15199,8 @@ const aliasCommands = new Map([
   ["ensure-login", "ensure-auth"],
   ["auth-ensure", "ensure-auth"],
   ["self-auth", "ensure-auth"],
+  ["business-onboarding", "onboarding"],
+  ["professional-onboarding", "onboarding"],
   ["decimals", "units"],
   ["amount-units", "units"],
   ["amount-examples", "units"],
@@ -15347,6 +15675,75 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
       console.error(
         `candidates=${result.candidates.map((candidate) => candidate.alias || candidate.address).join(",")}`
       );
+    }
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
+} else if (effectiveCommand === "onboarding") {
+  const result = await runBusinessOnboarding(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    if (result.mode === "status") {
+      console.log("business_onboarding_status");
+    } else {
+      console.log("business_onboarding_ok");
+    }
+    console.log(`state=${result.state ?? "unknown"}`);
+    console.log(`actor_binding=${result.actorBinding ?? "unknown"}`);
+    if (result.preconditionStatus !== undefined && result.preconditionStatus !== null) {
+      console.log(`precondition_status=${result.preconditionStatus}`);
+    }
+    console.log(`account_type=${result.currentAccountType ?? "unset"}`);
+    console.log(`use_context=${result.currentUseContext ?? "unset"}`);
+    console.log(`acknowledged_at=${result.currentAcknowledgedAt ?? "unset"}`);
+    console.log(`terms_version=${result.documentVersions?.termsVersion ?? "unset"}`);
+    console.log(`risk_disclosure_version=${result.documentVersions?.riskDisclosureVersion ?? "unset"}`);
+    if (Array.isArray(result.requiredForRoutes) && result.requiredForRoutes.length > 0) {
+      console.log(`required_for_routes=${result.requiredForRoutes.join(",")}`);
+    }
+    if (Array.isArray(result.contexts) && result.contexts.length > 0) {
+      for (const entry of result.contexts) {
+        console.log(
+          `context=${entry.key ?? "unknown"} enabled=${entry.enabled === true ? "true" : "false"} label=${entry.label ?? ""}`
+        );
+      }
+    }
+    if (Array.isArray(result.confirmations) && result.confirmations.length > 0) {
+      for (const entry of result.confirmations) {
+        console.log(`confirmation=${entry.key ?? "unknown"} label=${entry.label ?? ""}`);
+      }
+    }
+    if (result.nextHint) {
+      console.log(`next_hint=${result.nextHint}`);
+    }
+  } else {
+    console.error(`business_onboarding_error: ${result.error}`);
+    if (result.context) {
+      console.error(`context=${result.context}`);
+    }
+    if (result.detail) {
+      console.error(`detail=${result.detail}`);
+    }
+    if (Array.isArray(result.requiredConfirmations) && result.requiredConfirmations.length > 0) {
+      for (const entry of result.requiredConfirmations) {
+        console.error(`confirmation_required=${entry.key ?? "unknown"} label=${entry.label ?? ""}`);
+      }
+    }
+    if (Array.isArray(result.supportedContexts) && result.supportedContexts.length > 0) {
+      console.error(`supported_contexts=${result.supportedContexts.join(",")}`);
+    }
+    if (result.hint) {
+      console.error(`hint=${result.hint}`);
+    }
+    if (result.status !== undefined && result.status !== null) {
+      console.error(`status=${result.status}`);
     }
     process.exitCode = 1;
   }

@@ -5121,7 +5121,8 @@ test("listing-create prints compliance guidance for trader-account failures", as
     assert.match(result.stderr, /detail=public_listing_create_now_requires_both_reputation_init_and_role_compliance_preflight/);
     assert.match(result.stderr, /clawnera-help reputation-init/);
     assert.match(result.stderr, /GET \/compliance\/me/);
-    assert.match(result.stderr, /POST \/compliance\/me\/account-type/);
+    assert.match(result.stderr, /clawnera-help onboarding/);
+    assert.match(result.stderr, /--confirm-professional-capacity --confirm-age-18-plus/);
   } finally {
     await mock.close();
   }
@@ -5658,7 +5659,8 @@ test("bid-create prints seller-side guidance for request bidder compliance failu
     assert.match(result.stderr, /bid_create_error: request_bid_requires_trader_account/);
     assert.match(result.stderr, /cause=request_bidder_becomes_future_seller/);
     assert.match(result.stderr, /GET \/compliance\/me/);
-    assert.match(result.stderr, /POST \/compliance\/me\/account-type/);
+    assert.match(result.stderr, /clawnera-help onboarding/);
+    assert.match(result.stderr, /--context <freelancer\|employee\|company\|developer>/);
   } finally {
     await mock.close();
   }

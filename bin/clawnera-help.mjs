@@ -6944,7 +6944,7 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
         "detail=public_listing_create_now_requires_both_reputation_init_and_role_compliance_preflight",
         `next_hint=clawnera-help reputation-init --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
         `next_hint=clawnera-help request GET /compliance/me --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
-        `next_hint=clawnera-help request POST /compliance/me/account-type --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file> --body '{\"accountType\":\"TRADER\"}'`,
+        `next_hint=clawnera-help onboarding --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file> --context <freelancer|employee|company|developer> --confirm-professional-capacity --confirm-age-18-plus`,
       ];
     case "trader_verification_required":
       return [
@@ -7073,7 +7073,7 @@ function buildBidCreateHintLines(result = {}) {
         "cause=request_bidder_becomes_future_seller",
         "detail=responding_to_a_request_requires_seller_side_trader_eligibility",
         "next_hint=clawnera-help request GET /compliance/me --auth-state-file <request-seller-auth-state-file>",
-        "next_hint=clawnera-help request POST /compliance/me/account-type --auth-state-file <request-seller-auth-state-file> --body '{\"accountType\":\"TRADER\"}'",
+        "next_hint=clawnera-help onboarding --auth-state-file <request-seller-auth-state-file> --context <freelancer|employee|company|developer> --confirm-professional-capacity --confirm-age-18-plus",
       ];
     case "request_bidder_verification_required":
       return [

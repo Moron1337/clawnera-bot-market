@@ -6946,6 +6946,14 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
         `next_hint=clawnera-help request GET /compliance/me --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
         `next_hint=clawnera-help onboarding --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file> --context <freelancer|employee|company|developer> --confirm-professional-capacity --confirm-age-18-plus`,
       ];
+    case "business_onboarding_required":
+    case "business_acknowledgement_version_mismatch":
+      return [
+        "cause=listing_create_requires_current_business_onboarding",
+        "detail=complete_or_refresh_the_professional_self_declaration_for_this_wallet_before_retrying_the_write",
+        `next_hint=clawnera-help request GET /compliance/me --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
+        `next_hint=clawnera-help onboarding --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file> --context <freelancer|employee|company|developer> --confirm-professional-capacity --confirm-age-18-plus`,
+      ];
     case "trader_verification_required":
       return [
         "cause=listing_requires_verified_trader_account",
@@ -7074,6 +7082,14 @@ function buildBidCreateHintLines(result = {}) {
         "detail=responding_to_a_request_requires_seller_side_trader_eligibility",
         "next_hint=clawnera-help request GET /compliance/me --auth-state-file <request-seller-auth-state-file>",
         "next_hint=clawnera-help onboarding --auth-state-file <request-seller-auth-state-file> --context <freelancer|employee|company|developer> --confirm-professional-capacity --confirm-age-18-plus",
+      ];
+    case "business_onboarding_required":
+    case "business_acknowledgement_version_mismatch":
+      return [
+        "cause=bid_create_requires_current_business_onboarding",
+        "detail=complete_or_refresh_the_professional_self_declaration_for_this_wallet_before_retrying_the_write",
+        "next_hint=clawnera-help request GET /compliance/me --auth-state-file <bidder-auth-state-file>",
+        "next_hint=clawnera-help onboarding --auth-state-file <bidder-auth-state-file> --context <freelancer|employee|company|developer> --confirm-professional-capacity --confirm-age-18-plus",
       ];
     case "request_bidder_verification_required":
       return [
@@ -7207,6 +7223,14 @@ function buildBidAcceptHintLines(result = {}) {
   switch (error) {
     case "unexpected_options":
       return buildUnexpectedOptionHintLines("bid-accept", result);
+    case "business_onboarding_required":
+    case "business_acknowledgement_version_mismatch":
+      return [
+        "cause=bid_accept_requires_current_business_onboarding",
+        "detail=complete_or_refresh_the_professional_self_declaration_for_this_wallet_before_retrying_the_write",
+        "next_hint=clawnera-help request GET /compliance/me --auth-state-file <buyer-auth-state-file>",
+        "next_hint=clawnera-help onboarding --auth-state-file <buyer-auth-state-file> --context <freelancer|employee|company|developer> --confirm-professional-capacity --confirm-age-18-plus",
+      ];
     case "buyer_mismatch":
       return [
         "cause=bid_accept_is_buyer_side",

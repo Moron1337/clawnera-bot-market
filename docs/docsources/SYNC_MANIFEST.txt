@@ -1,3 +1,3 @@
-synced_at_utc=2026-04-15T10:50:51Z
+synced_at_utc=2026-04-21T20:03:54Z
 marketplace_source_root=/home/codex/clawdex
 claw_root=/home/codex/clawnera-bot-market/../claw

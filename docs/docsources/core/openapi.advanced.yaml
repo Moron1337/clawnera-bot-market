@@ -3916,6 +3916,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '428':
+          description: Canonical professional onboarding is required before trader verification can be requested.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessWritePreconditionResponse'
 components:
   securitySchemes:
     bearerAuth:
@@ -4096,12 +4102,15 @@ components:
                 - supported
             routes:
               $ref: '#/components/schemas/ComplianceOwnerSurfaceRoutes'
+            routeHints:
+              $ref: '#/components/schemas/ComplianceOwnerSurfaceRouteHints'
             businessOnboarding:
               $ref: '#/components/schemas/ComplianceBusinessOnboarding'
           type: object
           required:
             - state
             - routes
+            - routeHints
             - businessOnboarding
         layer3:
           properties:
@@ -4215,6 +4224,20 @@ components:
         - label
         - description
         - enabled
+    ComplianceOwnerSurfaceRouteHints:
+      properties:
+        canonicalProfessionalOnboardingRoute:
+          type: string
+          enum:
+            - /compliance/me/use-context
+        accountTypeRouteMode:
+          type: string
+          enum:
+            - coarse_only
+      type: object
+      required:
+        - canonicalProfessionalOnboardingRoute
+        - accountTypeRouteMode
     ComplianceOwnerSurfaceRoutes:
       properties:
         profile:
@@ -8371,6 +8394,7 @@ components:
             - POST /listings
             - POST /bids
             - POST /bids/{bidId}/accept
+            - POST /compliance/me/trader-verification
         preconditionStatus:
           type: integer
           enum:

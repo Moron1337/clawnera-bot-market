@@ -3754,6 +3754,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "428":
+          description: Canonical professional onboarding is required before trader verification can be requested.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessWritePreconditionResponse"
   /admin/compliance/notices:
     get:
       tags: [Admin, Compliance]
@@ -4296,6 +4302,16 @@ components:
         traderVerification:
           type: string
           nullable: true
+    ComplianceOwnerSurfaceRouteHints:
+      type: object
+      required: [canonicalProfessionalOnboardingRoute, accountTypeRouteMode]
+      properties:
+        canonicalProfessionalOnboardingRoute:
+          type: string
+          enum: [/compliance/me/use-context]
+        accountTypeRouteMode:
+          type: string
+          enum: [coarse_only]
     ComplianceBusinessOnboardingOption:
       type: object
       required: [key, label, description, enabled]
@@ -4363,13 +4379,15 @@ components:
           enum: [read_only]
         layer2:
           type: object
-          required: [state, routes, businessOnboarding]
+          required: [state, routes, routeHints, businessOnboarding]
           properties:
             state:
               type: string
               enum: [supported]
             routes:
               $ref: "#/components/schemas/ComplianceOwnerSurfaceRoutes"
+            routeHints:
+              $ref: "#/components/schemas/ComplianceOwnerSurfaceRouteHints"
             businessOnboarding:
               $ref: "#/components/schemas/ComplianceBusinessOnboarding"
         layer3:
@@ -4426,7 +4444,7 @@ components:
           enum: [/compliance/me/use-context]
         route:
           type: string
-          enum: ["POST /listings", "POST /bids", "POST /bids/{bidId}/accept"]
+          enum: ["POST /listings", "POST /bids", "POST /bids/{bidId}/accept", "POST /compliance/me/trader-verification"]
         preconditionStatus:
           type: integer
           enum: [428]

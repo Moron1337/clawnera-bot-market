@@ -10569,6 +10569,39 @@
             "propertyNames": [
               "error"
             ]
+          },
+          "428": {
+            "status": "428",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
+            "schemaName": "BusinessWritePreconditionResponse",
+            "requiredFields": [],
+            "optionalFields": [
+              "error",
+              "detail",
+              "redirectTo",
+              "compliancePath",
+              "useContextPath",
+              "route",
+              "preconditionStatus",
+              "documentVersions",
+              "businessOnboarding",
+              "currentTermsVersion",
+              "currentRiskDisclosureVersion"
+            ],
+            "propertyNames": [
+              "error",
+              "detail",
+              "redirectTo",
+              "compliancePath",
+              "useContextPath",
+              "route",
+              "preconditionStatus",
+              "documentVersions",
+              "businessOnboarding",
+              "currentTermsVersion",
+              "currentRiskDisclosureVersion"
+            ]
           }
         }
       }
@@ -22280,6 +22313,39 @@
           "propertyNames": [
             "error"
           ]
+        },
+        "428": {
+          "status": "428",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
+          "schemaName": "BusinessWritePreconditionResponse",
+          "requiredFields": [],
+          "optionalFields": [
+            "error",
+            "detail",
+            "redirectTo",
+            "compliancePath",
+            "useContextPath",
+            "route",
+            "preconditionStatus",
+            "documentVersions",
+            "businessOnboarding",
+            "currentTermsVersion",
+            "currentRiskDisclosureVersion"
+          ],
+          "propertyNames": [
+            "error",
+            "detail",
+            "redirectTo",
+            "compliancePath",
+            "useContextPath",
+            "route",
+            "preconditionStatus",
+            "documentVersions",
+            "businessOnboarding",
+            "currentTermsVersion",
+            "currentRiskDisclosureVersion"
+          ]
         }
       }
     },
@@ -23742,6 +23808,18 @@
         "accountType",
         "useContext",
         "traderVerification"
+      ],
+      "optionalFields": []
+    },
+    "ComplianceOwnerSurfaceRouteHints": {
+      "name": "ComplianceOwnerSurfaceRouteHints",
+      "propertyNames": [
+        "canonicalProfessionalOnboardingRoute",
+        "accountTypeRouteMode"
+      ],
+      "requiredFields": [
+        "canonicalProfessionalOnboardingRoute",
+        "accountTypeRouteMode"
       ],
       "optionalFields": []
     },

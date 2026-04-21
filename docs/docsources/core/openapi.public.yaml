@@ -114,6 +114,11 @@ paths:
                             enum:
                               - enabled
                               - disabled
+                          businessOnboarding:
+                            type: string
+                            enum:
+                              - available_not_enforced
+                              - required_for_protected_writes
                           traderVerification:
                             type: string
                             enum:
@@ -130,6 +135,7 @@ paths:
                           - audience
                           - portalWriteSurface
                           - consumerAccounts
+                          - businessOnboarding
                           - traderVerification
                           - consumerOwnerConfirmation
                       interaction:
@@ -3443,6 +3449,7 @@ components:
         state:
           type: string
           enum:
+            - available_not_enforced
             - required_for_protected_writes
         submissionRoute:
           type: string

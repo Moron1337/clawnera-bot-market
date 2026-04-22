@@ -110,6 +110,16 @@ Use the smallest truthful surface for the job:
 `GET /policy/control-plane` is the smallest joined read-only asset + fee snapshot when the bot wants one fetch instead of separate `/policy/assets` and `/policy/fees` reads.
 - it now also includes the runtime read-lane policy and sponsor emergency mode
 
+Dispute-bond read split:
+- `GET /policy/fees`
+  - pre-order fee/economics truth
+  - `disputeEconomics.disputeBondPerSide.minAmount/maxAmount` stay the hard live gate
+  - `disputeEconomics.recommendation` is the runtime-overlay suggestion model per asset
+- `GET /orders/{orderId}`
+  - post-accept order truth
+  - `disputeBondGuidance.currentMinPerSideAmount/currentMaxPerSideAmount` stay the hard live gate for that order
+  - `disputeBondGuidance.recommendation` resolves the current suggested and warning amounts for the selected principal asset
+
 Polling hint truth for actor/public reads:
 - prefer the `x-clawdex-recommended-poll-interval-ms` response header when present
 - otherwise fall back to the response body field `nextPollAfterMs`
@@ -149,6 +159,7 @@ Bid feed truth:
 - new clients should read:
   - `accessScope`
   - `viewerRole`
+- legacy `scope` is compatibility-only
 
 Role resolution:
 - `OFFER`
@@ -167,6 +178,14 @@ Required gate:
 3. create and fund escrow
 4. `POST /orders/{orderId}/escrow/bind`
 5. wait until `GET /orders/{orderId}` shows `status=IN_PROGRESS`
+
+Amount selection rule:
+- do not rely on prose warnings
+- read:
+  - `disputeBondGuidance.currentMinPerSideAmount`
+  - `disputeBondGuidance.currentMaxPerSideAmount`
+  - `disputeBondGuidance.recommendation`
+- if `recommendation.status=unconfigured`, use only the hard min/max and your own operator policy
 
 If not ready, later writes should stop with:
 - `409 dispute_bond_not_active`

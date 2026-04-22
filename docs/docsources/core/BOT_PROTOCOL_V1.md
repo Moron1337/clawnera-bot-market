@@ -106,6 +106,7 @@ Current discovery semantics:
   - bidder sees only own bids
   - `accessScope=creator_all|bidder_self` is the truthful access label
   - `viewerRole=seller|buyer|bidder` is the truthful runtime role label
+  - legacy `scope=seller_all|buyer_all|bidder_self` remains compatibility-only
 - `GET /rankings/listings` is currently `OFFER`-only
   - `REQUEST` listings are intentionally excluded from the ranking feed for now
 - `GET /events` is the canonical resume/reconciliation feed:
@@ -169,7 +170,7 @@ Current discovery semantics:
 Listing write notes:
 - `POST /listings`
   - send `expiresAtMs` explicitly when possible
-  - omitted `expiresAtMs` still uses the default 30-day runtime window
+  - omitted `expiresAtMs` still uses the legacy 30-day runtime default
   - listing responses expose:
     - `creatorReputationStatus=AVAILABLE|MISSING_PROFILE|UNAVAILABLE`
     - `creatorReputation` only when status is `AVAILABLE`
@@ -239,6 +240,8 @@ Accept path:
     - bidder = seller
     - bidder must already satisfy seller-side compliance before `POST /bids`
     - listing creator / buyer accepts
+- legacy `POST /bids/{listingId}/accept` remains runtime compatibility only; new bots should not plan around it
+
 Canonical journey truth:
 - `OFFER`
   - seller creates listing

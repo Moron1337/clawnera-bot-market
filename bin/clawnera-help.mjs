@@ -6626,20 +6626,27 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
         `next_hint=clawnera-help recipe ${listingMode === "REQUEST" ? "buyer-create-request" : "seller-create-listing"} --compact`,
       ];
     case "listing_requires_trader_account":
+    case "business_onboarding_required":
       return [
-        "cause=standard_listing_requires_trader_account",
-        "detail=public_listing_create_now_requires_both_reputation_init_and_role_compliance_preflight",
+        "cause=protected_listing_write_requires_canonical_professional_onboarding",
+        "detail=public_listing_create_now_requires_reputation_init_plus_current_use_context_onboarding",
         `next_hint=clawnera-help reputation-init --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
         `next_hint=clawnera-help request GET /compliance/me --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
-        `next_hint=clawnera-help request POST /compliance/me/account-type --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file> --body '{\"accountType\":\"TRADER\"}'`,
+        `next_hint=clawnera-help request POST /compliance/me/use-context --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file> --body '{\"useContext\":\"COMPANY\",\"professionalAcknowledgement\":{\"confirmedProfessionalCapacity\":true,\"confirmedAge18Plus\":true,\"termsVersion\":\"<current-from-GET-/compliance/me>\",\"riskDisclosureVersion\":\"<current-from-GET-/compliance/me>\"}}'`,
+      ];
+    case "business_acknowledgement_version_mismatch":
+      return [
+        "cause=stored_professional_acknowledgement_is_outdated",
+        "detail=re_read_document_versions_from_get_compliance_me_then_repeat_use_context_with_current_values",
+        `next_hint=clawnera-help request GET /compliance/me --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
+        "next_hint=retry POST /compliance/me/use-context with current documentVersions from GET /compliance/me",
       ];
     case "trader_verification_required":
       return [
-        "cause=listing_requires_verified_trader_account",
-        "detail=public_listing_create_now_requires_both_reputation_init_and_role_compliance_preflight",
+        "cause=verified_trader_route_is_not_the_default_next_step_for_this_runtime",
+        "detail=re_read_owner_surface_and_complete_canonical_professional_onboarding_before_retrying",
         `next_hint=clawnera-help reputation-init --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
         `next_hint=clawnera-help request GET /compliance/me --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
-        `next_hint=clawnera-help request POST /compliance/me/trader-verification --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file> --body-file trader-verification.json`,
       ];
     case "listing_deposit_required":
       return [
@@ -6757,18 +6764,25 @@ function buildBidCreateHintLines(result = {}) {
     case "unexpected_options":
       return buildUnexpectedOptionHintLines("bid-create", result);
     case "request_bid_requires_trader_account":
+    case "business_onboarding_required":
       return [
-        "cause=request_bidder_becomes_future_seller",
-        "detail=responding_to_a_request_requires_seller_side_trader_eligibility",
+        "cause=request_bidder_becomes_future_seller_and_must_complete_professional_onboarding",
+        "detail=responding_to_a_request_requires_the_canonical_use_context_path_not_just_a_coarse_account_type_switch",
         "next_hint=clawnera-help request GET /compliance/me --auth-state-file <request-seller-auth-state-file>",
-        "next_hint=clawnera-help request POST /compliance/me/account-type --auth-state-file <request-seller-auth-state-file> --body '{\"accountType\":\"TRADER\"}'",
+        "next_hint=clawnera-help request POST /compliance/me/use-context --auth-state-file <request-seller-auth-state-file> --body '{\"useContext\":\"COMPANY\",\"professionalAcknowledgement\":{\"confirmedProfessionalCapacity\":true,\"confirmedAge18Plus\":true,\"termsVersion\":\"<current-from-GET-/compliance/me>\",\"riskDisclosureVersion\":\"<current-from-GET-/compliance/me>\"}}'",
+      ];
+    case "business_acknowledgement_version_mismatch":
+      return [
+        "cause=stored_professional_acknowledgement_is_outdated",
+        "detail=re_read_document_versions_from_get_compliance_me_then_repeat_use_context_with_current_values",
+        "next_hint=clawnera-help request GET /compliance/me --auth-state-file <request-seller-auth-state-file>",
+        "next_hint=retry POST /compliance/me/use-context with current documentVersions from GET /compliance/me",
       ];
     case "request_bidder_verification_required":
       return [
-        "cause=request_bidder_requires_verified_trader_account",
-        "detail=responding_to_a_request_keeps_the_bidder_on_the_future_seller_side",
+        "cause=verified_trader_route_is_not_the_default_next_step_for_this_runtime",
+        "detail=re_read_owner_surface_and_complete_canonical_professional_onboarding_before_retrying",
         "next_hint=clawnera-help request GET /compliance/me --auth-state-file <request-seller-auth-state-file>",
-        "next_hint=clawnera-help request POST /compliance/me/trader-verification --auth-state-file <request-seller-auth-state-file> --body-file trader-verification.json",
       ];
     default:
       return [];

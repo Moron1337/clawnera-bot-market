@@ -136,8 +136,7 @@ Buyer/seller runtime helper truth:
      - `CLAW` nutzt `6`
      - `clawnera-help units` zeigt die kanonischen Beispiele
      - ohne `--display-values` erwartet `listing-create` atomische Integer
-   - Compliance-Preconditions: Actor muss als `TRADER` gefuehrt sein;
-     je nach Deployment kann zusaetzlich Trader-Verification Pflicht sein.
+   - Compliance-Preconditions: die Wallet muss das kanonische professionelle Onboarding ueber `POST /compliance/me/use-context` abgeschlossen haben; `accountType=TRADER` ist nur die grobe Rollenwahrheit, nicht mehr die alleinige Write-Voraussetzung.
    - Public Listing-Create braucht ein Reputation-Profil aus derselben Wallet. Wenn `POST /listings` mit `reputation_profile_required` scheitert, zuerst `clawnera-help reputation-init --auth-state-file ...` und danach `GET /users/<address>/reputation` pruefen.
    - Lies den Readback richtig:
      - das Owned `ReputationProfile` ist Aktivierung/Proof

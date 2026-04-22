@@ -5118,10 +5118,10 @@ test("listing-create prints compliance guidance for trader-account failures", as
     ]);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /listing_create_error: listing_requires_trader_account/);
-    assert.match(result.stderr, /detail=public_listing_create_now_requires_both_reputation_init_and_role_compliance_preflight/);
+    assert.match(result.stderr, /detail=public_listing_create_now_requires_reputation_init_plus_current_use_context_onboarding/);
     assert.match(result.stderr, /clawnera-help reputation-init/);
     assert.match(result.stderr, /GET \/compliance\/me/);
-    assert.match(result.stderr, /POST \/compliance\/me\/account-type/);
+    assert.match(result.stderr, /POST \/compliance\/me\/use-context/);
   } finally {
     await mock.close();
   }
@@ -5180,6 +5180,7 @@ test("request listing-create prints request-buyer compliance guidance for trader
     assert.match(result.stderr, /listing_create_error: listing_requires_trader_account/);
     assert.match(result.stderr, /request-buyer-auth-state-file/);
     assert.doesNotMatch(result.stderr, /seller-auth-state-file/);
+    assert.match(result.stderr, /POST \/compliance\/me\/use-context/);
   } finally {
     await mock.close();
   }
@@ -5236,8 +5237,69 @@ test("request listing-create prints request-buyer verification guidance for trad
     ]);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /listing_create_error: trader_verification_required/);
+    assert.match(result.stderr, /detail=re_read_owner_surface_and_complete_canonical_professional_onboarding_before_retrying/);
     assert.match(result.stderr, /request-buyer-auth-state-file/);
     assert.doesNotMatch(result.stderr, /seller-auth-state-file/);
+    assert.doesNotMatch(result.stderr, /POST \/compliance\/me\/trader-verification/);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("listing-create prints canonical professional onboarding guidance for business onboarding failures", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-listing-create-business-onboarding-guidance-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const creatorAddress = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  const mock = await startMockServer({
+    "POST /listings": () => ({
+      status: 428,
+      body: {
+        error: "business_onboarding_required"
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: creatorAddress,
+        alias: "seller"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "listing-create",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-mode",
+      "OFFER",
+      "--title",
+      "Two tiny IOTA text tasks",
+      "--description",
+      "Manual live flow test listing.",
+      "--category",
+      "ops",
+      "--currency",
+      "IOTA",
+      "--use-default-expiry",
+      "--milestones",
+      "Milestone 1:500000000;Milestone 2:500000000",
+      "--milestone-due-dates",
+      `${TEST_LISTING_DUE_AT_1};${TEST_LISTING_DUE_AT_2}`
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /listing_create_error: business_onboarding_required/);
+    assert.match(result.stderr, /cause=protected_listing_write_requires_canonical_professional_onboarding/);
+    assert.match(result.stderr, /POST \/compliance\/me\/use-context/);
+    assert.doesNotMatch(result.stderr, /POST \/compliance\/me\/account-type/);
   } finally {
     await mock.close();
   }
@@ -5655,9 +5717,60 @@ test("bid-create prints seller-side guidance for request bidder compliance failu
     ]);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /bid_create_error: request_bid_requires_trader_account/);
-    assert.match(result.stderr, /cause=request_bidder_becomes_future_seller/);
+    assert.match(result.stderr, /cause=request_bidder_becomes_future_seller_and_must_complete_professional_onboarding/);
     assert.match(result.stderr, /GET \/compliance\/me/);
-    assert.match(result.stderr, /POST \/compliance\/me\/account-type/);
+    assert.match(result.stderr, /POST \/compliance\/me\/use-context/);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("bid-create prints re-ack guidance for business acknowledgement version mismatch", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-bid-create-business-ack-mismatch-guidance-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const bidderAddress = "0x2222222222222222222222222222222222222222222222222222222222222222";
+  const mock = await startMockServer({
+    "POST /bids": () => ({
+      status: 428,
+      body: {
+        error: "business_acknowledgement_version_mismatch"
+      }
+    })
+  });
+
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: mock.baseUrl,
+        token: buildJwtWithExp(4102444800),
+        refreshToken: "refresh-token-1",
+        address: bidderAddress,
+        alias: "seller"
+      },
+      null,
+      2
+    )
+  );
+
+  try {
+    const result = await runCli([
+      "bid-create",
+      "--auth-state-file",
+      authStateFile,
+      "--listing-id",
+      "request-listing-1",
+      "--amount",
+      "1",
+      "--currency",
+      "IOTA",
+      "--display-values"
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /bid_create_error: business_acknowledgement_version_mismatch/);
+    assert.match(result.stderr, /cause=stored_professional_acknowledgement_is_outdated/);
+    assert.match(result.stderr, /GET \/compliance\/me/);
+    assert.match(result.stderr, /retry POST \/compliance\/me\/use-context with current documentVersions from GET \/compliance\/me/);
   } finally {
     await mock.close();
   }

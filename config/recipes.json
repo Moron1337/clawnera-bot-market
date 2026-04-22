@@ -112,7 +112,7 @@
         "Setup is complete.",
         "Seller notifications are running.",
         "Listing payload is final: title, description, milestones, currency, amount, and expiry choice.",
-        "Seller compliance is ready: the actor is TRADER; if the runtime enforces it, trader verification is already approved.",
+        "Seller compliance is ready: canonical professional onboarding has been completed through /compliance/me/use-context for this wallet; if the runtime later enables trader verification, that extra proof is completed too.",
         "If listing deposits are enabled, the on-chain listing deposit is ready before POST /listings."
       ],
       "store": [
@@ -152,7 +152,7 @@
         "Stop on any 409 and re-read state before retrying.",
         "Stop if the created listing does not read back exactly as intended.",
         "Stop if stored listing currency or total differs from the intended publish payload.",
-        "Stop on reputation_profile_required, listing_requires_trader_account, trader_verification_required, or listing_deposit_required and follow the emitted next_hint lines instead of guessing the next setup step."
+        "Stop on reputation_profile_required, listing_requires_trader_account, business_onboarding_required, business_acknowledgement_version_mismatch, trader_verification_required, or listing_deposit_required and follow the emitted next_hint lines instead of guessing the next setup step."
       ],
       "nextRecipes": [
         "seller-review-bids"
@@ -206,7 +206,7 @@
         "Stop on any 409 and re-read state before retrying.",
         "Stop if the created request does not read back exactly as intended.",
         "Stop if stored listing currency or total differs from the intended publish payload.",
-        "Stop on reputation_profile_required, consumer_accounts_disabled, or listing_deposit_required and follow the emitted next_hint lines instead of guessing reviewer/reputation work."
+        "Stop on reputation_profile_required, consumer_accounts_disabled, business_onboarding_required, business_acknowledgement_version_mismatch, or listing_deposit_required and follow the emitted next_hint lines instead of guessing reviewer/reputation work."
       ],
       "nextRecipes": [
         "buyer-review-request-bids"
@@ -425,7 +425,7 @@
         "Setup is complete.",
         "Seller notifications are running.",
         "Target request listingId or a search result that resolves to one request listingId.",
-        "Seller compliance is ready because REQUEST bidders become future sellers."
+        "Seller compliance is ready because REQUEST bidders become future sellers and therefore must complete canonical professional onboarding through /compliance/me/use-context."
       ],
       "store": [
         "request listingId",
@@ -454,7 +454,7 @@
       "stopConditions": [
         "Stop if the listing is not OPEN.",
         "Stop if the listing currency does not match the bid currency.",
-        "Stop if request_bid_requires_trader_account or request_bidder_verification_required and follow the emitted next_hint lines instead of retrying unchanged.",
+        "Stop if request_bid_requires_trader_account, business_onboarding_required, business_acknowledgement_version_mismatch, or request_bidder_verification_required and follow the emitted next_hint lines instead of retrying unchanged.",
         "Stop if bidId cannot be read back from the listing bids route."
       ],
       "nextRecipes": [

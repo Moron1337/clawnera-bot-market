@@ -810,7 +810,10 @@ test("recipe command prints a concise task runbook", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /# Seller Create Listing/);
   assert.match(result.stdout, /Need:/);
-  assert.match(result.stdout, /Seller compliance is ready: the actor is TRADER/);
+  assert.match(
+    result.stdout,
+    /Seller compliance is ready: canonical professional onboarding has been completed through \/compliance\/me\/use-context/
+  );
   assert.match(result.stdout, /Store:/);
   assert.match(result.stdout, /Routes:/);
   assert.match(result.stdout, /GET \/compliance\/me/);

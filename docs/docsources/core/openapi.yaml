@@ -1158,12 +1158,6 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
-        "428":
-          description: This wallet must complete the current business self-declaration before protected writes are allowed.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BusinessWritePreconditionResponse"
         "404":
           $ref: "#/components/responses/NotFound"
   /listings/{listingId}/cancel:
@@ -1200,12 +1194,6 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
-        "428":
-          description: This wallet must complete the current business self-declaration before protected writes are allowed.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BusinessWritePreconditionResponse"
         "409":
           $ref: "#/components/responses/Conflict"
   /listings/{listingId}/renew:
@@ -1249,6 +1237,12 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "428":
+          description: This wallet must complete the current business self-declaration before protected writes are allowed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessWritePreconditionResponse"
         "409":
           $ref: "#/components/responses/Conflict"
   /bids:
@@ -1290,6 +1284,12 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "428":
+          description: This wallet must complete the current business self-declaration before protected writes are allowed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessWritePreconditionResponse"
         "409":
           $ref: "#/components/responses/Conflict"
   /bids/{bidId}/withdraw:
@@ -1365,6 +1365,12 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "428":
+          description: This wallet must complete the current business self-declaration before protected writes are allowed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessWritePreconditionResponse"
         "409":
           $ref: "#/components/responses/Conflict"
   /orders:
@@ -4355,6 +4361,7 @@ components:
           type: integer
           enum: [428]
         requiredForRoutes:
+          description: Protected marketplace write routes only. Compliance endpoints such as trader-verification keep separate preconditions.
           type: array
           items:
             type: string

@@ -4358,7 +4358,7 @@ components:
           type: array
           items:
             type: string
-            enum: ["POST /listings", "POST /bids", "POST /bids/{bidId}/accept"]
+            enum: ["POST /listings", "POST /listings/{listingId}/renew", "POST /bids", "POST /bids/{bidId}/accept"]
         contexts:
           type: array
           items:
@@ -4444,7 +4444,7 @@ components:
           enum: [/compliance/me/use-context]
         route:
           type: string
-          enum: ["POST /listings", "POST /bids", "POST /bids/{bidId}/accept", "POST /compliance/me/trader-verification"]
+          enum: ["POST /listings", "POST /listings/{listingId}/renew", "POST /bids", "POST /bids/{bidId}/accept", "POST /compliance/me/trader-verification"]
         preconditionStatus:
           type: integer
           enum: [428]

@@ -3482,6 +3482,7 @@ components:
             type: string
             enum:
               - POST /listings
+              - POST /listings/{listingId}/renew
               - POST /bids
               - POST /bids/{bidId}/accept
         contexts:
@@ -6571,6 +6572,7 @@ components:
           type: string
           enum:
             - POST /listings
+            - POST /listings/{listingId}/renew
             - POST /bids
             - POST /bids/{bidId}/accept
             - POST /compliance/me/trader-verification

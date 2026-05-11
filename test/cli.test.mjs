@@ -233,6 +233,8 @@ test("units command prints canonical display decimals", () => {
   assert.match(result.stdout, /units_ok/);
   assert.match(result.stdout, /IOTA: decimals=9 atomic_per_display_unit=1000000000/);
   assert.match(result.stdout, /CLAW: decimals=6 atomic_per_display_unit=1000000/);
+  assert.match(result.stdout, /SUI: decimals=9 atomic_per_display_unit=1000000000/);
+  assert.match(result.stdout, /USDC: decimals=6 atomic_per_display_unit=1000000/);
   assert.match(result.stdout, /use --display-values/);
 });
 
@@ -329,6 +331,9 @@ test("listing-create help explains display values and categories", () => {
   assert.match(result.stdout, /--display-values/);
   assert.match(result.stdout, /IOTA uses 9 decimals/);
   assert.match(result.stdout, /CLAW uses 6 decimals/);
+  assert.match(result.stdout, /SUI uses 9 decimals/);
+  assert.match(result.stdout, /USDC uses 6 decimals/);
+  assert.match(result.stdout, /Sui SUI\/USDC are staged/);
   assert.match(result.stdout, /Without --display-values, milestone and budget numbers must already be atomic integers/);
   assert.match(result.stdout, /clawnera-help units/);
   assert.match(result.stdout, /--listing-mode <OFFER\|REQUEST>/);
@@ -342,6 +347,9 @@ test("listing-deposit-create help explains matching display-value mode", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Listing deposit helper/);
   assert.match(result.stdout, /--display-values/);
+  assert.match(result.stdout, /SUI uses 9 decimals/);
+  assert.match(result.stdout, /USDC uses 6 decimals/);
+  assert.match(result.stdout, /Listing deposits remain IOTA-package governed/);
   assert.match(result.stdout, /--rpc-url <url>/);
   assert.match(result.stdout, /Without --display-values, milestone and budget numbers must already be atomic integers/);
   assert.match(result.stdout, /Use the returned listingDepositObjectId as listingDepositObjectId on the later clawnera-help listing-create call/);
@@ -383,6 +391,9 @@ test("bid-create help explains display values", () => {
   assert.match(result.stdout, /--display-values/);
   assert.match(result.stdout, /IOTA uses 9 decimals/);
   assert.match(result.stdout, /CLAW uses 6 decimals/);
+  assert.match(result.stdout, /SUI uses 9 decimals/);
+  assert.match(result.stdout, /USDC uses 6 decimals/);
+  assert.match(result.stdout, /Sui SUI\/USDC bids are staged/);
   assert.match(result.stdout, /Without --display-values, --amount must already be an atomic integer/);
   assert.match(result.stdout, /clawnera-help units/);
   assert.match(result.stdout, /On REQUEST listings the bidder becomes the future seller/);
@@ -829,7 +840,8 @@ test("recipe compact output focuses on immediate command, readback, and next", (
   const result = runCli(["recipe", "seller-create-listing", "--compact"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^recipe:seller-create-listing/m);
-  assert.match(result.stdout, /^do:clawnera-help request GET \/policy\/fees /m);
+  assert.match(result.stdout, /^do:clawnera-help request GET \/policy\/assets /m);
+  assert.match(result.stdout, /clawnera-help request GET \/policy\/fees /);
   assert.match(result.stdout, /listing-categories --compact/);
   assert.match(result.stdout, /listing-deposit-create .* --display-values/);
   assert.match(result.stdout, /--listing-mode OFFER/);
@@ -849,7 +861,8 @@ test("request recipe compact output uses explicit request mode", () => {
   const result = runCli(["recipe", "buyer-create-request", "--compact"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^recipe:buyer-create-request/m);
-  assert.match(result.stdout, /^do:clawnera-help request GET \/policy\/fees /m);
+  assert.match(result.stdout, /^do:clawnera-help request GET \/policy\/assets /m);
+  assert.match(result.stdout, /clawnera-help request GET \/policy\/fees /);
   assert.match(result.stdout, /listing-categories --compact --listing-mode REQUEST/);
   assert.match(result.stdout, /listing-deposit-create .* --display-values/);
   assert.match(result.stdout, /listing-create .* --listing-mode REQUEST /);

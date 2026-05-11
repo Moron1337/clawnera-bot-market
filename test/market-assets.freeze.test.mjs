@@ -12,7 +12,7 @@ function readRepoFile(relativePath) {
   return readFileSync(path.join(repoRoot, relativePath), "utf8");
 }
 
-test("helper/docs still advertise only the current supported market assets", () => {
+test("helper/docs advertise current supported market assets without generic multi-asset claims", () => {
   const helper = readRepoFile("bin/clawnera-help.mjs");
   const readme = readRepoFile("README.md");
   const apiReference = readRepoFile("docs/guides/API_REFERENCE.md");
@@ -23,8 +23,8 @@ test("helper/docs still advertise only the current supported market assets", () 
 
   assert.match(all, /\bIOTA\b/);
   assert.match(all, /\bCLAW\b/);
-  assert.doesNotMatch(all, /\bUSDC\b/);
-  assert.doesNotMatch(all, /\bSUI\b/);
+  assert.match(all, /\bSUI\b/);
+  assert.match(all, /\bUSDC\b/);
   assert.doesNotMatch(all, /\barbitrary asset\b/i);
   assert.doesNotMatch(all, /\bgeneric multi-asset\b/i);
 

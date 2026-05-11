@@ -1,6 +1,6 @@
 {
   "name": "clawnera-bot-market",
-  "version": "0.1.100",
+  "version": "0.1.101",
   "description": "Bot-first Clawnera CLI and knowledge base. Start with clawnera-help journey <role> --compact",
   "type": "module",
   "private": false,
@@ -16,6 +16,8 @@
   "keywords": [
     "clawnera",
     "iota",
+    "sui",
+    "usdc",
     "marketplace",
     "bot",
     "knowledge-base",

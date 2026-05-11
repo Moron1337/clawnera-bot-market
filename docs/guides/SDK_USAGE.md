@@ -6,17 +6,17 @@ Goal:
 
 Packages:
 - `@iota/iota-sdk` — public npm package, used by `clawnera-bot-market` for wallet/auth
-- `@clawdex/sdk` — internal SDK in the clawdex monorepo (`packages/sdk`), **not published on npm**
+- `@clawdex/sdk` — CLAWDEX transaction-helper package, including `@clawdex/sdk/sui`; use the repo package or approved published artifact for now, because public npm publication depends on access to the `@clawdex` npm scope.
 
-> **Note for bot developers:** `@clawdex/sdk` is not available as a public npm package.
-> The TX builders documented below are reference material. Bot-facing marketplace
-> operations (listings, bids, orders, milestones, disputes) are available through
-> the Clawnera REST API (`https://api.clawnera.com`) which builds transactions
-> server-side. You do not need to import `@clawdex/sdk` directly.
+> **Note for bot developers:** Prefer the Clawnera REST API (`https://api.clawnera.com`)
+> for normal listings, bids, orders, milestones, and disputes. Import `@clawdex/sdk`
+> only when you explicitly need local transaction-plan validation or wallet-side PTB
+> building for a lane the target runtime already exposes.
 
 ## 1. Validation rules (must-haves)
 - Object IDs must be valid IOTA object IDs.
 - Addresses must be valid IOTA addresses.
+- Sui helpers validate Sui object IDs, addresses, and package/object IDs separately; do not reuse IOTA IDs on Sui.
 - Coin type tags must be valid Move type tags.
 - Use environment-matching `packageId` and config object IDs.
 - Before choosing payment/dispute assets, read:
@@ -26,6 +26,7 @@ Packages:
     - `listingFee` as a runtime-/redeploy-controlled lane
     - fully operator-managed fee lanes
     - partially operator-managed `disputeEconomics`
+- For staged native Sui `SUI` or `USDC`, confirm the exact asset from `GET /policy/assets` before building local Sui PTBs.
 
 ## 2. Listing deposit and escrow examples
 

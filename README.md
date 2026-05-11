@@ -93,8 +93,8 @@ Current buyer/seller helper truth:
 
 ## Current Focus
 - Runtime asset truth lives at `GET /policy/assets`; do not hardcode a fixed market-coin list.
-- The helper examples in this repo focus on `IOTA` and `CLAW` today.
-- Deployments may additionally expose other IOTA-chain typed coins such as `SPEC`; future lanes should be discovered from runtime policy, not guessed from docs.
+- The helper examples in this repo cover `IOTA`, `CLAW`, staged native Sui `SUI`, and staged native Sui `USDC`.
+- Deployments may additionally expose other typed coins such as `SPEC`; future lanes should be discovered from runtime policy, not guessed from docs.
 - CLAW type (mainnet):
   `0x7a38b9af32e37eb55133ec6755fa18418b10f39a86f51618883aa5f466e828b6::claw_coin::CLAW_COIN`
 
@@ -231,6 +231,8 @@ Notes:
 - `clawnera-help units` is the shortest truth for decimals:
   - `IOTA` uses `9`
   - `CLAW` uses `6`
+  - `SUI` uses `9`
+  - `USDC` uses `6`
   - without `--display-values`, write helpers expect atomic integers
 - cooperative order unwind now exists as a bounded direct SDK/PTB lane:
   - there is still no public HTTP `mutual cancel` route

@@ -161,6 +161,38 @@ const SUPPORTED_MARKET_ASSETS = Object.freeze({
       sponsorExecute: true,
     },
   },
+  SUI: {
+    symbol: "SUI",
+    displayName: "Native SUI on Sui",
+    decimals: 9,
+    capabilities: {
+      listingSingleAsset: true,
+      bidCurrency: true,
+      orderCurrency: true,
+      orderEscrowCreate: true,
+      listingDeposit: false,
+      reputationInit: false,
+      managedStorageFee: false,
+      sponsorReserve: false,
+      sponsorExecute: false,
+    },
+  },
+  USDC: {
+    symbol: "USDC",
+    displayName: "Native Sui USDC",
+    decimals: 6,
+    capabilities: {
+      listingSingleAsset: true,
+      bidCurrency: true,
+      orderCurrency: true,
+      orderEscrowCreate: true,
+      listingDeposit: false,
+      reputationInit: false,
+      managedStorageFee: false,
+      sponsorReserve: false,
+      sponsorExecute: false,
+    },
+  },
 });
 const SUPPORTED_MARKET_ASSET_SYMBOLS = Object.freeze(Object.keys(SUPPORTED_MARKET_ASSETS));
 const ASSET_DISPLAY_DECIMALS = Object.freeze(
@@ -675,17 +707,17 @@ function compactRecipeCommand(recipe) {
     case "reputation-init":
       return `clawnera-help reputation-init ${auth}`;
     case "seller-create-listing":
-      return `clawnera-help request GET /policy/fees ${auth} && clawnera-help listing-categories --compact && if listingDeposit.enabled=true then clawnera-help listing-deposit-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' && clawnera-help listing-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' --listing-deposit-object-id <listingDepositObjectId>; else clawnera-help listing-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'; fi`;
+      return `clawnera-help request GET /policy/assets ${auth} && clawnera-help request GET /policy/fees ${auth} && clawnera-help listing-categories --compact && if listingDeposit.enabled=true then clawnera-help listing-deposit-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' && clawnera-help listing-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' --listing-deposit-object-id <listingDepositObjectId>; else clawnera-help listing-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'; fi`;
     case "buyer-create-request":
-      return `clawnera-help request GET /policy/fees ${auth} && clawnera-help listing-categories --compact --listing-mode REQUEST && if listingDeposit.enabled=true then clawnera-help listing-deposit-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' && clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' --listing-deposit-object-id <listingDepositObjectId>; else clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'; fi`;
+      return `clawnera-help request GET /policy/assets ${auth} && clawnera-help request GET /policy/fees ${auth} && clawnera-help listing-categories --compact --listing-mode REQUEST && if listingDeposit.enabled=true then clawnera-help listing-deposit-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' && clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' --listing-deposit-object-id <listingDepositObjectId>; else clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'; fi`;
     case "creator-cancel-listing":
       return `clawnera-help listing-cancel ${auth} --listing-id <listingId>`;
     case "creator-renew-listing":
       return `clawnera-help listing-renew ${auth} --listing-id <listingId> --expires-at '<iso8601>'`;
     case "buyer-place-bid":
-      return `clawnera-help bid-create ${auth} --listing-id <listingId> --amount <amount> --currency <IOTA|CLAW> --display-values`;
+      return `clawnera-help bid-create ${auth} --listing-id <listingId> --amount <amount> --currency <IOTA|CLAW|SUI|USDC> --display-values`;
     case "seller-answer-request":
-      return `clawnera-help bid-create ${auth} --listing-id <requestListingId> --amount <amount> --currency <IOTA|CLAW> --display-values`;
+      return `clawnera-help bid-create ${auth} --listing-id <requestListingId> --amount <amount> --currency <IOTA|CLAW|SUI|USDC> --display-values`;
     case "buyer-accept-bid":
       return `clawnera-help bid-accept ${auth} --bid-id <bidId>`;
     case "buyer-accept-request-bid":
@@ -6023,6 +6055,9 @@ function listingCreateUsageLines() {
     "- Optional human mode: add --display-values to interpret milestone and budget numbers in whole-user units for the selected currency (examples: --currency IOTA --display-values --milestones 'file1.txt:1;file2.txt:1' or 'file1.txt:1 IOTA;file2.txt:1 IOTA')",
     ...buildCurrencyUnitLines("IOTA"),
     ...buildCurrencyUnitLines("CLAW"),
+    ...buildCurrencyUnitLines("SUI"),
+    ...buildCurrencyUnitLines("USDC"),
+    "- Sui SUI/USDC are staged: read GET /policy/assets before trying a Sui listing or bid, and expect allowlist/testnet gates on deployments that have not opened the lane.",
     "- Without --display-values, milestone and budget numbers must already be atomic integers",
     "- If you are unsure, run: clawnera-help units",
     "- Thin wrapper over POST /listings that infers creatorAddress from the saved auth state when possible",
@@ -6046,6 +6081,9 @@ function listingDepositCreateUsageLines() {
     "- Optional human mode: add --display-values when the later listing-create will also use whole-user units so both commands hash the same canonical listingRef",
     ...buildCurrencyUnitLines("IOTA"),
     ...buildCurrencyUnitLines("CLAW"),
+    ...buildCurrencyUnitLines("SUI"),
+    ...buildCurrencyUnitLines("USDC"),
+    "- Listing deposits remain IOTA-package governed; do not assume SUI/USDC deposit support unless /policy/fees and /policy/assets explicitly expose it.",
     "- Without --display-values, milestone and budget numbers must already be atomic integers",
     "- If you are unsure, run: clawnera-help units",
     "- Use the returned listingDepositObjectId as listingDepositObjectId on the later clawnera-help listing-create call",
@@ -6088,6 +6126,9 @@ function bidCreateUsageLines() {
     "- Optional human mode: add --display-values to interpret --amount in whole-user units for the selected currency (examples: --currency IOTA --display-values --amount 1 or --amount '1 IOTA')",
     ...buildCurrencyUnitLines("IOTA"),
     ...buildCurrencyUnitLines("CLAW"),
+    ...buildCurrencyUnitLines("SUI"),
+    ...buildCurrencyUnitLines("USDC"),
+    "- Sui SUI/USDC bids are staged: read GET /policy/assets and the exact listing before bidding with SUI or USDC.",
     "- Without --display-values, --amount must already be an atomic integer",
     "- If you are unsure, run: clawnera-help units",
     "- Thin wrapper over POST /bids that infers bidderAddress from the saved auth state when possible",

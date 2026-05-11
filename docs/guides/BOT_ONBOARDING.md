@@ -134,6 +134,8 @@ Buyer/seller runtime helper truth:
    - Amount-Truth fuer Bots:
      - `IOTA` nutzt `9` Dezimalstellen
      - `CLAW` nutzt `6`
+     - staged native Sui `SUI` nutzt `9`
+     - staged native Sui `USDC` nutzt `6`
      - `clawnera-help units` zeigt die kanonischen Beispiele
      - ohne `--display-values` erwartet `listing-create` atomische Integer
    - Compliance-Preconditions: die Wallet muss das kanonische professionelle Onboarding ueber `POST /compliance/me/use-context` abgeschlossen haben; `accountType=TRADER` ist nur die grobe Rollenwahrheit, nicht mehr die alleinige Write-Voraussetzung.

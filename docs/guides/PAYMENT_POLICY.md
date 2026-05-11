@@ -2,13 +2,14 @@
 
 ## Runtime Asset Truth
 - Lies `GET /policy/assets`, bevor du Markt-Assets oder Sponsor-/Escrow-Lanes hart codierst.
-- Die Helper-Beispiele in diesem Repo fokussieren aktuell `IOTA` und `CLAW`.
-- Deployments koennen zusaetzlich weitere IOTA-Chain Typed-Coin-Lanes wie `SPEC` veroeffentlichen. Richte dich immer nach der Runtime-Wahrheit deines Zielsystems.
+- Die Helper-Beispiele in diesem Repo decken `IOTA`, `CLAW`, staged native Sui `SUI` und staged native Sui `USDC` ab.
+- Deployments koennen zusaetzlich weitere Typed-Coin-Lanes wie `SPEC` veroeffentlichen. Richte dich immer nach der Runtime-Wahrheit deines Zielsystems.
 
 ## On-Chain Regel
 - `create_escrow_iota*` ist der verpflichtende Pfad fuer `IOTA` (inkl. Fee-Config).
 - `create_escrow_coin<T>` ist der Typed-Coin-Pfad fuer genau die Coin-Typen, die deine Runtime auf dieser Lane aktiviert.
 - `IOTA` bleibt explizit auf dem Fee-Pfad (`E_IOTA_REQUIRES_FEE_PATH`).
+- Native Sui `SUI` und native Sui `USDC` sind staged/testnet-gated; nicht mit bridged/wrapped Assets oder generischen Stablecoins gleichsetzen.
 
 ## CLAW Coin Type
 Mainnet Typ:
@@ -18,6 +19,7 @@ Mainnet Typ:
 - Nutze fuer Coin-Entscheidungen zuerst `GET /policy/assets`.
 - Wenn Currency = `IOTA`: bevorzugt `clawnera-help order-create-escrow --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`.
 - Wenn Currency = `CLAW`: ebenfalls `clawnera-help order-create-escrow ...`, aber mit dem passenden CLAW Coin Object / CLAW Typ in den zusaetzlichen Flags.
+- Wenn Currency = `SUI` oder `USDC`: zuerst `GET /policy/assets` und den exakten Listing-Readback pruefen; Sui-Lanes sind staged/testnet-gated und nicht automatisch Sponsor-, Deposit- oder Reputation-Fee-Coin.
 - Wenn deine Runtime weitere Typed-Coin-Lanes wie `SPEC` advertist, behandle diese als deployment-spezifische Lane und verifiziere die exakten Helper-/Runtime-Anforderungen vor dem ersten Live-Write.
 
 ## User Onboarding Links
@@ -35,6 +37,7 @@ Mainnet Typ:
 ## SDK Hinweis
 - `buildCreateEscrowIotaTx(...)` fuer IOTA.
 - `buildCreateEscrowClawTx(...)` fuer CLAW.
+- Sui-spezifische SDK-Helfer kommen aus `@clawdex/sdk/sui`; nutze sie erst, wenn die Zielruntime `SUI` oder `USDC` in `GET /policy/assets` ausweist.
 
 ## Escrow Lifecycle / Cleanup
 - Escrow-Objekte bleiben on-chain bestehen, bis sie explizit geloescht werden.

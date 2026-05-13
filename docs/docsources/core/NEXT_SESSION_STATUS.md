@@ -1,4 +1,4 @@
-# Next Session Status (2026-05-12)
+# Next Session Status (2026-05-13)
 
 ## Purpose
 
@@ -15,37 +15,197 @@ Detailed historical evidence stays in `docs/reports/` and git history.
 
 ## Current Sui Testnet Parity Dev Note
 
-`SUI-PARITY-06d` freshly published the current Sui testnet Settlement-Core
-line after adding deadline-extension parity. Current testnet Foundation remains
+Pro final-audit remediation status on 2026-05-13: `SUI-PARITY-33` has the
+critical source fixes implemented, locally verified, freshly published to Sui
+testnet, and re-seeded for native Sui USDC lanes. Dispute reveal/challenge
+timing, reviewer reputation/stake gating, order-escrow fee/invariant parity,
+and milestone fee parity are repaired and covered by focused tests. Mainnet
+publish prep is now blocked by final testnet soak/live product-route depth and
+the remaining package-facing cleanup, especially external
+`clawnera-bot-market` dual-chain runtime depth and any deliberate public API
+field-name retirement. It is no longer blocked by the four Pro P0 contract
+findings.
+
+`SUI-PARITY-35` current-line product-route soak has started on this same line.
+Native Sui-USDC create/release route planning plus external execution is green
+with final escrow `status=2/funds=0`. Typed Sui-USDC dispute route replay now
+uses real reviewer `ReputationProfile` objects, positive reviewer reward, and
+live `reviewer_min_stake_sui`; escrow create, typed dual-bond init/fund,
+reviewer registration, open-dispute, three accepts, three commits, and three
+reveals all executed externally on Sui testnet. Finalize is intentionally not
+complete yet because the repaired Worker now returns `409
+dispute_reveal_window_open` until the current long reveal/challenge windows
+close. Current readback is case `state=2`, bond `state=1`, escrow `status=3`.
+Resume full finalize/resolve after the window elapses or with an explicitly
+separate short-window package; do not treat the old early-finalize behavior as
+a success criterion.
+
+`SUI-PARITY-33` supersedes the earlier `SUI-PARITY-32` Sui testnet package
+line for current testnet pointer truth. Current Sui testnet Foundation is
+`0x88a1f3b391cb5c5f5c3618c1bf40d66d1429585060b288055c149fd77d500092`;
+current Settlement-Core is
+`0x0aac0121259ab978c9c648c219ed9bc44a6879b8764de711b3ac2d9ffbe8c5a4`.
+The current shared objects are GovernanceConfig
+`0x4a5e426515a008ad043f17d0ed1cc8f106ac3d6f865263ca49ac2d257bc1cb92`,
+DisputeQuorumConfig
+`0xb1e185e557267c72c998632e4d86773ceac431c5e3b00cfd34ec29c5d9537163`,
+AdminCap `0x1322d7a08b15d482991bc3f78fcf30105db7b7d8d1d5f0862edc5568e2c2dbd6`,
+ArbCap `0x4748e398f9c117b634c04c2ff9e841faea325750a18fb2ca220f3134acbd392e`,
+TreasuryCap `0x9d3befb5234330e78ef5bb07045d371ab482be30839143c3abe20812194e6ffa`,
+FeeConfig `0xbb1dca41093fcda461553a4a11b577a8d622d86f99bfa5f203e24b3d15347410`,
+Dispute ReviewerRegistry
+`0x7c2b4557924b053ca6dd4c5f9f50071a0bb8b435c8aa751efa1830b951407067`,
+ReviewRegistry
+`0x0b4ac60edede7dd21f0100184227e8f414acf9c9d9248b9880dfc64d746a053d`,
+ListingDepositConfig
+`0x2161051efe27b254acf25c68207791de427d19508c2822d7cd50848089c7cbfb`,
+ReputationFeeConfig
+`0x075d6dad6d7936e82fecb0e0ef09afe20cd1b742d1f76b93a8a3039285c5c859`,
+and DeadlineExtensionRegistry
+`0x94c73b34567ffef2d38c548d978c12fd70a5f9f1e6123a1736d4e98f8376a640`.
+
+`SUI-PARITY-26` opened same-asset typed Sui-USDC dispute-bond support while
+keeping reviewer-stake collateral closed. The Foundation now reports native
+Circle Sui USDC as a supported order-payment and same-asset dispute-bond typed
+asset; Settlement-Core exposes typed bond init/fund/cancel/open/finalize/
+fallback paths and distributes configured bond pool payouts for both native and
+typed paths. Focused local checks before publish were green: Foundation Move
+`50/50`, Settlement Move `96/96`, SDK Sui dispute/quorum builder tests,
+SDK build/typecheck, API coin-lane profile/CLI tests, API typecheck, and Sui
+testnet publish dry-run. The combined unpublished-dependency publish still hits
+Sui object-size limits, so the accepted operational route remains split publish
+in dependency order: Foundation first, Settlement second.
+
+The current `SUI-PARITY-33` fresh Sui testnet publish succeeded on
+2026-05-13. Foundation tx digest is
+`J4JxfBuL7ycCF588nKhQhGak2RciVNFBQWmQyZFQuJHH`; Settlement tx digest is
+`38ocwpwE7XSSu8bGVS4nyFQsxYbsXvn27VVJ9L8QpGTF`. Repo `Published.toml`,
+API/Web staging wrangler pointers, SDK/API live test defaults, and current
+operator docs are rotated to this line. Cloudflare runtime deploy was not run
+in this closeout. Native Sui-USDC payment-core lanes and the typed same-asset
+dispute-bond lane are re-seeded on the fresh line with minimum-start values:
+payment listing/bid/order are enabled and the same-asset typed dispute bond is
+enabled with exact `1000` minor USDC min/max. The Sui typed smoke helper
+confirms this as a profile/lane-capability proof; Sui commit-style smoke
+remains intentionally blocked by the helper.
+`SUI-PARITY-27` then closes the API-route seam: `/orders/:id/dispute-bond/fund`
+now returns Sui typed-USDC funding tx plans, and both buyer/seller route-planned
+funding transactions executed externally on Sui testnet before safe cleanup
+cancel with final `locked=0/0`. API-side execution remains off.
+The immediate local follow-up also removes the stale typed Sui gate from
+dispute-open planning: Sui typed bonds now route to
+`open_milestone_dispute_case_entry_with_invites_typed` in focused API tests.
+`SUI-PARITY-29` then closes the next route-planned Sui-USDC typed dispute
+happy path on testnet: a native Sui-USDC order escrow and same-asset typed USDC
+dual bond were opened, three reviewers accepted/committed/revealed, the API
+finalize route planned `finalize_case_with_typed_quorum`, the route-planned
+transaction executed externally, and the bound escrow resolved with final case
+`state=3`, bond `state=2`, escrow `status=4`, and escrow `funds=0`.
+The stale untyped finalize-route seam found during the first live attempt is
+fixed in Worker/API code and locally covered by focused route plus Worker tests.
+Cloudflare API staging is deployed with the finalize fix and the current
+Sui runtime-policy sync; `/health`, `/ready`, and `monitor:http` are green.
+Cloudflare staging now exposes USDC as a runtime `disputeBondPrincipal`, with
+no USDC fallback to native SUI in `/policy/assets`, and `liveAssets.USDC`
+reports `disputeBond=true` when the current Sui runtime lane is active.
+Current staging versions are API
+`bb9fcc71-af4d-48de-a573-480d3c1523fc` and Web
+`2d43d5f7-6389-4d7c-b573-f7ca96650c3b`.
+`SUI-PARITY-30` audited the current Sui source public/entry surface
+against the IOTA split contract surface. The audit found and fixed one
+shared hardening gap: disabled typed dispute-bond lanes now reject typed bond
+creation before any bond object is created, not only at funding/open time.
+The fix is applied in both Sui and IOTA current source and is covered by
+regression tests. Local source verification is green: Sui Foundation `50/50`,
+Sui Settlement `97/97`, IOTA Settlement `276/276`, API typecheck and dispute
+route tests, SDK Sui surface tests, and `git diff --check`. The hardened
+Sui Settlement-Core was freshly published again in `SUI-PARITY-32` after the
+direct `dispute_quorum` open-helper surface was narrowed and SDK/API routing was
+retargeted through `order_escrow`. Testnet publish tx digest is
+`GUkHZmraoRpiUyUwc3n2jNdMw2MXtCsiFWJ518Ntzcju` and package is
+`0x43e10ee50aa3489ac44149b91c846f21dd219b8513cb906ea1a01b619c4f9753`.
+Runtime pointer rotation, native Sui-USDC payment/dispute lane reseed, current
+line route-planned Sui-USDC create/release, full typed Sui-USDC dispute route
+E2E, Cloudflare API/Web staging deploy, public policy readback, and Web copy
+readback are complete and green. On-chain normalized ABI readback confirms the
+direct `dispute_quorum::open_milestone_dispute_case_entry*` helpers are
+non-entry `Friend` functions, while the route path works through
+`order_escrow` wrappers.
+
+The previous `SUI-PARITY-23` through `SUI-PARITY-25` reports remain historical
+proofs for the prior line: native Sui-USDC route-planned create/release,
+Cloudflare staging rollout, broad SDK/API live regression, mailbox, milestone,
+deadline extension, listing/reputation, reviews, dispute quorum, and event
+source readbacks. They are not current package/object pointer truth after
+`SUI-PARITY-26`.
+
+Evidence:
+
+- `docs/reports/sui-parity-21-testnet-fee-lane-publish-20260513T062506Z/`
+- `docs/reports/sui-parity-21-testnet-fee-lane-seed-20260513T062703Z/`
+- `docs/reports/sui-parity-22-sui-coin-lane-cli-live-20260513T063840Z/`
+- `docs/reports/sui-parity-23-current-line-usdc-lifecycle-20260513T070519Z/`
+- `docs/reports/sui-parity-23-current-line-usdc-lifecycle-20260513T070305Z/`
+- `docs/reports/sui-parity-24-current-line-live-regression-20260513T072333Z/`
+- `docs/reports/sui-parity-25-settlement-current-line-testnet-publish-20260513T101757Z/`
+- `docs/reports/sui-parity-25-current-line-usdc-lifecycle-20260513T102753Z/`
+- `docs/reports/sui-parity-26-typed-dispute-bond-testnet-dry-run-20260513T110830Z/`
+- `docs/reports/sui-parity-26-typed-dispute-bond-testnet-publish-20260513T111347Z/`
+- `docs/reports/sui-parity-26-faucet-gas-collection-20260513T112507Z/`
+- `docs/reports/sui-parity-26-lane-reseed-20260513T113030Z/`
+- `docs/reports/sui-parity-26-current-line-usdc-lifecycle-20260513T113206Z/`
+- `docs/reports/sui-parity-26-cloudflare-staging-policy-fix-20260513T114314Z/`
+- `docs/reports/sui-parity-26-current-line-usdc-typed-dispute-bond-smoke-20260513T115901Z/`
+- `docs/reports/sui-parity-27-usdc-dispute-bond-route-funding-20260513T120708Z/`
+- `docs/reports/sui-parity-28-typed-dispute-open-route-local-20260513T121114Z.md`
+- `docs/reports/sui-parity-29-usdc-typed-open-dispute-route-e2e-20260513T122717Z/`
+- `docs/reports/sui-parity-29-cloudflare-staging-finalize-fix-20260513T123836Z/`
+- `docs/reports/sui-parity-30-current-source-surface-audit-20260513T124309Z/`
+- `docs/reports/sui-parity-30-testnet-settlement-republish-20260513T125226Z/`
+- `docs/reports/sui-parity-31-iota-sui-function-surface-audit-20260513T132500Z/`
+- `docs/reports/sui-parity-32-testnet-direct-open-hardening-publish-20260513T134215Z/`
+- `docs/reports/sui-parity-33-pro-audit-remediation-testnet-publish-20260513T170700Z/`
+- `docs/reports/sui-parity-35-current-line-product-soak-20260513T183349Z/usdc_create_release/`
+- `docs/reports/sui-parity-35-current-line-product-soak-20260513T185013Z/typed_usdc_dispute_e2e/`
+
+`SUI-PARITY-12` below is retained as predecessor context, not current pointer
+truth. It freshly published the earlier Sui testnet Settlement-Core
+line after adding admin/governance parity. That older testnet Foundation was
 `0x239f875829676a77dfe6f124bc6fa9095e390e8dbfc4413641148a67d228b9a7`
 from tx `2U5jtThta7yuNtrboXspc6Aa2RmLcCVYmN2Rr1DTLnbj`, with UpgradeCap
 `0xaa6a9a822b38fa2830f1433a0b30451303f6b0a0d42253a2fd66e5555f206041`.
-Current testnet Settlement-Core is
-`0x37a28604c15dc061de2b013d40771c012b70d5816f306053c797a82c85226250`
-from tx `2MzPi7ScXEiTmWdbCrps3RgeRfww43zv1XVSMnhuSFtB`, with UpgradeCap
-`0x2ddd3a713e0666106c5f1e1c2ee65ebfe861b3998b187ce628145a527282bd84`,
+That older testnet Settlement-Core was
+`0xf7e91066fec7afbe1f9f37bbcdf22d80c3ed03df8294e1f59fb162608c7afa3e`
+from tx `5CMXXQkEgnG7cV582C4tXiZ2yuAV6smv5VKu2CnHwDuH`, with UpgradeCap
+`0x9d32914f1cd4a0a0f9683c1b1b5875ca737a7f82e939fd062b973103b9d649c0`,
 GovernanceConfig
-`0x34151a2b7400d66722971cefe4fba1ed08f5c53d3b07079f276541ca08dc2f4d`,
-AdminCap `0x6badc5bc57f861568541a5b9d7d587438d0817a628cd2f1df72ed3b658c20576`,
+`0x1502640f7d767304631c6bb64b53cafb72a1e7727181751532d4ce2fbbb57e20`,
+AdminCap `0x3398c277e04e6822f8468c0d9745f24a5b3ed284b03137642108a142c1a4b37c`,
 TreasuryCap
-`0x97679e671ef5be42cd83e12634e8613f06102963c4348702d4981fd702d22306`,
-ArbCap `0x6e0d65654a5bd6e6aa763167040ad03c216ba3f44b63346d9a2fdc5810b001a7`,
+`0x670d4127410f2f2b70d97559ab34c1b8597b4ee0e305ad622f067755d2a7156c`,
+ArbCap `0xb8c7a43145750e53465ae960ae0e33fac9758e6d3f144f58cd867774ff91e27d`,
 DisputeQuorumConfig
-`0x104bc3d50920fb82a934f9383c96980a195c1186e85ec22863bd779c10feae92`,
+`0xae0c7a166f82b639693e4fcf5b1d50126a6d7ec29c64ef7b4de1f5fed88380f0`,
 ReviewerRegistry
-`0xc90a8f9ea87886a80adde7ed3a0b7e4b56915fb92a0f6d31283f6805b5637ffe`,
+`0x83307ba1f58e0cfbaaffbd765d5c0efc7b17450d48a8792e8b0aa6031a91f099`,
 ListingDepositConfig
-`0x434ccbe5b0bf3ca033048679591ec39d588b8662c388874da42e1f44fe4231d3`,
+`0xa295c042e9c784e8f41e122112b892aa2b90d70959a754e6569414fb86adc1bf`,
 DeadlineExtensionRegistry
-`0x66787302bd8a706712df16ef6fe5b0365d818bf6abb1e540ac75c59f32926b66`,
+`0x60f70086410a9d4d5dfef746b4c955fd1af2b7b8f1f57ececabec8d11219f836`,
 and ReputationFeeConfig
-`0xafe55f98853c4c211c0b8396c790f5dded95dcb763bfe0eb362c9dc700559c54`.
+`0x74cce72c9694db7ed80304c9b1471216e9b99f7a6e21950c8e4a473d5244dc71`.
 
 The current package includes `admin`, `order_escrow`, `order_mailbox`,
 `milestone_escrow`, `manifest_anchor`, `dispute_quorum`, `listing_deposit`,
-`deadline_ext`, `reputation`, and `settlement_smoke`. Local Sui Move tests are
-green (`54/54`), focused SDK Sui deadline/export/ABI tests are green
-(`14/14`), and API/SDK typechecks are green after the fresh pointer update.
+`deadline_ext`, `reputation`, and `settlement_smoke`. The published Sui
+testnet `admin` module now has IOTA-style admin/governance parity for
+timelocked cap rotation, secondary approvals, cancellation, emergency
+rotation, incident freeze, and timelock updates. Local Sui Settlement-Core
+tests are green (`79/79`) after the admin parity port and the earlier
+IOTA-style milestone timeout positive/negative coverage. Focused SDK Sui
+deadline/export/ABI tests are green (`14/14`), and API/SDK typechecks are green
+after the fresh pointer update. Production/mainnet runtime pointers are not
+rotated by this testnet publish.
 
 Fresh Sui testnet evidence is green on the current package for native SUI
 mailbox init/post/ack/dual-close, order-escrow side paths, API
@@ -58,7 +218,26 @@ dispute-quorum SDK E2E, full native SUI dispute API route replay, read-only
 Sui event-source proof, and Sui deadline-extension propose/accept-with-escrow
 SDK live proof plus API tx-plan coverage. Evidence is under
 `docs/reports/sui-parity-04d-fresh-testnet-publish-20260512T1839Z/` and
-`docs/reports/sui-parity-06d-deadline-extension-local-20260512T2023Z/`.
+`docs/reports/sui-parity-06d-deadline-extension-local-20260512T2023Z/`;
+fresh admin/governance publish/readback evidence is under
+`docs/reports/sui-parity-12-admin-governance-testnet-publish-20260512T2230Z/`.
+Cloudflare API staging is now rotated to this package line on Worker version
+`97f86a3d-ff56-4bff-87da-5f85fd6bd0a1`; `/health`, `/ready`,
+`/policy/assets`, `/policy/fees`, `/capabilities`, and `/policy/storage` are
+green. Staging Sui policy now exposes native SUI as the managed-storage fee
+principal with `MANAGED_STORAGE_FEE_ASSET=SUI`, minimum `1`, and the current
+Sui `manifest_anchor::ManagedStorageFeePaid` event type. The managed-storage
+fee proof fallback is also Sui-aware and uses `sui_getTransactionBlock` when
+the repository has not indexed the fee event yet.
+The final staging rotation also corrected a stale staging config drift that had
+briefly redeployed old Sui testnet package ids and `MANAGED_STORAGE_FEE_ASSET=IOTA`.
+Local API parity has also been tightened and deployed to staging: Sui
+reviewer-selection checkpoints now use `sui_getLatestCheckpointSequenceNumber`
+and `sui_getCheckpoint`, reviewer receipt activation uses
+`sui_getTransactionBlock`, normalized Move function discovery uses
+`sui_getNormalizedMoveFunction`, generic package/object readback supports
+`sui_getObject`, and Sui dispute-bond guidance now selects native SUI rather
+than falling back to IOTA.
 
 Representative current-line live digests:
 
@@ -66,6 +245,8 @@ Representative current-line live digests:
 - API dispute route final resolve: `kDZ8BrzTxeANhoB7q2gWzGH3oemwaYv15qvBjHQLKVK`.
 - SDK milestone storage-fee payment: `7AbCC7SivE17QWia7TEjMrt77a8VUg31YBscbn83qijh`.
 - API milestone natural completion final approval: `DbayzuBit1apwNevqmrqTA3SDfwVUDRcn8VBnBYuBM83`.
+- API milestone timeout resolve on the short-timeout proof package:
+  `AstvgppngkbKbJhC68u3GQCWAPTBxGEZESaGuyhPnF76`.
 - Worker milestone disputed path digest: `3CCvnC7rg2x6CU2YUrtqHxUDM5xKmY9LjSNtcNkmoDak`.
 - Mailbox seller close digest: `6h3XKPgEfpGHmKz9CFa1LWzY2Ks86437XDBmToEB28hJ`.
 - Listing deposit refund digest: `29gvj96DqDs5NLigB5AZUR3hp7eGVabui4xvwW5YeVjs`.
@@ -103,12 +284,97 @@ confirms the reviewer metrics claim emits no event. Local indexer projection
 keeps replacement start internal while projecting the replacement invites into
 the existing `reviewer.invited` actor feed.
 
-Remaining Sui parity work after 04e: long-window product-package soak or
-equivalent timing evidence, positive milestone timeout execution after elapsed
-dispute time or a short-timeout package, fresh testnet publish/readback for the
-new local Sui deadline-extension module, sponsored-Sui implementation only if
-later desired, public OpenAPI/SDK/Bot/Web/Admin sync for newly live surfaces,
-broader monitor/runbook depth, and explicit mainnet-publish readiness/rotation.
+`SUI-PARITY-13` proves positive milestone timeout execution through the existing
+API route plan plus external execution on a deliberate short-timeout Sui testnet
+package. The timeout transaction emits `MilestoneDisputeForceResolved` and
+`MilestoneOrderCompleted`; final escrow readback is `order_state=1`, `locked=0`,
+and `total_released=1000`. The current product package remains unchanged with
+its production-style 30-day timeout. The same slice also syncs Web staging
+package-id env vars to the fresh Sui staging line and redeploys Web staging
+version `927e5ff2-3cc5-4bfe-aceb-cba42ae77a16`; `/support/sui`,
+`/how-it-works`, and the Web proxy `/api/policy/assets` readbacks are green.
+
+`SUI-PARITY-14` closes a monitor/runbook depth seam: Dashboard generic 5xx now
+excludes the broader Sui/IOTA classified on-chain-RPC and runtime/policy gate
+codes, `dashboardCli` re-exports the taxonomy expected by tests, and the HTTP /
+Dashboard runbooks name the Sui mailbox, storage-fee, reputation, reviewer,
+package/config, and canary-gate failure classes. Focused monitor tests are
+`23/23` green and API `tsc --noEmit` is green. Evidence is under
+`docs/reports/sui-parity-14-monitor-taxonomy-depth-20260512T2334Z/`.
+
+`SUI-PARITY-15` proves dispute replacement timing on the current Sui testnet
+product package line, not the earlier short-window package. The live API-route
+test waited past the real 20-minute reviewer-accept window, planned and
+externally executed `start_replacement_round_with_invites`, completed
+replacement reviewer acceptance, commit/reveal/finalize, claimed reviewer
+metrics, and read back final case/bond object state. Evidence is under
+`docs/reports/sui-parity-15-product-dispute-replacement-soak-20260512T2340Z/`.
+
+`SUI-PARITY-16` adds no-mutation Sui mainnet readiness evidence. It re-reads
+the already published fresh Sui mainnet Foundation and Settlement-Core package
+objects plus UpgradeCaps, confirms both packages are immutable and both
+UpgradeCaps remain owned by the expected publisher address, removes remaining
+Sui `vector::empty` deprecation usage, preserves `dynamic_field::exists_` as
+an explicit pinned-framework compatibility seam, and proves Foundation `50/50`
+plus Settlement-Core `79/79` tests with ephemeral mainnet dry-run success under
+`--warnings-are-errors`. Live read-only HTTP and Dashboard monitor smokes are
+green with alert count `0`, generic `5xx=0`, on-chain RPC unavailable `0`, and
+runtime policy gates `0`. Evidence is under
+`docs/reports/sui-parity-16-mainnet-readiness-preflight-20260513T0008Z/`.
+
+`SUI-PARITY-17` closes local public-helper drift after the SDK/API/Web Sui
+surface widened: SDK/Web assertions are synced, `clawnera-bot-market` now
+recognizes Sui unsigned transaction byte-plan responses, can dry-run them
+through Sui JSON-RPC, writes returned bytes via `--tx-bytes-out`, and stops
+`tx-plan-execute` with an explicit Sui-wallet-signing requirement instead of
+falling into the IOTA tx-builder path. Bot-market `release:check` is green.
+This was not a production deploy: live `/policy/assets` still keeps native
+SUI deposit/reputation/collateral/managed-storage lanes closed and native Sui
+USDC limited to order-bound escrow lanes. Evidence is under
+`docs/reports/sui-parity-17-public-helper-byte-plan-sync-20260513T004205Z.md`.
+
+`SUI-PARITY-18` adds the current-line Sui mainnet publish path for the
+post-admin/governance Settlement-Core source tree. The new
+`scripts/sui-current-line-publish.sh` uses temporary package copies, strips the
+target-network `Published.toml` entry only in that temp tree, runs
+Foundation/Settlement tests with `--warnings-are-errors`, and captures
+Foundation plus Settlement dry-runs without mutating repo package metadata. The
+dry-run confirms the current Settlement-Core publish would create the missing
+Sui mainnet `GovernanceConfig`, `AdminCap`, `ArbCap`, `TreasuryCap`,
+`DeadlineExtensionRegistry`, `DisputeQuorumConfig`, `ReviewerRegistry`,
+`ListingDepositConfig`, `ReputationFeeConfig`, and `UpgradeCap` objects. Current
+mainnet gas is only `0.62642125 SUI`; the estimated combined publish upper
+bound is `0.8135956 SUI`, so actual publish is intentionally blocked until the
+publisher address is topped up above the `0.9 SUI` script safety floor.
+Evidence is under
+`docs/reports/sui-parity-18-script-dry-run-r3-20260513T005805Z/`.
+
+Remaining Sui parity work after 18: top up the Sui mainnet publisher to at
+least `0.9 SUI` available gas before running publish mode, then rotate
+production/runtime pointers deliberately after readback. The true 24h+30m
+product-package platform
+fallback soak or equivalent deliberately configured testnet timing proof,
+sponsored-Sui implementation only if later desired, deliberate Admin-product
+exposure only if needed, longer live monitor soak / durable DB replay depth,
+and explicit mainnet runtime/product rotation beyond the already published
+package line.
+
+`SUI-PARITY-10` now adds Cloudflare API staging runtime proof for the newest
+Sui testnet package/surface set on Worker version
+`dc42cd10-6dc4-4d8d-ab98-bbfe6b99a690@100`. That proof also found and fixed a
+Sui config fallback bug where legacy IOTA fulfillment/ops package ids could
+leak into Sui policy readback. Final staging `/health`, `/ready`,
+`/policy/assets`, `/policy/fees`, `/capabilities`, and HTTP monitor evidence
+is green under
+`docs/reports/sui-parity-10-cloudflare-staging-runtime-20260512T2130Z/`.
+`SUI-PARITY-11` closed local Sui admin/governance source/test parity against
+IOTA with matching admin public/package function inventory (`36/36`) and
+Sui Settlement-Core tests `79/79` green; evidence is under
+`docs/reports/sui-parity-11-admin-governance-20260512T2200Z/`.
+`SUI-PARITY-12` then freshly published that admin parity on Sui testnet,
+read back the new package/config/cap objects, and rotated Cloudflare API
+staging to the fresh line with Sui-native fee, asset-lane, and storage-policy
+readback green.
 Typed Sui-USDC dispute bond/reviewer stake remains closed until explicit
 collateral economics are implemented and live-proven.
 
@@ -116,6 +382,9 @@ collateral economics are implemented and live-proven.
 and direct SDK builders are green for object-bound propose, accept-with-escrow,
 reject, expire, and delete. The Sui design binds proposal truth to the actual
 `OrderEscrow<T>` object instead of caller-supplied parties/deadline values.
+Public OpenAPI/SDK/Bot-helper and Web copy sync is locally green for the
+currently proven Sui surfaces; expire/delete remain SDK/direct-chain
+maintenance builders only.
 
 ## Current Sui USDC Finality Note
 
@@ -731,3 +1000,7 @@ Local `STBL-SUI-USDC-PRE-TESTNET-INTENSE-01m` evidence under `docs/reports/stbl-
 ## Sui USDC Pre-Public Finality 02w Local Update
 
 `STBL-SUI-USDC-PRE-PUBLIC-TESTNET-FINALITY-02w` is local and ready for Pro review. Evidence under `docs/reports/stbl-sui-usdc-pre-public-testnet-finality-02w-20260507T132013Z/` proves read-only post-lifecycle finality after accepted `02v`: prior 02v order/escrow remain final (`COMPLETED`, `status=2/funds=0`), seller delta remains `1000`, scoped open candidates and unclosed funded escrows are `0`, Worker/runtime/health/ready/policy/capabilities are restored/green, Worker Analytics shows `121` requests / `0` errors / unexpected `5xx=0`, route-family/completed-context negatives return no tx material, stale `02v` tx material and retained `02t` guard remain quarantined/safety-only, and API typecheck/boundary/evidence audit/secret/raw-tx/`git diff --check` are green. If Pro accepts `02w`, the next honest step is a separate no-launch availability decision/preflight such as `02x`, not launch.
+
+## Sui Parity 34 Staging Soak
+
+`SUI-PARITY-34` is local after the SUI-PARITY-33 contract/runtime parity remediation. Evidence under `docs/reports/sui-parity-34-sui-parity-33-runtime-soak-20260513T173327Z/` proves the current branch passes the full predeploy release gate, then deploys Cloudflare staging API/Web with HTTP smoke and a Sui-specific synthetic route smoke green. The packet also repairs the monitor/runtime seam exposed by Sui-default staging: explicit IOTA auth remains supported for dual-chain compatibility, while `CHAIN_FAMILY=sui` synthetic runs now use Sui personal-message auth plus read-only `/health`, `/ready`, `/capabilities`, `/policy/assets`, `/policy/fees`, and actor-capability checks instead of attempting the legacy IOTA full-write journey against Sui package IDs. Staging readback confirms repository-ready health and Sui/Sui-USDC asset policy on package line `0x0aac0121259ab978c9c648c219ed9bc44a6879b8764de711b3ac2d9ffbe8c5a4`. No production deploy, no mainnet publish, no API-side Sui execution, and no custody-key movement occurred in this packet.

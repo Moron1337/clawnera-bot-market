@@ -4079,6 +4079,142 @@
         }
       }
     },
+    "/orders/{orderId}/escrow/rescue-buyer": {
+      "post": {
+        "path": "/orders/{orderId}/escrow/rescue-buyer",
+        "method": "post",
+        "operationId": "rescueBuyerOrderEscrowAfterDeadlinePlan",
+        "tags": [
+          "Orders"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "orderId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/OrderEscrowBuyerRescueRequest",
+          "schemaName": "OrderEscrowBuyerRescueRequest",
+          "requiredFields": [
+            "escrowObjectId"
+          ],
+          "optionalFields": [
+            "clockObjectId"
+          ],
+          "propertyNames": [
+            "escrowObjectId",
+            "clockObjectId"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/TxPlanResponse",
+            "schemaName": "TxPlanResponse",
+            "requiredFields": [
+              "status",
+              "txBuilder",
+              "request"
+            ],
+            "optionalFields": [
+              "txMoveCall"
+            ],
+            "propertyNames": [
+              "status",
+              "txBuilder",
+              "request",
+              "txMoveCall"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": "#/components/responses/Conflict",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
     "/orders/{orderId}/mailbox": {
       "get": {
         "path": "/orders/{orderId}/mailbox",
@@ -5200,6 +5336,149 @@
         }
       }
     },
+    "/orders/{orderId}/milestones/{milestoneId}/submit-tx-plan": {
+      "post": {
+        "path": "/orders/{orderId}/milestones/{milestoneId}/submit-tx-plan",
+        "method": "post",
+        "operationId": "submitOrderMilestonePlan",
+        "tags": [
+          "Orders"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "orderId",
+              "in": "path",
+              "required": true
+            },
+            {
+              "name": "milestoneId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/MilestoneSubmitRequest",
+          "schemaName": "MilestoneSubmitRequest",
+          "requiredFields": [
+            "submissionProofHash"
+          ],
+          "optionalFields": [
+            "submissionRef",
+            "manifest"
+          ],
+          "propertyNames": [
+            "submissionProofHash",
+            "submissionRef",
+            "manifest"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/TxPlanResponse",
+            "schemaName": "TxPlanResponse",
+            "requiredFields": [
+              "status",
+              "txBuilder",
+              "request"
+            ],
+            "optionalFields": [
+              "txMoveCall"
+            ],
+            "propertyNames": [
+              "status",
+              "txBuilder",
+              "request",
+              "txMoveCall"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": "#/components/responses/Conflict",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
     "/orders/{orderId}/milestones/{milestoneId}/artifact-manifest": {
       "get": {
         "path": "/orders/{orderId}/milestones/{milestoneId}/artifact-manifest",
@@ -5785,6 +6064,133 @@
         }
       }
     },
+    "/orders/{orderId}/milestones/{milestoneId}/accept-tx-plan": {
+      "post": {
+        "path": "/orders/{orderId}/milestones/{milestoneId}/accept-tx-plan",
+        "method": "post",
+        "operationId": "acceptOrderMilestonePlan",
+        "tags": [
+          "Orders"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "orderId",
+              "in": "path",
+              "required": true
+            },
+            {
+              "name": "milestoneId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/TxPlanResponse",
+            "schemaName": "TxPlanResponse",
+            "requiredFields": [
+              "status",
+              "txBuilder",
+              "request"
+            ],
+            "optionalFields": [
+              "txMoveCall"
+            ],
+            "propertyNames": [
+              "status",
+              "txBuilder",
+              "request",
+              "txMoveCall"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": "#/components/responses/Conflict",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
     "/orders/{orderId}/milestones/{milestoneId}/reject": {
       "post": {
         "path": "/orders/{orderId}/milestones/{milestoneId}/reject",
@@ -5922,6 +6328,144 @@
           "409": {
             "status": "409",
             "reusableResponseRef": "#/components/responses/Conflict",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/orders/{orderId}/milestones/{milestoneId}/reject-tx-plan": {
+      "post": {
+        "path": "/orders/{orderId}/milestones/{milestoneId}/reject-tx-plan",
+        "method": "post",
+        "operationId": "rejectOrderMilestonePlan",
+        "tags": [
+          "Orders"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "orderId",
+              "in": "path",
+              "required": true
+            },
+            {
+              "name": "milestoneId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": false,
+          "schemaRef": "#/components/schemas/MilestoneRejectRequest",
+          "schemaName": "MilestoneRejectRequest",
+          "requiredFields": [
+            "rejectionReasonHash"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "rejectionReasonHash"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/TxPlanResponse",
+            "schemaName": "TxPlanResponse",
+            "requiredFields": [
+              "status",
+              "txBuilder",
+              "request"
+            ],
+            "optionalFields": [
+              "txMoveCall"
+            ],
+            "propertyNames": [
+              "status",
+              "txBuilder",
+              "request",
+              "txMoveCall"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": "#/components/responses/Conflict",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ErrorResponse",
             "schemaName": "ErrorResponse",
             "requiredFields": [
@@ -6618,6 +7162,7 @@
             "reputationProfileObjectId",
             "transportType",
             "transportPubkeyHex",
+            "minCaseRewardNative",
             "minCaseRewardIota",
             "stakeAmount",
             "clockObjectId"
@@ -6628,6 +7173,7 @@
             "reputationProfileObjectId",
             "transportType",
             "transportPubkeyHex",
+            "minCaseRewardNative",
             "minCaseRewardIota",
             "stakeAmount",
             "clockObjectId"
@@ -7270,6 +7816,7 @@
             "reviewerEntryObjectId",
             "transportType",
             "transportPubkeyHex",
+            "minCaseRewardNative",
             "minCaseRewardIota",
             "active",
             "clockObjectId"
@@ -7279,6 +7826,7 @@
             "reviewerEntryObjectId",
             "transportType",
             "transportPubkeyHex",
+            "minCaseRewardNative",
             "minCaseRewardIota",
             "active",
             "clockObjectId"
@@ -16354,6 +16902,139 @@
         }
       }
     },
+    "rescueBuyerOrderEscrowAfterDeadlinePlan": {
+      "path": "/orders/{orderId}/escrow/rescue-buyer",
+      "method": "post",
+      "tags": [
+        "Orders"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/OrderEscrowBuyerRescueRequest",
+        "schemaName": "OrderEscrowBuyerRescueRequest",
+        "requiredFields": [
+          "escrowObjectId"
+        ],
+        "optionalFields": [
+          "clockObjectId"
+        ],
+        "propertyNames": [
+          "escrowObjectId",
+          "clockObjectId"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/TxPlanResponse",
+          "schemaName": "TxPlanResponse",
+          "requiredFields": [
+            "status",
+            "txBuilder",
+            "request"
+          ],
+          "optionalFields": [
+            "txMoveCall"
+          ],
+          "propertyNames": [
+            "status",
+            "txBuilder",
+            "request",
+            "txMoveCall"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": "#/components/responses/Conflict",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
     "getOrderMailbox": {
       "path": "/orders/{orderId}/mailbox",
       "method": "get",
@@ -17450,6 +18131,146 @@
         }
       }
     },
+    "submitOrderMilestonePlan": {
+      "path": "/orders/{orderId}/milestones/{milestoneId}/submit-tx-plan",
+      "method": "post",
+      "tags": [
+        "Orders"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "milestoneId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/MilestoneSubmitRequest",
+        "schemaName": "MilestoneSubmitRequest",
+        "requiredFields": [
+          "submissionProofHash"
+        ],
+        "optionalFields": [
+          "submissionRef",
+          "manifest"
+        ],
+        "propertyNames": [
+          "submissionProofHash",
+          "submissionRef",
+          "manifest"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/TxPlanResponse",
+          "schemaName": "TxPlanResponse",
+          "requiredFields": [
+            "status",
+            "txBuilder",
+            "request"
+          ],
+          "optionalFields": [
+            "txMoveCall"
+          ],
+          "propertyNames": [
+            "status",
+            "txBuilder",
+            "request",
+            "txMoveCall"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": "#/components/responses/Conflict",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
     "getMilestoneArtifactManifest": {
       "path": "/orders/{orderId}/milestones/{milestoneId}/artifact-manifest",
       "method": "get",
@@ -18022,6 +18843,130 @@
         }
       }
     },
+    "acceptOrderMilestonePlan": {
+      "path": "/orders/{orderId}/milestones/{milestoneId}/accept-tx-plan",
+      "method": "post",
+      "tags": [
+        "Orders"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "milestoneId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/TxPlanResponse",
+          "schemaName": "TxPlanResponse",
+          "requiredFields": [
+            "status",
+            "txBuilder",
+            "request"
+          ],
+          "optionalFields": [
+            "txMoveCall"
+          ],
+          "propertyNames": [
+            "status",
+            "txBuilder",
+            "request",
+            "txMoveCall"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": "#/components/responses/Conflict",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
     "rejectOrderMilestone": {
       "path": "/orders/{orderId}/milestones/{milestoneId}/reject",
       "method": "post",
@@ -18157,6 +19102,141 @@
         "409": {
           "status": "409",
           "reusableResponseRef": "#/components/responses/Conflict",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "rejectOrderMilestonePlan": {
+      "path": "/orders/{orderId}/milestones/{milestoneId}/reject-tx-plan",
+      "method": "post",
+      "tags": [
+        "Orders"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "milestoneId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": false,
+        "schemaRef": "#/components/schemas/MilestoneRejectRequest",
+        "schemaName": "MilestoneRejectRequest",
+        "requiredFields": [
+          "rejectionReasonHash"
+        ],
+        "optionalFields": [],
+        "propertyNames": [
+          "rejectionReasonHash"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/TxPlanResponse",
+          "schemaName": "TxPlanResponse",
+          "requiredFields": [
+            "status",
+            "txBuilder",
+            "request"
+          ],
+          "optionalFields": [
+            "txMoveCall"
+          ],
+          "propertyNames": [
+            "status",
+            "txBuilder",
+            "request",
+            "txMoveCall"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": "#/components/responses/Conflict",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ErrorResponse",
           "schemaName": "ErrorResponse",
           "requiredFields": [
@@ -18834,6 +19914,7 @@
           "reputationProfileObjectId",
           "transportType",
           "transportPubkeyHex",
+          "minCaseRewardNative",
           "minCaseRewardIota",
           "stakeAmount",
           "clockObjectId"
@@ -18844,6 +19925,7 @@
           "reputationProfileObjectId",
           "transportType",
           "transportPubkeyHex",
+          "minCaseRewardNative",
           "minCaseRewardIota",
           "stakeAmount",
           "clockObjectId"
@@ -19468,6 +20550,7 @@
           "reviewerEntryObjectId",
           "transportType",
           "transportPubkeyHex",
+          "minCaseRewardNative",
           "minCaseRewardIota",
           "active",
           "clockObjectId"
@@ -19477,6 +20560,7 @@
           "reviewerEntryObjectId",
           "transportType",
           "transportPubkeyHex",
+          "minCaseRewardNative",
           "minCaseRewardIota",
           "active",
           "clockObjectId"
@@ -25705,6 +26789,7 @@
         "reputationProfileObjectId",
         "transportType",
         "transportPubkeyHex",
+        "minCaseRewardNative",
         "minCaseRewardIota",
         "stakeAmount",
         "clockObjectId"
@@ -25716,6 +26801,7 @@
         "reputationProfileObjectId",
         "transportType",
         "transportPubkeyHex",
+        "minCaseRewardNative",
         "minCaseRewardIota",
         "stakeAmount",
         "clockObjectId"
@@ -25728,6 +26814,7 @@
         "reviewerEntryObjectId",
         "transportType",
         "transportPubkeyHex",
+        "minCaseRewardNative",
         "minCaseRewardIota",
         "active",
         "clockObjectId"
@@ -25738,6 +26825,7 @@
         "reviewerEntryObjectId",
         "transportType",
         "transportPubkeyHex",
+        "minCaseRewardNative",
         "minCaseRewardIota",
         "active",
         "clockObjectId"
@@ -27334,6 +28422,19 @@
       ],
       "optionalFields": [
         "bondObjectId",
+        "clockObjectId"
+      ]
+    },
+    "OrderEscrowBuyerRescueRequest": {
+      "name": "OrderEscrowBuyerRescueRequest",
+      "propertyNames": [
+        "escrowObjectId",
+        "clockObjectId"
+      ],
+      "requiredFields": [
+        "escrowObjectId"
+      ],
+      "optionalFields": [
         "clockObjectId"
       ]
     },

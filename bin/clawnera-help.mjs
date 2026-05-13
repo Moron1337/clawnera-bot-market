@@ -8761,13 +8761,21 @@ function mergeChainConfigWithReviewerRuntime(chainConfig, reviewerRuntime) {
   );
   const runtimeReviewerRegistryObjectId = normalizeIotaAddress(reviewerRuntime.reviewerRegistryObjectId || "");
   let runtimeReviewerMinStakeIota = 0n;
+  let runtimeReviewerMinStakeNative = 0n;
   if (
+    reviewerRuntime.reviewerMinStakeNative !== undefined &&
+    reviewerRuntime.reviewerMinStakeNative !== null &&
+    /^[0-9]+$/.test(String(reviewerRuntime.reviewerMinStakeNative).trim())
+  ) {
+    runtimeReviewerMinStakeNative = BigInt(String(reviewerRuntime.reviewerMinStakeNative).trim());
+  } else if (
     reviewerRuntime.reviewerMinStakeIota !== undefined &&
     reviewerRuntime.reviewerMinStakeIota !== null &&
     /^[0-9]+$/.test(String(reviewerRuntime.reviewerMinStakeIota).trim())
   ) {
-    runtimeReviewerMinStakeIota = BigInt(String(reviewerRuntime.reviewerMinStakeIota).trim());
+    runtimeReviewerMinStakeNative = BigInt(String(reviewerRuntime.reviewerMinStakeIota).trim());
   }
+  runtimeReviewerMinStakeIota = runtimeReviewerMinStakeNative;
   if (runtimePackageId) {
     merged.packageId = runtimePackageId;
   }
@@ -8779,6 +8787,7 @@ function mergeChainConfigWithReviewerRuntime(chainConfig, reviewerRuntime) {
   }
   if (runtimeReviewerMinStakeIota > 0n) {
     merged.reviewerMinStakeIota = runtimeReviewerMinStakeIota;
+    merged.reviewerMinStakeNative = runtimeReviewerMinStakeIota;
   }
   return merged;
 }
@@ -10364,23 +10373,26 @@ async function runReviewerRegister(commandArgs) {
     }
     const keyRecord = transportKeyMaterial.keyRecord;
 
-    const body = {
+    const minCaseRewardNative =
+      options["min-case-reward-native"] !== undefined
+        ? parsePositiveBigIntOption(options["min-case-reward-native"], "min_case_reward_native").toString()
+        : options["min-case-reward-iota"] !== undefined
+          ? parsePositiveBigIntOption(options["min-case-reward-iota"], "min_case_reward_iota").toString()
+          : "1";
+    let body = {
       reviewerRegistryObjectId: chainConfig.reviewerRegistryObjectId,
       disputeQuorumConfigObjectId: chainConfig.disputeQuorumConfigObjectId,
       reputationProfileObjectId,
       transportType: parseU8Option(options["transport-type"], "transport_type", 0),
       transportPubkeyHex: keyAgreementPublicKeyHex(keyRecord.publicKeyMultibase),
-      minCaseRewardIota:
-        options["min-case-reward-iota"] !== undefined
-          ? parsePositiveBigIntOption(options["min-case-reward-iota"], "min_case_reward_iota").toString()
-          : "1",
+      minCaseRewardNative,
       stakeAmount:
         options["stake-amount"] !== undefined
           ? parsePositiveBigIntOption(options["stake-amount"], "stake_amount").toString()
-          : chainConfig.reviewerMinStakeIota.toString(),
+          : (chainConfig.reviewerMinStakeNative ?? chainConfig.reviewerMinStakeIota).toString(),
     };
 
-    const planCall = await callApiRoute({
+    let planCall = await callApiRoute({
       method: "POST",
       rawPath: "/reviewers/register",
       options: {
@@ -10389,6 +10401,22 @@ async function runReviewerRegister(commandArgs) {
       },
       timeoutMs,
     });
+    if (!planCall.result.ok && planCall.result.status === 400 && planCall.result.body?.error === "invalid_request") {
+      body = {
+        ...body,
+        minCaseRewardIota: body.minCaseRewardNative,
+      };
+      delete body.minCaseRewardNative;
+      planCall = await callApiRoute({
+        method: "POST",
+        rawPath: "/reviewers/register",
+        options: {
+          ...options,
+          body: JSON.stringify(body),
+        },
+        timeoutMs,
+      });
+    }
     if (!planCall.result.ok) {
       return {
         ok: false,
@@ -10548,23 +10576,26 @@ async function runReviewerUpdate(commandArgs) {
     }
     const keyRecord = transportKeyMaterial.keyRecord;
 
-    const currentMinCaseRewardIota =
-      reviewer && reviewer.minCaseRewardIota !== undefined && reviewer.minCaseRewardIota !== null
-        ? String(reviewer.minCaseRewardIota).trim() || "1"
+    const currentMinCaseRewardNative =
+      reviewer && (reviewer.minCaseRewardNative !== undefined || reviewer.minCaseRewardIota !== undefined)
+        ? String(reviewer.minCaseRewardNative ?? reviewer.minCaseRewardIota).trim() || "1"
         : "1";
-    const body = {
+    const minCaseRewardNative =
+      options["min-case-reward-native"] !== undefined
+        ? parsePositiveBigIntOption(options["min-case-reward-native"], "min_case_reward_native").toString()
+        : options["min-case-reward-iota"] !== undefined
+          ? parsePositiveBigIntOption(options["min-case-reward-iota"], "min_case_reward_iota").toString()
+          : currentMinCaseRewardNative;
+    let body = {
       reviewerRegistryObjectId: chainConfig.reviewerRegistryObjectId,
       reviewerEntryObjectId,
       transportType: parseU8Option(options["transport-type"], "transport_type", reviewer?.transportType ?? 0),
       transportPubkeyHex: keyAgreementPublicKeyHex(keyRecord.publicKeyMultibase),
-      minCaseRewardIota:
-        options["min-case-reward-iota"] !== undefined
-          ? parsePositiveBigIntOption(options["min-case-reward-iota"], "min_case_reward_iota").toString()
-          : currentMinCaseRewardIota,
+      minCaseRewardNative,
       active: parseBooleanOption(options.active, reviewer?.active !== false),
     };
 
-    const planCall = await callApiRoute({
+    let planCall = await callApiRoute({
       method: "POST",
       rawPath: "/reviewers/update",
       options: {
@@ -10573,6 +10604,22 @@ async function runReviewerUpdate(commandArgs) {
       },
       timeoutMs,
     });
+    if (!planCall.result.ok && planCall.result.status === 400 && planCall.result.body?.error === "invalid_request") {
+      body = {
+        ...body,
+        minCaseRewardIota: body.minCaseRewardNative,
+      };
+      delete body.minCaseRewardNative;
+      planCall = await callApiRoute({
+        method: "POST",
+        rawPath: "/reviewers/update",
+        options: {
+          ...options,
+          body: JSON.stringify(body),
+        },
+        timeoutMs,
+      });
+    }
     if (!planCall.result.ok) {
       return {
         ok: false,
@@ -14313,8 +14360,8 @@ function buildChainConfigGuidance(chainConfig) {
     selectionMode: normalizeDisputeBondSelectionMode("DUAL_BOND_REQUIRED"),
     userAmountChoiceRequired: true,
     platformOperatorFunding: false,
-    currentMinPerSideAmount: chainConfig.minDisputeBondPerSideIota,
-    currentMaxPerSideAmount: chainConfig.maxDisputeBondPerSideIota,
+    currentMinPerSideAmount: chainConfig.minDisputeBondPerSideNative ?? chainConfig.minDisputeBondPerSideIota,
+    currentMaxPerSideAmount: chainConfig.maxDisputeBondPerSideNative ?? chainConfig.maxDisputeBondPerSideIota,
     defaultRequiredReviewerVotes: chainConfig.defaultRequiredReviewerVotes,
     minRequiredReviewerVotes: chainConfig.minRequiredReviewerVotes,
     maxRequiredReviewerVotes: chainConfig.maxRequiredReviewerVotes,
@@ -14346,8 +14393,8 @@ function buildOrderInitBondGuidance({
     selectionMode: normalizeDisputeBondSelectionMode(normalizedPolicy),
     userAmountChoiceRequired: true,
     platformOperatorFunding: false,
-    currentMinPerSideAmount: chainConfig.minDisputeBondPerSideIota,
-    currentMaxPerSideAmount: chainConfig.maxDisputeBondPerSideIota,
+    currentMinPerSideAmount: chainConfig.minDisputeBondPerSideNative ?? chainConfig.minDisputeBondPerSideIota,
+    currentMaxPerSideAmount: chainConfig.maxDisputeBondPerSideNative ?? chainConfig.maxDisputeBondPerSideIota,
     defaultRequiredReviewerVotes: chainConfig.defaultRequiredReviewerVotes,
     minRequiredReviewerVotes: chainConfig.minRequiredReviewerVotes,
     maxRequiredReviewerVotes: chainConfig.maxRequiredReviewerVotes,
@@ -14526,7 +14573,8 @@ function reviewerRegisterUsageLines() {
     "- Requires a local key-agreement record, a matching non-expired remote key-agreement readback, and an on-chain reputation profile for the same actor",
     "- Auto-resolves reviewer registry + dispute quorum config ids from the live chain config",
     "- Uses the actor key-agreement public key as reviewer transportPubkeyHex",
-    "- Defaults: --min-case-reward-iota 1 and --stake-amount <live reviewer_min_stake_iota>",
+    "- Defaults: --min-case-reward-native 1 and --stake-amount <live reviewer_min_stake_native>",
+    "- Legacy alias still accepted: --min-case-reward-iota <int>",
     "- Optional: --transport-type <u8> --transport-key-file <file> --transport-key-version <int> --dry-run",
     "- If transport key file/version are omitted, the helper resolves the latest non-expired remote key-agreement record and matches the local private key automatically",
     "- If key-agreement-upsert prints warning=key_agreement_readback_pending, wait until GET /users/{address}/key-agreement?keyVersion=<n> returns 200 with the same non-expired key before rerunning reviewer-register",
@@ -14581,7 +14629,8 @@ function reviewerUpdateUsageLines() {
     "- Reads the current reviewer entry, then refreshes transportPubkeyHex from the local key-agreement record for the same wallet",
     "- Stops if the same key version is not yet visible as a non-expired remote key-agreement record",
     "- Use this after `key-agreement-upsert --rotate`, after any key file replacement, or when reviewer-readable dispute evidence reports reviewer key-agreement drift",
-    "- Optional: --transport-type <u8> --transport-key-file <file> --transport-key-version <int> --min-case-reward-iota <int> --active <true|false> --dry-run",
+    "- Optional: --transport-type <u8> --transport-key-file <file> --transport-key-version <int> --min-case-reward-native <int> --active <true|false> --dry-run",
+    "- Legacy alias still accepted: --min-case-reward-iota <int>",
     "- If transport key file/version are omitted, the helper resolves the latest non-expired remote key-agreement record and matches the local private key automatically",
     "- If the actor is not registered yet, stop and run `clawnera-help reviewer-register` first"
   ];
@@ -16161,6 +16210,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`default_required_reviewer_votes=${result.chainConfig.defaultRequiredReviewerVotes}`);
     console.log(`max_required_reviewer_votes=${result.chainConfig.maxRequiredReviewerVotes}`);
     console.log(`min_required_reviewer_votes=${result.chainConfig.minRequiredReviewerVotes}`);
+    console.log(`min_dispute_bond_per_side_native=${result.chainConfig.minDisputeBondPerSideNative ?? result.chainConfig.minDisputeBondPerSideIota}`);
+    console.log(`max_dispute_bond_per_side_native=${result.chainConfig.maxDisputeBondPerSideNative ?? result.chainConfig.maxDisputeBondPerSideIota}`);
+    console.log(`reviewer_min_stake_native=${result.chainConfig.reviewerMinStakeNative ?? result.chainConfig.reviewerMinStakeIota}`);
     console.log(`min_dispute_bond_per_side_iota=${result.chainConfig.minDisputeBondPerSideIota}`);
     console.log(`max_dispute_bond_per_side_iota=${result.chainConfig.maxDisputeBondPerSideIota}`);
     console.log(`reviewer_min_stake_iota=${result.chainConfig.reviewerMinStakeIota}`);
@@ -16392,6 +16444,8 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
     console.log(`default_required_reviewer_votes=${result.chainConfig.defaultRequiredReviewerVotes}`);
     console.log(`max_required_reviewer_votes=${result.chainConfig.maxRequiredReviewerVotes}`);
+    console.log(`min_dispute_bond_per_side_native=${result.chainConfig.minDisputeBondPerSideNative ?? result.chainConfig.minDisputeBondPerSideIota}`);
+    console.log(`max_dispute_bond_per_side_native=${result.chainConfig.maxDisputeBondPerSideNative ?? result.chainConfig.maxDisputeBondPerSideIota}`);
     console.log(`min_dispute_bond_per_side_iota=${result.chainConfig.minDisputeBondPerSideIota}`);
     console.log(`max_dispute_bond_per_side_iota=${result.chainConfig.maxDisputeBondPerSideIota}`);
     printDisputeBondGuidanceLines(result.guidance);

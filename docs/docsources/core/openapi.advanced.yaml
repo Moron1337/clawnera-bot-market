@@ -372,12 +372,22 @@ paths:
                                 type: array
                                 items:
                                   type: string
+                              disputeBondUnsupportedOrderAssets:
+                                type: array
+                                items:
+                                  type: string
+                              disputeBondFallbackPrincipalByOrderAsset:
+                                type: object
+                                additionalProperties:
+                                  type: string
                             type: object
                             required:
                               - orderAssetSource
                               - disputeBond
                               - managedStorageFee
                               - legacyBothAllowedSymbols
+                              - disputeBondUnsupportedOrderAssets
+                              - disputeBondFallbackPrincipalByOrderAsset
                         type: object
                         required:
                           - runtimeModes
@@ -1961,6 +1971,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /orders/{orderId}/escrow/rescue-buyer:
+    post:
+      tags:
+        - Orders
+      operationId: rescueBuyerOrderEscrowAfterDeadlinePlan
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderEscrowBuyerRescueRequest'
+      responses:
+        '200':
+          description: Transaction plan for buyer refund after the seller deadline grace period.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          description: On-chain escrow verification temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /orders/{orderId}/mailbox:
     get:
       tags:
@@ -2332,6 +2382,51 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /orders/{orderId}/milestones/{milestoneId}/submit-tx-plan:
+    post:
+      tags:
+        - Orders
+      operationId: submitOrderMilestonePlan
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: milestoneId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MilestoneSubmitRequest'
+      responses:
+        '200':
+          description: Transaction plan for submitting a milestone on the configured settlement chain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          description: Marketplace package or governance config not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /orders/{orderId}/milestones/{milestoneId}/artifact-manifest:
     get:
       tags:
@@ -2546,6 +2641,45 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /orders/{orderId}/milestones/{milestoneId}/accept-tx-plan:
+    post:
+      tags:
+        - Orders
+      operationId: acceptOrderMilestonePlan
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: milestoneId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Transaction plan for accepting a submitted milestone on the configured settlement chain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          description: Marketplace package or governance config not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /orders/{orderId}/milestones/{milestoneId}/reject:
     post:
       tags:
@@ -2593,6 +2727,51 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /orders/{orderId}/milestones/{milestoneId}/reject-tx-plan:
+    post:
+      tags:
+        - Orders
+      operationId: rejectOrderMilestonePlan
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: milestoneId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MilestoneRejectRequest'
+      responses:
+        '200':
+          description: Transaction plan for rejecting a submitted milestone on the configured settlement chain.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TxPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          description: Marketplace package or governance config not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /orders/{orderId}/reviews:
     get:
       tags:
@@ -6395,9 +6574,15 @@ components:
           maximum: 255
         transportPubkeyHex:
           type: string
+        minCaseRewardNative:
+          type: string
+          pattern: ^[0-9]+$
+          description: Preferred chain-neutral reviewer minimum case reward.
         minCaseRewardIota:
           type: string
           pattern: ^[0-9]+$
+          deprecated: true
+          description: Legacy alias for minCaseRewardNative.
         active:
           type: boolean
         clockObjectId:
@@ -6409,8 +6594,12 @@ components:
         - reviewerEntryObjectId
         - transportType
         - transportPubkeyHex
-        - minCaseRewardIota
         - active
+      anyOf:
+        - required:
+            - minCaseRewardNative
+        - required:
+            - minCaseRewardIota
     ReviewerSelfMetricsResponse:
       properties:
         reviewerAddress:
@@ -6758,9 +6947,15 @@ components:
           maximum: 255
         transportPubkeyHex:
           type: string
+        minCaseRewardNative:
+          type: string
+          pattern: ^[0-9]+$
+          description: Preferred chain-neutral reviewer minimum case reward.
         minCaseRewardIota:
           type: string
           pattern: ^[0-9]+$
+          deprecated: true
+          description: Legacy alias for minCaseRewardNative.
         stakeAmount:
           type: string
           pattern: ^[0-9]+$
@@ -6774,8 +6969,12 @@ components:
         - reputationProfileObjectId
         - transportType
         - transportPubkeyHex
-        - minCaseRewardIota
         - stakeAmount
+      anyOf:
+        - required:
+            - minCaseRewardNative
+        - required:
+            - minCaseRewardIota
     DeadlineExtActionRequest:
       properties:
         deadlineExtRegistryObjectId:
@@ -7358,6 +7557,20 @@ components:
       additionalProperties: false
       required:
         - mailboxObjectId
+    OrderEscrowBuyerRescueRequest:
+      properties:
+        escrowObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+        clockObjectId:
+          type: string
+          minLength: 3
+          maxLength: 200
+      type: object
+      additionalProperties: false
+      required:
+        - escrowObjectId
     OrderEscrowClaimAfterDeadlineRequest:
       properties:
         escrowObjectId:
@@ -10149,12 +10362,22 @@ components:
               type: array
               items:
                 type: string
+            disputeBondUnsupportedOrderAssets:
+              type: array
+              items:
+                type: string
+            disputeBondFallbackPrincipalByOrderAsset:
+              type: object
+              additionalProperties:
+                type: string
           type: object
           required:
             - orderAssetSource
             - disputeBond
             - managedStorageFee
             - legacyBothAllowedSymbols
+            - disputeBondUnsupportedOrderAssets
+            - disputeBondFallbackPrincipalByOrderAsset
         liveAssets:
           type: array
           items:

@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Added chain-neutral reviewer economics naming in the public helper:
+  - `reviewer-register` and `reviewer-update` now prefer `minCaseRewardNative` / `--min-case-reward-native` while keeping `minCaseRewardIota` / `--min-case-reward-iota` as a compatibility fallback
+  - `chain-config` now prints native dispute-bond and reviewer-stake aliases alongside legacy IOTA-specific labels
 - Added native Sui wallet-side execution for API-returned unsigned transaction bytes:
   - `clawnera-help tx-plan-execute` now signs Sui byte plans locally with `--sui-private-key` or a matching Sui keystore entry and submits them directly to the selected Sui RPC
   - Sui execution fails closed when the signer does not match the `txPlan.sender`

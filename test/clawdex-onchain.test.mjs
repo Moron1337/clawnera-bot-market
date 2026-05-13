@@ -192,6 +192,26 @@ test("buildClawdexTxFromPlan allows bootstrap whitelist dispute open with an emp
   assert.equal(extractLastMoveCallFunction(tx), "open_milestone_dispute_case_entry");
 });
 
+test("buildClawdexTxFromPlan accepts chain-neutral reviewer minimum reward", () => {
+  const tx = buildClawdexTxFromPlan({
+    txBuilder: "disputeQuorum.registerReviewer",
+    request: {
+      packageId: addr("1"),
+      sender: addr("a"),
+      reviewerRegistryObjectId: addr("b"),
+      disputeQuorumConfigObjectId: addr("c"),
+      reputationFeeConfigObjectId: addr("d"),
+      reputationProfileObjectId: addr("e"),
+      transportType: 0,
+      transportPubkeyHex: "ab".repeat(32),
+      minCaseRewardNative: "1",
+      stakeAmount: "1",
+    },
+  });
+
+  assert.equal(extractLastMoveCallFunction(tx), "register_reviewer_entry_with_reputation_cfg");
+});
+
 test("resolveClawdexChainConfig prefers created reviewer registry object changes", async () => {
   const packageId = addr("1");
   const disputeQuorumConfigObjectId = addr("2");
@@ -215,7 +235,10 @@ test("resolveClawdexChainConfig prefers created reviewer registry object changes
               max_required_reviewer_votes: "7",
               min_dispute_bond_per_side_iota: "900000",
               max_dispute_bond_per_side_iota: "1800000",
+              min_dispute_bond_per_side_sui: "910000",
+              max_dispute_bond_per_side_sui: "1810000",
               reviewer_min_stake_iota: "1200000",
+              reviewer_min_stake_sui: "1210000",
             },
           },
         },
@@ -259,6 +282,9 @@ test("resolveClawdexChainConfig prefers created reviewer registry object changes
     assert.equal(config.defaultRequiredReviewerVotes, 5n);
     assert.equal(config.minRequiredReviewerVotes, 3n);
     assert.equal(config.maxRequiredReviewerVotes, 7n);
+    assert.equal(config.minDisputeBondPerSideNative, 910000n);
+    assert.equal(config.maxDisputeBondPerSideNative, 1810000n);
+    assert.equal(config.reviewerMinStakeNative, 1210000n);
     assert.equal(config.minDisputeBondPerSideIota, 900000n);
     assert.equal(config.maxDisputeBondPerSideIota, 1800000n);
     assert.equal(config.reviewerMinStakeIota, 1200000n);

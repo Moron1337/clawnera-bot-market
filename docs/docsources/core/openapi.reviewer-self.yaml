@@ -476,9 +476,15 @@ components:
           maximum: 255
         transportPubkeyHex:
           type: string
+        minCaseRewardNative:
+          type: string
+          pattern: ^[0-9]+$
+          description: Preferred chain-neutral reviewer minimum case reward.
         minCaseRewardIota:
           type: string
           pattern: ^[0-9]+$
+          deprecated: true
+          description: Legacy alias for minCaseRewardNative.
         active:
           type: boolean
         clockObjectId:
@@ -490,8 +496,12 @@ components:
         - reviewerEntryObjectId
         - transportType
         - transportPubkeyHex
-        - minCaseRewardIota
         - active
+      anyOf:
+        - required:
+            - minCaseRewardNative
+        - required:
+            - minCaseRewardIota
     ReviewerSelfMetricsResponse:
       properties:
         reviewerAddress:
@@ -901,9 +911,15 @@ components:
           maximum: 255
         transportPubkeyHex:
           type: string
+        minCaseRewardNative:
+          type: string
+          pattern: ^[0-9]+$
+          description: Preferred chain-neutral reviewer minimum case reward.
         minCaseRewardIota:
           type: string
           pattern: ^[0-9]+$
+          deprecated: true
+          description: Legacy alias for minCaseRewardNative.
         stakeAmount:
           type: string
           pattern: ^[0-9]+$
@@ -917,5 +933,9 @@ components:
         - reputationProfileObjectId
         - transportType
         - transportPubkeyHex
-        - minCaseRewardIota
         - stakeAmount
+      anyOf:
+        - required:
+            - minCaseRewardNative
+        - required:
+            - minCaseRewardIota

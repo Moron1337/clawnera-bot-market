@@ -7776,6 +7776,8 @@ test("reviewer-register auto-resolves the latest non-expired transport key when 
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.error, "expected_plan_failure");
     assert.equal(payload.requestBody.transportPubkeyHex, currentTransportPubkeyHex);
+    assert.equal(payload.requestBody.minCaseRewardNative, "1");
+    assert.equal(payload.requestBody.minCaseRewardIota, undefined);
     assert.equal(registerCalls, 1);
     assert.ok(requestedKeyAgreementPaths.includes(`/users/${actorAddress}/key-agreement?keyVersion=2`));
   } finally {
@@ -7963,6 +7965,8 @@ test("reviewer-update auto-resolves the latest non-expired transport key when tr
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.error, "expected_plan_failure");
     assert.equal(payload.requestBody.transportPubkeyHex, currentTransportPubkeyHex);
+    assert.equal(payload.requestBody.minCaseRewardNative, "1");
+    assert.equal(payload.requestBody.minCaseRewardIota, undefined);
     assert.equal(updateCalls, 1);
     assert.ok(requestedKeyAgreementPaths.includes(`/users/${actorAddress}/key-agreement?keyVersion=2`));
   } finally {

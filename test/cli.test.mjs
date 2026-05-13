@@ -425,6 +425,8 @@ test("reviewer register help explains onboarding prerequisites", () => {
   );
   assert.match(result.stdout, /key-agreement-upsert/);
   assert.match(result.stdout, /reputation-init/);
+  assert.match(result.stdout, /--min-case-reward-native/);
+  assert.match(result.stdout, /Legacy alias still accepted: --min-case-reward-iota/);
 });
 
 test("reviewer update help explains transport refresh usage", () => {
@@ -434,6 +436,8 @@ test("reviewer update help explains transport refresh usage", () => {
   assert.match(result.stdout, /refreshes transportPubkeyHex from the local key-agreement record/);
   assert.match(result.stdout, /key-agreement-upsert --rotate/);
   assert.match(result.stdout, /reviewer-register/);
+  assert.match(result.stdout, /--min-case-reward-native/);
+  assert.match(result.stdout, /Legacy alias still accepted: --min-case-reward-iota/);
 });
 
 test("iota prepare transfer help prints usage", () => {

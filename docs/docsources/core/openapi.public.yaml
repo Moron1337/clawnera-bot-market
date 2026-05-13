@@ -5358,9 +5358,15 @@ components:
           type: integer
         transportPubkeyHex:
           type: string
+        minCaseRewardNative:
+          type: string
+          pattern: ^[0-9]+$
+          description: Preferred chain-neutral reviewer minimum case reward.
         minCaseRewardIota:
           type: string
           pattern: ^[0-9]+$
+          deprecated: true
+          description: Legacy alias for minCaseRewardNative.
         joinedAtMs:
           type: integer
           format: int64

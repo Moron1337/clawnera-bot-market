@@ -1,3 +1,3 @@
-synced_at_utc=2026-05-13T19:12:12Z
+synced_at_utc=2026-05-13T19:48:36Z
 marketplace_source_root=/home/codex/tmp/sui-01a-chain-runtime-20260422
 claw_root=/home/codex/clawnera-bot-market/../claw

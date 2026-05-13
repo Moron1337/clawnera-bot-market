@@ -20,11 +20,13 @@ critical source fixes implemented, locally verified, freshly published to Sui
 testnet, and re-seeded for native Sui USDC lanes. Dispute reveal/challenge
 timing, reviewer reputation/stake gating, order-escrow fee/invariant parity,
 and milestone fee parity are repaired and covered by focused tests. Mainnet
-publish prep is now blocked by final testnet soak/live product-route depth and
-the remaining package-facing cleanup, especially external
-`clawnera-bot-market` dual-chain runtime depth and any deliberate public API
-field-name retirement. It is no longer blocked by the four Pro P0 contract
-findings.
+publish prep is now blocked by final testnet soak/live product-route depth,
+especially the timed full finalize/resolve proof for the current long-window
+typed Sui-USDC dispute route. The current package-facing cleanup is closed:
+the API/OpenAPI/generated SDK now prefer `minCaseRewardNative` with deprecated
+`minCaseRewardIota` compatibility, and `clawnera-bot-market@0.1.103` is
+published with the matching helper/docsync release. It is no longer blocked by
+the four Pro P0 contract findings.
 
 `SUI-PARITY-35` current-line product-route soak has started on this same line.
 Native Sui-USDC create/release route planning plus external execution is green
@@ -36,9 +38,22 @@ reveals all executed externally on Sui testnet. Finalize is intentionally not
 complete yet because the repaired Worker now returns `409
 dispute_reveal_window_open` until the current long reveal/challenge windows
 close. Current readback is case `state=2`, bond `state=1`, escrow `status=3`.
-Resume full finalize/resolve after the window elapses or with an explicitly
-separate short-window package; do not treat the old early-finalize behavior as
-a success criterion.
+A dedicated resume proof runner now reconstructs the route fixture from the
+existing guarded report and can resume only finalize/resolve after the window.
+The first resume probe under
+`docs/reports/sui-parity-35-current-line-finalize-resume-20260513T194318Z/`
+correctly re-confirmed `409 dispute_reveal_window_open` with no external Sui
+execution. Resume full finalize/resolve after the window elapses or with an
+explicitly separate short-window package; do not treat the old early-finalize
+behavior as a success criterion.
+
+The public helper/npm sync is current as of `clawnera-bot-market@0.1.103`
+(`1178f2c` in `Moron1337/clawnera-bot-market`): reviewer register/update
+helpers emit `minCaseRewardNative`, retain legacy fallback for older servers,
+parse Sui-native reviewer economics readback fields, and carry synced
+OpenAPI/generated-contract docsources from this repo. Release evidence: helper
+`npm run release:check` green, publish-surface guard green, npm `latest`
+points at `0.1.103`.
 
 `SUI-PARITY-33` supersedes the earlier `SUI-PARITY-32` Sui testnet package
 line for current testnet pointer truth. Current Sui testnet Foundation is
@@ -621,7 +636,7 @@ Local `43a` evidence under `docs/reports/stbl-sui-usdc-limited-public-beta-candi
 | Current opening rule | the explicit operator-owned `browse_only` call is now recorded on `docs/reports/launch-window-evidence-20260408T114514Z`; `09_readiness-check.json` is `machineGreen=true`, `humanReady=true`, `openEligible=true`, the sponsor layer is now narrowed to `CLAW` only, `SPONSOR_ORDER_ID_MODE=required` is live and proven, and the window should stay within `browse_only` until a later explicit `EXPAND` or `PAUSE` decision |
 | Operator reality | one human owner runs the company today; Codex can prepare, verify, and document the launch path, but does not count as the missing human acknowledgement block; the only future hard separation already planned is the pair of hardware wallets for multisig |
 | Broad-launch blockers still truly open | final hardware-backed `2-of-3` multisig cutover |
-| Helper/npm state | `clawnera-bot-market@0.1.96` is published and current |
+| Helper/npm state | `clawnera-bot-market@0.1.103` is published and current |
 | Hetzner maintenance posture | Planned Hetzner package/kernel/libc/Docker/containerd/Postgres/signer/tunnel maintenance must now enter `maintenance_public` by default, or `write_freeze` for write-only risk, before host disruption. Canonical procedure lives in `docs/HETZNER_RUNTIME_MAINTENANCE_RUNBOOK.md`; the 2026-04-30 update/reboot left the host green on kernel `6.8.0-110-generic`, no reboot-required flag, and only Ubuntu-phased `iproute2` pending |
 | Compliance runtime posture | production API is intentionally `experimental_dark` + `b2b_only`; `businessOnboarding=required_for_protected_writes`, `consumerAccounts=disabled`, `traderVerification=disabled`; do not activate `B2C` or `C2C` without a deliberate later reopen |
 | Compliance family state | `CB-01g` remains paused after the fail-closed professional-ack hardening landed live on version `e0940baf-01a7-451f-baff-4ed83545b34d`; `CB-STATE-01` is paused after state/repository canonicalization; `CB-ADMIN-01` is now Pro-approved `APPROVE_CB_ADMIN_01_CLOSE_PAUSE` after admin trader-verification approval was canonicalized, Postgres payload approval became scalar-/array-safe, and denied missing-row fallback became read-only. Do not open B2C/C2C, public compliance ABI, OpenAPI/SDK, Web/helper, Sui, or Move changes from this paused state |
@@ -907,7 +922,7 @@ Keep it frozen unless one of these happens:
 - `admin`, `portal`, `bot`, and `reviewer-self` boundary contracts are frozen
 - the admin timeout fallback route-level live canary was completed and rolled back to dark-by-allowlist cleanly
 - reliability, discovery, trust, and bot-helper families listed as paused in `docs/NEXT_FAMILY_QUEUE.md` are complete enough for now
-- the public helper/docs/npm lane is current at `clawnera-bot-market@0.1.96`
+- the public helper/docs/npm lane is current at `clawnera-bot-market@0.1.103`
 - the canonical mainnet contract upgrade is now green on `C58DdoHtRSRjxXfukU7NYDLb5uveanwzEwQaRqtvg4fP`, post-upgrade `verify-source` is green against package `0x40562f9cd23cd35e598fa2b1f57f4161498cf193cdf6bc4f0c17e237c525d014`, and `CN-01e` proved that live Cloudflare, Hetzner indexer, and signing-queue runtime are aligned to that same package-derived truth
 - the required-host listing-expiry sweep is restored on Hetzner:
   - `clawdex-listing-expiry-sweep.timer` is active/enabled

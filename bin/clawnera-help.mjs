@@ -123,11 +123,22 @@ import {
   isMissingResolveDisputeWithBindingFunctionError,
   resolveQuorumTicketFromFinalizeTx,
 } from "../lib/dispute-ticket-compat.mjs";
+import { decodeSuiPrivateKey, SIGNATURE_FLAG_TO_SCHEME } from "@mysten/sui/cryptography";
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { Secp256k1Keypair } from "@mysten/sui/keypairs/secp256k1";
+import { Secp256r1Keypair } from "@mysten/sui/keypairs/secp256r1";
+import { isValidSuiAddress, normalizeSuiAddress } from "@mysten/sui/utils";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
 const DEFAULT_CLAWNERA_API_BASE = "https://api.clawnera.com";
+const DEFAULT_SUI_RPC_URLS = Object.freeze({
+  mainnet: "https://fullnode.mainnet.sui.io:443",
+  testnet: "https://fullnode.testnet.sui.io:443",
+  devnet: "https://fullnode.devnet.sui.io:443",
+});
+const DEFAULT_SUI_KEYSTORE_PATH = path.join(os.homedir(), ".sui", "sui_config", "sui.keystore");
 const SUPPORTED_MARKET_ASSETS = Object.freeze({
   IOTA: {
     symbol: "IOTA",
@@ -170,9 +181,9 @@ const SUPPORTED_MARKET_ASSETS = Object.freeze({
       bidCurrency: true,
       orderCurrency: true,
       orderEscrowCreate: true,
-      listingDeposit: false,
-      reputationInit: false,
-      managedStorageFee: false,
+      listingDeposit: true,
+      reputationInit: true,
+      managedStorageFee: true,
       sponsorReserve: false,
       sponsorExecute: false,
     },
@@ -4995,6 +5006,327 @@ function detectTxPlanPayload(body) {
   };
 }
 
+function detectSuiTransactionBytesPayload(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return null;
+  }
+  const chainFamily = normalizeString(body.chainFamily).toLowerCase();
+  const transactionBytesBase64 = normalizeString(body.transactionBytesBase64);
+  if (chainFamily !== "sui" || !transactionBytesBase64) {
+    return null;
+  }
+  const txPlan = body.txPlan && typeof body.txPlan === "object" && !Array.isArray(body.txPlan) ? body.txPlan : null;
+  const txPlanKind = normalizeString(txPlan?.kind);
+  if (txPlanKind && txPlanKind !== "sui_ptb") {
+    return null;
+  }
+  const chainNetwork = normalizeString(body.chainNetwork).toLowerCase() || null;
+  const target = normalizeString(body.target || txPlan?.target) || null;
+  return {
+    chainFamily: "sui",
+    chainNetwork,
+    transactionBytesBase64,
+    transactionBytesSha256: normalizeString(body.sourceGuard?.transactionBytesSha256) || null,
+    txBuilder: normalizeString(body.status) || txPlanKind || "sui_ptb",
+    txPlanKind: txPlanKind || "sui_ptb",
+    target,
+    sender: normalizeString(txPlan?.sender) || null,
+    txPlan,
+    body,
+  };
+}
+
+function resolveSuiRpcUrlForHelper(options = {}, chainNetwork = "") {
+  const explicit = normalizeApiBase(options["sui-rpc-url"] || options["rpc-url"] || "");
+  if (explicit) {
+    return explicit;
+  }
+  const normalizedNetwork = normalizeString(chainNetwork || options.network).toLowerCase();
+  return DEFAULT_SUI_RPC_URLS[normalizedNetwork] || DEFAULT_SUI_RPC_URLS.mainnet;
+}
+
+async function callSuiJsonRpcForHelper(options = {}, body, chainNetwork = "") {
+  const rpcUrl = resolveSuiRpcUrlForHelper(options, chainNetwork);
+  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+  const response = await requestJson(
+    rpcUrl,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    },
+    timeoutMs,
+  );
+  if (!response.ok) {
+    throw new Error(response.error || `sui_rpc_http_${response.status}`);
+  }
+  if (response.body?.error) {
+    throw new Error(
+      typeof response.body.error?.message === "string" ? response.body.error.message : "sui_rpc_error",
+    );
+  }
+  return {
+    rpcUrl,
+    result: response.body?.result ?? null,
+  };
+}
+
+async function dryRunSuiTransactionBytes(suiTxBytesPlan, options = {}) {
+  return callSuiJsonRpcForHelper(
+    options,
+    {
+      jsonrpc: "2.0",
+      id: "clawnera-sui-dry-run-1",
+      method: "sui_dryRunTransactionBlock",
+      params: [suiTxBytesPlan.transactionBytesBase64],
+    },
+    suiTxBytesPlan.chainNetwork || "",
+  );
+}
+
+function normalizeSuiAddressOrEmpty(value) {
+  const normalized = normalizeString(value);
+  if (!normalized) {
+    return "";
+  }
+  try {
+    const address = normalizeSuiAddress(normalized);
+    return isValidSuiAddress(address) ? address : "";
+  } catch {
+    return "";
+  }
+}
+
+function suiKeypairFromParsedSecret(scheme, secretKey) {
+  if (scheme === "ED25519") {
+    return Ed25519Keypair.fromSecretKey(secretKey);
+  }
+  if (scheme === "Secp256k1") {
+    return Secp256k1Keypair.fromSecretKey(secretKey);
+  }
+  if (scheme === "Secp256r1") {
+    return Secp256r1Keypair.fromSecretKey(secretKey);
+  }
+  throw new Error("unsupported_sui_signature_scheme");
+}
+
+function suiKeypairFromSecretKey(value) {
+  const normalized = normalizeString(value);
+  if (!normalized) {
+    throw new Error("missing_sui_private_key");
+  }
+  if (normalized.startsWith("suiprivkey")) {
+    const parsed = decodeSuiPrivateKey(normalized);
+    return {
+      keypair: suiKeypairFromParsedSecret(parsed.scheme, parsed.secretKey),
+      scheme: parsed.scheme,
+    };
+  }
+
+  const decoded = Buffer.from(normalized, "base64");
+  if (decoded.length !== 33) {
+    throw new Error("invalid_sui_private_key");
+  }
+  const scheme = SIGNATURE_FLAG_TO_SCHEME[decoded[0]];
+  if (!scheme) {
+    throw new Error("unsupported_sui_signature_scheme");
+  }
+  return {
+    keypair: suiKeypairFromParsedSecret(scheme, decoded.subarray(1)),
+    scheme,
+  };
+}
+
+function collectSuiKeystoreSecrets(value) {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry, index) => {
+      if (typeof entry === "string") {
+        return [{ secretKey: entry, alias: "", index }];
+      }
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        return [];
+      }
+      const secretKey = normalizeString(
+        entry.privateKey || entry.secretKey || entry.key || entry.value || entry.encoded || entry.keystore,
+      );
+      if (!secretKey) {
+        return [];
+      }
+      return [{
+        secretKey,
+        alias: normalizeString(entry.alias || entry.name),
+        index,
+      }];
+    });
+  }
+  if (value && typeof value === "object") {
+    for (const field of ["keystore", "keys", "accounts", "entries"]) {
+      if (Array.isArray(value[field])) {
+        return collectSuiKeystoreSecrets(value[field]);
+      }
+    }
+  }
+  return [];
+}
+
+async function loadSuiKeystoreEntries(keystorePath = DEFAULT_SUI_KEYSTORE_PATH) {
+  let parsed;
+  try {
+    parsed = JSON.parse(await fs.promises.readFile(keystorePath, "utf8"));
+  } catch (error) {
+    if (error && error.code === "ENOENT") {
+      return [];
+    }
+    throw new Error("invalid_sui_keystore");
+  }
+
+  const entries = [];
+  for (const item of collectSuiKeystoreSecrets(parsed)) {
+    try {
+      const { keypair, scheme } = suiKeypairFromSecretKey(item.secretKey);
+      entries.push({
+        address: keypair.toSuiAddress(),
+        alias: item.alias || null,
+        index: item.index,
+        scheme,
+        keypair,
+      });
+    } catch {
+      // Ignore malformed entries so one stale key does not hide usable keys.
+    }
+  }
+  return entries;
+}
+
+function summarizeSuiSignerCandidates(entries = []) {
+  return entries.map((entry) => ({
+    address: entry.address,
+    alias: entry.alias,
+    index: entry.index,
+    scheme: entry.scheme,
+  }));
+}
+
+async function resolveSuiSignerForPlan(suiTxBytesPlan, options = {}) {
+  const expectedSender = normalizeSuiAddressOrEmpty(suiTxBytesPlan.sender || "");
+  const explicitAddress = normalizeSuiAddressOrEmpty(options["sui-address"] || "");
+  const explicitAlias = normalizeString(options["sui-alias"] || "");
+  const explicitPrivateKey = normalizeString(
+    options["sui-private-key"] || process.env.CLAWNERA_SUI_PRIVATE_KEY || process.env.SUI_PRIVATE_KEY,
+  );
+
+  if (explicitPrivateKey) {
+    const { keypair, scheme } = suiKeypairFromSecretKey(explicitPrivateKey);
+    const address = keypair.toSuiAddress();
+    if (explicitAddress && address !== explicitAddress) {
+      throw new Error("sui_private_key_address_mismatch");
+    }
+    if (expectedSender && address !== expectedSender) {
+      throw new Error("sui_signer_does_not_match_tx_sender");
+    }
+    return {
+      address,
+      alias: null,
+      scheme,
+      keypair,
+      source: "private_key",
+      keystorePath: null,
+    };
+  }
+
+  const keystorePath =
+    typeof options["sui-keystore-path"] === "string" && options["sui-keystore-path"].trim()
+      ? path.resolve(String(options["sui-keystore-path"]).trim())
+      : normalizeString(process.env.CLAWNERA_SUI_KEYSTORE_PATH || process.env.SUI_KEYSTORE_PATH) ||
+        DEFAULT_SUI_KEYSTORE_PATH;
+  const entries = await loadSuiKeystoreEntries(keystorePath);
+  const candidates = summarizeSuiSignerCandidates(entries);
+  let selected = null;
+  if (explicitAddress) {
+    selected = entries.find((entry) => entry.address === explicitAddress) || null;
+  } else if (explicitAlias) {
+    selected = entries.find((entry) => entry.alias && entry.alias.toLowerCase() === explicitAlias.toLowerCase()) || null;
+  } else if (expectedSender) {
+    selected = entries.find((entry) => entry.address === expectedSender) || null;
+  } else if (entries.length === 1) {
+    selected = entries[0];
+  } else if (entries.length > 1) {
+    const error = new Error("ambiguous_sui_keystore");
+    error.candidates = candidates;
+    error.keystorePath = keystorePath;
+    throw error;
+  }
+
+  if (!selected) {
+    const error = new Error(entries.length === 0 ? "sui_keystore_empty_or_missing" : "sui_keystore_entry_not_found");
+    error.candidates = candidates;
+    error.keystorePath = keystorePath;
+    throw error;
+  }
+  if (expectedSender && selected.address !== expectedSender) {
+    throw new Error("sui_signer_does_not_match_tx_sender");
+  }
+
+  return {
+    ...selected,
+    source: "keystore",
+    keystorePath,
+  };
+}
+
+function suiExecutionStatus(result) {
+  const status = result?.effects?.status;
+  if (typeof status === "string") {
+    return status;
+  }
+  return normalizeString(status?.status);
+}
+
+function suiExecutionError(result) {
+  const status = result?.effects?.status;
+  return normalizeString(status?.error || result?.errors?.join("; ") || result?.error);
+}
+
+async function executeSuiTransactionBytes(suiTxBytesPlan, options = {}) {
+  const signer = await resolveSuiSignerForPlan(suiTxBytesPlan, options);
+  const txBytes = Buffer.from(suiTxBytesPlan.transactionBytesBase64, "base64");
+  if (txBytes.length === 0) {
+    throw new Error("invalid_sui_transaction_bytes");
+  }
+  const signed = await signer.keypair.signTransaction(txBytes);
+  const executed = await callSuiJsonRpcForHelper(
+    options,
+    {
+      jsonrpc: "2.0",
+      id: "clawnera-sui-execute-1",
+      method: "sui_executeTransactionBlock",
+      params: [
+        signed.bytes,
+        [signed.signature],
+        {
+          showEffects: true,
+          showEvents: true,
+          showObjectChanges: true,
+          showBalanceChanges: true,
+          showInput: true,
+        },
+      ],
+    },
+    suiTxBytesPlan.chainNetwork || "",
+  );
+  return {
+    ...executed,
+    signer,
+    signedBytesBase64: signed.bytes,
+    signature: signed.signature,
+    txDigest: normalizeString(executed.result?.digest) || null,
+    executionStatus: suiExecutionStatus(executed.result),
+    executionError: suiExecutionError(executed.result),
+  };
+}
+
 function resolveTxExecutionDigest(executed) {
   return typeof executed?.result?.digest === "string" && executed.result.digest.trim()
     ? executed.result.digest.trim()
@@ -5184,6 +5516,20 @@ function buildTxPlanNextCommandHint(method, rawPath, { body, bodyFile, bodySelec
   } else if (body) {
     parts.push("--body", shellQuote(body));
   }
+  return parts.join(" ");
+}
+
+function buildSuiTxBytesNextCommandHint(method, rawPath, { body, bodyFile, bodySelect } = {}) {
+  const parts = ["clawnera-help", "tx-plan-dry-run", method, shellQuote(rawPath)];
+  if (bodyFile) {
+    parts.push("--body-file", shellQuote(bodyFile));
+    if (bodySelect) {
+      parts.push("--body-select", shellQuote(bodySelect));
+    }
+  } else if (body) {
+    parts.push("--body", shellQuote(body));
+  }
+  parts.push("--tx-bytes-out", "./sui-tx.b64");
   return parts.join(" ");
 }
 
@@ -5895,6 +6241,7 @@ async function runApiRequest(commandArgs) {
   }
   const { context, apiBase, idempotencyKey, url, result } = apiCall;
   const txPlan = detectTxPlanPayload(result.body);
+  const suiTxBytesPlan = detectSuiTransactionBytesPayload(result.body);
   const responseTimingHints = extractResponseTimingHints(result.headers);
   const bodyNextPollAfterMs = extractBodyNextPollAfterMs(result.body);
   const responseOut = resolveOptionalPathOption(options["response-out"]);
@@ -5923,8 +6270,13 @@ async function runApiRequest(commandArgs) {
     nextPollAfterMs: bodyNextPollAfterMs,
     retryAfterMs: responseTimingHints.retryAfterMs,
     response: result.body,
-    txPlanDetected: Boolean(txPlan),
-    nextCommandHint: txPlan ? buildTxPlanNextCommandHint(method, rawPath, apiCall) : null,
+    txPlanDetected: Boolean(txPlan || suiTxBytesPlan),
+    txPlanFamily: suiTxBytesPlan ? "sui" : txPlan ? "iota" : null,
+    nextCommandHint: txPlan
+      ? buildTxPlanNextCommandHint(method, rawPath, apiCall)
+      : suiTxBytesPlan
+        ? buildSuiTxBytesNextCommandHint(method, rawPath, apiCall)
+        : null,
     raw: result.raw || "",
     error: result.ok ? null : summarizeApiFailure(result)
   };
@@ -6057,7 +6409,7 @@ function listingCreateUsageLines() {
     ...buildCurrencyUnitLines("CLAW"),
     ...buildCurrencyUnitLines("SUI"),
     ...buildCurrencyUnitLines("USDC"),
-    "- Sui SUI/USDC are staged: read GET /policy/assets before trying a Sui listing or bid, and expect allowlist/testnet gates on deployments that have not opened the lane.",
+    "- Sui SUI/USDC are runtime-advertised lanes: read GET /policy/assets before trying a Sui listing or bid, and expect fail-closed responses on deployments that have not opened the lane.",
     "- Without --display-values, milestone and budget numbers must already be atomic integers",
     "- If you are unsure, run: clawnera-help units",
     "- Thin wrapper over POST /listings that infers creatorAddress from the saved auth state when possible",
@@ -6073,8 +6425,8 @@ function listingDepositCreateUsageLines() {
     "Listing deposit helper:",
     `- Usage: clawnera-help listing-deposit-create --listing-mode <OFFER|REQUEST> --title <text> --description <text> --category <slug> --currency <${SUPPORTED_MARKET_ASSET_SYMBOLS.join("|")}> [--display-values] --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' [auth options]`,
     "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
-    "- Optional chain override: --rpc-url <url> when your local IOTA CLI default is not the intended network",
-    "- Reads /policy/fees, resolves the live listing-deposit config, computes the canonical listingRef digest locally, then builds `listing_deposit::create_listing_deposit_iota_entry` locally",
+    "- Optional chain override for the current helper lane: --rpc-url <url> when your local IOTA CLI default is not the intended network",
+    "- Reads /policy/fees, resolves the live listing-deposit config, computes the canonical listingRef digest locally, then builds the current local helper lane PTB",
     "- Optional explicit ref: --listing-ref-digest-hex <64-hex> if you already computed the exact canonical binding digest",
     "- Optional payment override: --payment-coin-object-id <0x...>",
     "- Optional outputs: --proof-out <file> --dry-run --shared",
@@ -6083,7 +6435,8 @@ function listingDepositCreateUsageLines() {
     ...buildCurrencyUnitLines("CLAW"),
     ...buildCurrencyUnitLines("SUI"),
     ...buildCurrencyUnitLines("USDC"),
-    "- Listing deposits remain IOTA-package governed; do not assume SUI/USDC deposit support unless /policy/fees and /policy/assets explicitly expose it.",
+    "- Current local helper execution is IOTA-package based; native SUI listing deposits are available through the Sui SDK/runtime byte-plan path when /policy/fees and /policy/assets expose that lane.",
+    "- Native Sui USDC listing deposits remain closed unless the live policy explicitly exposes them.",
     "- Without --display-values, milestone and budget numbers must already be atomic integers",
     "- If you are unsure, run: clawnera-help units",
     "- Use the returned listingDepositObjectId as listingDepositObjectId on the later clawnera-help listing-create call",
@@ -6128,7 +6481,7 @@ function bidCreateUsageLines() {
     ...buildCurrencyUnitLines("CLAW"),
     ...buildCurrencyUnitLines("SUI"),
     ...buildCurrencyUnitLines("USDC"),
-    "- Sui SUI/USDC bids are staged: read GET /policy/assets and the exact listing before bidding with SUI or USDC.",
+    "- Sui SUI/USDC bids require runtime-advertised lanes: read GET /policy/assets and the exact listing before bidding with SUI or USDC.",
     "- Without --display-values, --amount must already be an atomic integer",
     "- If you are unsure, run: clawnera-help units",
     "- Thin wrapper over POST /bids that infers bidderAddress from the saved auth state when possible",
@@ -8864,7 +9217,8 @@ async function runTxPlanCommand(commandArgs, mode) {
   }
 
   const txPlan = detectTxPlanPayload(apiCall.result.body);
-  if (!txPlan) {
+  const suiTxBytesPlan = detectSuiTransactionBytesPayload(apiCall.result.body);
+  if (!txPlan && !suiTxBytesPlan) {
     return {
       ok: false,
       error: "response_not_tx_plan",
@@ -8875,6 +9229,107 @@ async function runTxPlanCommand(commandArgs, mode) {
 
   const planOut = resolveOptionalPathOption(options["plan-out"]);
   const txBytesOut = resolveOptionalPathOption(options["tx-bytes-out"]);
+  if (suiTxBytesPlan) {
+    if (planOut) {
+      writeOptionalOutputFile(planOut, JSON.stringify(apiCall.result.body, null, 2));
+    }
+    if (txBytesOut) {
+      writeOptionalOutputFile(txBytesOut, `${suiTxBytesPlan.transactionBytesBase64}\n`);
+    }
+    if (mode === "dry_run") {
+      try {
+        const dryRun = await dryRunSuiTransactionBytes(suiTxBytesPlan, options);
+        return {
+          ok: true,
+          mode,
+          method,
+          rawPath,
+          apiBase: apiCall.apiBase,
+          chainFamily: "sui",
+          chainNetwork: suiTxBytesPlan.chainNetwork,
+          txBuilder: suiTxBytesPlan.txBuilder,
+          target: suiTxBytesPlan.target,
+          signerAddress: suiTxBytesPlan.sender,
+          txBytesOut: txBytesOut || null,
+          planOut: planOut || null,
+          suiRpcUrl: dryRun.rpcUrl,
+          dryRun: dryRun.result,
+          gasSummary: formatDryRunGasSummary(dryRun.result),
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : "sui_tx_plan_dry_run_failed",
+          mode,
+          method,
+          rawPath,
+          apiBase: apiCall.apiBase,
+          chainFamily: "sui",
+          chainNetwork: suiTxBytesPlan.chainNetwork,
+          txBuilder: suiTxBytesPlan.txBuilder,
+          target: suiTxBytesPlan.target,
+          txBytesOut: txBytesOut || null,
+          planOut: planOut || null,
+          hint: "Sui tx-plan dry-run needs a reachable Sui fullnode RPC. Pass --sui-rpc-url <url> if the default network RPC is not reachable.",
+        };
+      }
+    }
+    try {
+      const executed = await executeSuiTransactionBytes(suiTxBytesPlan, options);
+      if (txBytesOut) {
+        writeOptionalOutputFile(txBytesOut, `${executed.signedBytesBase64}\n`);
+      }
+      const baseResult = {
+        ok: executed.executionStatus === "success",
+        mode,
+        method,
+        rawPath,
+        apiBase: apiCall.apiBase,
+        chainFamily: "sui",
+        chainNetwork: suiTxBytesPlan.chainNetwork,
+        txBuilder: suiTxBytesPlan.txBuilder,
+        target: suiTxBytesPlan.target,
+        signerAddress: executed.signer.address,
+        signerSource: executed.signer.source,
+        signatureScheme: executed.signer.scheme,
+        txDigest: executed.txDigest,
+        suiRpcUrl: executed.rpcUrl,
+        txBytesOut: txBytesOut || null,
+        planOut: planOut || null,
+        executionStatus: executed.executionStatus || null,
+        execution: executed.result,
+      };
+      if (baseResult.ok) {
+        return baseResult;
+      }
+      return {
+        ...baseResult,
+        error: "sui_transaction_execution_failed",
+        rawError: executed.executionError || null,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "sui_tx_plan_execution_failed",
+        mode,
+        method,
+        rawPath,
+        apiBase: apiCall.apiBase,
+        chainFamily: "sui",
+        chainNetwork: suiTxBytesPlan.chainNetwork,
+        txBuilder: suiTxBytesPlan.txBuilder,
+        target: suiTxBytesPlan.target,
+        signerAddress: suiTxBytesPlan.sender,
+        txBytesOut: txBytesOut || null,
+        planOut: planOut || null,
+        keystorePath: error?.keystorePath || null,
+        candidates: Array.isArray(error?.candidates) ? error.candidates : undefined,
+        hint:
+          "Sui tx-plan execution needs a matching Sui signer. Pass --sui-private-key, CLAWNERA_SUI_PRIVATE_KEY, or --sui-keystore-path plus --sui-address/--sui-alias when the default Sui keystore is ambiguous.",
+      };
+    }
+  }
+
   const signer = resolveRuntimeSigner(options, apiCall.context);
   const iotaRuntime = resolveRuntimeIotaOptions(options, apiCall.context);
   let autoRetriedExecutionCount = 0;
@@ -13792,15 +14247,18 @@ function txPlanUsageLines(mode) {
     `- Usage: clawnera-help tx-plan-${label} <GET|POST|PUT|PATCH|DELETE> </path>`,
     "- Reuses the same auth/body flags as `clawnera-help request`",
     "- Use API paths only; full URLs are rejected to avoid leaking auth tokens to other hosts",
-    "- Fetches a canonical API tx plan, builds the PTB locally, then dry-runs or executes it",
+    "- Fetches a canonical API tx plan. IOTA plans are built locally; Sui plans are unsigned transaction bytes from the API.",
     "- Optional auth shortcuts: --auth-state-file <file> or --env-file <file>",
     "- Optional explicit auth: --api-base <url> --jwt <token>",
     "- Optional body: --body '{\"json\":true}' or --body-file ./payload.json",
     "- Optional nested body selection: --body-file ./vote-prepare.json --body-select commitRequestBody",
-    "- Optional signer overrides: --alias <wallet-alias> --address <0x...> --keystore-path <file>",
+    "- Optional signer overrides for IOTA execution: --alias <wallet-alias> --address <0x...> --keystore-path <file>",
+    "- Optional Sui signer overrides for execution: --sui-private-key <suiprivkey...> or --sui-keystore-path <file> --sui-address <0x...>",
+    "- Optional Sui RPC override: --sui-rpc-url <url> (or --rpc-url <url> on a Sui byte plan)",
     "- Optional outputs: --plan-out <file> --tx-bytes-out <file>",
     "- Optional timer-aware retry: --wait-until-ready [--max-ready-wait-ms <ms>] waits through known commit/challenge/settlement windows before rerunning the same command",
-    `- The package never sends a generic user PTB through the Clawnera worker; it ${verb} locally`
+    "- Sui execution signs returned unsigned transaction bytes locally with a matching Sui signer and submits directly to the selected Sui RPC",
+    `- The package never sends a generic user PTB through the Clawnera worker; it ${verb} locally when the local wallet lane supports the chain`
   ];
 }
 
@@ -15725,6 +16183,15 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   } else if (result.ok) {
     console.log(`tx_plan_dry_run_ok builder=${result.txBuilder}`);
     console.log(`path=${result.rawPath}`);
+    if (result.chainFamily) {
+      console.log(`chain_family=${result.chainFamily}`);
+    }
+    if (result.suiRpcUrl) {
+      console.log(`sui_rpc_url=${result.suiRpcUrl}`);
+    }
+    if (result.target) {
+      console.log(`target=${result.target}`);
+    }
     if (result.gasSummary) {
       console.log(`gas_used=${result.gasSummary}`);
     }
@@ -15738,6 +16205,21 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.error(`tx_plan_dry_run_error: ${result.error}`);
     if (result.txBuilder) {
       console.error(`tx_builder=${result.txBuilder}`);
+    }
+    if (result.chainFamily) {
+      console.error(`chain_family=${result.chainFamily}`);
+    }
+    if (result.target) {
+      console.error(`target=${result.target}`);
+    }
+    if (result.planOut) {
+      console.error(`plan_file=${result.planOut}`);
+    }
+    if (result.txBytesOut) {
+      console.error(`tx_bytes_file=${result.txBytesOut}`);
+    }
+    if (result.hint) {
+      console.error(`hint=${result.hint}`);
     }
     process.exitCode = 1;
   }
@@ -15755,6 +16237,12 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   } else if (result.ok) {
     console.log(`tx_plan_execute_ok builder=${result.txBuilder}`);
     console.log(`tx_digest=${result.txDigest || "unknown"}`);
+    if (result.chainFamily) {
+      console.log(`chain_family=${result.chainFamily}`);
+    }
+    if (result.suiRpcUrl) {
+      console.log(`sui_rpc_url=${result.suiRpcUrl}`);
+    }
     if (Number.isInteger(result.autoRetriedExecutionCount) && result.autoRetriedExecutionCount > 0) {
       console.log(`auto_retry_count=${result.autoRetriedExecutionCount}`);
     }
@@ -15763,6 +16251,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
     if (result.signerAddress) {
       console.log(`signer_address=${result.signerAddress}`);
+    }
+    if (result.signatureScheme) {
+      console.log(`signature_scheme=${result.signatureScheme}`);
     }
     if (result.disputeCaseObjectId) {
       console.log(`dispute_case_object_id=${result.disputeCaseObjectId}`);
@@ -15833,6 +16324,12 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.txBuilder) {
       console.error(`tx_builder=${result.txBuilder}`);
     }
+    if (result.chainFamily) {
+      console.error(`chain_family=${result.chainFamily}`);
+    }
+    if (result.target) {
+      console.error(`target=${result.target}`);
+    }
     if (Number.isInteger(result.autoRetriedExecutionCount) && result.autoRetriedExecutionCount > 0) {
       console.error(`auto_retry_count=${result.autoRetriedExecutionCount}`);
     }
@@ -15850,6 +16347,18 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
     if (result.hint) {
       console.error(`hint=${result.hint}`);
+    }
+    if (result.planOut) {
+      console.error(`plan_file=${result.planOut}`);
+    }
+    if (result.txBytesOut) {
+      console.error(`tx_bytes_file=${result.txBytesOut}`);
+    }
+    if (result.keystorePath) {
+      console.error(`keystore_path=${result.keystorePath}`);
+    }
+    if (Array.isArray(result.candidates) && result.candidates.length > 0) {
+      console.error(`sui_signer_candidates=${result.candidates.map((candidate) => candidate.address).join(",")}`);
     }
     if (result.waitUntilIso) {
       console.error(`wait_until=${result.waitUntilIso}`);

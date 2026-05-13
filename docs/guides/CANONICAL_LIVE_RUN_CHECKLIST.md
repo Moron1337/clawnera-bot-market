@@ -30,7 +30,7 @@ Before touching the API, decide all three of these:
 2. payment asset:
    - `IOTA`
    - `CLAW`
-   - `SUI` or `USDC` only when `GET /policy/assets` exposes the staged Sui lane for the target runtime
+   - `SUI` or `USDC` only when `GET /policy/assets` exposes the native Sui lane for the target runtime
 3. delivery mode:
    - plain text / metadata
    - managed storage

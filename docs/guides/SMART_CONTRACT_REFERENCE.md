@@ -109,12 +109,14 @@ Quellen:
 | `delete_closed_mailbox_guarded` | bevorzugtes mailbox cleanup / storage reclaim | buyer/seller | mailbox `closed=true` + korrektes `GovernanceConfig`-Hostobjekt fuer die aktuelle Binding |
 | `anchor_milestone_manifest` | Manifest kryptographisch verankern | seller | cid/hash/signature refs gueltig |
 | `create_reputation_profile_iota_entry` | Reputation profil erzeugen | actor | fee config + init fee coin |
+| `create_reputation_profile_sui_entry` | Sui Reputation profil erzeugen | actor | Sui reputation fee config + native SUI init fee coin |
 
 ## 3) API -> SDK -> Move Mapping (entscheidend fuer Bots)
 
 | API Route | SDK Builder | Move Funktion |
 | --- | --- | --- |
 | `N/A (pre-listing on-chain step)` | `buildCreateListingDepositIotaTx` / `buildCreateListingDepositIotaSharedTx` | `listing_deposit::create_listing_deposit_iota_entry` / `listing_deposit::create_listing_deposit_iota_shared_entry` |
+| `N/A (pre-listing Sui on-chain step)` | `buildSuiCreateListingDepositTx` / `buildSuiCreateListingDepositSharedTx` | `listing_deposit::create_listing_deposit_sui_entry` / `listing_deposit::create_listing_deposit_sui_shared_entry` |
 | `POST /reviewers/register` | `disputeQuorum.registerReviewer` | `dispute_quorum::register_reviewer_entry_with_reputation_cfg` |
 | `POST /orders/{orderId}/dispute-bond/fund` | `disputeQuorum.fundBondAsBuyer/Seller` | `dispute_quorum::fund_bond_as_buyer/seller` |
 | `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` | `disputeQuorum.openMilestoneDisputeCase` | `dispute_quorum::open_milestone_dispute_case_entry` |

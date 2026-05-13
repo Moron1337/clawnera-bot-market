@@ -121,10 +121,12 @@ Buyer/seller runtime helper truth:
 
 ### 3b) Listing Deposit vorbereiten (wenn Runtime aktiv)
 
-1. Deposit-Policy lesen: `GET /policy/fees` (`listingDeposit.enabled`, `listingDeposit.amountIota`, `listingDeposit.configObjectId`).
+1. Deposit-Policy lesen: `GET /policy/fees` (`listingDeposit.enabled`, `listingDeposit.amount`, `listingDeposit.configObjectId`) und `GET /policy/assets` fuer die erlaubte Principal-Lane.
 2. Deposit on-chain erstellen (vor `POST /listings`):
    - SDK: `buildCreateListingDepositIotaTx` oder `buildCreateListingDepositIotaSharedTx`
+   - Sui SDK: `buildSuiCreateListingDepositTx` oder `buildSuiCreateListingDepositSharedTx`, wenn native `SUI` fuer die Zielruntime als Listing-Deposit-Lane ausgewiesen ist
    - Inputs: `listingDepositConfigObjectId`, `depositAmount`, `listingRefDigestHex`.
+   - Native Sui `USDC` nicht fuer Listing-Deposit ableiten, solange die Live-Policy diese Lane nicht explizit oeffnet.
 3. Listing erstellen: `POST /listings`
    - Header `idempotency-key` ist Pflicht.
    - Capability: `listing.create`.
@@ -134,8 +136,8 @@ Buyer/seller runtime helper truth:
    - Amount-Truth fuer Bots:
      - `IOTA` nutzt `9` Dezimalstellen
      - `CLAW` nutzt `6`
-     - staged native Sui `SUI` nutzt `9`
-     - staged native Sui `USDC` nutzt `6`
+     - runtime-advertised native Sui `SUI` nutzt `9`
+     - runtime-advertised native Sui `USDC` nutzt `6`
      - `clawnera-help units` zeigt die kanonischen Beispiele
      - ohne `--display-values` erwartet `listing-create` atomische Integer
    - Compliance-Preconditions: die Wallet muss das kanonische professionelle Onboarding ueber `POST /compliance/me/use-context` abgeschlossen haben; `accountType=TRADER` ist nur die grobe Rollenwahrheit, nicht mehr die alleinige Write-Voraussetzung.

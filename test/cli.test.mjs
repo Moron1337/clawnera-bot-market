@@ -333,7 +333,7 @@ test("listing-create help explains display values and categories", () => {
   assert.match(result.stdout, /CLAW uses 6 decimals/);
   assert.match(result.stdout, /SUI uses 9 decimals/);
   assert.match(result.stdout, /USDC uses 6 decimals/);
-  assert.match(result.stdout, /Sui SUI\/USDC are staged/);
+  assert.match(result.stdout, /Sui SUI\/USDC are runtime-advertised lanes/);
   assert.match(result.stdout, /Without --display-values, milestone and budget numbers must already be atomic integers/);
   assert.match(result.stdout, /clawnera-help units/);
   assert.match(result.stdout, /--listing-mode <OFFER\|REQUEST>/);
@@ -349,7 +349,9 @@ test("listing-deposit-create help explains matching display-value mode", () => {
   assert.match(result.stdout, /--display-values/);
   assert.match(result.stdout, /SUI uses 9 decimals/);
   assert.match(result.stdout, /USDC uses 6 decimals/);
-  assert.match(result.stdout, /Listing deposits remain IOTA-package governed/);
+  assert.match(result.stdout, /Current local helper execution is IOTA-package based/);
+  assert.match(result.stdout, /native SUI listing deposits are available through the Sui SDK\/runtime byte-plan path/);
+  assert.match(result.stdout, /Native Sui USDC listing deposits remain closed/);
   assert.match(result.stdout, /--rpc-url <url>/);
   assert.match(result.stdout, /Without --display-values, milestone and budget numbers must already be atomic integers/);
   assert.match(result.stdout, /Use the returned listingDepositObjectId as listingDepositObjectId on the later clawnera-help listing-create call/);
@@ -393,7 +395,7 @@ test("bid-create help explains display values", () => {
   assert.match(result.stdout, /CLAW uses 6 decimals/);
   assert.match(result.stdout, /SUI uses 9 decimals/);
   assert.match(result.stdout, /USDC uses 6 decimals/);
-  assert.match(result.stdout, /Sui SUI\/USDC bids are staged/);
+  assert.match(result.stdout, /Sui SUI\/USDC bids require runtime-advertised lanes/);
   assert.match(result.stdout, /Without --display-values, --amount must already be an atomic integer/);
   assert.match(result.stdout, /clawnera-help units/);
   assert.match(result.stdout, /On REQUEST listings the bidder becomes the future seller/);
@@ -1376,6 +1378,7 @@ test("notifications presets json output is parseable", () => {
   assert.ok(buyerPreset.eventTypes.includes("order.mutual_cancel_approved"));
   assert.ok(allPreset.eventTypes.includes("order.status_changed"));
   assert.ok(allPreset.eventTypes.includes("order.mutual_cancel_approved"));
+  assert.equal(buyerPreset.eventTypes.includes("order.deadline_extended"), false);
   assert.equal(buyerPreset.eventTypes.includes("dispute.finalized"), false);
   assert.equal(buyerPreset.eventTypes.includes("dispute.resolved"), false);
   assert.equal(allPreset.eventTypes.includes("dispute.finalized"), false);

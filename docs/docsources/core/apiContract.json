@@ -62,11 +62,19 @@
           "200": {
             "status": "200",
             "reusableResponseRef": null,
-            "schemaRef": null,
-            "schemaName": null,
-            "requiredFields": [],
+            "schemaRef": "#/components/schemas/RuntimeControlPlaneSummary",
+            "schemaName": "RuntimeControlPlaneSummary",
+            "requiredFields": [
+              "preset",
+              "publicApiWrites",
+              "publicWeb"
+            ],
             "optionalFields": [],
-            "propertyNames": []
+            "propertyNames": [
+              "preset",
+              "publicApiWrites",
+              "publicWeb"
+            ]
           }
         }
       }
@@ -1612,6 +1620,39 @@
             "propertyNames": [
               "error"
             ]
+          },
+          "428": {
+            "status": "428",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
+            "schemaName": "BusinessWritePreconditionResponse",
+            "requiredFields": [],
+            "optionalFields": [
+              "error",
+              "detail",
+              "redirectTo",
+              "compliancePath",
+              "useContextPath",
+              "route",
+              "preconditionStatus",
+              "documentVersions",
+              "businessOnboarding",
+              "currentTermsVersion",
+              "currentRiskDisclosureVersion"
+            ],
+            "propertyNames": [
+              "error",
+              "detail",
+              "redirectTo",
+              "compliancePath",
+              "useContextPath",
+              "route",
+              "preconditionStatus",
+              "documentVersions",
+              "businessOnboarding",
+              "currentTermsVersion",
+              "currentRiskDisclosureVersion"
+            ]
           }
         }
       }
@@ -2124,6 +2165,39 @@
             "propertyNames": [
               "error"
             ]
+          },
+          "428": {
+            "status": "428",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
+            "schemaName": "BusinessWritePreconditionResponse",
+            "requiredFields": [],
+            "optionalFields": [
+              "error",
+              "detail",
+              "redirectTo",
+              "compliancePath",
+              "useContextPath",
+              "route",
+              "preconditionStatus",
+              "documentVersions",
+              "businessOnboarding",
+              "currentTermsVersion",
+              "currentRiskDisclosureVersion"
+            ],
+            "propertyNames": [
+              "error",
+              "detail",
+              "redirectTo",
+              "compliancePath",
+              "useContextPath",
+              "route",
+              "preconditionStatus",
+              "documentVersions",
+              "businessOnboarding",
+              "currentTermsVersion",
+              "currentRiskDisclosureVersion"
+            ]
           }
         }
       }
@@ -2260,6 +2334,39 @@
             "optionalFields": [],
             "propertyNames": [
               "error"
+            ]
+          },
+          "428": {
+            "status": "428",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
+            "schemaName": "BusinessWritePreconditionResponse",
+            "requiredFields": [],
+            "optionalFields": [
+              "error",
+              "detail",
+              "redirectTo",
+              "compliancePath",
+              "useContextPath",
+              "route",
+              "preconditionStatus",
+              "documentVersions",
+              "businessOnboarding",
+              "currentTermsVersion",
+              "currentRiskDisclosureVersion"
+            ],
+            "propertyNames": [
+              "error",
+              "detail",
+              "redirectTo",
+              "compliancePath",
+              "useContextPath",
+              "route",
+              "preconditionStatus",
+              "documentVersions",
+              "businessOnboarding",
+              "currentTermsVersion",
+              "currentRiskDisclosureVersion"
             ]
           }
         }
@@ -2509,6 +2616,39 @@
             "optionalFields": [],
             "propertyNames": [
               "error"
+            ]
+          },
+          "428": {
+            "status": "428",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
+            "schemaName": "BusinessWritePreconditionResponse",
+            "requiredFields": [],
+            "optionalFields": [
+              "error",
+              "detail",
+              "redirectTo",
+              "compliancePath",
+              "useContextPath",
+              "route",
+              "preconditionStatus",
+              "documentVersions",
+              "businessOnboarding",
+              "currentTermsVersion",
+              "currentRiskDisclosureVersion"
+            ],
+            "propertyNames": [
+              "error",
+              "detail",
+              "redirectTo",
+              "compliancePath",
+              "useContextPath",
+              "route",
+              "preconditionStatus",
+              "documentVersions",
+              "businessOnboarding",
+              "currentTermsVersion",
+              "currentRiskDisclosureVersion"
             ]
           }
         }
@@ -3248,6 +3388,340 @@
               "status",
               "createdAt",
               "updatedAt"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": "#/components/responses/Conflict",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/orders/{orderId}/escrow/create-tx-plan": {
+      "post": {
+        "path": "/orders/{orderId}/escrow/create-tx-plan",
+        "method": "post",
+        "operationId": "createSuiOrderEscrowTxPlan",
+        "tags": [
+          "Orders"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "orderId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/SuiUsdcCreateOrderEscrowTxPlanRequest",
+          "schemaName": "SuiUsdcCreateOrderEscrowTxPlanRequest",
+          "requiredFields": [
+            "chainFamily",
+            "chainNetwork",
+            "asset",
+            "paymentCoinObjectId",
+            "deadlineMs"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "chainFamily",
+            "chainNetwork",
+            "asset",
+            "paymentCoinObjectId",
+            "deadlineMs"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/SuiUsdcTxPlanOnlyResponse",
+            "schemaName": "SuiUsdcTxPlanOnlyResponse",
+            "requiredFields": [],
+            "optionalFields": [
+              "chainFamily",
+              "chainNetwork",
+              "status",
+              "asset",
+              "executionAllowed",
+              "publicLaunchReady",
+              "apiSideExecution",
+              "repositoryMutation",
+              "objectBindingCreated",
+              "canaryActorAllowlistEnforced",
+              "transactionBytesBase64",
+              "orderId",
+              "target",
+              "orderBinding",
+              "packageIds",
+              "paymentCoinReadback",
+              "objectReadback",
+              "txPlan"
+            ],
+            "propertyNames": [
+              "chainFamily",
+              "chainNetwork",
+              "status",
+              "asset",
+              "executionAllowed",
+              "publicLaunchReady",
+              "apiSideExecution",
+              "repositoryMutation",
+              "objectBindingCreated",
+              "canaryActorAllowlistEnforced",
+              "transactionBytesBase64",
+              "orderId",
+              "target",
+              "orderBinding",
+              "packageIds",
+              "paymentCoinReadback",
+              "objectReadback",
+              "txPlan"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": "#/components/responses/NotFound",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": "#/components/responses/Conflict",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/orders/{orderId}/escrow/release-tx-plan": {
+      "post": {
+        "path": "/orders/{orderId}/escrow/release-tx-plan",
+        "method": "post",
+        "operationId": "releaseSuiOrderEscrowTxPlan",
+        "tags": [
+          "Orders"
+        ],
+        "parameters": {
+          "path": [
+            {
+              "name": "orderId",
+              "in": "path",
+              "required": true
+            }
+          ],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/SuiUsdcReleaseOrderEscrowTxPlanRequest",
+          "schemaName": "SuiUsdcReleaseOrderEscrowTxPlanRequest",
+          "requiredFields": [
+            "chainFamily",
+            "chainNetwork",
+            "asset",
+            "orderEscrowObjectId"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "chainFamily",
+            "chainNetwork",
+            "asset",
+            "orderEscrowObjectId"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/SuiUsdcTxPlanOnlyResponse",
+            "schemaName": "SuiUsdcTxPlanOnlyResponse",
+            "requiredFields": [],
+            "optionalFields": [
+              "chainFamily",
+              "chainNetwork",
+              "status",
+              "asset",
+              "executionAllowed",
+              "publicLaunchReady",
+              "apiSideExecution",
+              "repositoryMutation",
+              "objectBindingCreated",
+              "canaryActorAllowlistEnforced",
+              "transactionBytesBase64",
+              "orderId",
+              "target",
+              "orderBinding",
+              "packageIds",
+              "paymentCoinReadback",
+              "objectReadback",
+              "txPlan"
+            ],
+            "propertyNames": [
+              "chainFamily",
+              "chainNetwork",
+              "status",
+              "asset",
+              "executionAllowed",
+              "publicLaunchReady",
+              "apiSideExecution",
+              "repositoryMutation",
+              "objectBindingCreated",
+              "canaryActorAllowlistEnforced",
+              "transactionBytesBase64",
+              "orderId",
+              "target",
+              "orderBinding",
+              "packageIds",
+              "paymentCoinReadback",
+              "objectReadback",
+              "txPlan"
             ]
           },
           "400": {
@@ -10139,30 +10613,20 @@
           "200": {
             "status": "200",
             "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/UserComplianceProfile",
-            "schemaName": "UserComplianceProfile",
-            "requiredFields": [],
-            "optionalFields": [
-              "address",
-              "tier",
-              "acceptsClaw",
-              "accountType",
-              "traderVerificationStatus",
-              "traderVerificationPayload",
-              "traderVerificationNote",
-              "traderVerificationUpdatedAt",
-              "isBot"
+            "schemaRef": "#/components/schemas/ComplianceMeEnvelope",
+            "schemaName": "ComplianceMeEnvelope",
+            "requiredFields": [
+              "profile",
+              "compliance",
+              "documentVersions",
+              "ownerSurface"
             ],
+            "optionalFields": [],
             "propertyNames": [
-              "address",
-              "tier",
-              "acceptsClaw",
-              "accountType",
-              "traderVerificationStatus",
-              "traderVerificationPayload",
-              "traderVerificationNote",
-              "traderVerificationUpdatedAt",
-              "isBot"
+              "profile",
+              "compliance",
+              "documentVersions",
+              "ownerSurface"
             ]
           },
           "401": {
@@ -10210,30 +10674,20 @@
           "200": {
             "status": "200",
             "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/UserComplianceProfile",
-            "schemaName": "UserComplianceProfile",
-            "requiredFields": [],
-            "optionalFields": [
-              "address",
-              "tier",
-              "acceptsClaw",
-              "accountType",
-              "traderVerificationStatus",
-              "traderVerificationPayload",
-              "traderVerificationNote",
-              "traderVerificationUpdatedAt",
-              "isBot"
+            "schemaRef": "#/components/schemas/ComplianceMeEnvelope",
+            "schemaName": "ComplianceMeEnvelope",
+            "requiredFields": [
+              "profile",
+              "compliance",
+              "documentVersions",
+              "ownerSurface"
             ],
+            "optionalFields": [],
             "propertyNames": [
-              "address",
-              "tier",
-              "acceptsClaw",
-              "accountType",
-              "traderVerificationStatus",
-              "traderVerificationPayload",
-              "traderVerificationNote",
-              "traderVerificationUpdatedAt",
-              "isBot"
+              "profile",
+              "compliance",
+              "documentVersions",
+              "ownerSurface"
             ]
           },
           "400": {
@@ -10265,6 +10719,111 @@
           "403": {
             "status": "403",
             "reusableResponseRef": "#/components/responses/Forbidden",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "/compliance/me/use-context": {
+      "post": {
+        "path": "/compliance/me/use-context",
+        "method": "post",
+        "operationId": "setComplianceUseContext",
+        "tags": [
+          "Compliance"
+        ],
+        "parameters": {
+          "path": [],
+          "query": [],
+          "header": []
+        },
+        "requestBody": {
+          "required": true,
+          "schemaRef": "#/components/schemas/ComplianceUseContextRequest",
+          "schemaName": "ComplianceUseContextRequest",
+          "requiredFields": [
+            "useContext"
+          ],
+          "optionalFields": [
+            "consumerAcknowledgement",
+            "professionalAcknowledgement"
+          ],
+          "propertyNames": [
+            "useContext",
+            "consumerAcknowledgement",
+            "professionalAcknowledgement"
+          ]
+        },
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ComplianceMeEnvelope",
+            "schemaName": "ComplianceMeEnvelope",
+            "requiredFields": [
+              "profile",
+              "compliance",
+              "documentVersions",
+              "ownerSurface"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "profile",
+              "compliance",
+              "documentVersions",
+              "ownerSurface"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": "#/components/responses/BadRequest",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "403": {
+            "status": "403",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ErrorResponse",
             "schemaName": "ErrorResponse",
             "requiredFields": [
@@ -10318,30 +10877,20 @@
           "202": {
             "status": "202",
             "reusableResponseRef": null,
-            "schemaRef": "#/components/schemas/UserComplianceProfile",
-            "schemaName": "UserComplianceProfile",
-            "requiredFields": [],
-            "optionalFields": [
-              "address",
-              "tier",
-              "acceptsClaw",
-              "accountType",
-              "traderVerificationStatus",
-              "traderVerificationPayload",
-              "traderVerificationNote",
-              "traderVerificationUpdatedAt",
-              "isBot"
+            "schemaRef": "#/components/schemas/ComplianceMeEnvelope",
+            "schemaName": "ComplianceMeEnvelope",
+            "requiredFields": [
+              "profile",
+              "compliance",
+              "documentVersions",
+              "ownerSurface"
             ],
+            "optionalFields": [],
             "propertyNames": [
-              "address",
-              "tier",
-              "acceptsClaw",
-              "accountType",
-              "traderVerificationStatus",
-              "traderVerificationPayload",
-              "traderVerificationNote",
-              "traderVerificationUpdatedAt",
-              "isBot"
+              "profile",
+              "compliance",
+              "documentVersions",
+              "ownerSurface"
             ]
           },
           "400": {
@@ -10370,6 +10919,19 @@
               "error"
             ]
           },
+          "404": {
+            "status": "404",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
           "409": {
             "status": "409",
             "reusableResponseRef": null,
@@ -10381,6 +10943,39 @@
             "optionalFields": [],
             "propertyNames": [
               "error"
+            ]
+          },
+          "428": {
+            "status": "428",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
+            "schemaName": "BusinessWritePreconditionResponse",
+            "requiredFields": [],
+            "optionalFields": [
+              "error",
+              "detail",
+              "redirectTo",
+              "compliancePath",
+              "useContextPath",
+              "route",
+              "preconditionStatus",
+              "documentVersions",
+              "businessOnboarding",
+              "currentTermsVersion",
+              "currentRiskDisclosureVersion"
+            ],
+            "propertyNames": [
+              "error",
+              "detail",
+              "redirectTo",
+              "compliancePath",
+              "useContextPath",
+              "route",
+              "preconditionStatus",
+              "documentVersions",
+              "businessOnboarding",
+              "currentTermsVersion",
+              "currentRiskDisclosureVersion"
             ]
           }
         }
@@ -11115,6 +11710,9 @@
               "tier",
               "acceptsClaw",
               "accountType",
+              "useContext",
+              "consumerAcknowledgement",
+              "professionalAcknowledgement",
               "traderVerificationStatus",
               "traderVerificationPayload",
               "traderVerificationNote",
@@ -11126,6 +11724,9 @@
               "tier",
               "acceptsClaw",
               "accountType",
+              "useContext",
+              "consumerAcknowledgement",
+              "professionalAcknowledgement",
               "traderVerificationStatus",
               "traderVerificationPayload",
               "traderVerificationNote",
@@ -11319,6 +11920,9 @@
               "tier",
               "acceptsClaw",
               "accountType",
+              "useContext",
+              "consumerAcknowledgement",
+              "professionalAcknowledgement",
               "traderVerificationStatus",
               "traderVerificationPayload",
               "traderVerificationNote",
@@ -11330,6 +11934,9 @@
               "tier",
               "acceptsClaw",
               "accountType",
+              "useContext",
+              "consumerAcknowledgement",
+              "professionalAcknowledgement",
               "traderVerificationStatus",
               "traderVerificationPayload",
               "traderVerificationNote",
@@ -11859,11 +12466,19 @@
         "200": {
           "status": "200",
           "reusableResponseRef": null,
-          "schemaRef": null,
-          "schemaName": null,
-          "requiredFields": [],
+          "schemaRef": "#/components/schemas/RuntimeControlPlaneSummary",
+          "schemaName": "RuntimeControlPlaneSummary",
+          "requiredFields": [
+            "preset",
+            "publicApiWrites",
+            "publicWeb"
+          ],
           "optionalFields": [],
-          "propertyNames": []
+          "propertyNames": [
+            "preset",
+            "publicApiWrites",
+            "publicWeb"
+          ]
         }
       }
     },
@@ -13342,6 +13957,39 @@
           "propertyNames": [
             "error"
           ]
+        },
+        "428": {
+          "status": "428",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
+          "schemaName": "BusinessWritePreconditionResponse",
+          "requiredFields": [],
+          "optionalFields": [
+            "error",
+            "detail",
+            "redirectTo",
+            "compliancePath",
+            "useContextPath",
+            "route",
+            "preconditionStatus",
+            "documentVersions",
+            "businessOnboarding",
+            "currentTermsVersion",
+            "currentRiskDisclosureVersion"
+          ],
+          "propertyNames": [
+            "error",
+            "detail",
+            "redirectTo",
+            "compliancePath",
+            "useContextPath",
+            "route",
+            "preconditionStatus",
+            "documentVersions",
+            "businessOnboarding",
+            "currentTermsVersion",
+            "currentRiskDisclosureVersion"
+          ]
         }
       }
     },
@@ -13839,6 +14487,39 @@
           "propertyNames": [
             "error"
           ]
+        },
+        "428": {
+          "status": "428",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
+          "schemaName": "BusinessWritePreconditionResponse",
+          "requiredFields": [],
+          "optionalFields": [
+            "error",
+            "detail",
+            "redirectTo",
+            "compliancePath",
+            "useContextPath",
+            "route",
+            "preconditionStatus",
+            "documentVersions",
+            "businessOnboarding",
+            "currentTermsVersion",
+            "currentRiskDisclosureVersion"
+          ],
+          "propertyNames": [
+            "error",
+            "detail",
+            "redirectTo",
+            "compliancePath",
+            "useContextPath",
+            "route",
+            "preconditionStatus",
+            "documentVersions",
+            "businessOnboarding",
+            "currentTermsVersion",
+            "currentRiskDisclosureVersion"
+          ]
         }
       }
     },
@@ -13972,6 +14653,39 @@
           "optionalFields": [],
           "propertyNames": [
             "error"
+          ]
+        },
+        "428": {
+          "status": "428",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
+          "schemaName": "BusinessWritePreconditionResponse",
+          "requiredFields": [],
+          "optionalFields": [
+            "error",
+            "detail",
+            "redirectTo",
+            "compliancePath",
+            "useContextPath",
+            "route",
+            "preconditionStatus",
+            "documentVersions",
+            "businessOnboarding",
+            "currentTermsVersion",
+            "currentRiskDisclosureVersion"
+          ],
+          "propertyNames": [
+            "error",
+            "detail",
+            "redirectTo",
+            "compliancePath",
+            "useContextPath",
+            "route",
+            "preconditionStatus",
+            "documentVersions",
+            "businessOnboarding",
+            "currentTermsVersion",
+            "currentRiskDisclosureVersion"
           ]
         }
       }
@@ -14215,6 +14929,39 @@
           "optionalFields": [],
           "propertyNames": [
             "error"
+          ]
+        },
+        "428": {
+          "status": "428",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
+          "schemaName": "BusinessWritePreconditionResponse",
+          "requiredFields": [],
+          "optionalFields": [
+            "error",
+            "detail",
+            "redirectTo",
+            "compliancePath",
+            "useContextPath",
+            "route",
+            "preconditionStatus",
+            "documentVersions",
+            "businessOnboarding",
+            "currentTermsVersion",
+            "currentRiskDisclosureVersion"
+          ],
+          "propertyNames": [
+            "error",
+            "detail",
+            "redirectTo",
+            "compliancePath",
+            "useContextPath",
+            "route",
+            "preconditionStatus",
+            "documentVersions",
+            "businessOnboarding",
+            "currentTermsVersion",
+            "currentRiskDisclosureVersion"
           ]
         }
       }
@@ -14929,6 +15676,334 @@
             "status",
             "createdAt",
             "updatedAt"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": "#/components/responses/Conflict",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "createSuiOrderEscrowTxPlan": {
+      "path": "/orders/{orderId}/escrow/create-tx-plan",
+      "method": "post",
+      "tags": [
+        "Orders"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/SuiUsdcCreateOrderEscrowTxPlanRequest",
+        "schemaName": "SuiUsdcCreateOrderEscrowTxPlanRequest",
+        "requiredFields": [
+          "chainFamily",
+          "chainNetwork",
+          "asset",
+          "paymentCoinObjectId",
+          "deadlineMs"
+        ],
+        "optionalFields": [],
+        "propertyNames": [
+          "chainFamily",
+          "chainNetwork",
+          "asset",
+          "paymentCoinObjectId",
+          "deadlineMs"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/SuiUsdcTxPlanOnlyResponse",
+          "schemaName": "SuiUsdcTxPlanOnlyResponse",
+          "requiredFields": [],
+          "optionalFields": [
+            "chainFamily",
+            "chainNetwork",
+            "status",
+            "asset",
+            "executionAllowed",
+            "publicLaunchReady",
+            "apiSideExecution",
+            "repositoryMutation",
+            "objectBindingCreated",
+            "canaryActorAllowlistEnforced",
+            "transactionBytesBase64",
+            "orderId",
+            "target",
+            "orderBinding",
+            "packageIds",
+            "paymentCoinReadback",
+            "objectReadback",
+            "txPlan"
+          ],
+          "propertyNames": [
+            "chainFamily",
+            "chainNetwork",
+            "status",
+            "asset",
+            "executionAllowed",
+            "publicLaunchReady",
+            "apiSideExecution",
+            "repositoryMutation",
+            "objectBindingCreated",
+            "canaryActorAllowlistEnforced",
+            "transactionBytesBase64",
+            "orderId",
+            "target",
+            "orderBinding",
+            "packageIds",
+            "paymentCoinReadback",
+            "objectReadback",
+            "txPlan"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": "#/components/responses/NotFound",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": "#/components/responses/Conflict",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "releaseSuiOrderEscrowTxPlan": {
+      "path": "/orders/{orderId}/escrow/release-tx-plan",
+      "method": "post",
+      "tags": [
+        "Orders"
+      ],
+      "parameters": {
+        "path": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/SuiUsdcReleaseOrderEscrowTxPlanRequest",
+        "schemaName": "SuiUsdcReleaseOrderEscrowTxPlanRequest",
+        "requiredFields": [
+          "chainFamily",
+          "chainNetwork",
+          "asset",
+          "orderEscrowObjectId"
+        ],
+        "optionalFields": [],
+        "propertyNames": [
+          "chainFamily",
+          "chainNetwork",
+          "asset",
+          "orderEscrowObjectId"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/SuiUsdcTxPlanOnlyResponse",
+          "schemaName": "SuiUsdcTxPlanOnlyResponse",
+          "requiredFields": [],
+          "optionalFields": [
+            "chainFamily",
+            "chainNetwork",
+            "status",
+            "asset",
+            "executionAllowed",
+            "publicLaunchReady",
+            "apiSideExecution",
+            "repositoryMutation",
+            "objectBindingCreated",
+            "canaryActorAllowlistEnforced",
+            "transactionBytesBase64",
+            "orderId",
+            "target",
+            "orderBinding",
+            "packageIds",
+            "paymentCoinReadback",
+            "objectReadback",
+            "txPlan"
+          ],
+          "propertyNames": [
+            "chainFamily",
+            "chainNetwork",
+            "status",
+            "asset",
+            "executionAllowed",
+            "publicLaunchReady",
+            "apiSideExecution",
+            "repositoryMutation",
+            "objectBindingCreated",
+            "canaryActorAllowlistEnforced",
+            "transactionBytesBase64",
+            "orderId",
+            "target",
+            "orderBinding",
+            "packageIds",
+            "paymentCoinReadback",
+            "objectReadback",
+            "txPlan"
           ]
         },
         "400": {
@@ -21660,30 +22735,20 @@
         "200": {
           "status": "200",
           "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/UserComplianceProfile",
-          "schemaName": "UserComplianceProfile",
-          "requiredFields": [],
-          "optionalFields": [
-            "address",
-            "tier",
-            "acceptsClaw",
-            "accountType",
-            "traderVerificationStatus",
-            "traderVerificationPayload",
-            "traderVerificationNote",
-            "traderVerificationUpdatedAt",
-            "isBot"
+          "schemaRef": "#/components/schemas/ComplianceMeEnvelope",
+          "schemaName": "ComplianceMeEnvelope",
+          "requiredFields": [
+            "profile",
+            "compliance",
+            "documentVersions",
+            "ownerSurface"
           ],
+          "optionalFields": [],
           "propertyNames": [
-            "address",
-            "tier",
-            "acceptsClaw",
-            "accountType",
-            "traderVerificationStatus",
-            "traderVerificationPayload",
-            "traderVerificationNote",
-            "traderVerificationUpdatedAt",
-            "isBot"
+            "profile",
+            "compliance",
+            "documentVersions",
+            "ownerSurface"
           ]
         },
         "401": {
@@ -21728,30 +22793,20 @@
         "200": {
           "status": "200",
           "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/UserComplianceProfile",
-          "schemaName": "UserComplianceProfile",
-          "requiredFields": [],
-          "optionalFields": [
-            "address",
-            "tier",
-            "acceptsClaw",
-            "accountType",
-            "traderVerificationStatus",
-            "traderVerificationPayload",
-            "traderVerificationNote",
-            "traderVerificationUpdatedAt",
-            "isBot"
+          "schemaRef": "#/components/schemas/ComplianceMeEnvelope",
+          "schemaName": "ComplianceMeEnvelope",
+          "requiredFields": [
+            "profile",
+            "compliance",
+            "documentVersions",
+            "ownerSurface"
           ],
+          "optionalFields": [],
           "propertyNames": [
-            "address",
-            "tier",
-            "acceptsClaw",
-            "accountType",
-            "traderVerificationStatus",
-            "traderVerificationPayload",
-            "traderVerificationNote",
-            "traderVerificationUpdatedAt",
-            "isBot"
+            "profile",
+            "compliance",
+            "documentVersions",
+            "ownerSurface"
           ]
         },
         "400": {
@@ -21783,6 +22838,108 @@
         "403": {
           "status": "403",
           "reusableResponseRef": "#/components/responses/Forbidden",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        }
+      }
+    },
+    "setComplianceUseContext": {
+      "path": "/compliance/me/use-context",
+      "method": "post",
+      "tags": [
+        "Compliance"
+      ],
+      "parameters": {
+        "path": [],
+        "query": [],
+        "header": []
+      },
+      "requestBody": {
+        "required": true,
+        "schemaRef": "#/components/schemas/ComplianceUseContextRequest",
+        "schemaName": "ComplianceUseContextRequest",
+        "requiredFields": [
+          "useContext"
+        ],
+        "optionalFields": [
+          "consumerAcknowledgement",
+          "professionalAcknowledgement"
+        ],
+        "propertyNames": [
+          "useContext",
+          "consumerAcknowledgement",
+          "professionalAcknowledgement"
+        ]
+      },
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ComplianceMeEnvelope",
+          "schemaName": "ComplianceMeEnvelope",
+          "requiredFields": [
+            "profile",
+            "compliance",
+            "documentVersions",
+            "ownerSurface"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "profile",
+            "compliance",
+            "documentVersions",
+            "ownerSurface"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": "#/components/responses/BadRequest",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "403": {
+          "status": "403",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ErrorResponse",
           "schemaName": "ErrorResponse",
           "requiredFields": [
@@ -21833,30 +22990,20 @@
         "202": {
           "status": "202",
           "reusableResponseRef": null,
-          "schemaRef": "#/components/schemas/UserComplianceProfile",
-          "schemaName": "UserComplianceProfile",
-          "requiredFields": [],
-          "optionalFields": [
-            "address",
-            "tier",
-            "acceptsClaw",
-            "accountType",
-            "traderVerificationStatus",
-            "traderVerificationPayload",
-            "traderVerificationNote",
-            "traderVerificationUpdatedAt",
-            "isBot"
+          "schemaRef": "#/components/schemas/ComplianceMeEnvelope",
+          "schemaName": "ComplianceMeEnvelope",
+          "requiredFields": [
+            "profile",
+            "compliance",
+            "documentVersions",
+            "ownerSurface"
           ],
+          "optionalFields": [],
           "propertyNames": [
-            "address",
-            "tier",
-            "acceptsClaw",
-            "accountType",
-            "traderVerificationStatus",
-            "traderVerificationPayload",
-            "traderVerificationNote",
-            "traderVerificationUpdatedAt",
-            "isBot"
+            "profile",
+            "compliance",
+            "documentVersions",
+            "ownerSurface"
           ]
         },
         "400": {
@@ -21885,6 +23032,19 @@
             "error"
           ]
         },
+        "404": {
+          "status": "404",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
         "409": {
           "status": "409",
           "reusableResponseRef": null,
@@ -21896,6 +23056,39 @@
           "optionalFields": [],
           "propertyNames": [
             "error"
+          ]
+        },
+        "428": {
+          "status": "428",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
+          "schemaName": "BusinessWritePreconditionResponse",
+          "requiredFields": [],
+          "optionalFields": [
+            "error",
+            "detail",
+            "redirectTo",
+            "compliancePath",
+            "useContextPath",
+            "route",
+            "preconditionStatus",
+            "documentVersions",
+            "businessOnboarding",
+            "currentTermsVersion",
+            "currentRiskDisclosureVersion"
+          ],
+          "propertyNames": [
+            "error",
+            "detail",
+            "redirectTo",
+            "compliancePath",
+            "useContextPath",
+            "route",
+            "preconditionStatus",
+            "documentVersions",
+            "businessOnboarding",
+            "currentTermsVersion",
+            "currentRiskDisclosureVersion"
           ]
         }
       }
@@ -22609,6 +23802,9 @@
             "tier",
             "acceptsClaw",
             "accountType",
+            "useContext",
+            "consumerAcknowledgement",
+            "professionalAcknowledgement",
             "traderVerificationStatus",
             "traderVerificationPayload",
             "traderVerificationNote",
@@ -22620,6 +23816,9 @@
             "tier",
             "acceptsClaw",
             "accountType",
+            "useContext",
+            "consumerAcknowledgement",
+            "professionalAcknowledgement",
             "traderVerificationStatus",
             "traderVerificationPayload",
             "traderVerificationNote",
@@ -22807,6 +24006,9 @@
             "tier",
             "acceptsClaw",
             "accountType",
+            "useContext",
+            "consumerAcknowledgement",
+            "professionalAcknowledgement",
             "traderVerificationStatus",
             "traderVerificationPayload",
             "traderVerificationNote",
@@ -22818,6 +24020,9 @@
             "tier",
             "acceptsClaw",
             "accountType",
+            "useContext",
+            "consumerAcknowledgement",
+            "professionalAcknowledgement",
             "traderVerificationStatus",
             "traderVerificationPayload",
             "traderVerificationNote",
@@ -23322,6 +24527,130 @@
         "enableEmail"
       ]
     },
+    "ComplianceDocumentVersions": {
+      "name": "ComplianceDocumentVersions",
+      "propertyNames": [
+        "termsVersion",
+        "riskDisclosureVersion"
+      ],
+      "requiredFields": [
+        "termsVersion",
+        "riskDisclosureVersion"
+      ],
+      "optionalFields": []
+    },
+    "ComplianceOwnerSurfaceRoutes": {
+      "name": "ComplianceOwnerSurfaceRoutes",
+      "propertyNames": [
+        "profile",
+        "accountType",
+        "useContext",
+        "traderVerification"
+      ],
+      "requiredFields": [
+        "profile",
+        "accountType",
+        "useContext",
+        "traderVerification"
+      ],
+      "optionalFields": []
+    },
+    "ComplianceOwnerSurfaceRouteHints": {
+      "name": "ComplianceOwnerSurfaceRouteHints",
+      "propertyNames": [
+        "canonicalProfessionalOnboardingRoute",
+        "accountTypeRouteMode"
+      ],
+      "requiredFields": [
+        "canonicalProfessionalOnboardingRoute",
+        "accountTypeRouteMode"
+      ],
+      "optionalFields": []
+    },
+    "ComplianceBusinessOnboardingOption": {
+      "name": "ComplianceBusinessOnboardingOption",
+      "propertyNames": [
+        "key",
+        "label",
+        "description",
+        "enabled"
+      ],
+      "requiredFields": [
+        "key",
+        "label",
+        "description",
+        "enabled"
+      ],
+      "optionalFields": []
+    },
+    "ComplianceBusinessOnboardingConfirmation": {
+      "name": "ComplianceBusinessOnboardingConfirmation",
+      "propertyNames": [
+        "key",
+        "label"
+      ],
+      "requiredFields": [
+        "key",
+        "label"
+      ],
+      "optionalFields": []
+    },
+    "ComplianceBusinessOnboarding": {
+      "name": "ComplianceBusinessOnboarding",
+      "propertyNames": [
+        "state",
+        "submissionRoute",
+        "redirectTo",
+        "actorBinding",
+        "preconditionStatus",
+        "requiredForRoutes",
+        "contexts",
+        "confirmations"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "state",
+        "submissionRoute",
+        "redirectTo",
+        "actorBinding",
+        "preconditionStatus",
+        "requiredForRoutes",
+        "contexts",
+        "confirmations"
+      ]
+    },
+    "ComplianceOwnerSurface": {
+      "name": "ComplianceOwnerSurface",
+      "propertyNames": [
+        "surface",
+        "publicPortal",
+        "layer2",
+        "layer3"
+      ],
+      "requiredFields": [
+        "surface",
+        "publicPortal",
+        "layer2",
+        "layer3"
+      ],
+      "optionalFields": []
+    },
+    "ComplianceMeEnvelope": {
+      "name": "ComplianceMeEnvelope",
+      "propertyNames": [
+        "profile",
+        "compliance",
+        "documentVersions",
+        "ownerSurface"
+      ],
+      "requiredFields": [
+        "profile",
+        "compliance",
+        "documentVersions",
+        "ownerSurface"
+      ],
+      "optionalFields": []
+    },
     "ErrorResponse": {
       "name": "ErrorResponse",
       "propertyNames": [
@@ -23331,6 +24660,36 @@
         "error"
       ],
       "optionalFields": []
+    },
+    "BusinessWritePreconditionResponse": {
+      "name": "BusinessWritePreconditionResponse",
+      "propertyNames": [
+        "error",
+        "detail",
+        "redirectTo",
+        "compliancePath",
+        "useContextPath",
+        "route",
+        "preconditionStatus",
+        "documentVersions",
+        "businessOnboarding",
+        "currentTermsVersion",
+        "currentRiskDisclosureVersion"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "error",
+        "detail",
+        "redirectTo",
+        "compliancePath",
+        "useContextPath",
+        "route",
+        "preconditionStatus",
+        "documentVersions",
+        "businessOnboarding",
+        "currentTermsVersion",
+        "currentRiskDisclosureVersion"
+      ]
     },
     "AuthChallengeRequest": {
       "name": "AuthChallengeRequest",
@@ -23840,7 +25199,8 @@
         "amount",
         "currency",
         "orderId",
-        "communicationProposal"
+        "communicationProposal",
+        "ownerConfirmation"
       ],
       "requiredFields": [],
       "optionalFields": [
@@ -23849,13 +25209,30 @@
         "amount",
         "currency",
         "orderId",
-        "communicationProposal"
+        "communicationProposal",
+        "ownerConfirmation"
       ]
     },
     "AcceptBidRequest": {
       "name": "AcceptBidRequest",
       "propertyNames": [],
       "requiredFields": [],
+      "optionalFields": []
+    },
+    "BidAcceptOwnerConfirmation": {
+      "name": "BidAcceptOwnerConfirmation",
+      "propertyNames": [
+        "action",
+        "confirmed",
+        "termsVersion",
+        "riskDisclosureVersion"
+      ],
+      "requiredFields": [
+        "action",
+        "confirmed",
+        "termsVersion",
+        "riskDisclosureVersion"
+      ],
       "optionalFields": []
     },
     "SponsorTxFamily": {
@@ -25013,6 +26390,84 @@
         "txMoveCall"
       ]
     },
+    "SuiUsdcCreateOrderEscrowTxPlanRequest": {
+      "name": "SuiUsdcCreateOrderEscrowTxPlanRequest",
+      "propertyNames": [
+        "chainFamily",
+        "chainNetwork",
+        "asset",
+        "paymentCoinObjectId",
+        "deadlineMs"
+      ],
+      "requiredFields": [
+        "chainFamily",
+        "chainNetwork",
+        "asset",
+        "paymentCoinObjectId",
+        "deadlineMs"
+      ],
+      "optionalFields": []
+    },
+    "SuiUsdcReleaseOrderEscrowTxPlanRequest": {
+      "name": "SuiUsdcReleaseOrderEscrowTxPlanRequest",
+      "propertyNames": [
+        "chainFamily",
+        "chainNetwork",
+        "asset",
+        "orderEscrowObjectId"
+      ],
+      "requiredFields": [
+        "chainFamily",
+        "chainNetwork",
+        "asset",
+        "orderEscrowObjectId"
+      ],
+      "optionalFields": []
+    },
+    "SuiUsdcTxPlanOnlyResponse": {
+      "name": "SuiUsdcTxPlanOnlyResponse",
+      "propertyNames": [
+        "chainFamily",
+        "chainNetwork",
+        "status",
+        "asset",
+        "executionAllowed",
+        "publicLaunchReady",
+        "apiSideExecution",
+        "repositoryMutation",
+        "objectBindingCreated",
+        "canaryActorAllowlistEnforced",
+        "transactionBytesBase64",
+        "orderId",
+        "target",
+        "orderBinding",
+        "packageIds",
+        "paymentCoinReadback",
+        "objectReadback",
+        "txPlan"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "chainFamily",
+        "chainNetwork",
+        "status",
+        "asset",
+        "executionAllowed",
+        "publicLaunchReady",
+        "apiSideExecution",
+        "repositoryMutation",
+        "objectBindingCreated",
+        "canaryActorAllowlistEnforced",
+        "transactionBytesBase64",
+        "orderId",
+        "target",
+        "orderBinding",
+        "packageIds",
+        "paymentCoinReadback",
+        "objectReadback",
+        "txPlan"
+      ]
+    },
     "ReviewerSummary": {
       "name": "ReviewerSummary",
       "propertyNames": [
@@ -26158,6 +27613,62 @@
       "requiredFields": [],
       "optionalFields": []
     },
+    "DisputeBondRecommendationPolicy": {
+      "name": "DisputeBondRecommendationPolicy",
+      "propertyNames": [
+        "source",
+        "updateMode",
+        "envKeys",
+        "model",
+        "priceDependency",
+        "sameAssetOnly",
+        "reviewerVotesSource",
+        "exactLaneBehavior",
+        "assetProfiles"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "source",
+        "updateMode",
+        "envKeys",
+        "model",
+        "priceDependency",
+        "sameAssetOnly",
+        "reviewerVotesSource",
+        "exactLaneBehavior",
+        "assetProfiles"
+      ]
+    },
+    "ResolvedDisputeBondRecommendation": {
+      "name": "ResolvedDisputeBondRecommendation",
+      "propertyNames": [
+        "status",
+        "source",
+        "model",
+        "priceDependency",
+        "requiredReviewerVotesUsed",
+        "hardMinPerSideAmount",
+        "hardMaxPerSideAmount",
+        "recommendedPerSideAmount",
+        "warningBelowPerSideAmount",
+        "exactLaneCollapsed",
+        "reasonCodes"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "status",
+        "source",
+        "model",
+        "priceDependency",
+        "requiredReviewerVotesUsed",
+        "hardMinPerSideAmount",
+        "hardMaxPerSideAmount",
+        "recommendedPerSideAmount",
+        "warningBelowPerSideAmount",
+        "exactLaneCollapsed",
+        "reasonCodes"
+      ]
+    },
     "DisputeBondGuidance": {
       "name": "DisputeBondGuidance",
       "propertyNames": [
@@ -26172,7 +27683,8 @@
         "minRequiredReviewerVotes",
         "maxRequiredReviewerVotes",
         "selectedRequiredReviewerVotes",
-        "selectedRequiredReviewerVotesFloor"
+        "selectedRequiredReviewerVotesFloor",
+        "recommendation"
       ],
       "requiredFields": [],
       "optionalFields": [
@@ -26187,7 +27699,8 @@
         "minRequiredReviewerVotes",
         "maxRequiredReviewerVotes",
         "selectedRequiredReviewerVotes",
-        "selectedRequiredReviewerVotesFloor"
+        "selectedRequiredReviewerVotesFloor",
+        "recommendation"
       ]
     },
     "Order": {
@@ -26720,6 +28233,53 @@
       ],
       "optionalFields": []
     },
+    "ComplianceUseContextRequest": {
+      "name": "ComplianceUseContextRequest",
+      "propertyNames": [
+        "useContext",
+        "consumerAcknowledgement",
+        "professionalAcknowledgement"
+      ],
+      "requiredFields": [
+        "useContext"
+      ],
+      "optionalFields": [
+        "consumerAcknowledgement",
+        "professionalAcknowledgement"
+      ]
+    },
+    "ConsumerAcknowledgementRequest": {
+      "name": "ConsumerAcknowledgementRequest",
+      "propertyNames": [
+        "acknowledgedRisks",
+        "confirmedAge18Plus",
+        "termsVersion",
+        "riskDisclosureVersion"
+      ],
+      "requiredFields": [
+        "acknowledgedRisks",
+        "confirmedAge18Plus",
+        "termsVersion",
+        "riskDisclosureVersion"
+      ],
+      "optionalFields": []
+    },
+    "ProfessionalAcknowledgementRequest": {
+      "name": "ProfessionalAcknowledgementRequest",
+      "propertyNames": [
+        "confirmedProfessionalCapacity",
+        "confirmedAge18Plus",
+        "termsVersion",
+        "riskDisclosureVersion"
+      ],
+      "requiredFields": [
+        "confirmedProfessionalCapacity",
+        "confirmedAge18Plus",
+        "termsVersion",
+        "riskDisclosureVersion"
+      ],
+      "optionalFields": []
+    },
     "TraderVerificationRequest": {
       "name": "TraderVerificationRequest",
       "propertyNames": [
@@ -26781,6 +28341,9 @@
         "tier",
         "acceptsClaw",
         "accountType",
+        "useContext",
+        "consumerAcknowledgement",
+        "professionalAcknowledgement",
         "traderVerificationStatus",
         "traderVerificationPayload",
         "traderVerificationNote",
@@ -26793,12 +28356,51 @@
         "tier",
         "acceptsClaw",
         "accountType",
+        "useContext",
+        "consumerAcknowledgement",
+        "professionalAcknowledgement",
         "traderVerificationStatus",
         "traderVerificationPayload",
         "traderVerificationNote",
         "traderVerificationUpdatedAt",
         "isBot"
       ]
+    },
+    "ConsumerAcknowledgement": {
+      "name": "ConsumerAcknowledgement",
+      "propertyNames": [
+        "acknowledgedRisks",
+        "confirmedAge18Plus",
+        "termsVersion",
+        "riskDisclosureVersion",
+        "acknowledgedAt"
+      ],
+      "requiredFields": [
+        "acknowledgedRisks",
+        "confirmedAge18Plus",
+        "termsVersion",
+        "riskDisclosureVersion",
+        "acknowledgedAt"
+      ],
+      "optionalFields": []
+    },
+    "ProfessionalAcknowledgement": {
+      "name": "ProfessionalAcknowledgement",
+      "propertyNames": [
+        "confirmedProfessionalCapacity",
+        "confirmedAge18Plus",
+        "termsVersion",
+        "riskDisclosureVersion",
+        "acknowledgedAt"
+      ],
+      "requiredFields": [
+        "confirmedProfessionalCapacity",
+        "confirmedAge18Plus",
+        "termsVersion",
+        "riskDisclosureVersion",
+        "acknowledgedAt"
+      ],
+      "optionalFields": []
     },
     "AdminTierUpdateRequest": {
       "name": "AdminTierUpdateRequest",
@@ -26940,15 +28542,61 @@
         "discoverySnapshotOnlyMode",
         "actorReadThrottleMode",
         "sponsorEmergencyMode",
+        "maintenance",
         "readLanes"
       ],
       "requiredFields": [
         "discoverySnapshotOnlyMode",
         "actorReadThrottleMode",
         "sponsorEmergencyMode",
+        "maintenance",
         "readLanes"
       ],
       "optionalFields": []
+    },
+    "RuntimeControlPlaneSummary": {
+      "name": "RuntimeControlPlaneSummary",
+      "propertyNames": [
+        "preset",
+        "publicApiWrites",
+        "publicWeb"
+      ],
+      "requiredFields": [
+        "preset",
+        "publicApiWrites",
+        "publicWeb"
+      ],
+      "optionalFields": []
+    },
+    "PublicRuntimeControlPlane": {
+      "name": "PublicRuntimeControlPlane",
+      "propertyNames": [
+        "preset",
+        "publicWeb",
+        "publicApiReads",
+        "publicApiWrites",
+        "legalPrivacyImprint",
+        "adminApi",
+        "reason",
+        "effectiveAt",
+        "expiresAt",
+        "updatedAt",
+        "source"
+      ],
+      "requiredFields": [],
+      "optionalFields": [
+        "preset",
+        "publicWeb",
+        "publicApiReads",
+        "publicApiWrites",
+        "legalPrivacyImprint",
+        "adminApi",
+        "reason",
+        "effectiveAt",
+        "expiresAt",
+        "updatedAt",
+        "source"
+      ]
     },
     "BotDiscoverySnapshot": {
       "name": "BotDiscoverySnapshot",

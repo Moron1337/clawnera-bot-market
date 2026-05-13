@@ -12,7 +12,10 @@ CLAW_ROOT="${CLAW_ROOT:-}"
 
 if [[ -z "$MARKETPLACE_SOURCE_ROOT" ]]; then
   for candidate in "$ROOT_DIR/.." "$HOME"/*; do
-    if [[ -f "$candidate/apps/api/openapi.yaml" ]] && [[ -f "$candidate/contracts/claw_marketplace/ci/callable_surface.snapshot" ]]; then
+    if [[ -f "$candidate/apps/api/openapi.yaml" ]] && {
+      [[ -f "$candidate/contracts/claw_marketplace/ci/callable_surface.snapshot" ]] ||
+        [[ -f "$candidate/contracts/claw_settlement_core/ci/callable_surface.snapshot" ]]
+    }; then
       MARKETPLACE_SOURCE_ROOT="$candidate"
       break
     fi
@@ -71,7 +74,11 @@ copy_if_exists "$MARKETPLACE_SOURCE_ROOT/apps/api/openapi.public.yaml" "$OUT_DIR
 copy_if_exists "$MARKETPLACE_SOURCE_ROOT/apps/api/openapi.advanced.yaml" "$OUT_DIR/core/openapi.advanced.yaml"
 copy_if_exists "$MARKETPLACE_SOURCE_ROOT/apps/api/openapi.reviewer-self.yaml" "$OUT_DIR/core/openapi.reviewer-self.yaml"
 copy_if_exists "$MARKETPLACE_SOURCE_ROOT/packages/sdk/src/generated/apiContract.json" "$OUT_DIR/core/apiContract.json"
-copy_if_exists "$MARKETPLACE_SOURCE_ROOT/contracts/claw_marketplace/ci/callable_surface.snapshot" "$OUT_DIR/core/callable_surface.snapshot"
+if [[ -f "$MARKETPLACE_SOURCE_ROOT/contracts/claw_marketplace/ci/callable_surface.snapshot" ]]; then
+  copy_if_exists "$MARKETPLACE_SOURCE_ROOT/contracts/claw_marketplace/ci/callable_surface.snapshot" "$OUT_DIR/core/callable_surface.snapshot"
+else
+  copy_if_exists "$MARKETPLACE_SOURCE_ROOT/contracts/claw_settlement_core/ci/callable_surface.snapshot" "$OUT_DIR/core/callable_surface.snapshot"
+fi
 
 # CLAW ecosystem docs
 if [[ -n "$CLAW_ROOT" ]]; then

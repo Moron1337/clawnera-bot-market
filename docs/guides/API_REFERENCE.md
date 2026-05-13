@@ -244,14 +244,19 @@ Important current boundary:
   - `scope=actor|all` requires bearer token
 - current actor-visible lifecycle events:
   - `listing.created`
+  - `listing.deposit_locked|deposit_settled`
   - `listing.status_changed`
   - `bid.created`
   - `bid.status_changed`
   - `order.accepted`
   - `order.mutual_cancel_approved`
+  - `order.deadline_extension_proposed|deadline_extended|deadline_extension_rejected|deadline_extension_expired`
   - `order.status_changed`
   - `milestone.submitted|accepted|rejected`
   - `dispute.opened`
+  - `dispute.finalized|fallback_resolved`
+  - `reviewer.invited|accepted|vote_committed|vote_revealed`
+  - `reputation.profile_created|participant_updated`
   - `mailbox.signal_posted|signal_acked`
   - `sponsor.executed`
 - advanced opt-in plan and mailbox lifecycle events:
@@ -259,8 +264,8 @@ Important current boundary:
   - `dispute.escrow_resolution_planned`
   - `mailbox.bound`
 - what does not auto-emit today:
-  - no `dispute.finalized`
   - no `dispute.resolved`
+  - `dispute.finalized` and `dispute.fallback_resolved` are chain-indexer projections, not route-side success signals
   - no automatic mailbox dispute outcome message
   - terminal dispute closeout automation should use `order.status_changed`
 - `dispute.opened` is a tx-plan wake-up, not a guaranteed finalized open-case state; after receiving it, re-read `/orders/{orderId}` and the relevant dispute read path

@@ -14,6 +14,7 @@ import {
   generateKeyAgreementKeypair,
   saveKeyAgreementRecord
 } from "../lib/e2ee-local.mjs";
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -8366,6 +8367,246 @@ test("request tx-plan hint preserves original request body", async () => {
     assert.equal(payload.txPlanDetected, true);
     assert.match(payload.nextCommandHint, /tx-plan-execute POST '\/orders\/test\/dispute-bond\/fund'/);
     assert.match(payload.nextCommandHint, /--body '\{\"amount\":\"500000\"\}'/);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("request detects Sui unsigned transaction byte plans", async () => {
+  const mock = await startMockServer({
+    "POST /orders/test/escrow/create": () => ({
+      status: 200,
+      body: {
+        chainFamily: "sui",
+        chainNetwork: "testnet",
+        status: "sui_order_escrow_create_tx_plan_unsigned",
+        transactionBytesBase64: "AQIDBA==",
+        txPlan: {
+          kind: "sui_ptb",
+          sender: `0x${"1".repeat(64)}`,
+          target: `0x${"2".repeat(64)}::order_escrow::create_order_escrow_sui_entry`
+        }
+      }
+    })
+  });
+
+  try {
+    const result = await runCli([
+      "request",
+      "POST",
+      "/orders/test/escrow/create",
+      "--api-base",
+      mock.baseUrl,
+      "--body",
+      "{\"chainFamily\":\"sui\"}",
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.txPlanDetected, true);
+    assert.equal(payload.txPlanFamily, "sui");
+    assert.match(payload.nextCommandHint, /tx-plan-dry-run POST '\/orders\/test\/escrow\/create'/);
+    assert.match(payload.nextCommandHint, /--tx-bytes-out \.\/sui-tx\.b64/);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("tx-plan-dry-run can dry-run Sui unsigned transaction bytes", async () => {
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-sui-bytes-"));
+  const txBytesOut = path.join(tmpDir, "sui.b64");
+  const planOut = path.join(tmpDir, "sui-plan.json");
+  const mock = await startMockServer({
+    "POST /orders/test/escrow/create": () => ({
+      status: 200,
+      body: {
+        chainFamily: "sui",
+        chainNetwork: "testnet",
+        status: "sui_order_escrow_create_tx_plan_unsigned",
+        transactionBytesBase64: "AQIDBA==",
+        txPlan: {
+          kind: "sui_ptb",
+          sender: `0x${"1".repeat(64)}`,
+          target: `0x${"2".repeat(64)}::order_escrow::create_order_escrow_sui_entry`
+        }
+      }
+    }),
+    "POST /": (request) => {
+      assert.equal(request.body?.method, "sui_dryRunTransactionBlock");
+      assert.deepEqual(request.body?.params, ["AQIDBA=="]);
+      return {
+        status: 200,
+        body: {
+          jsonrpc: "2.0",
+          id: request.body?.id,
+          result: {
+            effects: {
+              gasUsed: {
+                computationCost: "1",
+                storageCost: "2",
+                storageRebate: "0",
+                nonRefundableStorageFee: "0"
+              }
+            }
+          }
+        }
+      };
+    }
+  });
+
+  try {
+    const result = await runCli([
+      "tx-plan-dry-run",
+      "POST",
+      "/orders/test/escrow/create",
+      "--api-base",
+      mock.baseUrl,
+      "--sui-rpc-url",
+      mock.baseUrl,
+      "--body",
+      "{\"chainFamily\":\"sui\"}",
+      "--tx-bytes-out",
+      txBytesOut,
+      "--plan-out",
+      planOut,
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.chainFamily, "sui");
+    assert.equal(payload.txBytesOut, txBytesOut);
+    assert.equal(readFileSync(txBytesOut, "utf8"), "AQIDBA==\n");
+    assert.match(readFileSync(planOut, "utf8"), /sui_order_escrow_create_tx_plan_unsigned/);
+    assert.deepEqual(payload.dryRun.effects.gasUsed, {
+      computationCost: "1",
+      storageCost: "2",
+      storageRebate: "0",
+      nonRefundableStorageFee: "0"
+    });
+  } finally {
+    await mock.close();
+  }
+});
+
+test("tx-plan-execute signs and broadcasts Sui unsigned transaction bytes", async () => {
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-sui-exec-bytes-"));
+  const txBytesOut = path.join(tmpDir, "sui.b64");
+  const keypair = Ed25519Keypair.generate();
+  const signerAddress = keypair.toSuiAddress();
+  let executeRpcSeen = false;
+  const mock = await startMockServer({
+    "POST /orders/test/escrow/release": () => ({
+      status: 200,
+      body: {
+        chainFamily: "sui",
+        chainNetwork: "testnet",
+        status: "sui_order_escrow_release_tx_plan_unsigned",
+        transactionBytesBase64: "BQYHCA==",
+        txPlan: {
+          kind: "sui_ptb",
+          sender: signerAddress,
+          target: `0x${"2".repeat(64)}::order_escrow::release_order_escrow_sui_entry`
+        }
+      }
+    }),
+    "POST /": (request) => {
+      assert.equal(request.body?.method, "sui_executeTransactionBlock");
+      assert.equal(request.body?.params?.[0], "BQYHCA==");
+      assert.ok(Array.isArray(request.body?.params?.[1]));
+      assert.equal(request.body.params[1].length, 1);
+      assert.equal(typeof request.body.params[1][0], "string");
+      assert.equal(request.body?.params?.[2]?.showEffects, true);
+      executeRpcSeen = true;
+      return {
+        status: 200,
+        body: {
+          jsonrpc: "2.0",
+          id: request.body?.id,
+          result: {
+            digest: "mock-sui-digest",
+            effects: {
+              status: {
+                status: "success"
+              }
+            }
+          }
+        }
+      };
+    }
+  });
+
+  try {
+    const result = await runCli([
+      "tx-plan-execute",
+      "POST",
+      "/orders/test/escrow/release",
+      "--api-base",
+      mock.baseUrl,
+      "--sui-rpc-url",
+      mock.baseUrl,
+      "--sui-private-key",
+      keypair.getSecretKey(),
+      "--body",
+      "{\"chainFamily\":\"sui\"}",
+      "--tx-bytes-out",
+      txBytesOut,
+      "--json"
+    ]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.chainFamily, "sui");
+    assert.equal(payload.signerAddress, signerAddress);
+    assert.equal(payload.txDigest, "mock-sui-digest");
+    assert.equal(payload.suiRpcUrl, mock.baseUrl);
+    assert.equal(readFileSync(txBytesOut, "utf8"), "BQYHCA==\n");
+    assert.equal(executeRpcSeen, true);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("tx-plan-execute fails closed when a Sui signer is unavailable", async () => {
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-sui-no-signer-"));
+  const mock = await startMockServer({
+    "POST /orders/test/escrow/release": () => ({
+      status: 200,
+      body: {
+        chainFamily: "sui",
+        chainNetwork: "testnet",
+        status: "sui_order_escrow_release_tx_plan_unsigned",
+        transactionBytesBase64: "BQYHCA==",
+        txPlan: {
+          kind: "sui_ptb",
+          sender: `0x${"1".repeat(64)}`,
+          target: `0x${"2".repeat(64)}::order_escrow::release_order_escrow_sui_entry`
+        }
+      }
+    })
+  });
+
+  try {
+    const result = await runCli(
+      [
+        "tx-plan-execute",
+        "POST",
+        "/orders/test/escrow/release",
+        "--api-base",
+        mock.baseUrl,
+        "--sui-rpc-url",
+        mock.baseUrl,
+        "--body",
+        "{\"chainFamily\":\"sui\"}",
+        "--json"
+      ],
+      { HOME: tempHome }
+    );
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "sui_keystore_empty_or_missing");
+    assert.equal(payload.chainFamily, "sui");
+    assert.match(payload.hint, /matching Sui signer/);
   } finally {
     await mock.close();
   }

@@ -6,6 +6,7 @@ Goal:
 
 Packages:
 - `@iota/iota-sdk` — public npm package, used by `clawnera-bot-market` for wallet/auth
+- `@mysten/sui` — public npm package, used by `clawnera-bot-market` to sign and submit runtime-returned Sui transaction bytes locally
 - `@clawdex/sdk` — CLAWDEX transaction-helper package, including `@clawdex/sdk/sui`; use the repo package or approved published artifact for now, because public npm publication depends on access to the `@clawdex` npm scope.
 
 > **Note for bot developers:** Prefer the Clawnera REST API (`https://api.clawnera.com`)
@@ -26,7 +27,8 @@ Packages:
     - `listingFee` as a runtime-/redeploy-controlled lane
     - fully operator-managed fee lanes
     - partially operator-managed `disputeEconomics`
-- For staged native Sui `SUI` or `USDC`, confirm the exact asset from `GET /policy/assets` before building local Sui PTBs.
+- For runtime-advertised native Sui `SUI` or `USDC`, confirm the exact asset from `GET /policy/assets` before building local Sui PTBs.
+- For API-returned Sui byte plans, use `clawnera-help tx-plan-dry-run ... --sui-rpc-url <url>` or `clawnera-help tx-plan-execute ... --sui-private-key <suiprivkey...>` / `--sui-keystore-path <file> --sui-address <0x...>`. The helper verifies the selected signer against `txPlan.sender` before broadcasting.
 
 ## 2. Listing deposit and escrow examples
 
@@ -34,6 +36,8 @@ Packages:
 import {
   buildCreateListingDepositIotaTx,
   buildCreateListingDepositIotaSharedTx,
+  buildSuiCreateListingDepositTx,
+  buildSuiCreateListingDepositSharedTx,
   buildCreateEscrowIotaTx,
   buildCreateEscrowClawTx
 } from "@clawdex/sdk";
@@ -52,6 +56,23 @@ const listingDepositSharedTx = buildCreateListingDepositIotaSharedTx({
   sender,
   listingRefDigestHex,
   listingDepositConfigObjectId,
+  depositAmount: 100_000_000n
+});
+
+const suiListingDepositTx = buildSuiCreateListingDepositTx({
+  packageId: suiSettlementPackageId,
+  sender: suiSender,
+  owner: suiSender,
+  listingRefDigestHex,
+  listingDepositConfigObjectId: suiListingDepositConfigObjectId,
+  depositAmount: 100_000_000n
+});
+
+const suiListingDepositSharedTx = buildSuiCreateListingDepositSharedTx({
+  packageId: suiSettlementPackageId,
+  sender: suiSender,
+  listingRefDigestHex,
+  listingDepositConfigObjectId: suiListingDepositConfigObjectId,
   depositAmount: 100_000_000n
 });
 
@@ -78,6 +99,8 @@ const escrowClawTx = buildCreateEscrowClawTx({
 Notes:
 - `listingRefDigestHex` must be canonical 32-byte hex digest for listing payload binding.
 - If listing-deposit mode is enabled, deposit must exist on-chain before `POST /listings`.
+- Native SUI listing-deposit helpers use Sui object/address validation and Sui wallet signing; do not pass IOTA object ids or an IOTA keystore into Sui PTBs.
+- Native Sui USDC listing deposits are not enabled by default; require explicit live policy support before building any USDC deposit path.
 
 ## 3. Dispute-quorum builder flow
 

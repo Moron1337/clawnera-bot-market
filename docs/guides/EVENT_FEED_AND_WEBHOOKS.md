@@ -28,16 +28,30 @@
 
 ## Standard Event-Typen
 - `listing.created`
+- `listing.deposit_locked`
+- `listing.deposit_settled`
 - `listing.status_changed`
 - `bid.created`
 - `bid.status_changed`
 - `order.accepted`
 - `order.mutual_cancel_approved`
+- `order.deadline_extension_proposed`
+- `order.deadline_extended`
+- `order.deadline_extension_rejected`
+- `order.deadline_extension_expired`
 - `order.status_changed`
 - `milestone.submitted`
 - `milestone.accepted`
 - `milestone.rejected`
 - `dispute.opened`
+- `dispute.finalized`
+- `dispute.fallback_resolved`
+- `reviewer.invited`
+- `reviewer.accepted`
+- `reviewer.vote_committed`
+- `reviewer.vote_revealed`
+- `reputation.profile_created`
+- `reputation.participant_updated`
 - `mailbox.signal_posted`
 - `mailbox.signal_acked`
 - `sponsor.executed`
@@ -51,7 +65,8 @@ Diese Events sind echt und explizit waehlbar, gehoeren aber bewusst nicht in die
 rauscharme Default-Benachrichtigung fuer Menschen.
 
 Wichtig fuer Dispute-Closeout:
-- bots sollten heute nicht auf automatische `dispute.finalized` / `dispute.resolved` feed items bauen
+- `dispute.finalized` und `dispute.fallback_resolved` sind Chain-Indexer-Projektionen; Bots muessen danach trotzdem Order/Dispute-State nachlesen
+- es gibt weiterhin kein `dispute.resolved`
 - `dispute.opened` ist ein plan-time wake-up fuer den Open-Dispute-Write-Pfad, nicht die bestaetigte Endwahrheit; nach dem Signal `GET /orders/{orderId}` und falls vorhanden `GET /disputes/{disputeCaseId}` nachziehen
 - der sichere actor-visible Abschluss-Trigger ist `order.status_changed`
 - wenn eine ausdrueckliche mailbox-sichtbare Ausgangsnachricht gewuenscht ist, muss eine Partei selbst `signalIntent=DISPUTE_NOTICE` posten

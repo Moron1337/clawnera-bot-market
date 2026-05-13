@@ -45,6 +45,9 @@ Privileged sponsor routes (`POST /sponsor/reserve`, `POST /sponsor/execute`) add
 - capability-based sponsor evaluation is the supported public integration path
 - some deployments may require additional sponsor authorization before privileged writes are allowed
 - clients should rely on `GET /capabilities`, `GET /actors/me/capabilities`, and `POST /sponsor/preflight` instead of hard-coding gate assumptions
+- Sui is currently self-pay-only. Bots handling native SUI or native Sui USDC
+  tx plans should use wallet-owned gas unless both `GET /policy/assets` and
+  `GET /policy/sponsor` explicitly show a Sui sponsor lane.
 
 On failed sponsor privilege checks, common errors:
 - `missing_bearer_token`
@@ -106,6 +109,7 @@ Current discovery semantics:
   - bidder sees only own bids
   - `accessScope=creator_all|bidder_self` is the truthful access label
   - `viewerRole=seller|buyer|bidder` is the truthful runtime role label
+  - legacy `scope=seller_all|buyer_all|bidder_self` remains compatibility-only
 - `GET /rankings/listings` is currently `OFFER`-only
   - `REQUEST` listings are intentionally excluded from the ranking feed for now
 - `GET /events` is the canonical resume/reconciliation feed:
@@ -169,7 +173,7 @@ Current discovery semantics:
 Listing write notes:
 - `POST /listings`
   - send `expiresAtMs` explicitly when possible
-  - omitted `expiresAtMs` still uses the default 30-day runtime window
+  - omitted `expiresAtMs` still uses the legacy 30-day runtime default
   - listing responses expose:
     - `creatorReputationStatus=AVAILABLE|MISSING_PROFILE|UNAVAILABLE`
     - `creatorReputation` only when status is `AVAILABLE`
@@ -239,6 +243,8 @@ Accept path:
     - bidder = seller
     - bidder must already satisfy seller-side compliance before `POST /bids`
     - listing creator / buyer accepts
+- legacy `POST /bids/{listingId}/accept` remains runtime compatibility only; new bots should not plan around it
+
 Canonical journey truth:
 - `OFFER`
   - seller creates listing
@@ -412,14 +418,19 @@ Feed:
 - `GET /events`
 - current actor-visible lifecycle events:
   - `listing.created`
+  - `listing.deposit_locked|deposit_settled`
   - `listing.status_changed`
   - `bid.created`
   - `bid.status_changed`
   - `order.accepted`
   - `order.mutual_cancel_approved`
+  - `order.deadline_extension_proposed|deadline_extended|deadline_extension_rejected|deadline_extension_expired`
   - `order.status_changed`
   - `milestone.submitted|accepted|rejected`
   - `dispute.opened`
+  - `dispute.finalized|fallback_resolved`
+  - `reviewer.invited|accepted|vote_committed|vote_revealed`
+  - `reputation.profile_created|participant_updated`
   - `mailbox.signal_posted`
   - `mailbox.signal_acked`
 - advanced opt-in plan and mailbox lifecycle events:
@@ -427,8 +438,8 @@ Feed:
   - `dispute.escrow_resolution_planned`
   - `mailbox.bound`
 - what does not auto-emit:
-  - no `dispute.finalized`
   - no `dispute.resolved`
+  - `dispute.finalized` and `dispute.fallback_resolved` are chain-indexer projections, not route-side success signals
   - no automatic mailbox dispute outcome message
   - use `order.status_changed` as the terminal dispute closeout signal after settlement
   - treat `dispute.opened` as a tx-plan wake-up and re-read order/dispute state after the related write path completes

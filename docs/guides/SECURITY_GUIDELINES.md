@@ -22,7 +22,7 @@
 
 ## On-Chain Safety
 - Vor jedem Call: `packageId`, Objekt-IDs, Coin-Type pruefen.
-- Payment-Regel beachten: nur Runtime-advertisierte Assets aus `GET /policy/assets`; aktuell IOTA/CLAW plus staged native Sui SUI/USDC.
+- Payment-Regel beachten: nur Runtime-advertisierte Assets aus `GET /policy/assets`; aktuell IOTA/CLAW plus runtime-advertised native Sui SUI/USDC.
 - Fallback-/Timeout-Pfade bewusst und explizit behandeln.
 
 ## Incident Verhalten

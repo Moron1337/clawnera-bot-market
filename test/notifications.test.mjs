@@ -45,24 +45,30 @@ test("explicit advanced event types are accepted even when presets stay low-nois
   const resolved = resolveNotificationEventTypes({
     preset: "buyer",
     eventTypes:
-      "dispute.finalization_planned,dispute.escrow_resolution_planned,reviewer.invited,mailbox.bound,mailbox.signal_acked"
+      "dispute.finalization_planned,dispute.escrow_resolution_planned,dispute.finalized,dispute.fallback_resolved,reviewer.invited,reviewer.vote_committed,listing.deposit_locked,reputation.participant_updated,order.deadline_extended,mailbox.bound,mailbox.signal_acked"
   });
   assert.ok(resolved.eventTypes.includes("order.status_changed"));
+  assert.ok(resolved.eventTypes.includes("order.deadline_extended"));
+  assert.ok(resolved.eventTypes.includes("listing.deposit_locked"));
   assert.ok(resolved.eventTypes.includes("dispute.finalization_planned"));
   assert.ok(resolved.eventTypes.includes("dispute.escrow_resolution_planned"));
+  assert.ok(resolved.eventTypes.includes("dispute.finalized"));
+  assert.ok(resolved.eventTypes.includes("dispute.fallback_resolved"));
   assert.ok(resolved.eventTypes.includes("reviewer.invited"));
+  assert.ok(resolved.eventTypes.includes("reviewer.vote_committed"));
+  assert.ok(resolved.eventTypes.includes("reputation.participant_updated"));
   assert.ok(resolved.eventTypes.includes("mailbox.bound"));
   assert.ok(resolved.eventTypes.includes("mailbox.signal_acked"));
   assert.deepEqual(resolved.invalidEventTypes, []);
 });
 
-test("removed drift dispute event types are rejected explicitly", () => {
+test("removed drift dispute resolved event type is rejected explicitly", () => {
   const resolved = resolveNotificationEventTypes({
     preset: "buyer",
     eventTypes: "dispute.finalized,dispute.resolved"
   });
-  assert.deepEqual(resolved.invalidEventTypes, ["dispute.finalized", "dispute.resolved"]);
-  assert.equal(resolved.eventTypes.includes("dispute.finalized"), false);
+  assert.deepEqual(resolved.invalidEventTypes, ["dispute.resolved"]);
+  assert.equal(resolved.eventTypes.includes("dispute.finalized"), true);
   assert.equal(resolved.eventTypes.includes("dispute.resolved"), false);
 });
 
@@ -160,6 +166,28 @@ test("advanced dispute and mailbox event formatting stays human-readable", () =>
   assert.match(reviewerInviteText, /^Clawnera reviewer invite/m);
   assert.match(reviewerInviteText, /A reviewer invite is now live for this wallet/);
   assert.match(reviewerInviteText, /assignmentRound: 2/);
+
+  const deadlineText = formatNotificationEventForTelegram({
+    eventType: "order.deadline_extended",
+    payloadJson: {
+      orderId: "order-1",
+      extensionObjectId: "0xext",
+      newDeadlineMs: "1710003600000"
+    }
+  });
+  assert.match(deadlineText, /^Clawnera deadline update/m);
+  assert.match(deadlineText, /Order deadline extended/);
+
+  const disputeFinalizedText = formatNotificationEventForTelegram({
+    eventType: "dispute.finalized",
+    payloadJson: {
+      orderId: "order-1",
+      disputeCaseId: "case-1",
+      winningSide: "seller"
+    }
+  });
+  assert.match(disputeFinalizedText, /^Clawnera dispute settled/m);
+  assert.match(disputeFinalizedText, /Dispute finalized on-chain/);
 });
 
 test("notification service text points at the generic event notifier", () => {

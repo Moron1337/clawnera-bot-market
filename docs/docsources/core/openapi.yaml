@@ -34,7 +34,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [status, appEnv, sponsorMode, compliance]
+                required: [status, appEnv, sponsorMode, compliance, runtimeControlPlane]
                 properties:
                   status:
                     type: string
@@ -46,6 +46,8 @@ paths:
                     enum: [mock, live]
                   compliance:
                     $ref: "#/components/schemas/ComplianceFlags"
+                  runtimeControlPlane:
+                    $ref: "#/components/schemas/RuntimeControlPlaneSummary"
   /ready:
     get:
       tags: [Health]
@@ -58,13 +60,15 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [status, sponsorLiveConfigured]
+                required: [status, sponsorLiveConfigured, runtimeControlPlane]
                 properties:
                   status:
                     type: string
                     enum: [ready]
                   sponsorLiveConfigured:
                     type: boolean
+                  runtimeControlPlane:
+                    $ref: "#/components/schemas/RuntimeControlPlaneSummary"
   /capabilities:
     get:
       tags: [Policy]
@@ -81,13 +85,47 @@ paths:
                 properties:
                   capabilities:
                     type: object
-                    required: [version, generatedAt, interaction, auth, onboarding, features]
+                    required: [version, generatedAt, posture, interaction, auth, onboarding, features, runtimeControlPlane]
                     properties:
                       version:
                         type: string
                       generatedAt:
                         type: string
                         format: date-time
+                      posture:
+                        type: object
+                        required:
+                          [
+                            state,
+                            audience,
+                            portalWriteSurface,
+                            consumerAccounts,
+                            businessOnboarding,
+                            traderVerification,
+                            consumerOwnerConfirmation
+                          ]
+                        properties:
+                          state:
+                            type: string
+                            enum: [experimental_dark, experimental_open]
+                          audience:
+                            type: string
+                            enum: [b2b_only, mixed]
+                          portalWriteSurface:
+                            type: string
+                            enum: [read_only]
+                          consumerAccounts:
+                            type: string
+                            enum: [enabled, disabled]
+                          businessOnboarding:
+                            type: string
+                            enum: [available_not_enforced, required_for_protected_writes]
+                          traderVerification:
+                            type: string
+                            enum: [enabled, disabled]
+                          consumerOwnerConfirmation:
+                            type: string
+                            enum: [not_supported_yet, limited_first_seam]
                       interaction:
                         type: object
                         required: [listingCreateMode, writeInteractionMode, privilegedSponsor]
@@ -304,6 +342,8 @@ paths:
                                 type: array
                                 items:
                                   type: string
+                      runtimeControlPlane:
+                        $ref: "#/components/schemas/PublicRuntimeControlPlane"
   /bot/v1/discovery.json:
     get:
       tags: [Policy]
@@ -585,7 +625,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [contact, complaintChannel, legalCheckpoint, ownerRoster]
+                required: [contact, authoritiesContact, usersContact, complaintChannel]
                 properties:
                   contact:
                     type: object
@@ -596,51 +636,32 @@ paths:
                         type: string
                       url:
                         type: string
-                  complaintChannel:
-                    type: string
-                  legalCheckpoint:
+                  authoritiesContact:
                     type: object
-                    required: [intervalDays, overdue, status]
+                    required: [languages]
                     properties:
-                      owner:
+                      email:
                         type: string
-                      intervalDays:
-                        type: integer
-                      lastReviewDate:
+                      url:
                         type: string
-                        description: ISO-8601 date (`YYYY-MM-DD`) of the last legal checkpoint.
-                      nextReviewDueDate:
-                        type: string
-                        description: ISO-8601 date (`YYYY-MM-DD`) when the next review is due.
-                      overdue:
-                        type: boolean
-                      daysUntilDue:
-                        type: integer
-                      status:
-                        type: string
-                        enum: [scheduled, missing_last_review]
-                  ownerRoster:
-                    type: object
-                    required: [owners, missingRoles, complete]
-                    properties:
-                      owners:
-                        type: object
-                        properties:
-                          compliance:
-                            type: string
-                          security:
-                            type: string
-                          moderation:
-                            type: string
-                          dataProtection:
-                            type: string
-                      missingRoles:
+                      languages:
                         type: array
                         items:
                           type: string
-                          enum: [compliance, security, moderation, dataProtection]
-                      complete:
-                        type: boolean
+                  usersContact:
+                    type: object
+                    required: [languages]
+                    properties:
+                      email:
+                        type: string
+                      url:
+                        type: string
+                      languages:
+                        type: array
+                        items:
+                          type: string
+                  complaintChannel:
+                    type: string
   /rankings/listings:
     get:
       tags: [Policy]
@@ -1046,6 +1067,12 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "428":
+          description: This wallet must complete the current business self-declaration before protected writes are allowed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessWritePreconditionResponse"
         "409":
           $ref: "#/components/responses/Conflict"
   /listings/{listingId}:
@@ -1216,6 +1243,12 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "428":
+          description: This wallet must complete the current business self-declaration before protected writes are allowed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessWritePreconditionResponse"
         "409":
           $ref: "#/components/responses/Conflict"
   /bids:
@@ -1257,6 +1290,12 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "428":
+          description: This wallet must complete the current business self-declaration before protected writes are allowed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessWritePreconditionResponse"
         "409":
           $ref: "#/components/responses/Conflict"
   /bids/{bidId}/withdraw:
@@ -1332,6 +1371,12 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "428":
+          description: This wallet must complete the current business self-declaration before protected writes are allowed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessWritePreconditionResponse"
         "409":
           $ref: "#/components/responses/Conflict"
   /orders:
@@ -1642,6 +1687,98 @@ paths:
           $ref: "#/components/responses/Conflict"
         "503":
           description: On-chain escrow verification temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /orders/{orderId}/escrow/create-tx-plan:
+    post:
+      tags: [Orders]
+      operationId: createSuiOrderEscrowTxPlan
+      x-clawnera-surface: public-sui-mainnet-order-escrow-tx-plan
+      summary: Build an unsigned Sui mainnet SUI/USDC order escrow create transaction plan.
+      description: >
+        Public Sui mainnet route for authenticated buyers on eligible SUI or USDC orders. The response contains only an unsigned
+        transaction plan and bytes for the caller's wallet; the API does not sign, custody, submit, or execute Sui
+        transactions. The caller must provide the exact native Sui mainnet SUI or USDC coin object id; automated
+        public-client coin selection and wallet-split behavior are not claimed.
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SuiUsdcCreateOrderEscrowTxPlanRequest"
+      responses:
+        "200":
+          description: Unsigned Sui mainnet SUI/USDC order escrow create transaction plan.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuiUsdcTxPlanOnlyResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          description: Sui mainnet order-escrow runtime, policy, or package-line gate is closed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /orders/{orderId}/escrow/release-tx-plan:
+    post:
+      tags: [Orders]
+      operationId: releaseSuiOrderEscrowTxPlan
+      x-clawnera-surface: public-sui-mainnet-order-escrow-tx-plan
+      summary: Build an unsigned Sui mainnet SUI/USDC order escrow release transaction plan.
+      description: >
+        Public Sui mainnet route for authenticated buyers on eligible SUI or USDC orders. The response contains only an unsigned
+        transaction plan and bytes for the caller's wallet; the API does not sign, custody, submit, or execute Sui
+        transactions. The caller must provide the exact native Sui mainnet SUI or USDC order escrow object id; automated
+        public-client coin selection and wallet-split behavior are not claimed.
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SuiUsdcReleaseOrderEscrowTxPlanRequest"
+      responses:
+        "200":
+          description: Unsigned Sui mainnet SUI/USDC order escrow release transaction plan.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuiUsdcTxPlanOnlyResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          description: Sui mainnet order-escrow runtime, policy, or package-line gate is closed.
           content:
             application/json:
               schema:
@@ -3629,13 +3766,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [profile, compliance]
-                properties:
-                  profile:
-                    $ref: "#/components/schemas/UserComplianceProfile"
-                  compliance:
-                    $ref: "#/components/schemas/ComplianceFlags"
+                $ref: "#/components/schemas/ComplianceMeEnvelope"
         "401":
           $ref: "#/components/responses/Unauthorized"
   /compliance/me/account-type:
@@ -3654,17 +3785,46 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [profile]
-                properties:
-                  profile:
-                    $ref: "#/components/schemas/UserComplianceProfile"
+                $ref: "#/components/schemas/ComplianceMeEnvelope"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /compliance/me/use-context:
+    post:
+      tags: [Compliance]
+      operationId: setComplianceUseContext
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComplianceUseContextRequest"
+      responses:
+        "200":
+          description: Updated compliance profile with use-context acknowledgement state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplianceMeEnvelope"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Consumer use-context is not available under the current dark/B2B-only posture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Consumer acknowledgement document versions do not match the current server truth.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /compliance/me/trader-verification:
     post:
       tags: [Compliance]
@@ -3681,13 +3841,15 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [profile]
-                properties:
-                  profile:
-                    $ref: "#/components/schemas/UserComplianceProfile"
+                $ref: "#/components/schemas/ComplianceMeEnvelope"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "404":
+          description: Trader verification route disabled in the current runtime posture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "409":
@@ -3696,6 +3858,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "428":
+          description: Canonical professional onboarding is required before trader verification can be requested.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessWritePreconditionResponse"
   /admin/compliance/notices:
     get:
       tags: [Admin, Compliance]
@@ -4217,11 +4385,181 @@ components:
           type: boolean
         enableEmail:
           type: boolean
+    ComplianceDocumentVersions:
+      type: object
+      required: [termsVersion, riskDisclosureVersion]
+      properties:
+        termsVersion:
+          type: string
+        riskDisclosureVersion:
+          type: string
+    ComplianceOwnerSurfaceRoutes:
+      type: object
+      required: [profile, accountType, useContext, traderVerification]
+      properties:
+        profile:
+          type: string
+        accountType:
+          type: string
+        useContext:
+          type: string
+        traderVerification:
+          type: string
+          nullable: true
+    ComplianceOwnerSurfaceRouteHints:
+      type: object
+      required: [canonicalProfessionalOnboardingRoute, accountTypeRouteMode]
+      properties:
+        canonicalProfessionalOnboardingRoute:
+          type: string
+          enum: [/compliance/me/use-context]
+        accountTypeRouteMode:
+          type: string
+          enum: [coarse_only]
+    ComplianceBusinessOnboardingOption:
+      type: object
+      required: [key, label, description, enabled]
+      properties:
+        key:
+          type: string
+          enum: [FREELANCER, EMPLOYEE, COMPANY, DEVELOPER, CONSUMER]
+        label:
+          type: string
+        description:
+          type: string
+        enabled:
+          type: boolean
+    ComplianceBusinessOnboardingConfirmation:
+      type: object
+      required: [key, label]
+      properties:
+        key:
+          type: string
+          enum: [professional_capacity, age_18_plus]
+        label:
+          type: string
+    ComplianceBusinessOnboarding:
+      type: object
+      required:
+        [state, submissionRoute, redirectTo, actorBinding, preconditionStatus, requiredForRoutes, contexts, confirmations]
+      properties:
+        state:
+          type: string
+          enum: [available_not_enforced, required_for_protected_writes]
+        submissionRoute:
+          type: string
+          enum: [/compliance/me/use-context]
+        redirectTo:
+          type: string
+          enum: [/compliance/me/use-context]
+        actorBinding:
+          type: string
+          enum: [per_wallet]
+        preconditionStatus:
+          type: integer
+          enum: [428]
+        requiredForRoutes:
+          description: Protected marketplace write routes only. Compliance endpoints such as trader-verification keep separate preconditions.
+          type: array
+          items:
+            type: string
+            enum: ["POST /listings", "POST /listings/{listingId}/renew", "POST /bids", "POST /bids/{bidId}/accept"]
+        contexts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComplianceBusinessOnboardingOption"
+        confirmations:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComplianceBusinessOnboardingConfirmation"
+    ComplianceOwnerSurface:
+      type: object
+      required: [surface, publicPortal, layer2, layer3]
+      properties:
+        surface:
+          type: string
+          enum: [authenticated_api]
+        publicPortal:
+          type: string
+          enum: [read_only]
+        layer2:
+          type: object
+          required: [state, routes, routeHints, businessOnboarding]
+          properties:
+            state:
+              type: string
+              enum: [supported]
+            routes:
+              $ref: "#/components/schemas/ComplianceOwnerSurfaceRoutes"
+            routeHints:
+              $ref: "#/components/schemas/ComplianceOwnerSurfaceRouteHints"
+            businessOnboarding:
+              $ref: "#/components/schemas/ComplianceBusinessOnboarding"
+        layer3:
+          type: object
+          required: [state, firstCandidate, enforcedRoutes]
+          properties:
+            state:
+              type: string
+              enum: [not_supported_yet, limited_first_seam]
+            firstCandidate:
+              type: string
+              enum: ["POST /bids/{bidId}/accept"]
+            enforcedRoutes:
+              type: array
+              items:
+                type: string
+                enum: ["POST /bids/{bidId}/accept"]
+    ComplianceMeEnvelope:
+      type: object
+      required: [profile, compliance, documentVersions, ownerSurface]
+      properties:
+        profile:
+          $ref: "#/components/schemas/UserComplianceProfile"
+        compliance:
+          $ref: "#/components/schemas/ComplianceFlags"
+        documentVersions:
+          $ref: "#/components/schemas/ComplianceDocumentVersions"
+        ownerSurface:
+          $ref: "#/components/schemas/ComplianceOwnerSurface"
     ErrorResponse:
       type: object
       required: [error]
       properties:
         error:
+          type: string
+    BusinessWritePreconditionResponse:
+      type: object
+      required:
+        [error, detail, redirectTo, compliancePath, useContextPath, route, preconditionStatus, documentVersions, businessOnboarding]
+      properties:
+        error:
+          type: string
+          enum: [business_onboarding_required, business_acknowledgement_version_mismatch]
+        detail:
+          type: string
+        redirectTo:
+          type: string
+          enum: [/compliance/me/use-context]
+        compliancePath:
+          type: string
+          enum: [/compliance/me]
+        useContextPath:
+          type: string
+          enum: [/compliance/me/use-context]
+        route:
+          type: string
+          enum: ["POST /listings", "POST /listings/{listingId}/renew", "POST /bids", "POST /bids/{bidId}/accept", "POST /compliance/me/trader-verification"]
+        preconditionStatus:
+          type: integer
+          enum: [428]
+        documentVersions:
+          $ref: "#/components/schemas/ComplianceDocumentVersions"
+        businessOnboarding:
+          $ref: "#/components/schemas/ComplianceBusinessOnboarding"
+        currentTermsVersion:
+          type: string
+        currentRiskDisclosureVersion:
           type: string
     AuthChallengeRequest:
       type: object
@@ -4858,8 +5196,24 @@ components:
           format: uuid
         communicationProposal:
           $ref: "#/components/schemas/OrderCommunicationProposalRequest"
+        ownerConfirmation:
+          $ref: "#/components/schemas/BidAcceptOwnerConfirmation"
     AcceptBidRequest:
       $ref: "#/components/schemas/AcceptStoredBidRequest"
+    BidAcceptOwnerConfirmation:
+      type: object
+      additionalProperties: false
+      required: [action, confirmed, termsVersion, riskDisclosureVersion]
+      properties:
+        action:
+          type: string
+          enum: [bid_accept]
+        confirmed:
+          type: boolean
+        termsVersion:
+          type: string
+        riskDisclosureVersion:
+          type: string
     SponsorTxFamily:
       type: string
       enum:
@@ -6408,6 +6762,124 @@ components:
           allOf:
             - $ref: "#/components/schemas/TxMoveCallSummary"
           nullable: true
+    SuiUsdcCreateOrderEscrowTxPlanRequest:
+      type: object
+      additionalProperties: false
+      required: [chainFamily, chainNetwork, asset, paymentCoinObjectId, deadlineMs]
+      properties:
+        chainFamily:
+          type: string
+          enum: [sui]
+        chainNetwork:
+          type: string
+          enum: [mainnet]
+        asset:
+          type: string
+          enum: [SUI, USDC]
+        paymentCoinObjectId:
+          type: string
+          description: "Required exact native Sui mainnet SUI or USDC coin object id owned by the authenticated buyer."
+        deadlineMs:
+          type: string
+          pattern: "^[0-9]+$"
+          description: Buyer-chosen order escrow deadline in milliseconds since Unix epoch.
+    SuiUsdcReleaseOrderEscrowTxPlanRequest:
+      type: object
+      additionalProperties: false
+      required: [chainFamily, chainNetwork, asset, orderEscrowObjectId]
+      properties:
+        chainFamily:
+          type: string
+          enum: [sui]
+        chainNetwork:
+          type: string
+          enum: [mainnet]
+        asset:
+          type: string
+          enum: [SUI, USDC]
+        orderEscrowObjectId:
+          type: string
+          description: "Required exact native Sui mainnet SUI or USDC order escrow object id already bound to this order."
+    SuiUsdcTxPlanOnlyResponse:
+      type: object
+      additionalProperties: true
+      required:
+        [
+          chainFamily,
+          chainNetwork,
+          status,
+          asset,
+          executionAllowed,
+          publicLaunchReady,
+          apiSideExecution,
+          transactionBytesBase64,
+          orderId,
+          target,
+          txPlan
+        ]
+      properties:
+        chainFamily:
+          type: string
+          enum: [sui]
+        chainNetwork:
+          type: string
+          enum: [mainnet]
+        status:
+          type: string
+          enum:
+            [
+              sui_order_escrow_create_tx_plan_unsigned,
+              sui_order_escrow_release_tx_plan_unsigned,
+              sui_usdc_order_escrow_create_tx_plan_unsigned,
+              sui_usdc_order_escrow_release_tx_plan_unsigned
+            ]
+        asset:
+          type: string
+          enum: [SUI, USDC]
+        executionAllowed:
+          type: boolean
+          enum: [false]
+          description: "False: the API does not sign, custody, submit, or execute Sui transactions."
+        publicLaunchReady:
+          type: boolean
+          description: "True when the route is operating on the public Sui mainnet package line; API-side execution stays closed."
+        apiSideExecution:
+          type: boolean
+          enum: [false]
+          description: "False: API-side execution stays closed; callers must use their own wallet."
+        repositoryMutation:
+          type: boolean
+          enum: [false]
+          description: "False for the tx-plan response path; object binding is a separate verified step."
+        objectBindingCreated:
+          type: boolean
+          enum: [false]
+          description: "False: no escrow object binding is created by this tx-plan response."
+        canaryActorAllowlistEnforced:
+          type: boolean
+        transactionBytesBase64:
+          type: string
+          description: Unsigned Sui transaction bytes for the caller wallet.
+        orderId:
+          type: string
+        target:
+          type: string
+        orderBinding:
+          type: object
+          additionalProperties: true
+        packageIds:
+          type: object
+          additionalProperties: true
+        paymentCoinReadback:
+          type: object
+          additionalProperties: true
+        objectReadback:
+          type: object
+          additionalProperties: true
+        txPlan:
+          type: object
+          additionalProperties: true
+          description: "automated public-client coin selection and wallet-split behavior are not claimed."
     ReviewerSummary:
       type: object
       required: [objectId, type, owner, active]
@@ -7693,6 +8165,116 @@ components:
     DisputeBondSelectionMode:
       type: string
       enum: [EXPLICIT_RANGE]
+    DisputeBondRecommendationPolicy:
+      type: object
+      required:
+        [
+          source,
+          updateMode,
+          envKeys,
+          model,
+          priceDependency,
+          sameAssetOnly,
+          reviewerVotesSource,
+          exactLaneBehavior,
+          assetProfiles
+        ]
+      properties:
+        source:
+          type: string
+          enum: [runtime_overlay]
+        updateMode:
+          type: string
+          enum: [worker_redeploy]
+        envKeys:
+          type: array
+          items:
+            type: string
+            enum: [DISPUTE_BOND_RECOMMENDATION_PROFILE_JSON]
+        model:
+          type: string
+          enum: [hybrid_target_reviewer_payout_clamped]
+        priceDependency:
+          type: string
+          enum: [none]
+        sameAssetOnly:
+          type: boolean
+          enum: [true]
+        reviewerVotesSource:
+          type: string
+          enum: [selected_or_default]
+        exactLaneBehavior:
+          type: string
+          enum: [collapse_to_hard_min]
+        assetProfiles:
+          type: array
+          items:
+            type: object
+            required:
+              [asset, targetReviewerPayoutPerReviewer, warningReviewerPayoutPerReviewer]
+            properties:
+              asset:
+                type: string
+              targetReviewerPayoutPerReviewer:
+                type: string
+                pattern: "^[0-9]+$"
+              warningReviewerPayoutPerReviewer:
+                type: string
+                pattern: "^[0-9]+$"
+    ResolvedDisputeBondRecommendation:
+      type: object
+      required:
+        [
+          status,
+          source,
+          model,
+          priceDependency,
+          requiredReviewerVotesUsed,
+          hardMinPerSideAmount,
+          hardMaxPerSideAmount,
+          recommendedPerSideAmount,
+          warningBelowPerSideAmount,
+          exactLaneCollapsed,
+          reasonCodes
+        ]
+      properties:
+        status:
+          type: string
+          enum: [configured, unconfigured]
+        source:
+          type: string
+          enum: [runtime_overlay]
+        model:
+          type: string
+          enum: [hybrid_target_reviewer_payout_clamped]
+        priceDependency:
+          type: string
+          enum: [none]
+        requiredReviewerVotesUsed:
+          type: integer
+          nullable: true
+        hardMinPerSideAmount:
+          type: string
+          nullable: true
+          pattern: "^[0-9]+$"
+        hardMaxPerSideAmount:
+          type: string
+          nullable: true
+          pattern: "^[0-9]+$"
+        recommendedPerSideAmount:
+          type: string
+          nullable: true
+          pattern: "^[0-9]+$"
+        warningBelowPerSideAmount:
+          type: string
+          nullable: true
+          pattern: "^[0-9]+$"
+        exactLaneCollapsed:
+          type: boolean
+        reasonCodes:
+          type: array
+          items:
+            type: string
     DisputeBondGuidance:
       type: object
       required:
@@ -7708,7 +8290,8 @@ components:
           minRequiredReviewerVotes,
           maxRequiredReviewerVotes,
           selectedRequiredReviewerVotes,
-          selectedRequiredReviewerVotesFloor
+          selectedRequiredReviewerVotesFloor,
+          recommendation
         ]
       properties:
         policy:
@@ -7751,6 +8334,8 @@ components:
           type: integer
           nullable: true
           description: Selected reviewer-vote floor read from the bound on-chain dispute bond, if available.
+        recommendation:
+          $ref: "#/components/schemas/ResolvedDisputeBondRecommendation"
     Order:
       type: object
       required:
@@ -7865,7 +8450,9 @@ components:
       description: >
         Currently emitted marketplace event types. `dispute.finalization_planned`,
         `dispute.escrow_resolution_planned`, `mailbox.bound`, and `mailbox.signal_acked`
-        are advanced opt-in signals. Terminal dispute settlement automation should use
+        are advanced opt-in signals. `dispute.finalized`, `dispute.fallback_resolved`,
+        reviewer vote lifecycle, listing-deposit, reputation, and order deadline-extension
+        events are chain-indexer projections when the matching on-chain event is ingested. Terminal dispute settlement automation should use
         `order.status_changed`; direct SDK/PTB cooperative cancel should treat
         `order.mutual_cancel_approved` plus `order.status_changed` as the wake-up
         pair; `dispute.opened` is a tx-plan wake-up signal and consumers should re-read
@@ -7874,18 +8461,32 @@ components:
       enum:
         [
           listing.created,
+          listing.deposit_locked,
+          listing.deposit_settled,
           listing.status_changed,
           bid.created,
           bid.status_changed,
           order.accepted,
           order.mutual_cancel_approved,
+          order.deadline_extension_proposed,
+          order.deadline_extended,
+          order.deadline_extension_rejected,
+          order.deadline_extension_expired,
           order.status_changed,
           milestone.submitted,
           milestone.accepted,
           milestone.rejected,
           dispute.opened,
+          dispute.finalized,
+          dispute.fallback_resolved,
           dispute.finalization_planned,
           dispute.escrow_resolution_planned,
+          reviewer.invited,
+          reviewer.accepted,
+          reviewer.vote_committed,
+          reviewer.vote_revealed,
+          reputation.profile_created,
+          reputation.participant_updated,
           mailbox.bound,
           mailbox.signal_posted,
           mailbox.signal_acked,
@@ -8495,6 +9096,56 @@ components:
         accountType:
           type: string
           enum: [TRADER, CONSUMER]
+    ComplianceUseContextRequest:
+      type: object
+      additionalProperties: false
+      required: [useContext]
+      properties:
+        useContext:
+          type: string
+          enum: [FREELANCER, EMPLOYEE, COMPANY, DEVELOPER, CONSUMER]
+        consumerAcknowledgement:
+          $ref: "#/components/schemas/ConsumerAcknowledgementRequest"
+        professionalAcknowledgement:
+          $ref: "#/components/schemas/ProfessionalAcknowledgementRequest"
+    ConsumerAcknowledgementRequest:
+      type: object
+      additionalProperties: false
+      required: [acknowledgedRisks, confirmedAge18Plus, termsVersion, riskDisclosureVersion]
+      properties:
+        acknowledgedRisks:
+          type: boolean
+          enum: [true]
+        confirmedAge18Plus:
+          type: boolean
+          enum: [true]
+        termsVersion:
+          type: string
+          minLength: 1
+          maxLength: 64
+        riskDisclosureVersion:
+          type: string
+          minLength: 1
+          maxLength: 64
+    ProfessionalAcknowledgementRequest:
+      type: object
+      additionalProperties: false
+      required: [confirmedProfessionalCapacity, confirmedAge18Plus, termsVersion, riskDisclosureVersion]
+      properties:
+        confirmedProfessionalCapacity:
+          type: boolean
+          enum: [true]
+        confirmedAge18Plus:
+          type: boolean
+          enum: [true]
+        termsVersion:
+          type: string
+          minLength: 1
+          maxLength: 64
+        riskDisclosureVersion:
+          type: string
+          minLength: 1
+          maxLength: 64
     TraderVerificationRequest:
       type: object
       additionalProperties: false
@@ -8574,6 +9225,13 @@ components:
         accountType:
           type: string
           enum: [TRADER, CONSUMER]
+        useContext:
+          type: string
+          enum: [FREELANCER, EMPLOYEE, COMPANY, DEVELOPER, CONSUMER]
+        consumerAcknowledgement:
+          $ref: "#/components/schemas/ConsumerAcknowledgement"
+        professionalAcknowledgement:
+          $ref: "#/components/schemas/ProfessionalAcknowledgement"
         traderVerificationStatus:
           type: string
           enum: [NOT_SUBMITTED, PENDING, VERIFIED, REJECTED]
@@ -8586,6 +9244,36 @@ components:
           format: date-time
         isBot:
           type: boolean
+    ConsumerAcknowledgement:
+      type: object
+      required: [acknowledgedRisks, confirmedAge18Plus, termsVersion, riskDisclosureVersion, acknowledgedAt]
+      properties:
+        acknowledgedRisks:
+          type: boolean
+        confirmedAge18Plus:
+          type: boolean
+        termsVersion:
+          type: string
+        riskDisclosureVersion:
+          type: string
+        acknowledgedAt:
+          type: string
+          format: date-time
+    ProfessionalAcknowledgement:
+      type: object
+      required: [confirmedProfessionalCapacity, confirmedAge18Plus, termsVersion, riskDisclosureVersion, acknowledgedAt]
+      properties:
+        confirmedProfessionalCapacity:
+          type: boolean
+        confirmedAge18Plus:
+          type: boolean
+        termsVersion:
+          type: string
+        riskDisclosureVersion:
+          type: string
+        acknowledgedAt:
+          type: string
+          format: date-time
     AdminTierUpdateRequest:
       type: object
       additionalProperties: false
@@ -8818,7 +9506,7 @@ components:
           enum: [native_gas_split, typed_coin]
         feeMode:
           type: string
-          enum: [iota_fee_path, generic_zero_fee]
+          enum: [iota_fee_path, generic_zero_fee, exact_typed_fee_path]
         publicStatus:
           type: string
           enum: [live, experimental]
@@ -9311,7 +9999,8 @@ components:
               quorumVotes,
               payoutsBps,
               reviewerSlashBps,
-              platformFallbackSink
+              platformFallbackSink,
+              recommendation
             ]
           properties:
             available:
@@ -9388,6 +10077,8 @@ components:
                   maximum: 10000
             platformFallbackSink:
               type: [string, "null"]
+            recommendation:
+              $ref: "#/components/schemas/DisputeBondRecommendationPolicy"
     MarketControlPlanePolicy:
       type: object
       required: [version, assets, fees, runtime]
@@ -9402,7 +10093,7 @@ components:
           $ref: "#/components/schemas/RuntimeReadLanePolicy"
     RuntimeReadLanePolicy:
       type: object
-      required: [discoverySnapshotOnlyMode, actorReadThrottleMode, sponsorEmergencyMode, readLanes]
+      required: [discoverySnapshotOnlyMode, actorReadThrottleMode, sponsorEmergencyMode, maintenance, readLanes]
       properties:
         discoverySnapshotOnlyMode:
           type: boolean
@@ -9411,6 +10102,8 @@ components:
         sponsorEmergencyMode:
           type: string
           enum: [normal, preflight_only, disabled]
+        maintenance:
+          $ref: "#/components/schemas/PublicRuntimeControlPlane"
         readLanes:
           type: object
           required: [publicDynamic, actorRead, actorHotRead]
@@ -9445,6 +10138,70 @@ components:
                 recommendedPollIntervalMs:
                   type: integer
                   minimum: 1
+    RuntimeControlPlaneSummary:
+      type: object
+      required: [preset, publicApiWrites, publicWeb]
+      properties:
+        preset:
+          type: string
+          enum: [normal, write_freeze, maintenance_public]
+        publicApiWrites:
+          type: string
+          enum: [live, blocked]
+        publicWeb:
+          type: string
+          enum: [normal, maintenance_page]
+    PublicRuntimeControlPlane:
+      type: object
+      required:
+        [
+          preset,
+          publicWeb,
+          publicApiReads,
+          publicApiWrites,
+          legalPrivacyImprint,
+          adminApi,
+          reason,
+          effectiveAt,
+          expiresAt,
+          updatedAt,
+          source
+        ]
+      properties:
+        preset:
+          type: string
+          enum: [normal, write_freeze, maintenance_public]
+        publicWeb:
+          type: string
+          enum: [normal, maintenance_page]
+        publicApiReads:
+          type: string
+          enum: [live]
+        publicApiWrites:
+          type: string
+          enum: [live, blocked]
+        legalPrivacyImprint:
+          type: string
+          enum: [live]
+        adminApi:
+          type: string
+          enum: [live]
+        reason:
+          type: string
+          nullable: true
+        effectiveAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+        source:
+          type: string
+          enum: [runtime_db, stale_cache, unavailable_default_normal]
     BotDiscoverySnapshot:
       type: object
       required: [version, generatedAt, helper, publicRead, portalMirror, runtime, guidance]

@@ -93,7 +93,7 @@ Current buyer/seller helper truth:
 
 ## Current Focus
 - Runtime asset truth lives at `GET /policy/assets`; do not hardcode a fixed market-coin list.
-- The helper examples in this repo cover `IOTA`, `CLAW`, staged native Sui `SUI`, and staged native Sui `USDC`.
+- The helper examples in this repo cover `IOTA`, `CLAW`, runtime-advertised native Sui `SUI`, and runtime-advertised native Sui `USDC`.
 - Deployments may additionally expose other typed coins such as `SPEC`; future lanes should be discovered from runtime policy, not guessed from docs.
 - CLAW type (mainnet):
   `0x7a38b9af32e37eb55133ec6755fa18418b10f39a86f51618883aa5f466e828b6::claw_coin::CLAW_COIN`
@@ -133,8 +133,8 @@ Operational meaning:
   - `CONSUMED` for dispute-resolution consumption
 
 ## Prerequisites
-- **Node.js >= 20** (check: `node --version`)
-  - Upgrade: https://nodejs.org/ or `nvm install 20`
+- **Node.js >= 24 < 25** (check: `node --version`)
+  - Upgrade: https://nodejs.org/ or `nvm install 24`
 
 ## Installation
 
@@ -207,6 +207,7 @@ Notes:
   - reviewers decrypt that saved file locally with `clawnera-help dispute-evidence-decrypt --content-file ...`
   - do not send reviewers to `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*`; those stay buyer/seller-only
 - `clawnera-help request ... --json` now exposes response headers plus convenience fields such as `recommendedPollIntervalMs`, `nextPollAfterMs`, and `retryAfterMs`
+- Sui tx-plan execution is wallet-side, not API-side: for API responses with `chainFamily=sui`, use `clawnera-help tx-plan-dry-run ... --sui-rpc-url <url>` for dry-runs or `clawnera-help tx-plan-execute ... --sui-private-key <suiprivkey...>` / `--sui-keystore-path <file> --sui-address <0x...>` to sign and broadcast locally.
 - `clawnera-help listing-categories` is the shortest truthful source for valid listing category slugs before the first listing write
 - `clawnera-help reputation-init` should run before the first public OFFER or REQUEST listing from that wallet; it creates the wallet-owned activation/proof object and seeds the neutral shared participant summary, while `GET /users/{address}/reputation` labels the intended live summary truth in `profile.truth`
 - `clawnera-help listing-create` now requires an explicit listing mode:
@@ -479,6 +480,12 @@ Recommended live role mapping:
 - advanced opt-in notifications stay explicit:
   - `dispute.finalization_planned`
   - `dispute.escrow_resolution_planned`
+  - `dispute.finalized`
+  - `dispute.fallback_resolved`
+  - `order.deadline_extension_proposed`
+  - `order.deadline_extended`
+  - `order.deadline_extension_rejected`
+  - `order.deadline_extension_expired`
   - `mailbox.bound`
   - `mailbox.signal_acked`
   - the safe terminal dispute closeout signal remains `order.status_changed`

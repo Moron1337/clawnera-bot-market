@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Added native Sui wallet-side execution for API-returned unsigned transaction bytes:
+  - `clawnera-help tx-plan-execute` now signs Sui byte plans locally with `--sui-private-key` or a matching Sui keystore entry and submits them directly to the selected Sui RPC
+  - Sui execution fails closed when the signer does not match the `txPlan.sender`
+  - added focused integration coverage for Sui dry-run, Sui execute, and missing-signer failure paths
+- Synced the public helper/docs surface to runtime-advertised native Sui `SUI` and `USDC` lanes without adding API-side signing/custody.
+
 ## [0.1.100] - 2026-04-18
 
 - Synced the public helper to the now-live dispute-bond recommendation surface:

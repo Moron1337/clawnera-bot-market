@@ -8,6 +8,8 @@ import {
   buildCreateListingDepositTx,
   buildCreateOrderEscrowTx,
   buildCreateReputationProfileTx,
+  dryRunTransaction,
+  executeTransaction,
   extractLatestEventByTypeSuffix,
   resolveClawdexChainConfig,
   extractMailboxSignalAcked,
@@ -187,6 +189,117 @@ test("buildCreateOrderEscrowTx uses Sui typed asset entrypoints for USDC", () =>
 
   assert.equal(lastMoveCall?.function, "create_order_escrow_typed_order_asset_entry");
   assert.deepEqual(lastMoveCall?.typeArguments, [coinType]);
+});
+
+test("dryRunTransaction supports direct Sui transaction objects", async () => {
+  const txBytes = new Uint8Array([1, 2, 3, 4]);
+  const expectedBase64 = Buffer.from(txBytes).toString("base64");
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push({ url, body });
+    assert.equal(body.method, "sui_dryRunTransactionBlock");
+    assert.deepEqual(body.params, [expectedBase64]);
+    return new Response(
+      JSON.stringify({
+        result: {
+          effects: {
+            status: {
+              status: "success",
+            },
+          },
+        },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+
+  try {
+    const result = await dryRunTransaction(
+      {
+        async build({ client }) {
+          assert.ok(client);
+          return txBytes;
+        },
+      },
+      {
+        chainFamily: "sui",
+        chainNetwork: "testnet",
+        rpcUrl: "https://sui-rpc.example.test",
+      },
+    );
+
+    assert.equal(result.rpcUrl, "https://sui-rpc.example.test");
+    assert.equal(result.network, "testnet");
+    assert.equal(result.txBytesB64, expectedBase64);
+    assert.equal(result.transactionBytesBase64, expectedBase64);
+    assert.equal(result.result.effects.status.status, "success");
+    assert.equal(calls.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("executeTransaction supports direct Sui transaction objects", async () => {
+  const txBytes = new Uint8Array([4, 5, 6, 7]);
+  const expectedBase64 = Buffer.from(txBytes).toString("base64");
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    assert.equal(body.method, "sui_executeTransactionBlock");
+    assert.deepEqual(body.params[0], expectedBase64);
+    assert.deepEqual(body.params[1], ["sui-signature-1"]);
+    assert.equal(body.params[2].showEffects, true);
+    assert.equal(body.params[2].showObjectChanges, true);
+    return new Response(
+      JSON.stringify({
+        result: {
+          digest: "sui-digest-1",
+          effects: {
+            status: {
+              status: "success",
+            },
+          },
+        },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+
+  try {
+    const result = await executeTransaction(
+      {
+        async build({ client }) {
+          assert.ok(client);
+          return txBytes;
+        },
+      },
+      {
+        chainFamily: "sui",
+        chainNetwork: "testnet",
+        rpcUrl: "https://sui-rpc.example.test",
+        signer: {
+          async signTransaction(bytes) {
+            assert.deepEqual(Array.from(bytes), Array.from(txBytes));
+            return {
+              bytes: expectedBase64,
+              signature: "sui-signature-1",
+            };
+          },
+        },
+      },
+    );
+
+    assert.equal(result.rpcUrl, "https://sui-rpc.example.test");
+    assert.equal(result.network, "testnet");
+    assert.equal(result.txBytesB64, expectedBase64);
+    assert.equal(result.signature, "sui-signature-1");
+    assert.equal(result.signerSource, "signTransaction");
+    assert.equal(result.result.digest, "sui-digest-1");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("buildClawdexTxFromPlan keeps legacy quorum-ticket settlement as explicit compat path", () => {

@@ -21,14 +21,20 @@ function addr(char) {
   return `0x${char.repeat(64)}`;
 }
 
-function extractLastMoveCallFunction(tx) {
+function extractLastMoveCall(tx) {
   const data = tx.getData();
   const lastCommand = data.commands.at(-1);
   if (!lastCommand || !("MoveCall" in lastCommand) || !lastCommand.MoveCall) {
     throw new Error("missing_move_call");
   }
-  return lastCommand.MoveCall.function;
+  return lastCommand.MoveCall;
 }
+
+function extractLastMoveCallFunction(tx) {
+  return extractLastMoveCall(tx).function;
+}
+
+const SUI_NATIVE_COIN_TYPE = `0x${"0".repeat(63)}2::sui::SUI`;
 
 test("mailbox event extractors normalize posted and acked events from execution results", () => {
   const executionResult = {
@@ -191,6 +197,83 @@ test("buildCreateOrderEscrowTx uses Sui typed asset entrypoints for USDC", () =>
 
   assert.equal(lastMoveCall?.function, "create_order_escrow_typed_order_asset_entry");
   assert.deepEqual(lastMoveCall?.typeArguments, [coinType]);
+});
+
+
+test("buildClawdexTxFromPlan dispatches Sui accept through reputation-gated entrypoint", () => {
+  const tx = buildClawdexTxFromPlan({
+    chainFamily: "sui",
+    txBuilder: "disputeQuorum.acceptDisputeCase",
+    request: {
+      packageId: addr("1"),
+      sender: addr("a"),
+      disputeCaseObjectId: addr("b"),
+      reviewerRegistryObjectId: addr("c"),
+      reviewerEntryObjectId: addr("d"),
+      disputeQuorumConfigObjectId: addr("e"),
+      reputationFeeConfigObjectId: addr("f"),
+      reputationProfileObjectId: addr("9"),
+    },
+  });
+  const moveCall = extractLastMoveCall(tx);
+
+  assert.equal(moveCall.module, "dispute_quorum");
+  assert.equal(moveCall.function, "accept_dispute_case_with_reputation_cfg");
+  assert.equal(moveCall.arguments.length, 7);
+});
+
+test("buildClawdexTxFromPlan uses Sui order-escrow closeout entrypoints for Sui plans", () => {
+  const tx = buildClawdexTxFromPlan({
+    txBuilder: "orderEscrow.release",
+    request: {
+      chainFamily: "sui",
+      packageId: addr("1"),
+      sender: addr("a"),
+      escrowObjectId: addr("b"),
+      escrowCoinType: SUI_NATIVE_COIN_TYPE,
+      reputationFeeConfigObjectId: addr("c"),
+    },
+  });
+
+  assert.equal(extractLastMoveCallFunction(tx), "release_order_escrow_sui_entry");
+});
+
+test("buildClawdexTxFromPlan rejects legacy quorum-ticket settlement on Sui", () => {
+  assert.throws(
+    () =>
+      buildClawdexTxFromPlan({
+        txBuilder: "orderEscrow.resolveDisputeWithQuorumTicket",
+        request: {
+          chainFamily: "sui",
+          packageId: addr("1"),
+          sender: addr("a"),
+          escrowObjectId: addr("b"),
+          escrowCoinType: SUI_NATIVE_COIN_TYPE,
+          quorumResolutionTicketObjectId: addr("c"),
+          disputeQuorumConfigObjectId: addr("d"),
+        },
+      }),
+    /unsupported_sui_order_escrow_quorum_ticket/,
+  );
+});
+
+test("buildClawdexTxFromPlan dispatches Sui order-mailbox plans", () => {
+  const tx = buildClawdexTxFromPlan({
+    txBuilder: "orderMailbox.postSignal",
+    request: {
+      chainFamily: "sui",
+      packageId: addr("1"),
+      sender: addr("a"),
+      mailboxObjectId: addr("b"),
+      signalIntent: "CHECKPOINT",
+      ciphertextHash: "11".repeat(32),
+      payloadRef: "ipfs://signal-1",
+    },
+  });
+  const moveCall = extractLastMoveCall(tx);
+
+  assert.equal(moveCall.module, "order_mailbox");
+  assert.equal(moveCall.function, "post_signal");
 });
 
 test("dryRunTransaction supports direct Sui transaction objects", async () => {

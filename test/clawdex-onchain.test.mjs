@@ -158,6 +158,7 @@ test("buildCreateOrderEscrowTx uses Sui native order-escrow entrypoints", () => 
     chainFamily: "sui",
     packageId: addr("1"),
     sender: addr("a"),
+    governanceConfigObjectId: addr("b"),
     orderId: "order-sui-1",
     seller: addr("c"),
     amount: 2000000000n,
@@ -175,6 +176,7 @@ test("buildCreateOrderEscrowTx uses Sui typed asset entrypoints for USDC", () =>
     chainFamily: "sui",
     packageId: addr("1"),
     sender: addr("a"),
+    governanceConfigObjectId: addr("b"),
     orderId: "order-sui-usdc-1",
     seller: addr("c"),
     amount: 1000n,
@@ -297,6 +299,41 @@ test("executeTransaction supports direct Sui transaction objects", async () => {
     assert.equal(result.signature, "sui-signature-1");
     assert.equal(result.signerSource, "signTransaction");
     assert.equal(result.result.digest, "sui-digest-1");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("executeTransaction rejects mismatched pre-signed Sui bytes", async () => {
+  const txBytes = new Uint8Array([4, 5, 6, 7]);
+  const mismatchedBase64 = Buffer.from(new Uint8Array([7, 6, 5, 4])).toString("base64");
+  const originalFetch = globalThis.fetch;
+  let called = false;
+  globalThis.fetch = async () => {
+    called = true;
+    throw new Error("unexpected_fetch");
+  };
+
+  try {
+    await assert.rejects(
+      () =>
+        executeTransaction(
+          {
+            async build() {
+              return txBytes;
+            },
+          },
+          {
+            chainFamily: "sui",
+            chainNetwork: "testnet",
+            rpcUrl: "https://sui-rpc.example.test",
+            signature: "sui-signature-1",
+            signedBytesBase64: mismatchedBase64,
+          },
+        ),
+      /signed_sui_transaction_bytes_mismatch/,
+    );
+    assert.equal(called, false);
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -5,7 +5,9 @@ import { IotaClient } from "@iota/iota-sdk/client";
 import {
   assertExecutionSuccess,
   buildClawdexTxFromPlan,
+  buildCreateListingDepositTx,
   buildCreateOrderEscrowTx,
+  buildCreateReputationProfileTx,
   extractLatestEventByTypeSuffix,
   resolveClawdexChainConfig,
   extractMailboxSignalAcked,
@@ -149,6 +151,44 @@ test("buildCreateOrderEscrowTx uses guarded CLAW order-escrow entrypoints", () =
   assert.equal(extractLastMoveCallFunction(tx), "create_order_escrow_coin_entry_guarded");
 });
 
+test("buildCreateOrderEscrowTx uses Sui native order-escrow entrypoints", () => {
+  const tx = buildCreateOrderEscrowTx({
+    chainFamily: "sui",
+    packageId: addr("1"),
+    sender: addr("a"),
+    orderId: "order-sui-1",
+    seller: addr("c"),
+    amount: 2000000000n,
+    deadlineMs: 1776000000000n,
+    feeConfigObjectId: addr("d"),
+    currency: "SUI",
+  });
+
+  assert.equal(extractLastMoveCallFunction(tx), "create_order_escrow_sui_entry");
+});
+
+test("buildCreateOrderEscrowTx uses Sui typed asset entrypoints for USDC", () => {
+  const coinType = `${addr("2")}::usdc::USDC`;
+  const tx = buildCreateOrderEscrowTx({
+    chainFamily: "sui",
+    packageId: addr("1"),
+    sender: addr("a"),
+    orderId: "order-sui-usdc-1",
+    seller: addr("c"),
+    amount: 1000n,
+    deadlineMs: 1776000000000n,
+    feeConfigObjectId: addr("d"),
+    currency: "USDC",
+    coinType,
+    paymentCoinObjectId: addr("e"),
+  });
+  const data = tx.getData();
+  const lastMoveCall = data.commands.at(-1)?.MoveCall;
+
+  assert.equal(lastMoveCall?.function, "create_order_escrow_typed_order_asset_entry");
+  assert.deepEqual(lastMoveCall?.typeArguments, [coinType]);
+});
+
 test("buildClawdexTxFromPlan keeps legacy quorum-ticket settlement as explicit compat path", () => {
   const tx = buildClawdexTxFromPlan({
     txBuilder: "orderEscrow.resolveDisputeWithQuorumTicket",
@@ -210,6 +250,27 @@ test("buildClawdexTxFromPlan accepts chain-neutral reviewer minimum reward", () 
   });
 
   assert.equal(extractLastMoveCallFunction(tx), "register_reviewer_entry_with_reputation_cfg");
+});
+
+test("Sui helper builders cover reputation and listing-deposit entrypoints", () => {
+  const reputationTx = buildCreateReputationProfileTx({
+    chainFamily: "sui",
+    packageId: addr("1"),
+    sender: addr("a"),
+    reputationFeeConfigObjectId: addr("b"),
+    initFeeAmount: 1000000n,
+  });
+  const listingTx = buildCreateListingDepositTx({
+    chainFamily: "sui",
+    packageId: addr("1"),
+    sender: addr("a"),
+    listingRefDigestHex: "ab".repeat(32),
+    listingDepositConfigObjectId: addr("b"),
+    depositAmount: 1000000n,
+  });
+
+  assert.equal(extractLastMoveCallFunction(reputationTx), "create_reputation_profile_sui_entry");
+  assert.equal(extractLastMoveCallFunction(listingTx), "create_listing_deposit_sui_entry");
 });
 
 test("resolveClawdexChainConfig prefers created reviewer registry object changes", async () => {
@@ -291,6 +352,79 @@ test("resolveClawdexChainConfig prefers created reviewer registry object changes
   } finally {
     IotaClient.prototype.getObject = originalGetObject;
     IotaClient.prototype.getTransactionBlock = originalGetTransactionBlock;
+  }
+});
+
+test("resolveClawdexChainConfig uses Sui JSON-RPC methods for Sui runtimes", async () => {
+  const packageId = addr("1");
+  const disputeQuorumConfigObjectId = addr("2");
+  const escrowFeeConfigObjectId = addr("3");
+  const governanceConfigObjectId = addr("4");
+  const reviewerRegistryObjectId = addr("6");
+  const initTxDigest = "B".repeat(44);
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push(body.method);
+    if (body.method === "sui_getObject") {
+      assert.equal(body.params[0], disputeQuorumConfigObjectId);
+      return new Response(
+        JSON.stringify({
+          result: {
+            data: {
+              previousTransaction: initTxDigest,
+              content: {
+                fields: {
+                  default_required_reviewer_votes: "5",
+                  min_required_reviewer_votes: "3",
+                  max_required_reviewer_votes: "7",
+                  min_dispute_bond_per_side_sui: "910000",
+                  max_dispute_bond_per_side_sui: "1810000",
+                  reviewer_min_stake_sui: "1210000",
+                },
+              },
+            },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    if (body.method === "sui_getTransactionBlock") {
+      assert.equal(body.params[0], initTxDigest);
+      return new Response(
+        JSON.stringify({
+          result: {
+            objectChanges: [
+              {
+                type: "created",
+                objectType: `${packageId}::dispute_quorum::ReviewerRegistry`,
+                objectId: reviewerRegistryObjectId,
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    throw new Error(`unexpected_method:${body.method}`);
+  };
+
+  try {
+    const config = await resolveClawdexChainConfig({
+      chainFamily: "sui",
+      packageId,
+      rpcUrl: "https://sui-rpc.example.test",
+      disputeQuorumConfigObjectId,
+      escrowFeeConfigObjectId,
+      governanceConfigObjectId,
+    });
+
+    assert.deepEqual(calls, ["sui_getObject", "sui_getTransactionBlock"]);
+    assert.equal(config.reviewerRegistryObjectId, reviewerRegistryObjectId);
+    assert.equal(config.reviewerMinStakeNative, 1210000n);
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
 test("execution helpers surface on-chain failure reasons from effects.status", () => {

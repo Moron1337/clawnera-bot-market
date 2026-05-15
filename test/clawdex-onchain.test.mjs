@@ -35,6 +35,7 @@ function extractLastMoveCallFunction(tx) {
 }
 
 const SUI_NATIVE_COIN_TYPE = `0x${"0".repeat(63)}2::sui::SUI`;
+const SUI_USDC_TESTNET_COIN_TYPE = "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
 
 test("mailbox event extractors normalize posted and acked events from execution results", () => {
   const executionResult = {
@@ -176,8 +177,8 @@ test("buildCreateOrderEscrowTx uses Sui native order-escrow entrypoints", () => 
   assert.equal(extractLastMoveCallFunction(tx), "create_order_escrow_sui_entry");
 });
 
-test("buildCreateOrderEscrowTx uses Sui typed asset entrypoints for USDC", () => {
-  const coinType = `${addr("2")}::usdc::USDC`;
+test("buildCreateOrderEscrowTx uses Sui typed asset entrypoints for exact native USDC", () => {
+  const coinType = SUI_USDC_TESTNET_COIN_TYPE;
   const tx = buildCreateOrderEscrowTx({
     chainFamily: "sui",
     packageId: addr("1"),
@@ -197,6 +198,48 @@ test("buildCreateOrderEscrowTx uses Sui typed asset entrypoints for USDC", () =>
 
   assert.equal(lastMoveCall?.function, "create_order_escrow_typed_order_asset_entry");
   assert.deepEqual(lastMoveCall?.typeArguments, [coinType]);
+});
+
+test("buildCreateOrderEscrowTx rejects Sui CLAW order escrow instead of silently building native SUI", () => {
+  assert.throws(
+    () =>
+      buildCreateOrderEscrowTx({
+        chainFamily: "sui",
+        packageId: addr("1"),
+        sender: addr("a"),
+        governanceConfigObjectId: addr("b"),
+        orderId: "order-sui-claw-1",
+        seller: addr("c"),
+        amount: 1000n,
+        deadlineMs: 1776000000000n,
+        feeConfigObjectId: addr("d"),
+        currency: "CLAW",
+        coinType: `${addr("2")}::claw_coin::CLAW_COIN`,
+        paymentCoinObjectId: addr("e"),
+      }),
+    /unsupported_sui_order_currency/
+  );
+});
+
+test("buildCreateOrderEscrowTx rejects arbitrary Sui typed order assets", () => {
+  assert.throws(
+    () =>
+      buildCreateOrderEscrowTx({
+        chainFamily: "sui",
+        packageId: addr("1"),
+        sender: addr("a"),
+        governanceConfigObjectId: addr("b"),
+        orderId: "order-sui-generic-1",
+        seller: addr("c"),
+        amount: 1000n,
+        deadlineMs: 1776000000000n,
+        feeConfigObjectId: addr("d"),
+        currency: "USDC",
+        coinType: `${addr("2")}::usdx::USDX`,
+        paymentCoinObjectId: addr("e"),
+      }),
+    /unsupported_sui_market_asset_coin_type/
+  );
 });
 
 

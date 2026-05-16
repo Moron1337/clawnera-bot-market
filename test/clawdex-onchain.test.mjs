@@ -8,6 +8,7 @@ import {
   buildCreateListingDepositTx,
   buildCreateOrderEscrowTx,
   buildCreateReputationProfileTx,
+  buildManagedStorageFeeTx,
   dryRunTransaction,
   executeTransaction,
   extractLatestEventByTypeSuffix,
@@ -262,6 +263,36 @@ test("buildCreateOrderEscrowTx admits arbitrary Sui typed order assets but keeps
       }),
     /native_sui_uses_sui_order_escrow_builder/
   );
+});
+
+test("buildManagedStorageFeeTx builds Sui native and exact typed fee calls", () => {
+  const nativeTx = buildManagedStorageFeeTx({
+    chainFamily: "sui",
+    packageId: addr("1"),
+    sender: addr("a"),
+    orderId: "order-sui-storage-1",
+    milestoneId: "milestone-1",
+    recipientAddress: addr("b"),
+    amountAtomic: 1000n,
+    currency: "SUI",
+  });
+  assert.equal(extractLastMoveCallFunction(nativeTx), "pay_managed_storage_fee_sui");
+
+  const typedTx = buildManagedStorageFeeTx({
+    chainFamily: "sui",
+    packageId: addr("1"),
+    sender: addr("a"),
+    orderId: "order-sui-storage-2",
+    milestoneId: "milestone-1",
+    recipientAddress: addr("b"),
+    amountAtomic: 1000n,
+    currency: "USDC",
+    coinType: SUI_USDC_TESTNET_COIN_TYPE,
+    paymentCoinObjectId: addr("c"),
+  });
+  const typedMoveCall = extractLastMoveCall(typedTx);
+  assert.equal(typedMoveCall.function, "pay_managed_storage_fee_typed_order_asset");
+  assert.deepEqual(typedMoveCall.typeArguments, [SUI_USDC_TESTNET_COIN_TYPE]);
 });
 
 

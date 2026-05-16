@@ -12237,7 +12237,9 @@ async function runManagedStorageFeePay(commandArgs) {
         error: "managed_storage_disabled",
       };
     }
-    if (String(feePolicy.asset || "").trim().toUpperCase() !== "IOTA") {
+    const feeAsset = String(feePolicy.asset || "").trim().toUpperCase();
+    const isSuiFeeAsset = feeAsset === "SUI";
+    if (feeAsset !== "IOTA" && !isSuiFeeAsset) {
       return {
         ok: false,
         error: "managed_storage_fee_asset_unsupported",
@@ -12245,7 +12247,9 @@ async function runManagedStorageFeePay(commandArgs) {
       };
     }
     const amountAtomic = parsePositiveBigIntOption(feePolicy.minAtomic, "managed_storage_fee_min_atomic");
-    const recipientAddress = normalizeIotaAddress(feePolicy.recipient || "");
+    const recipientAddress = isSuiFeeAsset
+      ? normalizeSuiAddressOrEmpty(feePolicy.recipient || "")
+      : normalizeIotaAddress(feePolicy.recipient || "");
     if (!recipientAddress) {
       return {
         ok: false,
@@ -12253,16 +12257,45 @@ async function runManagedStorageFeePay(commandArgs) {
       };
     }
 
-    const { packageId, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfig(options, {
-      ...iotaRuntime,
-    });
+    let packageId = "";
+    let transactionRuntime = {};
+    if (isSuiFeeAsset) {
+      const feesCall = await callApiRoute({
+        method: "GET",
+        rawPath: "/policy/fees",
+        options,
+        timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+      });
+      if (!feesCall.result.ok) {
+        return {
+          ok: false,
+          error: summarizeApiFailure(feesCall.result),
+          status: feesCall.result.status,
+          response: feesCall.result.body,
+        };
+      }
+      packageId = extractPackageIdFromPolicyResponse(feesCall.result.body);
+      transactionRuntime = {
+        chainFamily: "sui",
+        network: String(options["sui-network"] || options["chain-network"] || options.network || "").trim() || "mainnet",
+        rpcUrl: String(options["sui-rpc-url"] || options["rpc-url"] || "").trim() || undefined,
+      };
+    } else {
+      const resolved = await fetchPolicyAndChainConfig(options, {
+        ...iotaRuntime,
+      });
+      packageId = resolved.packageId;
+      transactionRuntime = resolved.iotaRuntime;
+    }
     const tx = buildManagedStorageFeeTx({
+      chainFamily: isSuiFeeAsset ? "sui" : "iota",
       packageId,
       sender: actorAddress,
       orderId,
       milestoneId,
       recipientAddress,
       amountAtomic,
+      currency: feeAsset,
     });
     const dryRun = parseBooleanOption(options["dry-run"], false);
     if (dryRun) {
@@ -12270,7 +12303,7 @@ async function runManagedStorageFeePay(commandArgs) {
         alias: signer.alias,
         address: signer.address,
         keystorePath: signer.keystorePath,
-        ...resolvedIotaRuntime,
+        ...transactionRuntime,
       });
       return {
         ok: true,
@@ -12283,7 +12316,7 @@ async function runManagedStorageFeePay(commandArgs) {
         paymentProof: {
           txDigest: null,
           amountAtomic: amountAtomic.toString(),
-          asset: "IOTA",
+          asset: feeAsset,
           recipientAddress,
         },
         dryRun: dryRunResult,
@@ -12294,7 +12327,7 @@ async function runManagedStorageFeePay(commandArgs) {
       alias: signer.alias,
       address: signer.address,
       keystorePath: signer.keystorePath,
-      ...resolvedIotaRuntime,
+      ...transactionRuntime,
     });
     const txDigest = executed.result?.digest || null;
     if (!txDigest) {
@@ -12306,7 +12339,7 @@ async function runManagedStorageFeePay(commandArgs) {
     const paymentProof = {
       txDigest,
       amountAtomic: amountAtomic.toString(),
-      asset: "IOTA",
+      asset: feeAsset,
       recipientAddress,
     };
     const proofOut =
@@ -14733,8 +14766,8 @@ function managedStorageFeePayUsageLines() {
   return [
     "Managed storage fee helper:",
     "- Usage: clawnera-help managed-storage-fee-pay --order-id <id> --milestone-id <id> --auth-state-file <file>",
-    "- Reads /policy/storage + /policy/fees, builds `manifest_anchor::pay_managed_storage_fee_iota` locally, then signs and broadcasts locally",
-    "- Optional: --proof-out <file> --dry-run --alias <wallet-alias> --address <0x...> --keystore-path <file>",
+    "- Reads /policy/storage + /policy/fees, builds the IOTA or Sui `manifest_anchor::pay_managed_storage_fee_*` transaction locally, then signs and broadcasts locally",
+    "- Optional: --proof-out <file> --dry-run --alias <wallet-alias> --address <0x...> --keystore-path <file> --sui-network <mainnet|testnet> --sui-rpc-url <url>",
     "- Use this before managed-storage presign. The same actor must later use the payment proof."
   ];
 }

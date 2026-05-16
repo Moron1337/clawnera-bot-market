@@ -6,7 +6,8 @@ All notable changes to this project will be documented in this file.
 
 - Added Sui-aware `clawdex-onchain` helper runtime support:
   - object, owned-object, and event reads now use Sui JSON-RPC methods when `chainFamily=sui`
-  - direct helper builders now cover native SUI order escrow, Sui-USDC typed order escrow, arbitrary non-native Sui typed order escrow, Sui reputation profile creation, and Sui listing deposits
+  - direct helper builders now cover native SUI order escrow, Sui-USDC typed order escrow, arbitrary non-native Sui typed order escrow, Sui managed-storage fee payment, Sui reputation profile creation, and Sui listing deposits
+  - `clawnera-help managed-storage-fee-pay` now accepts runtime SUI fee policies and builds `manifest_anchor::pay_managed_storage_fee_sui` locally instead of rejecting Sui as API-plan-only
   - direct Sui transaction-object dry-run/execution fails closed with guidance to use API-returned Sui byte plans, which the CLI already signs and submits wallet-side
 - Added chain-neutral reviewer economics naming in the public helper:
   - `reviewer-register` and `reviewer-update` now prefer `minCaseRewardNative` / `--min-case-reward-native` while keeping `minCaseRewardIota` / `--min-case-reward-iota` as a compatibility fallback

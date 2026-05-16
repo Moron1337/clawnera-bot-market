@@ -8933,12 +8933,14 @@ components:
           maxLength: 128
         amountAtomic:
           type: string
-          pattern: ^[0-9]+$
+          pattern: ^[1-9][0-9]*$
         asset:
           type: string
           enum:
             - IOTA
             - CLAW
+            - SUI
+            - TESTUSD
         recipientAddress:
           type: string
           minLength: 3

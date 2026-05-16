@@ -295,6 +295,37 @@ test("buildManagedStorageFeeTx builds Sui native and exact typed fee calls", () 
   assert.deepEqual(typedMoveCall.typeArguments, [SUI_USDC_TESTNET_COIN_TYPE]);
 });
 
+test("buildManagedStorageFeeTx fails closed for unsupported Sui managed-storage fee currencies", () => {
+  assert.throws(
+    () =>
+      buildManagedStorageFeeTx({
+        chainFamily: "sui",
+        packageId: addr("1"),
+        sender: addr("a"),
+        orderId: "order-sui-storage-unsupported-1",
+        milestoneId: "milestone-1",
+        recipientAddress: addr("b"),
+        amountAtomic: 1000n,
+        currency: "CLAW",
+      }),
+    /unsupported_sui_managed_storage_fee_asset/
+  );
+  assert.throws(
+    () =>
+      buildManagedStorageFeeTx({
+        chainFamily: "sui",
+        packageId: addr("1"),
+        sender: addr("a"),
+        orderId: "order-sui-storage-unsupported-2",
+        milestoneId: "milestone-1",
+        recipientAddress: addr("b"),
+        amountAtomic: 1000n,
+        currency: "USDC",
+      }),
+    /sui_managed_storage_fee_coin_type_required/
+  );
+});
+
 
 test("buildClawdexTxFromPlan dispatches Sui accept through reputation-gated entrypoint", () => {
   const tx = buildClawdexTxFromPlan({

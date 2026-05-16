@@ -200,28 +200,51 @@ test("buildCreateOrderEscrowTx uses Sui typed asset entrypoints for exact native
   assert.deepEqual(lastMoveCall?.typeArguments, [coinType]);
 });
 
-test("buildCreateOrderEscrowTx rejects Sui CLAW order escrow instead of silently building native SUI", () => {
-  assert.throws(
-    () =>
-      buildCreateOrderEscrowTx({
-        chainFamily: "sui",
-        packageId: addr("1"),
-        sender: addr("a"),
-        governanceConfigObjectId: addr("b"),
-        orderId: "order-sui-claw-1",
-        seller: addr("c"),
-        amount: 1000n,
-        deadlineMs: 1776000000000n,
-        feeConfigObjectId: addr("d"),
-        currency: "CLAW",
-        coinType: `${addr("2")}::claw_coin::CLAW_COIN`,
-        paymentCoinObjectId: addr("e"),
-      }),
-    /unsupported_sui_order_currency/
-  );
+test("buildCreateOrderEscrowTx admits Sui CLAW through the generic typed asset entrypoint", () => {
+  const coinType = `${addr("2")}::claw_coin::CLAW_COIN`;
+  const tx = buildCreateOrderEscrowTx({
+    chainFamily: "sui",
+    packageId: addr("1"),
+    sender: addr("a"),
+    governanceConfigObjectId: addr("b"),
+    orderId: "order-sui-claw-1",
+    seller: addr("c"),
+    amount: 1000n,
+    deadlineMs: 1776000000000n,
+    feeConfigObjectId: addr("d"),
+    currency: "CLAW",
+    coinType,
+    paymentCoinObjectId: addr("e"),
+  });
+  const data = tx.getData();
+  const lastMoveCall = data.commands.at(-1)?.MoveCall;
+
+  assert.equal(lastMoveCall?.function, "create_order_escrow_typed_order_asset_entry");
+  assert.deepEqual(lastMoveCall?.typeArguments, [coinType]);
 });
 
-test("buildCreateOrderEscrowTx rejects arbitrary Sui typed order assets", () => {
+test("buildCreateOrderEscrowTx admits arbitrary Sui typed order assets but keeps native SUI on native builder", () => {
+  const coinType = `${addr("2")}::usdx::USDX`;
+  const tx = buildCreateOrderEscrowTx({
+    chainFamily: "sui",
+    packageId: addr("1"),
+    sender: addr("a"),
+    governanceConfigObjectId: addr("b"),
+    orderId: "order-sui-generic-1",
+    seller: addr("c"),
+    amount: 1000n,
+    deadlineMs: 1776000000000n,
+    feeConfigObjectId: addr("d"),
+    currency: "SPEC",
+    coinType,
+    paymentCoinObjectId: addr("e"),
+  });
+  const data = tx.getData();
+  const lastMoveCall = data.commands.at(-1)?.MoveCall;
+
+  assert.equal(lastMoveCall?.function, "create_order_escrow_typed_order_asset_entry");
+  assert.deepEqual(lastMoveCall?.typeArguments, [coinType]);
+
   assert.throws(
     () =>
       buildCreateOrderEscrowTx({
@@ -229,16 +252,15 @@ test("buildCreateOrderEscrowTx rejects arbitrary Sui typed order assets", () => 
         packageId: addr("1"),
         sender: addr("a"),
         governanceConfigObjectId: addr("b"),
-        orderId: "order-sui-generic-1",
+        orderId: "order-sui-native-typed-1",
         seller: addr("c"),
         amount: 1000n,
         deadlineMs: 1776000000000n,
         feeConfigObjectId: addr("d"),
-        currency: "USDC",
-        coinType: `${addr("2")}::usdx::USDX`,
+        coinType: SUI_NATIVE_COIN_TYPE,
         paymentCoinObjectId: addr("e"),
       }),
-    /unsupported_sui_market_asset_coin_type/
+    /native_sui_uses_sui_order_escrow_builder/
   );
 });
 

@@ -179,7 +179,7 @@ If you use managed storage, the safe order is:
 
 1. finalize exact file bytes
 2. compute final SHA-256
-3. obtain an exact policy-and-escrow-bound V2 fee proof through a reviewed chain-native flow; the public `managed-storage-fee-pay` builder is disabled
+3. obtain an exact policy-and-escrow-bound V2 fee proof through a reviewed chain-native flow; canonical SDK builders exist, but the public `managed-storage-fee-pay` command remains closed until complete live DAG and singleton pointers are published
 4. request presign
 5. upload the exact same bytes
 6. submit the milestone

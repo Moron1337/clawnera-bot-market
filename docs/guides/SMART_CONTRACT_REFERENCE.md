@@ -14,6 +14,9 @@ Quellen:
   - Typed-Coin Escrow ueber `create_escrow_coin_entry` fuer genau die Lane, die dein Zielsystem aktiviert.
 - Viele API Write Calls bauen nur PTB-Plans; Bots muessen selbst signieren/ausfuehren.
 - State-Machine Regeln strikt beachten (single settlement, time gates, role checks).
+- Paket-IDs sind Teil des Runtime-Profils. Auf bestehenden Mainnet-Linien koennen `settlement`, `fulfillment` und `ops` dieselbe Paket-ID haben; ein Fresh-DAG darf nur mit drei vollstaendig publizierten Alias-IDs verwendet werden.
+- Im Fresh-DAG gilt `settlement_v2 -> fulfillment -> ops`: Settlement enthaelt Kern-Governance/Escrow, Fulfillment enthaelt `milestone_escrow`/`review`, Ops enthaelt `listing_deposit`/`manifest_anchor`. Niemals eine fehlende Fulfillment- oder Ops-ID durch die Settlement-ID erraten.
+- Der mitgelieferte Callable-Snapshot bleibt die bestehende Mainnet-ABI. Fresh-DAG-Builder duerfen erst genutzt werden, wenn der Ziel-Runtime genau diese Paket- und Objektzeiger ausweist.
 
 ## 2) Bot-kritische Entry-Funktionen nach Modulen
 
@@ -108,6 +111,7 @@ Quellen:
 | `close_order_mailbox` | mailbox-schliessen approven | buyer/seller | mailbox offen; final geschlossen erst nach buyer+seller approval |
 | `delete_closed_mailbox_guarded` | bevorzugtes mailbox cleanup / storage reclaim | buyer/seller | mailbox `closed=true` + korrektes `GovernanceConfig`-Hostobjekt fuer die aktuelle Binding |
 | `anchor_milestone_manifest` | Manifest kryptographisch verankern | seller | cid/hash/signature refs gueltig |
+| `pay_managed_storage_fee_iota_v2` / `pay_managed_storage_fee_sui_v2` | Native Managed-Storage-Gebuehr zahlen | buyer/seller | Settlement-`GovernanceConfig` + Ops-Singleton `ManagedStorageFeeConfig` + derselbe Fulfillment-`MilestoneEscrow`; 32-Byte Nonce; exakter Recipient |
 | `create_reputation_profile_iota_entry` | Reputation profil erzeugen | actor | fee config + init fee coin |
 | `create_reputation_profile_sui_entry` | Sui Reputation profil erzeugen | actor | Sui reputation fee config + native SUI init fee coin |
 
@@ -129,6 +133,7 @@ Quellen:
 | `POST /disputes/{id}/fallback/timeout` | `disputeQuorum.resolveTimeoutFallback` | `dispute_quorum::resolve_case_with_timeout_fallback` |
 | `POST /disputes/{id}/resolve-escrow` | `orderEscrow.resolveDisputeWithBinding` | `order_escrow::resolve_dispute_with_binding` |
 | `N/A (direct SDK/PTB only)` | `buildApproveMutualCancelOrderEscrowTx` / `buildMutualCancelOrderEscrowTx` | `order_escrow::approve_mutual_cancel` / `order_escrow::mutual_cancel` |
+| `N/A (direct SDK/PTB only)` | `buildPayManagedStorageFeeIotaTx` / `buildSuiPayManagedStorageFeeSuiTx` | `manifest_anchor::pay_managed_storage_fee_iota_v2` / `manifest_anchor::pay_managed_storage_fee_sui_v2` |
 | `POST /orders/{orderId}/reviews` | `review.postWithEscrow/postWithMilestoneEscrow` | `review::post_review_with_escrow` / `review::post_review_with_milestone_escrow` |
 | `POST /orders/{orderId}/deadline-ext/propose` | `deadlineExt.propose` | `deadline_ext::propose_extension` |
 | `POST /deadline-ext/{id}/reject` | `deadlineExt.reject` | `deadline_ext::reject_extension` |
@@ -136,6 +141,7 @@ Quellen:
 ## 4) Was fuer Bots typischerweise NICHT direkt relevant ist
 
 - Governance-Rotation, timelock admin flows (`admin::*`)
+- Es gibt im Fresh-DAG keine `bind_managed_storage_fee_config_v2`-Migration. Die Ops-FeeConfig ist ein bei Package-Init erzeugtes Singleton; Bots duerfen keine FeeConfig-ID am Milestone binden oder erfinden.
 - Tax/DSA administrative reporting paths
 - Interne maintenance/deletion helper fuer settled objects
 

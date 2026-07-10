@@ -91,10 +91,11 @@ SOURCE_MAPPINGS=(
   "packages/sdk/dist/tx/disputeQuorum.js|lib/vendor/clawdex-sdk/tx/disputeQuorum.js"
   "packages/sdk/dist/tx/listingDeposit.js|lib/vendor/clawdex-sdk/tx/listingDeposit.js"
   "packages/sdk/dist/tx/manifestAnchor.js|lib/vendor/clawdex-sdk/tx/manifestAnchor.js"
+  "packages/sdk/dist/suiMilestoneManifestTx.js|lib/vendor/clawdex-sdk/suiMilestoneManifestTx.js"
   "packages/sdk/dist/tx/orderMailbox.js|lib/vendor/clawdex-sdk/tx/orderMailbox.js"
 )
 
-if [[ "${#SOURCE_MAPPINGS[@]}" -ne 23 ]]; then
+if [[ "${#SOURCE_MAPPINGS[@]}" -ne 24 ]]; then
   echo "invalid_sync_mapping_count: ${#SOURCE_MAPPINGS[@]}"
   exit 1
 fi

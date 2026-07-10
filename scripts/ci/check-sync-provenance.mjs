@@ -19,6 +19,7 @@ export const EXPECTED_SYNC_PATHS = Object.freeze([
   "docs/docsources/core/openapi.reviewer-self.yaml",
   "docs/docsources/core/openapi.yaml",
   "lib/vendor/clawdex-sdk/assetControlPlane.js",
+  "lib/vendor/clawdex-sdk/suiMilestoneManifestTx.js",
   "lib/vendor/clawdex-sdk/tx/assetCoin.js",
   "lib/vendor/clawdex-sdk/tx/clawCoin.js",
   "lib/vendor/clawdex-sdk/tx/disputeQuorum.js",

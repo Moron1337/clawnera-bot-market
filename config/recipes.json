@@ -820,7 +820,7 @@
         "Finalize exact file bytes and SHA-256 before any upload step.",
         "Encrypt locally for seller and buyer with clawnera-help deliverable-encrypt.",
         "If managed storage allows application/json and a reviewed chain-native flow produced the exact policy-and-escrow-bound V2 fee proof, use managed-storage-presign -> managed-storage-upload.",
-        "The public managed-storage-fee-pay builder is disabled. Use BYO JSON storage such as Pinata/IPFS whenever the exact external V2 proof is unavailable.",
+        "The canonical V2 SDK builder exists, but the public managed-storage-fee-pay command remains runtime-gated until complete Settlement/Fulfillment/Ops and singleton pointers are published. Use BYO JSON storage such as Pinata/IPFS whenever the exact external V2 proof is unavailable.",
         "Use the exact ipfs:// URI printed by managed-storage-upload for milestone-submit-byo; do not reuse an older CID or type it by hand if the helper already printed one.",
         "Submit the signed manifest with clawnera-help milestone-submit-byo and then anchor it with clawnera-help milestone-anchor.",
         "Signal DELIVERABLE_READY through the mailbox if communication is active, store mailbox_signal_posted_seq from the verified chain-native receipt or API readback, then confirm it later with clawnera-help mailbox-events.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",

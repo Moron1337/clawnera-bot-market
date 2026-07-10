@@ -65,7 +65,7 @@ test("checked-in sync provenance has the exact unique source set", () => {
   );
   assert.ok(EXPECTED_PUBLISHED_SYNC_PATHS.every((entry) => EXPECTED_SYNC_PATHS.includes(entry)));
   const result = validateSyncProvenance({ rootDir: root, manifestText: manifest });
-  assert.equal(result.fileCount, 23);
+  assert.equal(result.fileCount, 24);
 });
 
 test("sync manifest rejects duplicate fields, duplicate hashes, and path-set drift", () => {

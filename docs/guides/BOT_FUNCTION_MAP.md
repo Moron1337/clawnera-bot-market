@@ -55,7 +55,7 @@ Use it for two things:
 | Mailbox init / bind | mailbox setup routes | `live-green` | Covered live. |
 | Mailbox event readback | `clawnera-help mailbox-events` | `live-green` | Use `--events-out` for the saved JSON file. |
 | Deliverable encryption | `clawnera-help deliverable-encrypt` | `live-green` | Covered on both milestones in the live dispute run. |
-| Managed storage presign / upload | `managed-storage-presign`, `managed-storage-upload` | `external-v2-proof-required` | `managed-storage-fee-pay` fails closed until the helper has an exact policy-and-escrow-bound V2 builder. Use BYO storage when that proof is unavailable. |
+| Managed storage presign / upload | `managed-storage-presign`, `managed-storage-upload` | `external-v2-proof-required` | Canonical V2 SDK builders exist; `managed-storage-fee-pay` remains closed until the live runtime publishes the complete package DAG and singleton pointers. Use BYO storage when an exact proof is unavailable. |
 | Deliverable submit / anchor | `milestone-submit-byo`, `milestone-anchor` | `iota-live` | IOTA is covered. The helper keeps Sui signing closed until Sui auth and manifest verification are bound end to end. |
 | Mailbox signal | `tx-plan-dry-run POST /orders/{orderId}/mailbox/post-signal-plan` | `live-green` | Current event feed can map seller `DELIVERABLE_READY` signals back as `CHECKPOINT`; key off `seq`, `payloadRef`, and `ciphertextHash`, not only the label. |
 | Buyer manifest read / decrypt | `GET /orders/{orderId}/milestones/{milestoneId}/artifact-manifest/content`, `deliverable-decrypt` | `live-green` | Covered live. |

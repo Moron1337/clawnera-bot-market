@@ -650,7 +650,7 @@ function printUsageAll() {
   console.log("  clawnera-help dispute-evidence-decrypt [options]  Decrypt saved dispute evidence locally");
   console.log("  clawnera-help mailbox-evidence-export [options]  Export mailbox coordination into one encrypted dispute bundle");
   console.log("  clawnera-help checkpoint-evidence-export [options]  Export checkpoint handover evidence into one encrypted dispute bundle");
-  console.log("  clawnera-help managed-storage-fee-pay [options]  Disabled until the policy-bound V2 builder is wired");
+  console.log("  clawnera-help managed-storage-fee-pay [options]  Disabled until the runtime publishes the complete V2 DAG pointers");
   console.log("  clawnera-help managed-storage-presign [options]  Get a signed managed-storage upload URL");
   console.log("  clawnera-help managed-storage-upload [options]   Upload the encrypted JSON payload to managed storage");
   console.log("  clawnera-help reviewer-shortlist [options]   Build the canonical operator shortlist body with live checkpoint digest");
@@ -12078,7 +12078,7 @@ async function runManagedStorageFeePay(commandArgs) {
     ok: false,
     error: "managed_storage_fee_payment_builder_disabled",
     requiredEntrypoint: "manifest_anchor::pay_managed_storage_fee_*_v2",
-    hint: "Obtain an exact policy-and-escrow-bound V2 payment proof through a reviewed chain-native flow, or use BYO storage.",
+    hint: "The SDK builder exists, but this command stays closed until the active runtime publishes complete Settlement/Fulfillment/Ops and managed-storage singleton pointers. Use a reviewed chain-native flow or BYO storage.",
   };
 }
 
@@ -14605,10 +14605,11 @@ function checkpointEvidenceExportUsageLines() {
 
 function managedStorageFeePayUsageLines() {
   return [
-    "Managed storage fee helper (disabled):",
+    "Managed storage fee helper (runtime-gated):",
     "- Usage: clawnera-help managed-storage-fee-pay --order-id <id> --milestone-id <id> --auth-state-file <file>",
-    "- The legacy fee builders are disabled because they do not bind the payment to the authoritative policy and milestone escrow.",
-    "- Obtain an exact `manifest_anchor::pay_managed_storage_fee_*_v2` proof through a reviewed chain-native flow, then pass the saved proof to managed-storage-presign.",
+    "- The canonical V2 SDK builders bind Settlement GovernanceConfig, the Ops policy singleton, and the Fulfillment milestone escrow.",
+    "- This CLI command remains disabled until the active runtime publishes the complete package DAG and singleton object pointers.",
+    "- Until then, obtain an exact `manifest_anchor::pay_managed_storage_fee_*_v2` proof through a reviewed chain-native flow, then pass the saved proof to managed-storage-presign.",
     "- Use BYO storage while that exact V2 payment flow is unavailable."
   ];
 }

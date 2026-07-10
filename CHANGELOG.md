@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Synced the wallet-side managed-storage payment builders to the fresh contract DAG: Ops policy/config, Fulfillment milestone escrow, governance-first ABI, and native IOTA/SUI payment entries.
+- Removed the obsolete managed-storage FeeConfig bind route from the helper surface and made partial package-DAG configuration fail closed instead of guessing Settlement aliases.
+
 ## [0.1.104] - 2026-07-10
 
 - Closed the reviewer-selection authorization gap in the public helper:

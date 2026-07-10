@@ -20,6 +20,7 @@ Packages:
 - Sui helpers validate Sui object IDs, addresses, and package/object IDs separately; do not reuse IOTA IDs on Sui.
 - Coin type tags must be valid Move type tags.
 - Use environment-matching `packageId` and config object IDs.
+- Treat `settlementPackageId`, `fulfillmentPackageId`, and `opsPackageId` as an atomic runtime snapshot. If a Fresh-DAG exposes one distinct alias, require all three; do not fall back to settlement for a missing alias.
 - Before choosing payment/dispute assets, read:
   - `GET /policy/assets` for lane truth and current asset-manager coverage.
   - `GET /policy/fees` for fee amounts and the remaining IOTA-only lanes.
@@ -60,7 +61,7 @@ const listingDepositSharedTx = buildCreateListingDepositIotaSharedTx({
 });
 
 const suiListingDepositTx = buildSuiCreateListingDepositTx({
-  packageId: suiSettlementPackageId,
+  packageId: suiOpsPackageId,
   sender: suiSender,
   owner: suiSender,
   listingRefDigestHex,
@@ -69,7 +70,7 @@ const suiListingDepositTx = buildSuiCreateListingDepositTx({
 });
 
 const suiListingDepositSharedTx = buildSuiCreateListingDepositSharedTx({
-  packageId: suiSettlementPackageId,
+  packageId: suiOpsPackageId,
   sender: suiSender,
   listingRefDigestHex,
   listingDepositConfigObjectId: suiListingDepositConfigObjectId,
@@ -147,6 +148,43 @@ Recommended sequence:
   - `buildCloseOrderMailboxTx`
   - `buildDeleteClosedOrderMailboxTx`
   - `buildMilestoneManifestAnchorTx`
+  - `buildPayManagedStorageFeeIotaTx`
+  - `buildSuiPayManagedStorageFeeSuiTx`
+
+Managed-storage payment example for a runtime that advertises the Fresh-DAG:
+
+```ts
+import {
+  buildPayManagedStorageFeeIotaTx,
+  buildSuiPayManagedStorageFeeSuiTx
+} from "@clawdex/sdk";
+
+const binding = {
+  governanceConfigObjectId,
+  feeConfigObjectId: managedStorageFeeConfigObjectId,
+  milestoneEscrowObjectId,
+  expectedEscrowId: milestoneEscrowObjectId,
+  orderId,
+  milestoneIndex: 0n,
+  proofNonce: crypto.getRandomValues(new Uint8Array(32)),
+  recipientAddress: managedStorageRecipient,
+  amount: managedStorageFeeAtomic
+};
+
+const iotaStorageFeeTx = buildPayManagedStorageFeeIotaTx({
+  ...binding,
+  packageId: opsPackageId,
+  sender: iotaSender
+});
+
+const suiStorageFeeTx = buildSuiPayManagedStorageFeeSuiTx({
+  ...binding,
+  packageId: suiOpsPackageId,
+  sender: suiSender
+});
+```
+
+The argument order is fixed: GovernanceConfig, Ops ManagedStorageFeeConfig, Fulfillment MilestoneEscrow, order id, expected escrow id, milestone index, 32-byte nonce, expected recipient, native payment coin. The SDK rejects a detached escrow id. There is no `bind_managed_storage_fee_config_v2` builder or migration route.
 
 Mutual-cancel example:
 

@@ -267,20 +267,40 @@ test("buildCreateOrderEscrowTx admits arbitrary Sui typed order assets but keeps
   );
 });
 
-test("buildManagedStorageFeeTx stays closed when the canonical SDK has no builder", () => {
+test("buildManagedStorageFeeTx binds native payments to Ops policy and Fulfillment escrow", () => {
+  const baseRequest = {
+    packageId: addr("1"),
+    sender: addr("a"),
+    governanceConfigObjectId: addr("b"),
+    feeConfigObjectId: addr("c"),
+    milestoneEscrowObjectId: addr("d"),
+    expectedEscrowId: addr("d"),
+    orderId: "order-storage-1",
+    milestoneIndex: 0n,
+    proofNonce: new Uint8Array(32).fill(7),
+    recipientAddress: addr("e"),
+    amountAtomic: 1000n,
+  };
+
+  const iotaCall = extractLastMoveCall(buildManagedStorageFeeTx({
+    ...baseRequest,
+    chainFamily: "iota",
+    currency: "IOTA",
+  }));
+  assert.equal(iotaCall.function, "pay_managed_storage_fee_iota_v2");
+  assert.equal(iotaCall.arguments.length, 9);
+
+  const suiCall = extractLastMoveCall(buildManagedStorageFeeTx({
+    ...baseRequest,
+    chainFamily: "sui",
+    currency: "SUI",
+  }));
+  assert.equal(suiCall.function, "pay_managed_storage_fee_sui_v2");
+  assert.equal(suiCall.arguments.length, 9);
+
   assert.throws(
-    () =>
-      buildManagedStorageFeeTx({
-        chainFamily: "sui",
-        packageId: addr("1"),
-        sender: addr("a"),
-        orderId: "order-sui-storage-unsupported-1",
-        milestoneId: "milestone-1",
-        recipientAddress: addr("b"),
-        amountAtomic: 1000n,
-        currency: "CLAW",
-      }),
-    /managed_storage_fee_builder_not_in_canonical_sdk/
+    () => buildManagedStorageFeeTx({ ...baseRequest, chainFamily: "sui", currency: "USDC" }),
+    /unsupported_sui_managed_storage_fee_currency/
   );
 });
 

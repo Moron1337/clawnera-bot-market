@@ -42,7 +42,7 @@ therefore remains `pending`, and all affected production/mainnet widening stays
 fail-closed.
 
 The current controlled testnet checkpoint used clean source commit
-`4fc769d0e09298f70b4f2d93f77cc665b0b51f11` and made no chain write. All six
+`2fde4560c0c1924e251b9affe03ffe870805cef8` and made no chain write. All six
 Fresh roots are below the `98304`-byte release budget:
 
 | Chain | Settlement | Fulfillment | Ops |

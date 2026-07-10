@@ -1,6 +1,6 @@
 format=clawnera.sync.v3
 marketplace_source_remote=github.com/Moron1337/Clawdex
-marketplace_source_commit=45089222ba6892218e1cd7b00dae2bcdb7ccbe2d
+marketplace_source_commit=15b9248dcfcf139e893e31be9bee202e8bce68cb
 marketplace_origin_main_commit=f643732c465e64242678d721b576e94253e789b5
 sdk_version=0.1.0
 sdk_iota_version=1.13.0

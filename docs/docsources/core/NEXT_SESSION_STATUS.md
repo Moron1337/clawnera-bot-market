@@ -16,7 +16,7 @@ Detailed historical evidence stays in `docs/reports/` and git history.
 ## Security Remediation Candidate
 
 Repository truth on 2026-07-10: `agent/security-review-remediation` contains a
-security-remediation candidate for `SEC-001` through `SEC-026`. The candidate
+security-remediation candidate for `SEC-001` through `SEC-027`. The candidate
 adds additive Move V2 controls, published-surface compatibility gates, exact
 runtime/auth/sponsor/indexer provenance checks, transactional bot and consumer
 state, encrypted local-key storage, verifiable cross-repository sync, pinned
@@ -35,21 +35,56 @@ Live production truth is unchanged by this work. No Move publish or upgrade,
 package/object/cap rotation, production deploy, secret rotation, policy
 mutation, database migration, or fund-bearing canary was executed. The current
 Sui payout-sink ownership, separated 2-of-3 hardware custody, independent
-contract audit, exact UpgradeCap dry-runs, existing-object bootstrap/migration,
+contract audit, green mainnet UpgradeCap dry-runs, existing-object bootstrap/migration,
 GitHub/npm controls, Cloudflare policy, and systemd isolation still require
 external readback evidence. `docs/security/mainnet-security-evidence.json`
 therefore remains `pending`, and all affected production/mainnet widening stays
 fail-closed.
 
-Next operator decision: review and merge the candidate only after CI and human
-review; then satisfy the evidence sequence in `docs/NEXT_FAMILY_QUEUE.md` and
-`docs/MOVE_CONTRACT_ROTATION_CHECKLIST.md` before any live mutation.
+The current controlled testnet checkpoint used clean source commit
+`4fc769d0e09298f70b4f2d93f77cc665b0b51f11` and made no chain write. All six
+Fresh roots are below the `98304`-byte release budget:
+
+| Chain | Settlement | Fulfillment | Ops |
+| --- | ---: | ---: | ---: |
+| IOTA | `91434` | `9556` | `11344` |
+| Sui | `89545` | `10995` | `11588` |
+
+The pinned IOTA `1.27.0-rc` and Sui `1.75.1` No-Sign helpers matched testnet
+chain IDs, expected senders, Foundation package readbacks, and a
+`500000000`-atomic-unit balance floor. IOTA held `50.2131348 IOTA`; Sui held
+`1,328,901,534 MIST`. Settlement publish dry-runs succeeded with estimated
+costs of `728,612,400` IOTA nanos and `714,072,400` MIST respectively. These
+facts do not prove a cumulative three-publish gas budget: Fulfillment and Ops
+dry-runs are correctly deferred until their real predecessor package IDs exist.
+Both manifests report `chainWritesAttempted=0`, `chainWritesCompleted=0`,
+`commitEligible=false`, and `livePublishAvailable=false`.
+
+The follow-up no-sign old-package audit makes the deployment decision stricter:
+in-place upgrade is `NO-GO` on both chains. Old V1 managed-storage payments
+remain executable, while old dispute/replacement bytecode remains selector-free
+and accepts the old shared object lineage. The safe candidate is a fresh
+Settlement original package ID followed by Fresh Fulfillment and Ops roots with
+new package-local type origins; the current Foundation packages can remain only
+because they do not bridge the replaced object families. Selector state would
+be initialized by a future Fresh publish. Direct Fresh policy seeding is closed:
+Managed Storage and the incomplete Fresh Sui policy families remain disabled
+until `SEC-027` supplies exact builders, separate signer/cap-owner preflights,
+and active/pending readbacks. The active old IOTA case must still be closed or
+explicitly quarantined.
+
+Next technical work: complete `SEC-027` and the evidence-bound sequential
+publish resume/readback workflow, then bind an independent audit to that exact
+final source commit. Old-line drain/quarantine, cumulative gas-coin budgeting,
+custody, and rollback evidence remain separate live gates. Review and merge only
+after CI and human review; satisfy the sequence in `docs/NEXT_FAMILY_QUEUE.md`
+and `docs/MOVE_CONTRACT_ROTATION_CHECKLIST.md` before any live mutation.
 
 ## Current Sui Testnet Parity Dev Note
 
 Current Sui operator truth on 2026-05-16: `SUI-PARITY-51` is the fresh
-current-head Sui testnet line and the repo testnet/staging pointers have been
-refreshed. Foundation is
+current-head Sui testnet line and the Sui `Published.toml` plus staging pointers
+have been refreshed. Foundation is
 `0x60c369e4e4e22476f71025ba97b3ebcccf2dea2c4165e9f54e6aae6ca9aebfab`;
 Settlement-Core is
 `0x650f5dd3768808a8c9dc0aa882876747dd9924dc6c88947b19075c32c4c58ccd`.
@@ -1096,9 +1131,14 @@ Do not treat the separate dirty main repo under `/home/codex/clawdex` as the act
 
 ## Current Broad-Launch Blockers
 
-These are still the true broader-launch gates:
+These are still the true broader-launch gates, including any promotion of this
+Fresh candidate:
 
 1. final hardware-backed `2-of-3` multisig cutover
+2. `SEC-027` dual-chain policy control plane and distinct signer/cap ownership
+3. evidence-bound sequential publish resume and exact per-stage readbacks
+4. independent audit bound to the final commit with no unresolved high finding
+5. old-line closure/quarantine, cumulative gas budget, and rollback evidence
 
 These are already no longer blockers:
 
@@ -1140,7 +1180,7 @@ Current decision: keep the system at `OPEN` for the first controlled `browse_onl
 That means:
 
 - no new decomposition family
-- no fresh contract churn
+- no live contract publish, policy activation, or pointer mutation
 - no new frontend build
 - no hardware dry-run or mainnet custody execution until the real signer inputs arrive and the hardware-backed evidence path starts
 

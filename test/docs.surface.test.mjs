@@ -85,11 +85,36 @@ test("reviewer and sponsor docs match the current runtime truth", () => {
   assert.match(runtimeChecks, /--payment-coin claw/);
   assert.match(runtimeChecks, /--order-id "<order-id>"/);
   assert.match(runtimeChecks, /SPONSOR_ORDER_ID_MODE=required/);
-  assert.match(sdkUsage, /always send canonical `orderId`/);
+  assert.match(sdkUsage, /always send the canonical active `orderId`/);
+  assert.match(sdkUsage, /CLAWDEX Sponsor Execute Intent v2/);
+  assert.match(sdkUsage, /chainTxDigest/);
+  assert.doesNotMatch(sdkUsage, /CLAWDEX Sponsor Execute Intent v1/);
   assert.match(readme, /GET \/policy\/assets/);
   assert.match(paymentPolicy, /GET \/policy\/assets/);
   assert.match(paymentPolicy, /SPEC/);
   assert.equal(publicSpec.includes("BOTH"), false, "public spec still leaks retired BOTH asset enum");
+});
+
+test("active guides require selector receipts and sponsor intent v2", () => {
+  const sponsorPolicy = readRepoFile("docs/guides/SPONSOR_POLICY.md");
+  const apiReference = readRepoFile("docs/guides/API_REFERENCE.md");
+  const onboarding = readRepoFile("docs/guides/BOT_ONBOARDING.md");
+  const operations = readRepoFile("docs/guides/OPERATIONS_CHECKS.md");
+  const reviewerFlow = readRepoFile("docs/guides/REVIEWER_SELECTOR_FLOW.md");
+  const checklist = readRepoFile("docs/guides/CANONICAL_LIVE_RUN_CHECKLIST.md");
+
+  for (const text of [sponsorPolicy, apiReference, onboarding, operations]) {
+    assert.match(text, /CLAWDEX Sponsor Execute Intent v2/);
+    assert.match(text, /chainTxDigest/);
+    assert.doesNotMatch(text, /CLAWDEX Sponsor Execute Intent v1/);
+  }
+  for (const text of [apiReference, onboarding, reviewerFlow, checklist]) {
+    assert.match(text, /reviewerSelectionReceiptId/);
+    assert.match(text, /ordered shortlist|geordnete Receipt-Shortlist/);
+    assert.match(text, /operatorAuthorizationHandoff/);
+    assert.match(text, /preExecutionRequirements/);
+    assert.doesNotMatch(text, /omit the receipt only|omitting the receipt is only/);
+  }
 });
 
 test("core knowledge sources avoid stale bid accept path strings", () => {

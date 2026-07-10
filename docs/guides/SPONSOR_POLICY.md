@@ -93,7 +93,7 @@ If `gasCoins` is empty/unusable:
 Treat `POST /sponsor/preflight` as runtime truth for:
 - whether sponsor is likely allowed,
 - whether self-pay fallback is currently allowed,
-- whether the current order-id / execute-intent policy applies,
+- the exact order binding and transaction family for the next mandatory v2 execute intent,
 - which gas budget should be used for the next reserve.
 
 ## 2. Request contract
@@ -101,7 +101,7 @@ Treat `POST /sponsor/preflight` as runtime truth for:
 `POST /sponsor/preflight` body:
 - `purpose` (required): `claw_payment|bond|marketplace_tx`
 - `paymentCoin` (optional): normalized lowercase sponsor token
-- `orderId` (send for every order-scoped sponsor request)
+- `orderId` (required canonical active order identifier)
 - `gasBudget` (optional): integer `> 0`
 - `txFamily` (optional): one of
   - `marketplace_write`
@@ -118,28 +118,32 @@ Treat `POST /sponsor/preflight` as runtime truth for:
 - `purpose` (required): `claw_payment|bond|marketplace_tx`
 - `gasBudget` (required): integer `> 0`
 - `paymentCoin` (optional): normalized lowercase sponsor token
-- `orderId` (send for every order-scoped sponsor request)
+- `orderId` (required canonical active order identifier)
 
 `POST /sponsor/execute` body:
 - `reservationId` (required)
 - `txBytesB64` (required)
 - `userSig` (required)
-- `orderId` (send for every order-scoped sponsor request)
-- `intent` (optional; only send it when the active deployment explicitly requires sponsor intent binding)
-- `intentSig` (required whenever `intent` is sent)
+- `orderId` (required; must match the reservation)
+- `intent` (required)
+- `intentSig` (required)
 
 `intent` fields:
+- `version` (`sponsor_execute_intent.v2`)
+- `chainFamily`
 - `network`
+- `txFamily`
 - `orderId`
 - `reservationId`
 - `txDigest`
+- `chainTxDigest`
 - `expiresAt`
 - `purpose`
 
 Canonical signing message (for `intentSig`):
-- Prefix line: `CLAWDEX Sponsor Execute Intent v1`
+- Prefix line: `CLAWDEX Sponsor Execute Intent v2`
 - Tuple line (strict order):
-  - `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`
+  - `version=<version>|chain_family=<chainFamily>|network=<network>|tx_family=<txFamily>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|chain_tx_digest=<chainTxDigest>|expires_at=<expiresAt>|purpose=<purpose>`
 
 ## 3. Runtime policy modes
 - `SPONSOR_PROXY_MODE=mock|live`
@@ -147,13 +151,11 @@ Canonical signing message (for `intentSig`):
 
 Always read actor decision before sponsor writes:
 - `GET /actors/me/capabilities`
-- if the deployment advertises execute-intent requirements for a path, treat `intentRequired=true` and `intentSignatureRequired=true` as hard requirements
+- every execute requires the complete v2 intent and actor-wallet `intentSig`; policy markers remain diagnostics, not permission to omit them
 
 ### 3.1 `orderId` policy
-- Prefer sending `orderId` on every order-scoped sponsor request.
-- In strict mode:
-  - `POST /sponsor/reserve` without `orderId` returns `400 sponsor_order_id_required`.
-  - `POST /sponsor/execute` without `orderId` returns `400 sponsor_order_id_required`.
+- `POST /sponsor/reserve` without `orderId` returns `400 sponsor_order_id_required`.
+- `POST /sponsor/execute` without `orderId` returns `400 sponsor_order_id_required`.
 
 ## 4. TTL, budget, and operational limits
 - Reservation TTL default: `SPONSOR_RESERVATION_TTL_SEC=120`.
@@ -186,15 +188,19 @@ This is the hard gate that prevents silent downgrade when a deployment requires 
 - Reservation must exist and belong to the actor.
 - Reservation must still be `RESERVED` and not expired.
 - If reservation has `orderId`, request must include same `orderId`.
-- When a strict sponsor path requires it, `intent` is mandatory.
-- If `intent` is present, API validates full tuple:
+- `intent` and `intentSig` are mandatory for every execute.
+- API validates the full tuple:
+  - `version`
+  - `chainFamily`
   - `network`
+  - `txFamily`
   - `orderId`
   - `reservationId`
   - `txDigest` (computed from `txBytesB64`)
+  - `chainTxDigest` (computed with the selected chain transaction-data digest)
   - `expiresAt`
   - `purpose`
-- If `intent` is present, API requires `intentSig` and verifies that the actor wallet signed the canonical intent message.
+- API verifies that the actor wallet signed the canonical v2 intent message.
 
 ## 7. Error and operator actions
 

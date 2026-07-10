@@ -2,10 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { once } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {
   buildDisputeSupplementalBundlePayload,
@@ -15,6 +16,10 @@ import {
   saveKeyAgreementRecord
 } from "../lib/e2ee-local.mjs";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { buildAuthChallengeV2Message } from "../lib/runtime-auth.mjs";
+import { prepareSponsorExecutionIntentV2 } from "../lib/sponsor-intent.mjs";
+
+process.umask(0o077);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,6 +37,133 @@ function defaultArtifactsDir(tempHome) {
 function buildJwtWithExp(expSeconds) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
   return `${encode({ alg: "none", typ: "JWT" })}.${encode({ exp: expSeconds })}.signature`;
+}
+
+function sponsorReservationBody({ reservationId, orderId, expiresAt, purpose = "marketplace_tx", txFamily = "marketplace_write" }) {
+  return {
+    reservation: {
+      reservationId,
+      sponsorAddress: "0xabc",
+      gasBudget: 1_000_000,
+      purpose,
+      gasCoins: ["0x1"],
+      orderId,
+      expiresAt,
+    },
+    planning: {
+      txFamily,
+      minimumGasBudget: 1_000_000,
+      recommendedGasBudget: 2_000_000,
+      maxGasBudget: 5_000_000,
+    },
+  };
+}
+
+function sponsorV2BuildCommand({
+  reservationId,
+  orderId,
+  expiresAt,
+  txBytesB64 = "dHhieXRlcw==",
+  purpose = "marketplace_tx",
+  txFamily = "marketplace_write",
+  chainFamily = "iota",
+  network = "testnet",
+  intentOverrides = {},
+}) {
+  const prepared = prepareSponsorExecutionIntentV2({
+    txBytesB64,
+    chainFamily,
+    network,
+    txFamily,
+    orderId,
+    reservationId,
+    expiresAt,
+    purpose,
+  });
+  const payload = Buffer.from(JSON.stringify({
+    txBytesB64,
+    userSig: "c2ln",
+    intent: { ...prepared.intent, ...intentOverrides },
+    intentSig: "c2ln",
+  })).toString("base64");
+  return `node -e "process.stdout.write(Buffer.from('${payload}','base64').toString('utf8'))"`;
+}
+
+function reviewerShortlistAuthorizationHandoff({
+  scope,
+  receiptId,
+  reviewers,
+  orderId,
+  milestoneId,
+  disputeCaseObjectId,
+}) {
+  const open = scope === "OPEN";
+  return {
+    state: "BLOCKED_EXTERNAL_CUSTODY_INPUTS",
+    requiredBeforePublish: true,
+    custodyBoundary: "external",
+    txBuilder: open
+      ? "disputeQuorum.authorizeOrderReviewerSelection"
+      : "disputeQuorum.authorizeReplacementReviewerSelection",
+    receiptId,
+    orderedReviewerAddresses: [...reviewers],
+    preparedRequest: open
+      ? {
+          orderId,
+          milestoneId,
+          invitedReviewerAddresses: [...reviewers],
+        }
+      : {
+          disputeCaseObjectId,
+          invitedReviewerAddresses: [...reviewers],
+        },
+    missingOperatorInputs: open
+      ? [
+          "sender",
+          "reviewerSelectorCapObjectId",
+          "reviewerRegistryObjectId",
+          "bondObjectId",
+          "bondCoinTypeWhenTyped",
+          "escrowObjectId",
+          "intendedParty",
+          "expiresAtMs",
+        ]
+      : [
+          "sender",
+          "reviewerSelectorCapObjectId",
+          "reviewerRegistryObjectId",
+          "intendedParty",
+          "expiresAtMs",
+        ],
+  };
+}
+
+function buildLocalAuthChallenge(request, address, nonce) {
+  const nowMs = Date.now();
+  const context = {
+    origin: `http://${request.headers.host}`,
+    audience: "clawdex-client",
+    environment: "test",
+    chainFamily: "iota",
+    network: "localnet",
+    address,
+    nonce,
+    issuedAtMs: nowMs - 1_000,
+    expiresAtMs: nowMs + 60_000,
+  };
+  return {
+    protocol: "clawdex.auth",
+    version: 2,
+    ...context,
+    messageToSign: buildAuthChallengeV2Message(context),
+  };
+}
+
+function txBytesGuard(bytesBase64, chainIdentifier = "test-chain") {
+  return {
+    chainIdentifier,
+    transactionBytesSha256: createHash("sha256").update(Buffer.from(bytesBase64, "base64")).digest("hex"),
+  };
 }
 
 async function runCli(args = [], env = {}) {
@@ -95,10 +227,15 @@ async function startMockServer(routes) {
     const handler = routes[`${request.method} ${request.url}`] || routes[request.url || "/"] || routes.default;
     const response = handler
       ? await handler(request)
-      : {
-          status: 404,
-          body: { error: "not_found" }
-        };
+      : request.method === "GET" && /^\/users\/[^/]+\/key-agreement\?keyVersion=\d+$/.test(request.url)
+        ? {
+            status: 404,
+            body: { error: "key_agreement_not_found" },
+          }
+        : {
+            status: 404,
+            body: { error: "not_found" }
+          };
 
     const headers = {
       "content-type": "application/json",
@@ -956,7 +1093,7 @@ test("dispute-evidence-bundle-build creates supplemental bundle payloads and dis
       if (request.method === "GET" && request.url.startsWith(`/users/`) && request.url.includes(`/key-agreement?keyVersion=`)) {
         return {
           status: 404,
-          body: { error: "not_found" }
+          body: { error: "key_agreement_not_found" }
         };
       }
       return {
@@ -1309,7 +1446,7 @@ test("mailbox-evidence-export builds reviewer-readable mailbox coordination bund
       if (request.method === "GET" && request.url.startsWith(`/users/`) && request.url.includes(`/key-agreement?keyVersion=`)) {
         return {
           status: 404,
-          body: { error: "not_found" }
+          body: { error: "key_agreement_not_found" }
         };
       }
       return {
@@ -1569,7 +1706,7 @@ test("checkpoint-evidence-export builds canonical checkpoint packets inside supp
       if (request.method === "GET" && request.url.startsWith(`/users/`) && request.url.includes(`/key-agreement?keyVersion=`)) {
         return {
           status: 404,
-          body: { error: "not_found" }
+          body: { error: "key_agreement_not_found" }
         };
       }
       return {
@@ -1795,7 +1932,7 @@ test("checkpoint-evidence-export fails closed without an explicit ciphertext sou
       if (request.method === "GET" && request.url.startsWith(`/users/`) && request.url.includes(`/key-agreement?keyVersion=`)) {
         return {
           status: 404,
-          body: { error: "not_found" }
+          body: { error: "key_agreement_not_found" }
         };
       }
       return {
@@ -2158,17 +2295,16 @@ test("ensure-auth falls back to the sole keystore entry and saves auth state", a
   const mock = await startMockServer({
     "POST /auth/challenge": (request) => {
       assert.equal(request.body?.address, createdAddress);
+      assert.equal(request.body?.chainFamily, "iota");
       return {
         status: 200,
-        body: {
-          messageToSign: "clawnera-auth-test",
-          nonce: "nonce-1"
-        }
+        body: buildLocalAuthChallenge(request, createdAddress, "nonce-1")
       };
     },
     "POST /auth/verify": (request) => {
       assert.equal(request.body?.address, createdAddress);
-      assert.equal(request.body?.message, "clawnera-auth-test");
+      assert.match(request.body?.message, /^CLAWDEX Sign-In v2\n/);
+      assert.equal(request.body?.chainFamily, "iota");
       assert.equal(typeof request.body?.signature, "string");
       return {
         status: 200,
@@ -2269,15 +2405,12 @@ test("ensure-auth falls back to fresh login when auth/session and refresh are bo
       assert.equal(request.body?.address, address);
       return {
         status: 200,
-        body: {
-          messageToSign: "clawnera-auth-relogin",
-          nonce: "nonce-relogin"
-        }
+        body: buildLocalAuthChallenge(request, address, "nonce-relogin")
       };
     },
     "POST /auth/verify": (request) => {
       assert.equal(request.body?.address, address);
-      assert.equal(request.body?.message, "clawnera-auth-relogin");
+      assert.match(request.body?.message, /^CLAWDEX Sign-In v2\n/);
       return {
         status: 200,
         body: {
@@ -2351,7 +2484,7 @@ test("ensure-auth stops with a local-wallet hint when no auth state and no keyst
   assert.doesNotMatch(payload.hint, /JWT/i);
 });
 
-test("tx-plan-execute rejects absolute URLs before requesting a plan", async () => {
+test("tx-plan-dry-run rejects absolute URLs before requesting a plan", async () => {
   const tmpDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-cli-abs-tx-"));
   const authStateFile = path.join(tmpDir, "auth-state.json");
   writeFileSync(
@@ -2366,12 +2499,127 @@ test("tx-plan-execute rejects absolute URLs before requesting a plan", async () 
   );
 
   const result = await runCli(
-    ["tx-plan-execute", "POST", "https://attacker.example/plan", "--auth-state-file", authStateFile, "--json"],
+    ["tx-plan-dry-run", "POST", "https://attacker.example/plan", "--auth-state-file", authStateFile, "--json"],
     {}
   );
   assert.equal(result.status, 1);
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.error, "absolute_api_url_not_allowed");
+});
+
+test("tx-plan-dry-run rejects reviewer publish plans without authorization requirements before RPC", async () => {
+  let rpcCalls = 0;
+  const reviewers = [`0x${"a".repeat(64)}`];
+  const receiptId = "receipt-plan-guard";
+  const mock = await startMockServer({
+    "POST /orders/order-guard/milestones/milestone-guard/disputes/open": () => ({
+      status: 200,
+      body: {
+        txBuilder: "disputeQuorum.openMilestoneDisputeCase",
+        chainFamily: "iota",
+        chainNetwork: "testnet",
+        chainIdentifier: "test-chain",
+        request: {
+          sender: `0x${"1".repeat(64)}`,
+          orderId: "order-guard",
+          milestoneId: "milestone-guard",
+          reviewerSelectionReceiptId: receiptId,
+          invitedReviewerAddresses: reviewers,
+        },
+        inviteBinding: {
+          mode: "selection_receipt_activation",
+          invitedReviewerAddresses: reviewers,
+          reviewerSelectionReceiptId: receiptId,
+          postExecuteBindingRequired: true,
+          bindRoute: `/reviewer-selection-receipts/${receiptId}/bind-dispute-case`,
+        },
+      },
+    }),
+    "POST /rpc": () => {
+      rpcCalls += 1;
+      return { status: 500, body: { error: "must_not_run" } };
+    },
+  });
+
+  try {
+    const result = await runCli([
+      "tx-plan-dry-run",
+      "POST",
+      "/orders/order-guard/milestones/milestone-guard/disputes/open",
+      "--api-base",
+      mock.baseUrl,
+      "--rpc-url",
+      `${mock.baseUrl}/rpc`,
+      "--body",
+      JSON.stringify({
+        reviewerSelectionReceiptId: receiptId,
+        invitedReviewerAddresses: reviewers,
+      }),
+      "--json",
+    ]);
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "tx_plan_reviewer_selection_pre_execution_requirements_invalid");
+    assert.equal(rpcCalls, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("tx-plan-execute fails closed before reading inputs, calling the API, or writing bytes", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-disabled-tx-execute-"));
+  const bytesOut = path.join(tempDir, "must-not-exist.b64");
+  const mock = await startMockServer({
+    "POST /must-not-run": () => ({ status: 500, body: { error: "should_not_run" } }),
+  });
+  try {
+    const result = await runCli([
+      "tx-plan-execute",
+      "POST",
+      "/must-not-run",
+      "--api-base",
+      mock.baseUrl,
+      "--body-file",
+      path.join(tempDir, "missing.json"),
+      "--tx-bytes-out",
+      bytesOut,
+      "--json",
+    ]);
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "generic_tx_plan_execution_disabled");
+    assert.equal(mock.requests.length, 0);
+    assert.equal(existsSync(bytesOut), false);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("managed-storage-fee-pay fails closed before reading wallet state or calling the API", async () => {
+  const mock = await startMockServer({
+    "GET /must-not-run": () => ({ status: 500, body: { error: "should_not_run" } }),
+  });
+  try {
+    const result = await runCli([
+      "managed-storage-fee-pay",
+      "--order-id",
+      "order-1",
+      "--milestone-id",
+      "milestone-1",
+      "--api-base",
+      mock.baseUrl,
+      "--auth-state-file",
+      "/missing/auth-state.json",
+      "--json",
+    ]);
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "managed_storage_fee_payment_builder_disabled");
+    assert.match(payload.requiredEntrypoint, /pay_managed_storage_fee_\*_v2/);
+    assert.equal(mock.requests.length, 0);
+  } finally {
+    await mock.close();
+  }
 });
 
 test("sponsor dry-run surfaces reserve auth failures", async () => {
@@ -2384,7 +2632,17 @@ test("sponsor dry-run surfaces reserve auth failures", async () => {
   });
 
   try {
-    const result = await runCli(["sponsor-execute", "--api-base", mock.baseUrl, "--jwt", "test-jwt", "--dry-run", "--json"]);
+    const result = await runCli([
+      "sponsor-execute",
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      "test-jwt",
+      "--order-id",
+      "order-auth-failure",
+      "--dry-run",
+      "--json",
+    ]);
     assert.equal(result.status, 1);
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.error, "sponsor_reserve_failed");
@@ -2913,6 +3171,17 @@ test("reviewer-shortlist builds a full dispute-open body and warns on stale cont
               reviewerSelectionReceiptId: "receipt-1",
             },
           },
+          operatorAuthorizationHandoff: reviewerShortlistAuthorizationHandoff({
+            scope: "OPEN",
+            receiptId: "receipt-1",
+            reviewers: [
+              "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            ],
+            orderId: "order-1",
+            milestoneId: "milestone-2",
+          }),
         },
       };
     },
@@ -2973,7 +3242,10 @@ test("reviewer-shortlist builds a full dispute-open body and warns on stale cont
     assert.equal(payload.contextMilestoneStatus, "SUBMITTED");
     assert.ok(Array.isArray(payload.warnings));
     assert.ok(payload.warnings.some((entry) => /context_milestone_status=SUBMITTED/.test(entry)));
-    assert.match(payload.nextPublishHint, /--auth-state-file '\/tmp\/buyer-auth-state\.json'/);
+    assert.equal(payload.publishReady, false);
+    assert.equal(payload.operatorAuthorizationRequired, true);
+    assert.equal(payload.nextPublishHint, null);
+    assert.match(payload.nextPostAuthorizationDryRunHint, /--auth-state-file '\/tmp\/buyer-auth-state\.json'/);
     assert.equal(payload.response.receipt?.shortlistedReviewerAddresses?.length, 3);
     const publishBody = JSON.parse(readFileSync(payload.publishBodyOut, "utf8"));
     assert.deepEqual(publishBody, {
@@ -2986,6 +3258,95 @@ test("reviewer-shortlist builds a full dispute-open body and warns on stale cont
       ],
       reviewerSelectionReceiptId: "receipt-1",
     });
+  } finally {
+    await mock.close();
+  }
+});
+
+test("reviewer-shortlist does not write a publish body for a mismatched operator handoff", async () => {
+  const reviewers = [
+    "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  ];
+  const mock = await startMockServer({
+    "POST /rpc": (request) => ({
+      status: 200,
+      body: {
+        jsonrpc: "2.0",
+        id: request.body?.id ?? 1,
+        result: request.body?.method === "iota_getLatestCheckpointSequenceNumber"
+          ? "7"
+          : {
+              digest: "checkpoint-7",
+              sequenceNumber: "7",
+              timestampMs: "1773916000000",
+            },
+      },
+    }),
+    "POST /admin/reviewer-selection/shortlist": () => {
+      const operatorAuthorizationHandoff = reviewerShortlistAuthorizationHandoff({
+        scope: "OPEN",
+        receiptId: "receipt-invalid-handoff",
+        reviewers,
+        orderId: "order-guard",
+        milestoneId: "milestone-guard",
+      });
+      operatorAuthorizationHandoff.orderedReviewerAddresses.reverse();
+      return {
+        status: 200,
+        body: {
+          selectionComplete: true,
+          directoryScanTruncated: false,
+          receipt: {
+            id: "receipt-invalid-handoff",
+            shortlistedReviewerAddresses: reviewers,
+          },
+          publishTarget: {
+            route: "/orders/order-guard/milestones/milestone-guard/disputes/open",
+            requestPatch: {
+              invitedReviewerAddresses: reviewers,
+              reviewerSelectionReceiptId: "receipt-invalid-handoff",
+            },
+          },
+          operatorAuthorizationHandoff,
+        },
+      };
+    },
+  });
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-handoff-guard-"));
+  const publishBodyOut = path.join(tempDir, "must-not-exist.json");
+
+  try {
+    const result = await runCli([
+      "reviewer-shortlist",
+      "--api-base",
+      mock.baseUrl,
+      "--rpc-url",
+      `${mock.baseUrl}/rpc`,
+      "--jwt",
+      "test-jwt",
+      "--order-id",
+      "order-guard",
+      "--milestone-id",
+      "milestone-guard",
+      "--buyer-address",
+      `0x${"1".repeat(64)}`,
+      "--seller-address",
+      `0x${"2".repeat(64)}`,
+      "--escrow-object-id",
+      `0x${"3".repeat(64)}`,
+      "--bond-object-id",
+      `0x${"4".repeat(64)}`,
+      "--publish-body-out",
+      publishBodyOut,
+      "--json",
+    ]);
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "reviewer_shortlist_reviewer_order_mismatch");
+    assert.equal(payload.publishBodyOut, null);
+    assert.equal(existsSync(publishBodyOut), false);
+    assert.equal(existsSync(payload.receiptOut), true);
   } finally {
     await mock.close();
   }
@@ -3030,7 +3391,18 @@ test("reviewer-shortlist retries once when the server reports checkpoint_digest_
               ],
               reviewerSelectionReceiptId: "receipt-open-1"
             }
-          }
+          },
+          operatorAuthorizationHandoff: reviewerShortlistAuthorizationHandoff({
+            scope: "OPEN",
+            receiptId: "receipt-open-1",
+            reviewers: [
+              "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            ],
+            orderId: "order-1",
+            milestoneId: "milestone-1"
+          })
         }
       };
     },
@@ -3175,7 +3547,18 @@ test("reviewer-shortlist retries transient rpc_unreachable shortlist failures au
               ],
               reviewerSelectionReceiptId: "receipt-open-rpc-retry"
             }
-          }
+          },
+          operatorAuthorizationHandoff: reviewerShortlistAuthorizationHandoff({
+            scope: "OPEN",
+            receiptId: "receipt-open-rpc-retry",
+            reviewers: [
+              "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            ],
+            orderId: "order-1",
+            milestoneId: "milestone-1"
+          })
         }
       };
     },
@@ -3387,7 +3770,17 @@ test("reviewer-shortlist replacement continues when dispute pre-read is forbidde
               ],
               reviewerSelectionReceiptId: "receipt-replacement-1"
             }
-          }
+          },
+          operatorAuthorizationHandoff: reviewerShortlistAuthorizationHandoff({
+            scope: "REPLACEMENT",
+            receiptId: "receipt-replacement-1",
+            reviewers: [
+              "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            ],
+            disputeCaseObjectId
+          })
         }
       };
     }
@@ -3419,7 +3812,9 @@ test("reviewer-shortlist replacement continues when dispute pre-read is forbidde
         /replacement_dispute_pre_read_failed status=403 error=forbidden/.test(entry)
       )
     );
-    assert.match(payload.nextPublishHint, /\/disputes\/0x[a-f0-9]+\/reviewers\/replace/);
+    assert.equal(payload.publishReady, false);
+    assert.equal(payload.nextPublishHint, null);
+    assert.match(payload.nextPostAuthorizationDryRunHint, /\/disputes\/0x[a-f0-9]+\/reviewers\/replace/);
     const publishBody = JSON.parse(readFileSync(payload.publishBodyOut, "utf8"));
     assert.deepEqual(publishBody, {
       reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
@@ -3563,7 +3958,17 @@ test("reviewer-shortlist replacement retries dispute pre-read with publish auth 
             ],
             reviewerSelectionReceiptId: "receipt-replacement-3"
           }
-        }
+        },
+        operatorAuthorizationHandoff: reviewerShortlistAuthorizationHandoff({
+          scope: "REPLACEMENT",
+          receiptId: "receipt-replacement-3",
+          reviewers: [
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          ],
+          disputeCaseObjectId
+        })
       }
     })
   });
@@ -3720,7 +4125,17 @@ test("reviewer-shortlist replacement surfaces wait-until warning when the live r
             ],
             reviewerSelectionReceiptId: "receipt-replacement-2"
           }
-        }
+        },
+        operatorAuthorizationHandoff: reviewerShortlistAuthorizationHandoff({
+          scope: "REPLACEMENT",
+          receiptId: "receipt-replacement-2",
+          reviewers: [
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          ],
+          disputeCaseObjectId
+        })
       }
     })
   });
@@ -5508,8 +5923,8 @@ test("milestone-submit-byo prints mailbox-handshake recovery for mailbox-gated s
     assert.match(result.stderr, /milestone_submit_byo_error: order_mailbox_required/);
     assert.match(result.stderr, /cause=order_mailbox_required/);
     assert.match(result.stderr, /next_hint=clawnera-help recipe mailbox-handshake/);
-    assert.match(result.stderr, /next_init=clawnera-help tx-plan-execute POST \/orders\/<orderId>\/mailbox\/init-plan/);
-    assert.match(result.stderr, /bind_source=use order_mailbox_object_id from the previous tx-plan-execute output/);
+    assert.match(result.stderr, /next_init=clawnera-help tx-plan-dry-run POST \/orders\/<orderId>\/mailbox\/init-plan/);
+    assert.match(result.stderr, /bind_source=execute the reviewed canonical plan in a chain-native client/);
     assert.match(result.stderr, /next_bind=clawnera-help request POST \/orders\/<orderId>\/mailbox/);
   } finally {
     await mock.close();
@@ -6007,7 +6422,7 @@ test("bid-accept prints buyer-side guidance on buyer_mismatch", async () => {
   }
 });
 
-test("tx-plan-execute pre-hydrates reviewer commit routes before the first POST", async () => {
+test("tx-plan-dry-run pre-hydrates reviewer commit routes before the first POST", async () => {
   const caseId = "0x2cb6d1df7a78eb63647728d7cdf7a5098dce8cb4f0693b20fee7641629068ac5";
   const reviewerAddress = "0x8212e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
   const reviewerEntryObjectId = "0x1111111111111111111111111111111111111111111111111111111111111111";
@@ -6064,7 +6479,7 @@ test("tx-plan-execute pre-hydrates reviewer commit routes before the first POST"
 
   try {
     const result = await runCli([
-      "tx-plan-execute",
+      "tx-plan-dry-run",
       "POST",
       `/disputes/${caseId}/votes/commit`,
       "--api-base",
@@ -6090,7 +6505,7 @@ test("tx-plan-execute pre-hydrates reviewer commit routes before the first POST"
   }
 });
 
-test("tx-plan-execute retries one transient auth_session_unavailable on reviewer commit fetch", async () => {
+test("tx-plan-dry-run retries one transient auth_session_unavailable on reviewer commit fetch", async () => {
   const caseId = "0x3cb6d1df7a78eb63647728d7cdf7a5098dce8cb4f0693b20fee7641629068ac5";
   const reviewerAddress = "0x8212e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
   const reviewerEntryObjectId = "0x1111111111111111111111111111111111111111111111111111111111111111";
@@ -6155,7 +6570,7 @@ test("tx-plan-execute retries one transient auth_session_unavailable on reviewer
 
   try {
     const result = await runCli([
-      "tx-plan-execute",
+      "tx-plan-dry-run",
       "POST",
       `/disputes/${caseId}/votes/commit`,
       "--api-base",
@@ -6181,7 +6596,7 @@ test("tx-plan-execute retries one transient auth_session_unavailable on reviewer
   }
 });
 
-test("tx-plan-execute surfaces top-level reveal wait hints and auto-retries one short route boundary", async () => {
+test("tx-plan-dry-run surfaces top-level reveal wait hints and auto-retries one short route boundary", async () => {
   const caseId = "0x4cb6d1df7a78eb63647728d7cdf7a5098dce8cb4f0693b20fee7641629068ac5";
   const reviewerAddress = "0x8212e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
   const reviewerEntryObjectId = "0x1111111111111111111111111111111111111111111111111111111111111111";
@@ -6239,7 +6654,7 @@ test("tx-plan-execute surfaces top-level reveal wait hints and auto-retries one 
 
   try {
     const result = await runCli([
-      "tx-plan-execute",
+      "tx-plan-dry-run",
       "POST",
       `/disputes/${caseId}/votes/reveal`,
       "--api-base",
@@ -6261,14 +6676,14 @@ test("tx-plan-execute surfaces top-level reveal wait hints and auto-retries one 
     assert.equal(payload.autoHydratedReviewerContext.reviewerEntryObjectId, reviewerEntryObjectId);
     assert.equal(payload.waitUntilMs, commitDeadlineMs);
     assert.equal(payload.waitUntilIso, new Date(commitDeadlineMs).toISOString());
-    assert.match(payload.nextCommandHint, /tx-plan-execute POST '\/disputes\/.*\/votes\/reveal'/);
+    assert.match(payload.nextCommandHint, /tx-plan-dry-run POST '\/disputes\/.*\/votes\/reveal'/);
     assert.equal(revealCalls, 2);
   } finally {
     await mock.close();
   }
 });
 
-test("tx-plan-execute prints top-level finalize wait hints in non-json mode", async () => {
+test("tx-plan-dry-run prints top-level finalize wait hints in non-json mode", async () => {
   const caseId = "0x5cb6d1df7a78eb63647728d7cdf7a5098dce8cb4f0693b20fee7641629068ac5";
   const challengeDeadlineMs = Date.now() + 90_000;
   let finalizeCalls = 0;
@@ -6288,7 +6703,7 @@ test("tx-plan-execute prints top-level finalize wait hints in non-json mode", as
 
   try {
     const result = await runCli([
-      "tx-plan-execute",
+      "tx-plan-dry-run",
       "POST",
       `/disputes/${caseId}/finalize`,
       "--api-base",
@@ -6297,17 +6712,17 @@ test("tx-plan-execute prints top-level finalize wait hints in non-json mode", as
       buildJwtWithExp(4102444800),
     ]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /tx_plan_execute_error: dispute_challenge_window_open/);
+    assert.match(result.stderr, /tx_plan_dry_run_error: dispute_challenge_window_open/);
     assert.match(result.stderr, new RegExp(`wait_until=${new Date(challengeDeadlineMs).toISOString().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
     assert.match(result.stderr, /retry_after_ms=30/);
-    assert.match(result.stderr, /next_command=clawnera-help tx-plan-execute POST '\/disputes\/.*\/finalize'/);
+    assert.match(result.stderr, /next_command=clawnera-help tx-plan-dry-run POST '\/disputes\/.*\/finalize'/);
     assert.equal(finalizeCalls, 2);
   } finally {
     await mock.close();
   }
 });
 
-test("tx-plan-execute can wait through a known finalize challenge window when asked", async () => {
+test("tx-plan-dry-run can wait through a known finalize challenge window when asked", async () => {
   const caseId = "0x6cb6d1df7a78eb63647728d7cdf7a5098dce8cb4f0693b20fee7641629068ac5";
   const challengeDeadlineMs = Date.now() + 800;
   let finalizeCalls = 0;
@@ -6336,7 +6751,7 @@ test("tx-plan-execute can wait through a known finalize challenge window when as
   const startedAtMs = Date.now();
   try {
     const result = await runCli([
-      "tx-plan-execute",
+      "tx-plan-dry-run",
       "POST",
       `/disputes/${caseId}/finalize`,
       "--api-base",
@@ -6361,7 +6776,7 @@ test("tx-plan-execute can wait through a known finalize challenge window when as
   }
 });
 
-test("tx-plan-execute pre-hydrates reviewer claim-metrics from pendingMetricsClaimContext without invites", async () => {
+test("tx-plan-dry-run pre-hydrates reviewer claim-metrics from pendingMetricsClaimContext without invites", async () => {
   const reviewerAddress = "0x8212e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
   const reviewerEntryObjectId = "0x1111111111111111111111111111111111111111111111111111111111111111";
   const reviewerRegistryObjectId = "0x2222222222222222222222222222222222222222222222222222222222222222";
@@ -6426,7 +6841,7 @@ test("tx-plan-execute pre-hydrates reviewer claim-metrics from pendingMetricsCla
 
   try {
     const result = await runCli([
-      "tx-plan-execute",
+      "tx-plan-dry-run",
       "POST",
       "/reviewers/me/claim-metrics",
       "--api-base",
@@ -6450,7 +6865,7 @@ test("tx-plan-execute pre-hydrates reviewer claim-metrics from pendingMetricsCla
   }
 });
 
-test("tx-plan-execute surfaces pendingMetricsClaimContext ambiguity before invites", async () => {
+test("tx-plan-dry-run surfaces pendingMetricsClaimContext ambiguity before invites", async () => {
   const reviewerAddress = "0x4d77e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
   const closedCaseA = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
   const closedCaseB = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -6508,7 +6923,7 @@ test("tx-plan-execute surfaces pendingMetricsClaimContext ambiguity before invit
 
   try {
     const result = await runCli([
-      "tx-plan-execute",
+      "tx-plan-dry-run",
       "POST",
       "/reviewers/me/claim-metrics",
       "--api-base",
@@ -6531,7 +6946,7 @@ test("tx-plan-execute surfaces pendingMetricsClaimContext ambiguity before invit
   }
 });
 
-test("tx-plan-execute stops when pendingMetricsClaimContext is unavailable", async () => {
+test("tx-plan-dry-run stops when pendingMetricsClaimContext is unavailable", async () => {
   const reviewerAddress = "0x4d77e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
   let claimCalls = 0;
   let inviteReads = 0;
@@ -6577,7 +6992,7 @@ test("tx-plan-execute stops when pendingMetricsClaimContext is unavailable", asy
 
   try {
     const result = await runCli([
-      "tx-plan-execute",
+      "tx-plan-dry-run",
       "POST",
       "/reviewers/me/claim-metrics",
       "--api-base",
@@ -6599,7 +7014,7 @@ test("tx-plan-execute stops when pendingMetricsClaimContext is unavailable", asy
   }
 });
 
-test("tx-plan-execute pre-hydrates reviewer claim-metrics with reviewer context and a single closed invite", async () => {
+test("tx-plan-dry-run pre-hydrates reviewer claim-metrics with reviewer context and a single closed invite", async () => {
   const reviewerAddress = "0x8212e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
   const reviewerEntryObjectId = "0x1111111111111111111111111111111111111111111111111111111111111111";
   const reviewerRegistryObjectId = "0x2222222222222222222222222222222222222222222222222222222222222222";
@@ -6658,7 +7073,7 @@ test("tx-plan-execute pre-hydrates reviewer claim-metrics with reviewer context 
 
   try {
     const result = await runCli([
-      "tx-plan-execute",
+      "tx-plan-dry-run",
       "POST",
       "/reviewers/me/claim-metrics",
       "--api-base",
@@ -6685,7 +7100,7 @@ test("tx-plan-execute pre-hydrates reviewer claim-metrics with reviewer context 
   }
 });
 
-test("tx-plan-execute does not infer claim-metrics from stale reviewer invites", async () => {
+test("tx-plan-dry-run does not infer claim-metrics from stale reviewer invites", async () => {
   const reviewerAddress = "0x8212e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
   let claimCalls = 0;
   const mock = await startMockServer({
@@ -6734,7 +7149,7 @@ test("tx-plan-execute does not infer claim-metrics from stale reviewer invites",
 
   try {
     const result = await runCli([
-      "tx-plan-execute",
+      "tx-plan-dry-run",
       "POST",
       "/reviewers/me/claim-metrics",
       "--api-base",
@@ -6754,7 +7169,7 @@ test("tx-plan-execute does not infer claim-metrics from stale reviewer invites",
   }
 });
 
-test("tx-plan-execute surfaces closed dispute case candidates when claim-metrics is ambiguous", async () => {
+test("tx-plan-dry-run surfaces closed dispute case candidates when claim-metrics is ambiguous", async () => {
   const reviewerAddress = "0x4d77e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
   let claimCalls = 0;
   const closedCaseA = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -6814,7 +7229,7 @@ test("tx-plan-execute surfaces closed dispute case candidates when claim-metrics
 
   try {
     const result = await runCli([
-      "tx-plan-execute",
+      "tx-plan-dry-run",
       "POST",
       "/reviewers/me/claim-metrics",
       "--api-base",
@@ -6838,7 +7253,7 @@ test("tx-plan-execute surfaces closed dispute case candidates when claim-metrics
   }
 });
 
-test("tx-plan-execute stops claim-metrics retries when reviewer metrics are already clear", async () => {
+test("tx-plan-dry-run stops claim-metrics retries when reviewer metrics are already clear", async () => {
   const reviewerAddress = "0x8212e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
   let claimCalls = 0;
   let inviteReads = 0;
@@ -6881,7 +7296,7 @@ test("tx-plan-execute stops claim-metrics retries when reviewer metrics are alre
 
   try {
     const result = await runCli([
-      "tx-plan-execute",
+      "tx-plan-dry-run",
       "POST",
       "/reviewers/me/claim-metrics",
       "--api-base",
@@ -6904,7 +7319,7 @@ test("tx-plan-execute stops claim-metrics retries when reviewer metrics are alre
   }
 });
 
-test("tx-plan-execute stops explicit claim-metrics bodies when reviewer metrics are already clear", async () => {
+test("tx-plan-dry-run stops explicit claim-metrics bodies when reviewer metrics are already clear", async () => {
   const reviewerAddress = "0x4d3bf95fcd3fdbb7d460056d2af7489cbd1fabdd68f0d54b66fc6e7cb0e5d9a1";
   let claimCalls = 0;
   let inviteReads = 0;
@@ -6948,7 +7363,7 @@ test("tx-plan-execute stops explicit claim-metrics bodies when reviewer metrics 
 
   try {
     const result = await runCli([
-      "tx-plan-execute",
+      "tx-plan-dry-run",
       "POST",
       "/reviewers/me/claim-metrics",
       "--api-base",
@@ -6971,10 +7386,10 @@ test("tx-plan-execute stops explicit claim-metrics bodies when reviewer metrics 
   }
 });
 
-test("tx-plan-execute rejects retired reviewer address claim-metrics path locally", async () => {
+test("tx-plan-dry-run rejects retired reviewer address claim-metrics path locally", async () => {
   const reviewerAddress = "0x8212e354d6f2cbe390b95422f1713b83d7962920aff840291b30445b78f3cea7";
   const result = await runCli([
-    "tx-plan-execute",
+    "tx-plan-dry-run",
     "POST",
     `/reviewers/${reviewerAddress}/claim-metrics`,
     "--api-base",
@@ -7060,12 +7475,149 @@ test("key-agreement-upsert stores the default key file under the auth-state home
     assert.match(payload.keyFile, new RegExp(`${tempHome.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/\\.config/clawnera/key-agreements/`));
     assert.equal(payload.keyVersion, 2);
     assert.equal(payload.publicKeyMultibase, mockPublicKey);
+    assert.equal(JSON.stringify(payload).includes("privateKeyMultibase"), false);
+    assert.equal(JSON.stringify(payload).includes("privateKeyEnvelope"), false);
+    const storedKeyRecord = JSON.parse(readFileSync(payload.keyFile, "utf8"));
+    assert.equal(Object.prototype.hasOwnProperty.call(storedKeyRecord, "privateKeyMultibase"), false);
   } finally {
     await mock.close();
   }
 });
 
-test("key-agreement-upsert succeeds with readbackPending when the PUT succeeded but readback still lags", async () => {
+test("key-agreement-upsert creates no local key unless the initial GET is valid or exactly not found", async (t) => {
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-key-initial-read-"));
+  const walletInit = await runCli(["wallet-init", "--alias", "bot", "--json"], { HOME: tempHome });
+  assert.equal(walletInit.status, 0);
+  const actorAddress = JSON.parse(walletInit.stdout).address;
+  const authStateFile = path.join(tempHome, ".config", "clawnera", "auth-state.json");
+  const keyDirectory = path.join(tempHome, ".config", "clawnera", "key-agreements");
+  const keyFile = path.join(keyDirectory, `${actorAddress}.v1.json`);
+  const masterKeyFile = path.join(keyDirectory, ".key-agreement-master-key");
+  mkdirSync(path.dirname(authStateFile), { recursive: true });
+  const cases = [
+    {
+      name: "wrong 404 body",
+      response: { status: 404, body: { error: "not_found" } },
+      expectedError: "key_agreement_initial_read_failed",
+    },
+    {
+      name: "unauthorized",
+      response: { status: 401, body: { error: "unauthorized" } },
+      expectedError: "key_agreement_initial_read_failed",
+    },
+    {
+      name: "server failure",
+      response: { status: 500, body: { error: "internal_error" } },
+      expectedError: "key_agreement_initial_read_failed",
+    },
+    {
+      name: "malformed success",
+      response: { status: 200, body: { ok: true } },
+      expectedError: "invalid_key_agreement_initial_readback",
+    },
+  ];
+
+  for (const testCase of cases) {
+    await t.test(testCase.name, async () => {
+      let putCount = 0;
+      const mock = await startMockServer({
+        [`GET /users/${actorAddress}/key-agreement?keyVersion=1`]: () => testCase.response,
+        "PUT /users/me/key-agreement": () => {
+          putCount += 1;
+          return { status: 500, body: { error: "should_not_put" } };
+        },
+      });
+      try {
+        writeFileSync(
+          authStateFile,
+          JSON.stringify({
+            apiBase: mock.baseUrl,
+            token: buildJwtWithExp(4102444800),
+            refreshToken: "refresh-token-1",
+            address: actorAddress,
+            alias: "bot",
+          }, null, 2),
+        );
+        const result = await runCli([
+          "key-agreement-upsert",
+          "--auth-state-file",
+          authStateFile,
+          "--json",
+        ], { HOME: tempHome });
+        assert.equal(result.status, 1);
+        assert.equal(JSON.parse(result.stdout).error, testCase.expectedError);
+        assert.equal(putCount, 0);
+        assert.equal(existsSync(keyFile), false);
+        assert.equal(existsSync(masterKeyFile), false);
+      } finally {
+        await mock.close();
+      }
+    });
+  }
+});
+
+test("concurrent key-agreement upserts allow one binding and keep the successful local key aligned", async () => {
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-key-upsert-race-"));
+  const walletInit = await runCli(["wallet-init", "--alias", "bot", "--json"], { HOME: tempHome });
+  assert.equal(walletInit.status, 0);
+  const actorAddress = JSON.parse(walletInit.stdout).address;
+  const authStateFile = path.join(tempHome, ".config", "clawnera", "auth-state.json");
+  mkdirSync(path.dirname(authStateFile), { recursive: true });
+  let remoteKeyAgreement = null;
+  let putCount = 0;
+  const mock = await startMockServer({
+    [`GET /users/${actorAddress}/key-agreement?keyVersion=1`]: async () => {
+      if (!remoteKeyAgreement) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        return { status: 404, body: { error: "key_agreement_not_found" } };
+      }
+      return { status: 200, body: { keyAgreement: remoteKeyAgreement } };
+    },
+    "PUT /users/me/key-agreement": (request) => {
+      putCount += 1;
+      if (remoteKeyAgreement) {
+        return { status: 409, body: { error: "key_agreement_version_conflict" } };
+      }
+      remoteKeyAgreement = {
+        address: actorAddress,
+        publicKeyMultibase: request.body?.publicKeyMultibase,
+        keyVersion: request.body?.keyVersion,
+        expiresAt: new Date(request.body?.expiresAtMs).toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isExpired: false,
+      };
+      return { status: 200, body: { keyAgreement: remoteKeyAgreement } };
+    },
+  });
+  try {
+    writeFileSync(authStateFile, JSON.stringify({
+      apiBase: mock.baseUrl,
+      token: buildJwtWithExp(4102444800),
+      refreshToken: "refresh-token-1",
+      address: actorAddress,
+      alias: "bot",
+    }, null, 2));
+    const args = ["key-agreement-upsert", "--auth-state-file", authStateFile, "--json"];
+    const results = await Promise.all([
+      runCli(args, { HOME: tempHome }),
+      runCli(args, { HOME: tempHome }),
+    ]);
+    const successes = results.filter((result) => result.status === 0).map((result) => JSON.parse(result.stdout));
+    const failures = results.filter((result) => result.status !== 0).map((result) => JSON.parse(result.stdout));
+    assert.equal(successes.length, 1);
+    assert.equal(failures.length, 1);
+    assert.equal(failures[0].error, "secret_file_write_in_progress");
+    assert.equal(putCount, 1);
+    assert.equal(successes[0].publicKeyMultibase, remoteKeyAgreement.publicKeyMultibase);
+    const localRecord = JSON.parse(readFileSync(successes[0].keyFile, "utf8"));
+    assert.equal(localRecord.publicKeyMultibase, remoteKeyAgreement.publicKeyMultibase);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("key-agreement-upsert exits nonzero when the PUT succeeded but readback still lags", async () => {
   const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-key-pending-"));
   const walletInit = await runCli(["wallet-init", "--alias", "bot", "--json"], { HOME: tempHome });
   assert.equal(walletInit.status, 0);
@@ -7106,9 +7658,11 @@ test("key-agreement-upsert succeeds with readbackPending when the PUT succeeded 
       authStateFile,
       "--json"
     ], { HOME: tempHome });
-    assert.equal(result.status, 0);
+    assert.equal(result.status, 1);
     const payload = JSON.parse(result.stdout);
-    assert.equal(payload.ok, true);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error, "key_agreement_readback_pending");
+    assert.equal(payload.writeCommitted, true);
     assert.equal(payload.readbackPending, true);
     assert.equal(payload.warning, "key_agreement_readback_pending");
     assert.match(payload.verifyHint, new RegExp(`/users/${actorAddress}/key-agreement\\?keyVersion=1`));
@@ -7117,7 +7671,7 @@ test("key-agreement-upsert succeeds with readbackPending when the PUT succeeded 
   }
 });
 
-test("key-agreement-upsert keeps readbackPending when GET still returns the same expired public key", async () => {
+test("key-agreement-upsert exits nonzero when GET returns the same expired public key", async () => {
   const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-key-readback-expired-"));
   const walletInit = await runCli(["wallet-init", "--alias", "bot", "--json"], { HOME: tempHome });
   assert.equal(walletInit.status, 0);
@@ -7158,7 +7712,7 @@ test("key-agreement-upsert keeps readbackPending when GET still returns the same
       if (readCount === 1) {
         return {
           status: 404,
-          body: { error: "not_found" }
+          body: { error: "key_agreement_not_found" }
         };
       }
       return {
@@ -7214,11 +7768,13 @@ test("key-agreement-upsert keeps readbackPending when GET still returns the same
       keyFile,
       "--json"
     ], { HOME: tempHome });
-    assert.equal(result.status, 0);
+    assert.equal(result.status, 1);
     const payload = JSON.parse(result.stdout);
-    assert.equal(payload.ok, true);
-    assert.equal(payload.readbackPending, true);
-    assert.equal(payload.warning, "key_agreement_readback_pending");
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error, "key_agreement_readback_mismatch");
+    assert.equal(payload.writeCommitted, true);
+    assert.equal(payload.readbackPending, false);
+    assert.equal(payload.warning, "key_agreement_readback_mismatch");
     assert.equal(payload.readback?.isExpired, true);
     assert.equal(payload.writeResponseKeyAgreement?.isExpired, false);
     assert.match(payload.verifyHint, new RegExp(`/users/${actorAddress}/key-agreement\\?keyVersion=1`));
@@ -8129,7 +8685,8 @@ test("deliverable-encrypt retries transient reads and writes the payload beside 
     assert.ok(existsSync(payload.payloadOut));
     assert.equal(orderReads, 2);
     assert.equal(sellerKeyReads, 2);
-    assert.match(payload.nextUploadHint, /managed-storage-fee-pay/);
+    assert.match(payload.nextUploadHint, /pinata-upload-json/);
+    assert.match(payload.managedStorageHint, /V2 payment proof/);
   } finally {
     await mock.close();
   }
@@ -8338,7 +8895,7 @@ test("deliverable-encrypt auto-resolves the latest non-expired key-agreement ver
   }
 });
 
-test("request tx-plan hint preserves original request body", async () => {
+test("request dry-run hint preserves original request body", async () => {
   const mock = await startMockServer({
     "POST /orders/test/dispute-bond/fund": (request) => {
       assert.equal(request.body?.amount, "500000");
@@ -8369,22 +8926,24 @@ test("request tx-plan hint preserves original request body", async () => {
     assert.equal(result.status, 0);
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.txPlanDetected, true);
-    assert.match(payload.nextCommandHint, /tx-plan-execute POST '\/orders\/test\/dispute-bond\/fund'/);
+    assert.match(payload.nextCommandHint, /tx-plan-dry-run POST '\/orders\/test\/dispute-bond\/fund'/);
     assert.match(payload.nextCommandHint, /--body '\{\"amount\":\"500000\"\}'/);
   } finally {
     await mock.close();
   }
 });
 
-test("request detects Sui unsigned transaction byte plans", async () => {
+test("request marks Sui transaction bytes unverified and offers no execution hint", async () => {
   const mock = await startMockServer({
     "POST /orders/test/escrow/create": () => ({
       status: 200,
       body: {
         chainFamily: "sui",
         chainNetwork: "testnet",
+        chainIdentifier: "test-chain",
         status: "sui_order_escrow_create_tx_plan_unsigned",
         transactionBytesBase64: "AQIDBA==",
+        sourceGuard: txBytesGuard("AQIDBA=="),
         txPlan: {
           kind: "sui_ptb",
           sender: `0x${"1".repeat(64)}`,
@@ -8407,27 +8966,30 @@ test("request detects Sui unsigned transaction byte plans", async () => {
     ]);
     assert.equal(result.status, 0);
     const payload = JSON.parse(result.stdout);
-    assert.equal(payload.txPlanDetected, true);
+    assert.equal(payload.txPlanDetected, false);
     assert.equal(payload.txPlanFamily, "sui");
-    assert.match(payload.nextCommandHint, /tx-plan-dry-run POST '\/orders\/test\/escrow\/create'/);
-    assert.match(payload.nextCommandHint, /--tx-bytes-out \.\/sui-tx\.b64/);
+    assert.equal(payload.rawTransactionBytesUnverified, true);
+    assert.equal(payload.nextCommandHint, null);
   } finally {
     await mock.close();
   }
 });
 
-test("tx-plan-dry-run can dry-run Sui unsigned transaction bytes", async () => {
+test("tx-plan-dry-run never runs or writes Sui transaction bytes", async () => {
   const tmpDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-sui-bytes-"));
   const txBytesOut = path.join(tmpDir, "sui.b64");
   const planOut = path.join(tmpDir, "sui-plan.json");
+  let rpcCalls = 0;
   const mock = await startMockServer({
     "POST /orders/test/escrow/create": () => ({
       status: 200,
       body: {
         chainFamily: "sui",
         chainNetwork: "testnet",
+        chainIdentifier: "test-chain",
         status: "sui_order_escrow_create_tx_plan_unsigned",
         transactionBytesBase64: "AQIDBA==",
+        sourceGuard: txBytesGuard("AQIDBA=="),
         txPlan: {
           kind: "sui_ptb",
           sender: `0x${"1".repeat(64)}`,
@@ -8436,6 +8998,13 @@ test("tx-plan-dry-run can dry-run Sui unsigned transaction bytes", async () => {
       }
     }),
     "POST /": (request) => {
+      rpcCalls += 1;
+      if (request.body?.method === "sui_getChainIdentifier") {
+        return {
+          status: 200,
+          body: { jsonrpc: "2.0", id: request.body?.id, result: "test-chain" }
+        };
+      }
       assert.equal(request.body?.method, "sui_dryRunTransactionBlock");
       assert.deepEqual(request.body?.params, ["AQIDBA=="]);
       return {
@@ -8469,31 +9038,119 @@ test("tx-plan-dry-run can dry-run Sui unsigned transaction bytes", async () => {
       mock.baseUrl,
       "--body",
       "{\"chainFamily\":\"sui\"}",
-      "--tx-bytes-out",
-      txBytesOut,
       "--plan-out",
       planOut,
       "--json"
     ]);
-    assert.equal(result.status, 0);
+    assert.equal(result.status, 1);
     const payload = JSON.parse(result.stdout);
-    assert.equal(payload.ok, true);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error, "raw_transaction_bytes_unverified");
     assert.equal(payload.chainFamily, "sui");
-    assert.equal(payload.txBytesOut, txBytesOut);
-    assert.equal(readFileSync(txBytesOut, "utf8"), "AQIDBA==\n");
-    assert.match(readFileSync(planOut, "utf8"), /sui_order_escrow_create_tx_plan_unsigned/);
-    assert.deepEqual(payload.dryRun.effects.gasUsed, {
-      computationCost: "1",
-      storageCost: "2",
-      storageRebate: "0",
-      nonRefundableStorageFee: "0"
-    });
+    assert.equal(rpcCalls, 0);
+    assert.equal(existsSync(txBytesOut), false);
+    assert.equal(existsSync(planOut), false);
   } finally {
     await mock.close();
   }
 });
 
-test("tx-plan-execute signs and broadcasts Sui unsigned transaction bytes", async () => {
+test("tx-plan-dry-run rejects untrusted Sui raw transaction plans before dry-run", async (t) => {
+  const cases = [
+    {
+      name: "tampered transaction byte hash",
+      topChainIdentifier: "test-chain",
+      guardChainIdentifier: "test-chain",
+      transactionBytesSha256: "0".repeat(64),
+      rpcChainIdentifier: "test-chain",
+      expectedError: "sui_transaction_bytes_sha256_mismatch",
+      expectedRpcCalls: 0,
+    },
+    {
+      name: "mismatched API and SourceGuard chain identifiers",
+      topChainIdentifier: "test-chain",
+      guardChainIdentifier: "other-chain",
+      rpcChainIdentifier: "test-chain",
+      expectedError: "tx_plan_chain_identifier_missing_or_mismatched",
+      expectedRpcCalls: 0,
+    },
+    {
+      name: "mismatched local RPC chain identifier",
+      topChainIdentifier: "test-chain",
+      guardChainIdentifier: "test-chain",
+      rpcChainIdentifier: "other-chain",
+      expectedError: "tx_plan_rpc_chain_identifier_mismatch",
+      expectedRpcCalls: 0,
+    },
+  ];
+
+  for (const testCase of cases) {
+    await t.test(testCase.name, async () => {
+      let rpcCalls = 0;
+      let dryRunCalls = 0;
+      const sourceGuard = txBytesGuard("AQIDBA==", testCase.guardChainIdentifier);
+      if (testCase.transactionBytesSha256) {
+        sourceGuard.transactionBytesSha256 = testCase.transactionBytesSha256;
+      }
+      const mock = await startMockServer({
+        "POST /orders/test/escrow/create": () => ({
+          status: 200,
+          body: {
+            chainFamily: "sui",
+            chainNetwork: "testnet",
+            chainIdentifier: testCase.topChainIdentifier,
+            status: "sui_order_escrow_create_tx_plan_unsigned",
+            transactionBytesBase64: "AQIDBA==",
+            sourceGuard,
+            txPlan: {
+              kind: "sui_ptb",
+              sender: `0x${"1".repeat(64)}`,
+              target: `0x${"2".repeat(64)}::order_escrow::create_order_escrow_sui_entry`,
+            },
+          },
+        }),
+        "POST /": (request) => {
+          rpcCalls += 1;
+          if (request.body?.method === "sui_dryRunTransactionBlock") {
+            dryRunCalls += 1;
+          }
+          return {
+            status: 200,
+            body: {
+              jsonrpc: "2.0",
+              id: request.body?.id,
+              result: testCase.rpcChainIdentifier,
+            },
+          };
+        },
+      });
+
+      try {
+        const result = await runCli([
+          "tx-plan-dry-run",
+          "POST",
+          "/orders/test/escrow/create",
+          "--api-base",
+          mock.baseUrl,
+          "--sui-rpc-url",
+          mock.baseUrl,
+          "--body",
+          "{\"chainFamily\":\"sui\"}",
+          "--json",
+        ]);
+        assert.equal(result.status, 1, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+        const payload = JSON.parse(result.stdout);
+        assert.equal(payload.error, "raw_transaction_bytes_unverified");
+        assert.equal(rpcCalls, testCase.expectedRpcCalls);
+        assert.equal(dryRunCalls, 0);
+      } finally {
+        await mock.close();
+      }
+    });
+  }
+});
+
+test("tx-plan-dry-run rejects Sui private keys in process arguments before fetching a plan", async () => {
   const tmpDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-sui-exec-bytes-"));
   const txBytesOut = path.join(tmpDir, "sui.b64");
   const keypair = Ed25519Keypair.generate();
@@ -8542,7 +9199,7 @@ test("tx-plan-execute signs and broadcasts Sui unsigned transaction bytes", asyn
 
   try {
     const result = await runCli([
-      "tx-plan-execute",
+      "tx-plan-dry-run",
       "POST",
       "/orders/test/escrow/release",
       "--api-base",
@@ -8553,25 +9210,20 @@ test("tx-plan-execute signs and broadcasts Sui unsigned transaction bytes", asyn
       keypair.getSecretKey(),
       "--body",
       "{\"chainFamily\":\"sui\"}",
-      "--tx-bytes-out",
-      txBytesOut,
       "--json"
     ]);
-    assert.equal(result.status, 0);
+    assert.equal(result.status, 1);
     const payload = JSON.parse(result.stdout);
-    assert.equal(payload.ok, true);
-    assert.equal(payload.chainFamily, "sui");
-    assert.equal(payload.signerAddress, signerAddress);
-    assert.equal(payload.txDigest, "mock-sui-digest");
-    assert.equal(payload.suiRpcUrl, mock.baseUrl);
-    assert.equal(readFileSync(txBytesOut, "utf8"), "BQYHCA==\n");
-    assert.equal(executeRpcSeen, true);
+    assert.equal(payload.error, "sui_private_key_argv_disabled");
+    assert.match(payload.hint, /protected Sui keystore/);
+    assert.equal(existsSync(txBytesOut), false);
+    assert.equal(executeRpcSeen, false);
   } finally {
     await mock.close();
   }
 });
 
-test("tx-plan-execute fails closed when a Sui signer is unavailable", async () => {
+test("tx-plan-dry-run refuses raw Sui transaction bytes even without a signer", async () => {
   const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-sui-no-signer-"));
   const mock = await startMockServer({
     "POST /orders/test/escrow/release": () => ({
@@ -8579,21 +9231,27 @@ test("tx-plan-execute fails closed when a Sui signer is unavailable", async () =
       body: {
         chainFamily: "sui",
         chainNetwork: "testnet",
+        chainIdentifier: "test-chain",
         status: "sui_order_escrow_release_tx_plan_unsigned",
         transactionBytesBase64: "BQYHCA==",
+        sourceGuard: txBytesGuard("BQYHCA=="),
         txPlan: {
           kind: "sui_ptb",
           sender: `0x${"1".repeat(64)}`,
           target: `0x${"2".repeat(64)}::order_escrow::release_order_escrow_sui_entry`
         }
       }
+    }),
+    "POST /": (request) => ({
+      status: 200,
+      body: { jsonrpc: "2.0", id: request.body?.id, result: "test-chain" }
     })
   });
 
   try {
     const result = await runCli(
       [
-        "tx-plan-execute",
+        "tx-plan-dry-run",
         "POST",
         "/orders/test/escrow/release",
         "--api-base",
@@ -8608,12 +9266,45 @@ test("tx-plan-execute fails closed when a Sui signer is unavailable", async () =
     );
     assert.equal(result.status, 1);
     const payload = JSON.parse(result.stdout);
-    assert.equal(payload.error, "sui_keystore_empty_or_missing");
+    assert.equal(payload.error, "raw_transaction_bytes_unverified");
     assert.equal(payload.chainFamily, "sui");
-    assert.match(payload.hint, /matching Sui signer/);
+    assert.match(payload.hint, /never treated as verified/);
   } finally {
     await mock.close();
   }
+});
+
+test("pinata upload rejects argv credentials and unsafe credential files", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-pinata-credentials-"));
+  const payloadFile = path.join(tempDir, "payload.json");
+  const jwtFile = path.join(tempDir, "pinata.jwt");
+  writeFileSync(payloadFile, "{\"encrypted\":true}\n");
+  writeFileSync(jwtFile, "secret-token\n", { mode: 0o644 });
+  chmodSync(jwtFile, 0o644);
+
+  const argvResult = await runCli([
+    "pinata-upload-json",
+    "--file",
+    payloadFile,
+    "--jwt",
+    "secret-token",
+    "--json",
+  ]);
+  assert.equal(argvResult.status, 1);
+  assert.equal(JSON.parse(argvResult.stdout).error, "pinata_jwt_argv_disabled");
+
+  const fileResult = await runCli([
+    "pinata-upload-json",
+    "--file",
+    payloadFile,
+    "--jwt-file",
+    jwtFile,
+    "--json",
+  ]);
+  assert.equal(fileResult.status, 1);
+  const filePayload = JSON.parse(fileResult.stdout);
+  assert.equal(filePayload.error, "invalid_pinata_jwt_file");
+  assert.equal(filePayload.detail, "unsafe_secret_file_mode");
 });
 
 test("sponsor preflight surfaces runtime failures", async () => {
@@ -8723,24 +9414,27 @@ test("sponsor preflight accepts auth state and refreshes one invalid token respo
 });
 
 test("sponsor execute surfaces execute-side failures after successful reserve", async () => {
+  const expiresAt = new Date(Date.now() + 60_000).toISOString();
   const mock = await startMockServer({
     "POST /sponsor/reserve": (request) => {
       assert.equal(request.body?.gasBudget, 1000000);
       assert.equal(request.body?.paymentCoin, "claw");
+      assert.equal(request.body?.orderId, "order-1");
       return {
         status: 200,
-        body: {
-          reservation: {
-            reservationId: "resv-1",
-            sponsorAddress: "0xabc",
-            gasCoins: ["0x1"]
-          }
-        }
+        body: sponsorReservationBody({ reservationId: "resv-1", orderId: "order-1", expiresAt }),
       };
     },
     "POST /sponsor/execute": (request) => {
       assert.equal(request.headers["idempotency-key"]?.length > 0, true);
       assert.equal(request.body?.reservationId, "resv-1");
+      assert.equal(request.body?.orderId, "order-1");
+      assert.equal(request.body?.intent?.version, "sponsor_execute_intent.v2");
+      assert.equal(request.body?.intent?.chainFamily, "iota");
+      assert.equal(request.body?.intent?.network, "testnet");
+      assert.equal(request.body?.intent?.txFamily, "marketplace_write");
+      assert.equal(request.body?.intent?.chainTxDigest?.length > 15, true);
+      assert.equal(request.body?.intentSig, "c2ln");
       return {
         status: 409,
         body: {
@@ -8757,8 +9451,14 @@ test("sponsor execute surfaces execute-side failures after successful reserve", 
       mock.baseUrl,
       "--jwt",
       "test-jwt",
+      "--order-id",
+      "order-1",
+      "--chain-family",
+      "iota",
+      "--network",
+      "testnet",
       "--build-cmd",
-      `node -e "console.log(JSON.stringify({txBytesB64:'dHhieXRlcw==',userSig:'c2ln'}))"`,
+      sponsorV2BuildCommand({ reservationId: "resv-1", orderId: "order-1", expiresAt }),
       "--json"
     ]);
     assert.equal(result.status, 1);
@@ -8772,11 +9472,95 @@ test("sponsor execute surfaces execute-side failures after successful reserve", 
   }
 });
 
+test("sponsor execute rejects an incomplete builder result before calling execute", async () => {
+  const expiresAt = new Date(Date.now() + 60_000).toISOString();
+  let executeCalls = 0;
+  const mock = await startMockServer({
+    "POST /sponsor/reserve": () => ({
+      status: 200,
+      body: sponsorReservationBody({ reservationId: "resv-incomplete", orderId: "order-incomplete", expiresAt }),
+    }),
+    "POST /sponsor/execute": () => {
+      executeCalls += 1;
+      return { status: 500, body: { error: "must_not_execute" } };
+    },
+  });
+
+  try {
+    const result = await runCli([
+      "sponsor-execute",
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      "test-jwt",
+      "--order-id",
+      "order-incomplete",
+      "--chain-family",
+      "iota",
+      "--network",
+      "testnet",
+      "--build-cmd",
+      `node -e "console.log(JSON.stringify({txBytesB64:'dHhieXRlcw==',userSig:'c2ln'}))"`,
+      "--json",
+    ]);
+    assert.equal(result.status, 1);
+    assert.equal(JSON.parse(result.stdout).error, "builder_sponsor_intent_v2_required");
+    assert.equal(executeCalls, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("sponsor execute rejects a complete but drifted v2 intent before calling execute", async () => {
+  const expiresAt = new Date(Date.now() + 60_000).toISOString();
+  let executeCalls = 0;
+  const mock = await startMockServer({
+    "POST /sponsor/reserve": () => ({
+      status: 200,
+      body: sponsorReservationBody({ reservationId: "resv-drift", orderId: "order-drift", expiresAt }),
+    }),
+    "POST /sponsor/execute": () => {
+      executeCalls += 1;
+      return { status: 500, body: { error: "must_not_execute" } };
+    },
+  });
+
+  try {
+    const result = await runCli([
+      "sponsor-execute",
+      "--api-base",
+      mock.baseUrl,
+      "--jwt",
+      "test-jwt",
+      "--order-id",
+      "order-drift",
+      "--chain-family",
+      "iota",
+      "--network",
+      "testnet",
+      "--build-cmd",
+      sponsorV2BuildCommand({
+        reservationId: "resv-drift",
+        orderId: "order-drift",
+        expiresAt,
+        intentOverrides: { chainTxDigest: "1111111111111111" },
+      }),
+      "--json",
+    ]);
+    assert.equal(result.status, 1);
+    assert.equal(JSON.parse(result.stdout).error, "builder_sponsor_intent_mismatch:chainTxDigest");
+    assert.equal(executeCalls, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("sponsor execute accepts auth state, refreshes reserve auth, and forwards order id", async () => {
   const staleToken = buildJwtWithExp(1);
   const refreshedToken = buildJwtWithExp(4102444800);
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-sponsor-execute-refresh-"));
   const authStateFile = path.join(tempDir, "auth-state.json");
+  const expiresAt = new Date(Date.now() + 60_000).toISOString();
 
   const mock = await startMockServer({
     "POST /sponsor/reserve": (request) => {
@@ -8789,18 +9573,17 @@ test("sponsor execute accepts auth state, refreshes reserve auth, and forwards o
       assert.equal(request.body?.orderId, "order-9");
       return {
         status: 200,
-        body: {
-          reservation: {
-            reservationId: "resv-9",
-            sponsorAddress: "0xabc",
-            gasCoins: ["0x1"]
-          }
-        }
+        body: sponsorReservationBody({ reservationId: "resv-9", orderId: "order-9", expiresAt }),
       };
     },
     "POST /sponsor/execute": (request) => {
       assert.equal(request.headers.authorization, `Bearer ${refreshedToken}`);
       assert.equal(request.body?.reservationId, "resv-9");
+      assert.equal(request.body?.orderId, "order-9");
+      assert.equal(request.body?.intent?.version, "sponsor_execute_intent.v2");
+      assert.equal(request.body?.intent?.chainFamily, "iota");
+      assert.equal(request.body?.intent?.network, "testnet");
+      assert.equal(request.body?.intentSig, "c2ln");
       return {
         status: 200,
         body: {
@@ -8832,7 +9615,11 @@ test("sponsor execute accepts auth state, refreshes reserve auth, and forwards o
           token: staleToken,
           refreshToken: "refresh-token-1",
           address: "0x1111111111111111111111111111111111111111111111111111111111111111",
-          alias: "bot"
+          alias: "bot",
+          authContext: {
+            chainFamily: "iota",
+            network: "testnet",
+          },
         },
         null,
         2
@@ -8847,7 +9634,7 @@ test("sponsor execute accepts auth state, refreshes reserve auth, and forwards o
       "--order-id",
       "order-9",
       "--build-cmd",
-      `node -e "console.log(JSON.stringify({txBytesB64:'dHhieXRlcw==',userSig:'c2ln'}))"`,
+      sponsorV2BuildCommand({ reservationId: "resv-9", orderId: "order-9", expiresAt }),
       "--json"
     ]);
     assert.equal(result.status, 0);

@@ -1,6 +1,10 @@
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import {
+  normalizeAuthenticatedBaseUrl,
+  normalizeAuthenticatedUrl
+} from "../lib/local-security.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,12 +27,9 @@ export function normalizeApiBase(rawValue) {
     return null;
   }
   try {
-    const parsed = new URL(String(rawValue).trim());
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      return null;
-    }
-    const out = parsed.toString();
-    return out.endsWith("/") ? out.slice(0, -1) : out;
+    return normalizeAuthenticatedBaseUrl(String(rawValue), {
+      errorCode: "invalid_api_base"
+    });
   } catch {
     return null;
   }
@@ -52,11 +53,15 @@ export function requireApiEnv() {
 }
 
 export async function requestJson(url, init = {}, timeoutMs = 10_000) {
+  const requestUrl = normalizeAuthenticatedUrl(String(url), {
+    errorCode: "invalid_request_url"
+  });
   const controller = new AbortController();
   const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(url, {
+    const response = await fetch(requestUrl, {
       ...init,
+      redirect: "error",
       signal: controller.signal
     });
     const text = await response.text();

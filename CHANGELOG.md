@@ -4,18 +4,41 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.104] - 2026-07-10
+
+- Closed the reviewer-selection authorization gap in the public helper:
+  - `reviewer-shortlist` validates the external-custody operator handoff against the receipt, exact ordered shortlist, target route, prepared request, and required missing inputs before writing a publish body
+  - dispute open/replacement plans fail closed unless `inviteBinding` and `preExecutionRequirements.reviewerSelectionAuthorization` agree with the request and receipt
+  - generic tx-plan dry-runs now require an explicit successful chain effects status instead of treating a transport-level JSON-RPC result as success
+  - shortlist output remains `publishReady=false` until the external operator authorization step is completed
+
+- Hardened local secret and transaction handling:
+  - X25519 key-agreement private keys now use a versioned scrypt + XChaCha20-Poly1305 envelope with record-bound authenticated metadata instead of plaintext JSON
+  - master-key read buffers are cleared after copying, and an explicit strict production policy requires a pre-provisioned master-key file outside the record directory
+  - sponsor execution requires the complete signed v2 intent tuple and locally rechecks both transaction digests before calling the API
+  - dispute open/replacement guidance requires an exact selector receipt whose ordered shortlist matches the invite list, including empty bootstrap lists
+  - normal commands reject plaintext legacy records; `key-agreement-migrate` performs an explicit atomic in-place migration without printing secret material
+  - auth state, transfer drafts, decrypted deliverables, and local signing inputs use owner-only no-follow atomic file paths, while raw Sui private-key and unverified transaction-byte execution paths fail closed
+  - authenticated runtime calls reconstruct the versioned challenge message and bind actor, route, intent, chain, and RPC identity before wallet-side execution
+- Hardened release and dependency automation:
+  - GitHub Actions use full commit pins, pull-request tests run only on GitHub-hosted runners, and Dependabot covers npm plus Actions updates
+  - a hash-pinned Gitleaks history scan and high-severity npm audit now block pull requests, main pushes, and the scheduled security gate
+  - npm publication requires the protected `npm-publish` environment, revalidates the clean tag/main source after tests, builds one tarball, uploads SHA-256/source evidence, publishes that exact artifact with provenance, and compares registry SHA-1/SHA-512 metadata to the local tarball
+  - added executable workflow and release-policy gates with regression tests
+
 - Added Sui-aware `clawdex-onchain` helper runtime support:
   - object, owned-object, and event reads now use Sui JSON-RPC methods when `chainFamily=sui`
-  - direct helper builders now cover native SUI order escrow, Sui-USDC typed order escrow, arbitrary non-native Sui typed order escrow, Sui managed-storage fee payment, Sui reputation profile creation, and Sui listing deposits
-  - `clawnera-help managed-storage-fee-pay` now accepts runtime SUI fee policies and builds `manifest_anchor::pay_managed_storage_fee_sui` locally instead of rejecting Sui as API-plan-only
-  - direct Sui transaction-object dry-run/execution fails closed with guidance to use API-returned Sui byte plans, which the CLI already signs and submits wallet-side
+  - direct helper builders cover native SUI order escrow, Sui-USDC typed order escrow, arbitrary non-native Sui typed order escrow, Sui reputation profile creation, and Sui listing deposits
+  - Sui no-invite dispute opens use the policy-bound V2 entrypoints instead of abort-only legacy entries
+  - removed dormant managed-storage builders that targeted abort-only legacy Move entries; `managed-storage-fee-pay` now fails closed before wallet or network access until an exact policy-and-escrow-bound V2 flow is wired
+  - direct Sui transaction-object execution stays outside the public CLI; canonical builder plans are rebuilt and dry-run locally, then signed and executed separately in a reviewed chain-native wallet/client
 - Added chain-neutral reviewer economics naming in the public helper:
   - `reviewer-register` and `reviewer-update` now prefer `minCaseRewardNative` / `--min-case-reward-native` while keeping `minCaseRewardIota` / `--min-case-reward-iota` as a compatibility fallback
   - `chain-config` now prints native dispute-bond and reviewer-stake aliases alongside legacy IOTA-specific labels
-- Added native Sui wallet-side execution for API-returned unsigned transaction bytes:
-  - `clawnera-help tx-plan-execute` now signs Sui byte plans locally with `--sui-private-key` or a matching Sui keystore entry and submits them directly to the selected Sui RPC
-  - Sui execution fails closed when the signer does not match the `txPlan.sender`
-  - added focused integration coverage for Sui dry-run, Sui execute, and missing-signer failure paths
+- Hardened Sui wallet-plan handling:
+  - `tx-plan-dry-run` rebuilds canonical builder requests locally and requires an explicit successful effects status
+  - `tx-plan-execute` is disabled before API, file, key, signing, or broadcast access; private keys in argv or environment remain rejected
+  - removed the unused public-CLI Sui keystore/private-key parsing path
 - Synced the public helper/docs surface to runtime-advertised native Sui `SUI` and `USDC` lanes without adding API-side signing/custody.
 
 ## [0.1.100] - 2026-04-18

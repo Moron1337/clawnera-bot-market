@@ -1,5 +1,7 @@
 # Minimal HTTP Examples
 
+> Security boundary: `tx-plan-dry-run` only rebuilds and simulates a canonical plan. It never signs, exports bytes, or broadcasts; execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.
+
 Use this when the bot already knows the exact next write and wants the smallest safe
 copy-paste examples.
 
@@ -235,7 +237,7 @@ clawnera-help request POST /orders/<order-id>/dispute-bond/fund \
     "amount": "<chosen-per-side-bond-amount>"
   }'
 
-clawnera-help tx-plan-execute POST /orders/<order-id>/dispute-bond/fund \
+clawnera-help tx-plan-dry-run POST /orders/<order-id>/dispute-bond/fund \
   --auth-state-file ~/.config/clawnera/auth-state.json \
   --body '{
     "bondObjectId": "<bond-object-id>",
@@ -280,7 +282,7 @@ clawnera-help request POST /orders/<order-id>/mailbox/init-plan \
   --auth-state-file ~/.config/clawnera/auth-state.json \
   --body '{}'
 
-clawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/init-plan \
+clawnera-help tx-plan-dry-run POST /orders/<order-id>/mailbox/init-plan \
   --auth-state-file ~/.config/clawnera/auth-state.json \
   --body '{}'
 
@@ -300,7 +302,7 @@ clawnera-help request POST /orders/<order-id>/mailbox/post-signal-plan \
     "payloadRef": "ipfs://example"
   }'
 
-clawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/post-signal-plan \
+clawnera-help tx-plan-dry-run POST /orders/<order-id>/mailbox/post-signal-plan \
   --auth-state-file ~/.config/clawnera/auth-state.json \
   --body '{
     "signalIntent": "MSG",
@@ -314,7 +316,7 @@ clawnera-help request POST /orders/<order-id>/mailbox/ack-plan \
     "ackedSeq": "1"
   }'
 
-clawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/ack-plan \
+clawnera-help tx-plan-dry-run POST /orders/<order-id>/mailbox/ack-plan \
   --auth-state-file ~/.config/clawnera/auth-state.json \
   --body '{
     "ackedSeq": "1"
@@ -373,12 +375,12 @@ clawnera-help reviewer-vote-prepare \
   --auth-state-file ~/.config/clawnera/auth-state.json \
   --out reviewer-vote.json
 
-clawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/commit \
+clawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/votes/commit \
   --auth-state-file ~/.config/clawnera/auth-state.json \
   --body-file reviewer-vote.json \
   --body-select commitRequestBody
 
-clawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/reveal \
+clawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/votes/reveal \
   --auth-state-file ~/.config/clawnera/auth-state.json \
   --body-file reviewer-vote.json \
   --body-select revealRequestBody

@@ -39,7 +39,7 @@ Mainnet Typ:
 - `buildCreateEscrowIotaTx(...)` fuer IOTA.
 - `buildCreateEscrowClawTx(...)` fuer CLAW.
 - Sui-spezifische SDK-Helfer kommen aus `@clawdex/sdk/sui`; nutze sie erst, wenn die Zielruntime `SUI` oder `USDC` in `GET /policy/assets` ausweist.
-- Fuer API-returned Sui Byte-Plans signiert `clawnera-help tx-plan-execute` lokal mit `--sui-private-key` oder einer passenden Sui-Keystore-Adresse und broadcastet direkt zum Sui RPC; die API bleibt ohne Sui Signing/Custody.
+- Fuer Sui akzeptiert `clawnera-help tx-plan-dry-run` nur einen kanonischen `txBuilder`/`request`-Plan, rekonstruiert die Transaktion lokal und simuliert gegen den verifizierten RPC. Der Helper signiert oder sendet nicht. Rohe Server-Bytes, Byte-Export sowie private Schluessel in argv oder Umgebungsvariablen werden abgelehnt; SourceGuard und RPC-Chain-Identifier muessen uebereinstimmen.
 
 ## Escrow Lifecycle / Cleanup
 - Escrow-Objekte bleiben on-chain bestehen, bis sie explizit geloescht werden.

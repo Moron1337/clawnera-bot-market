@@ -9,15 +9,14 @@ Dieses Repo ist der bot-orientierte Knowledge-Layer.
 - `${MARKETPLACE_SOURCE_ROOT}/apps/api/openapi.advanced.yaml`
 - `${MARKETPLACE_SOURCE_ROOT}/apps/api/openapi.reviewer-self.yaml`
 - `${MARKETPLACE_SOURCE_ROOT}/packages/sdk/src/generated/apiContract.json`
-- `${MARKETPLACE_SOURCE_ROOT}/contracts/claw_marketplace/ci/callable_surface.snapshot`
-- `${CLAW_ROOT}/docs/*`
+- `${MARKETPLACE_SOURCE_ROOT}/contracts/claw_settlement_core/ci/callable_surface.snapshot`
 
 ## Sync
-- `bash scripts/sync-local-sources.sh`
+- `MARKETPLACE_SOURCE_ROOT=/path/to/clawdex MARKETPLACE_SOURCE_COMMIT=<reviewed-full-40-char-sha> bash scripts/sync-local-sources.sh`
 - Ausgabe nach: `docs/docsources/`
 - Maintainer-only: normale Nutzer brauchen diesen Schritt nicht.
-- `clawnera-help sync` ueberspringt fehlende Quell-Repos standardmaessig.
-- Fuer harten Fehler: `clawnera-help sync --require-sources` oder `CLAWNERA_SYNC_STRICT=1`.
+- Der Sync akzeptiert nur den erwarteten GitHub-Origin, einen sauberen Checkout des expliziten Commits und einen Commit auf einem gefetchten `origin/*`-Ref, der auf `origin/main` basiert.
+- Installation und SDK-Build laufen mit eingefrorenem Lockfile; jede Quelle und jedes Ziel muss eine regulaere Datei ohne Symlink-Komponente sein.
 
 ## Wichtige kopierte Dateien
 - `docs/docsources/core/openapi.yaml`
@@ -29,9 +28,8 @@ Dieses Repo ist der bot-orientierte Knowledge-Layer.
 - `docs/docsources/core/SMART_CONTRACT_ARCHITECTURE_MAP.md`
 - `docs/docsources/core/BOT_QUICKSTART.md`
 - `docs/docsources/core/SMART_CONTRACT_FUNCTION_INVENTORY_AND_USER_TEST_MATRIX.md`
-- `docs/docsources/claw/CLAW_OPERATIONS_CURRENT.md`
 
 ## Pflege-Workflow
 1. In den Quell-Repos aendern.
-2. Hier `sync:local` ausfuehren.
+2. Hier `sync:local` mit explizitem vollem Commit-SHA ausfuehren.
 3. Kuratierte Guides in `docs/guides/*` aktualisieren.

@@ -4746,16 +4746,44 @@ components:
           type: string
           minLength: 1
           maxLength: 200
+        chainFamily:
+          type: string
+          enum: [iota, sui]
     AuthChallengeResponse:
       type: object
-      required: [nonce, address, messageToSign, expiresAtMs]
+      additionalProperties: false
+      required: [protocol, version, origin, audience, environment, chainFamily, network, nonce, address, messageToSign, issuedAtMs, expiresAtMs]
       properties:
+        protocol:
+          type: string
+          enum: [clawdex.auth]
+        version:
+          type: integer
+          enum: [2]
+        origin:
+          type: string
+          format: uri
+          pattern: "^https://"
+        audience:
+          type: string
+          enum: [clawdex-client]
+        environment:
+          type: string
+        chainFamily:
+          type: string
+          enum: [iota, sui]
+        network:
+          type: string
         nonce:
           type: string
         address:
           type: string
         messageToSign:
           type: string
+          description: Canonical CLAWDEX Sign-In v2 message containing every response field in fixed order.
+        issuedAtMs:
+          type: integer
+          format: int64
         expiresAtMs:
           type: integer
           format: int64
@@ -4780,6 +4808,9 @@ components:
           type: string
           minLength: 1
           maxLength: 8192
+        chainFamily:
+          type: string
+          enum: [iota, sui]
     AuthRefreshRequest:
       type: object
       additionalProperties: false
@@ -4791,11 +4822,25 @@ components:
           maxLength: 8192
     AuthSessionView:
       type: object
-      required: [refreshAvailable]
+      required: [id, authVersion, origin, environment, chainFamily, network, refreshAvailable, issuedAtMs, refreshExpiresAtMs, lastRefreshedAtMs, revokedAtMs]
       properties:
         id:
           type: string
           format: uuid
+        authVersion:
+          type: integer
+          enum: [2]
+        origin:
+          type: string
+          format: uri
+          pattern: "^https://"
+        environment:
+          type: string
+        chainFamily:
+          type: string
+          enum: [iota, sui]
+        network:
+          type: string
         refreshAvailable:
           type: boolean
         issuedAtMs:
@@ -5476,7 +5521,7 @@ components:
           type: boolean
         orderIdMode:
           type: string
-          enum: [optional, required]
+          enum: [required]
         reservationTtlSec:
           type: integer
           minimum: 1
@@ -5508,7 +5553,7 @@ components:
         execute:
           type: object
           additionalProperties: false
-          required: [idempotencyHeader, intentSupported, intentRequired, intentSignatureRequired]
+          required: [idempotencyHeader, intentSupported, intentRequired, intentSignatureRequired, executableTxFamilies]
           properties:
             idempotencyHeader:
               type: string
@@ -5519,48 +5564,35 @@ components:
               type: boolean
             intentSignatureRequired:
               type: boolean
+            executableTxFamilies:
+              type: array
+              minItems: 2
+              maxItems: 2
+              uniqueItems: true
+              items:
+                type: string
+                enum: [marketplace_write, claw_payment]
         recommendedGasBudgets:
           type: object
           additionalProperties: false
           required:
             [
               marketplace_write,
-              mailbox_signal,
-              milestone_submit,
-              review_post,
-              deadline_extension,
-              dispute_bond,
-              dispute_vote,
-              dispute_resolution,
               claw_payment
             ]
           properties:
             marketplace_write:
-              $ref: "#/components/schemas/SponsorGasEstimate"
-            mailbox_signal:
-              $ref: "#/components/schemas/SponsorGasEstimate"
-            milestone_submit:
-              $ref: "#/components/schemas/SponsorGasEstimate"
-            review_post:
-              $ref: "#/components/schemas/SponsorGasEstimate"
-            deadline_extension:
-              $ref: "#/components/schemas/SponsorGasEstimate"
-            dispute_bond:
-              $ref: "#/components/schemas/SponsorGasEstimate"
-            dispute_vote:
-              $ref: "#/components/schemas/SponsorGasEstimate"
-            dispute_resolution:
               $ref: "#/components/schemas/SponsorGasEstimate"
             claw_payment:
               $ref: "#/components/schemas/SponsorGasEstimate"
     SponsorReserveRequest:
       type: object
       additionalProperties: false
-      required: [purpose, gasBudget]
+      required: [purpose, gasBudget, orderId]
       properties:
         purpose:
           type: string
-          enum: [claw_payment, bond, marketplace_tx]
+          enum: [claw_payment, marketplace_tx]
         gasBudget:
           type: integer
           minimum: 1
@@ -5577,11 +5609,11 @@ components:
     SponsorPreflightRequest:
       type: object
       additionalProperties: false
-      required: [purpose]
+      required: [purpose, orderId]
       properties:
         purpose:
           type: string
-          enum: [claw_payment, bond, marketplace_tx]
+          enum: [claw_payment, marketplace_tx]
         paymentCoin:
           type: string
           minLength: 1
@@ -5599,7 +5631,7 @@ components:
     SponsorExecuteRequest:
       type: object
       additionalProperties: false
-      required: [reservationId, txBytesB64, userSig]
+      required: [reservationId, orderId, txBytesB64, userSig, intent, intentSig]
       properties:
         reservationId:
           type: string
@@ -5625,18 +5657,26 @@ components:
           description: |
             Serialized wallet personal-message signature over the canonical
             sponsor intent message:
-            first line `CLAWDEX Sponsor Execute Intent v1`, second line
-            `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`.
-            Required whenever `intent` is provided.
+            first line `CLAWDEX Sponsor Execute Intent v2`, second line
+            `version=<version>|chain_family=<chainFamily>|network=<network>|tx_family=<txFamily>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|chain_tx_digest=<chainTxDigest>|expires_at=<expiresAt>|purpose=<purpose>`.
+            Required for every sponsor execution.
     SponsorExecutionIntentRequest:
       type: object
       additionalProperties: false
-      required: [network, orderId, reservationId, txDigest, expiresAt, purpose]
+      required: [version, chainFamily, network, txFamily, orderId, reservationId, txDigest, chainTxDigest, expiresAt, purpose]
       properties:
+        version:
+          type: string
+          enum: [sponsor_execute_intent.v2]
+        chainFamily:
+          type: string
+          enum: [iota, sui]
         network:
           type: string
           minLength: 1
           maxLength: 64
+        txFamily:
+          $ref: "#/components/schemas/SponsorTxFamily"
         orderId:
           type: string
           minLength: 1
@@ -5648,6 +5688,10 @@ components:
         txDigest:
           type: string
           pattern: "^[a-f0-9]{64}$"
+        chainTxDigest:
+          type: string
+          minLength: 16
+          maxLength: 128
         expiresAt:
           type: string
           format: date-time
@@ -5839,7 +5883,7 @@ components:
           type: object
           additionalProperties: false
           required:
-            [sponsorLikelyAllowed, selfPayFallbackAvailable, strictMode, intentRequired, intentSignatureRequired, authGate]
+            [sponsorLikelyAllowed, selfPayFallbackAvailable, strictMode, intentRequired, intentSignatureRequired, executionSupported, authGate]
           properties:
             sponsorLikelyAllowed:
               type: boolean
@@ -5850,6 +5894,8 @@ components:
             intentRequired:
               type: boolean
             intentSignatureRequired:
+              type: boolean
+            executionSupported:
               type: boolean
             authGate:
               type: object
@@ -5951,6 +5997,7 @@ components:
           strictMode,
           intentRequired,
           intentSignatureRequired,
+          executionSupported,
           selfPayFallbackAvailable,
           reservationTtlSec
         ]
@@ -5981,6 +6028,8 @@ components:
         intentRequired:
           type: boolean
         intentSignatureRequired:
+          type: boolean
+        executionSupported:
           type: boolean
         selfPayFallbackAvailable:
           type: boolean
@@ -6081,7 +6130,7 @@ components:
           pattern: "^[1-9][0-9]*$"
         asset:
           type: string
-          enum: [IOTA, CLAW, SUI, TESTUSD]
+          enum: [IOTA, SUI]
         recipientAddress:
           type: string
           minLength: 3
@@ -6334,7 +6383,7 @@ components:
     DisputeOpenRequest:
       type: object
       additionalProperties: false
-      required: [escrowObjectId, bondObjectId, invitedReviewerAddresses]
+      required: [escrowObjectId, bondObjectId, invitedReviewerAddresses, reviewerSelectionReceiptId]
       properties:
         escrowObjectId:
           type: string
@@ -6348,7 +6397,7 @@ components:
             type: string
         reviewerSelectionReceiptId:
           type: string
-          description: "Canonical operator shortlist publishes should carry the exact selector receipt id. Omit only for explicit manual recovery / hand-curated fallback publishing."
+          description: "Required selector receipt id. Its ordered shortlist must exactly match invitedReviewerAddresses, including an empty bootstrap shortlist."
         clockObjectId:
           type: string
     DisputeAcceptRequest:
@@ -6855,19 +6904,19 @@ components:
     DisputeReplaceReviewersRequest:
       type: object
       additionalProperties: false
-      required: [reviewerRegistryObjectId, invitedReviewerAddresses]
+      required: [reviewerRegistryObjectId, invitedReviewerAddresses, reviewerSelectionReceiptId]
       properties:
         reviewerRegistryObjectId:
           type: string
         invitedReviewerAddresses:
           type: array
-          minItems: 1
+          minItems: 0
           maxItems: 32
           items:
             type: string
         reviewerSelectionReceiptId:
           type: string
-          description: "Canonical operator shortlist publishes should carry the exact selector receipt id. Omit only for explicit manual recovery / hand-curated fallback publishing."
+          description: "Required selector receipt id. Its ordered shortlist must exactly match invitedReviewerAddresses, including an empty bootstrap shortlist."
         clockObjectId:
           type: string
     DisputeFinalizeRequest:
@@ -6938,10 +6987,67 @@ components:
           type: string
         fn:
           type: string
+    ReviewerSelectionInviteBinding:
+      type: object
+      additionalProperties: false
+      required:
+        - mode
+        - invitedReviewerAddresses
+        - reviewerSelectionReceiptId
+        - postExecuteBindingRequired
+        - bindRoute
+      properties:
+        mode:
+          type: string
+          enum: [selection_receipt_activation]
+        invitedReviewerAddresses:
+          type: array
+          description: Exact ordered reviewer sequence committed by the selection receipt. Duplicates are forbidden.
+          uniqueItems: true
+          items:
+            type: string
+        reviewerSelectionReceiptId:
+          type: string
+          minLength: 1
+        postExecuteBindingRequired:
+          type: boolean
+          enum: [true]
+        bindRoute:
+          type: string
+          description: Route that must bind the executed dispute case to this receipt after publish.
+    ReviewerSelectionAuthorizationRequirement:
+      type: object
+      additionalProperties: false
+      required: [required, state, reviewerSelectionReceiptId, orderedReviewerAddresses]
+      properties:
+        required:
+          type: boolean
+          enum: [true]
+        state:
+          type: string
+          enum: [EXTERNAL_OPERATOR_ACTION_REQUIRED]
+        reviewerSelectionReceiptId:
+          type: string
+          minLength: 1
+        orderedReviewerAddresses:
+          type: array
+          description: Exact ordered reviewer sequence that the external operator must authorize on-chain before publish.
+          uniqueItems: true
+          items:
+            type: string
+    TxPlanPreExecutionRequirements:
+      type: object
+      additionalProperties: false
+      required: [reviewerSelectionAuthorization]
+      properties:
+        reviewerSelectionAuthorization:
+          $ref: "#/components/schemas/ReviewerSelectionAuthorizationRequirement"
     TxPlanResponse:
       type: object
-      required: [status, txBuilder, request]
+      required: [status, txBuilder, request, chainIdentifier]
       properties:
+        chainIdentifier:
+          $ref: "#/components/schemas/ChainIdentifier"
         status:
           type: string
           enum: [tx_plan_unsigned]
@@ -6950,6 +7056,10 @@ components:
         request:
           type: object
           additionalProperties: true
+        inviteBinding:
+          $ref: "#/components/schemas/ReviewerSelectionInviteBinding"
+        preExecutionRequirements:
+          $ref: "#/components/schemas/TxPlanPreExecutionRequirements"
         txMoveCall:
           allOf:
             - $ref: "#/components/schemas/TxMoveCallSummary"
@@ -6999,17 +7109,25 @@ components:
         [
           chainFamily,
           chainNetwork,
+          chainIdentifier,
           status,
           asset,
           executionAllowed,
+          txPlanOnly,
+          signerRequired,
           publicLaunchReady,
           apiSideExecution,
+          runtimeAccessScope,
+          actorAllowlistEnforced,
           transactionBytesBase64,
+          sourceGuard,
           orderId,
           target,
           txPlan
         ]
       properties:
+        chainIdentifier:
+          $ref: "#/components/schemas/ChainIdentifier"
         chainFamily:
           type: string
           enum: [sui]
@@ -7023,7 +7141,9 @@ components:
               sui_order_escrow_create_tx_plan_unsigned,
               sui_order_escrow_release_tx_plan_unsigned,
               sui_usdc_order_escrow_create_tx_plan_unsigned,
-              sui_usdc_order_escrow_release_tx_plan_unsigned
+              sui_usdc_order_escrow_release_tx_plan_unsigned,
+              sui_order_escrow_claim_after_deadline_tx_plan_unsigned,
+              sui_usdc_order_escrow_claim_after_deadline_tx_plan_unsigned
             ]
         asset:
           type: string
@@ -7032,6 +7152,14 @@ components:
           type: boolean
           enum: [false]
           description: "False: the API does not sign, custody, submit, or execute Sui transactions."
+        txPlanOnly:
+          type: boolean
+          enum: [true]
+          description: "True: the response is an unsigned Sui transaction plan only."
+        signerRequired:
+          type: boolean
+          enum: [true]
+          description: "True: the caller wallet must sign and submit the unsigned transaction bytes."
         publicLaunchReady:
           type: boolean
           description: "True when the route is operating on the public Sui mainnet package line; API-side execution stays closed."
@@ -7039,6 +7167,10 @@ components:
           type: boolean
           enum: [false]
           description: "False: API-side execution stays closed; callers must use their own wallet."
+        runtimeAccessScope:
+          type: string
+          enum: [public_mainnet, allowlisted_non_mainnet]
+          description: "Public mainnet routes are open; non-mainnet routes require configured actor allowlists."
         repositoryMutation:
           type: boolean
           enum: [false]
@@ -7047,11 +7179,13 @@ components:
           type: boolean
           enum: [false]
           description: "False: no escrow object binding is created by this tx-plan response."
-        canaryActorAllowlistEnforced:
+        actorAllowlistEnforced:
           type: boolean
         transactionBytesBase64:
           type: string
           description: Unsigned Sui transaction bytes for the caller wallet.
+        sourceGuard:
+          $ref: "#/components/schemas/SuiTxPlanSourceGuard"
         orderId:
           type: string
         target:
@@ -7072,6 +7206,33 @@ components:
           type: object
           additionalProperties: true
           description: "automated public-client coin selection and wallet-split behavior are not claimed."
+    ChainIdentifier:
+      type: string
+      pattern: "^[0-9a-f]{8}$"
+      description: RPC-verified chain identifier. Wallets must compare it with their selected RPC before approval, dry-run, or signing.
+    SuiTxPlanSourceGuard:
+      type: object
+      additionalProperties: true
+      required: [kind, chainIdentifier, transactionBytesSha256, transactionBytesHashAlgorithm]
+      properties:
+        kind:
+          type: string
+          enum:
+            [
+              sui_order_escrow_create_plan_lock,
+              sui_order_escrow_release_binding_guard,
+              sui_order_escrow_claim_after_deadline_binding_guard
+            ]
+        chainIdentifier:
+          allOf:
+            - $ref: "#/components/schemas/ChainIdentifier"
+          description: Must exactly equal the top-level chainIdentifier.
+        transactionBytesSha256:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+        transactionBytesHashAlgorithm:
+          type: string
+          enum: [sha256]
     ReviewerSummary:
       type: object
       required: [objectId, type, owner, active]
@@ -7723,7 +7884,7 @@ components:
           type: string
     ReviewerSelectionShortlistResponse:
       type: object
-      required: [receipt, selectionComplete, directoryScanTruncated, publishTarget]
+      required: [receipt, selectionComplete, directoryScanTruncated, publishTarget, operatorAuthorizationHandoff]
       properties:
         receipt:
           $ref: "#/components/schemas/ReviewerSelectionReceipt"
@@ -7748,6 +7909,38 @@ components:
                     type: string
                 reviewerSelectionReceiptId:
                   type: string
+        operatorAuthorizationHandoff:
+          type: object
+          additionalProperties: false
+          required:
+            [state, requiredBeforePublish, custodyBoundary, txBuilder, receiptId, orderedReviewerAddresses, preparedRequest, missingOperatorInputs]
+          properties:
+            state:
+              type: string
+              enum: [BLOCKED_EXTERNAL_CUSTODY_INPUTS]
+            requiredBeforePublish:
+              type: boolean
+              enum: [true]
+            custodyBoundary:
+              type: string
+              enum: [external]
+            txBuilder:
+              type: string
+              enum:
+                [disputeQuorum.authorizeOrderReviewerSelection, disputeQuorum.authorizeReplacementReviewerSelection]
+            receiptId:
+              type: string
+            orderedReviewerAddresses:
+              type: array
+              items:
+                type: string
+            preparedRequest:
+              type: object
+              additionalProperties: true
+            missingOperatorInputs:
+              type: array
+              items:
+                type: string
     DisputeCaseSnapshot:
       type: object
       required: [objectId, type, orderId, milestoneId]
@@ -8151,7 +8344,7 @@ components:
           maxLength: 200
     AuthClaims:
       type: object
-      required: [sub, iat, exp, jti, iss, aud]
+      required: [sub, iat, exp, jti, iss, aud, sid, tokenType, authVersion, origin, environment, chainFamily, network]
       properties:
         sub:
           type: string
@@ -8175,6 +8368,20 @@ components:
         tokenType:
           type: string
           enum: [access]
+        authVersion:
+          type: integer
+          enum: [2]
+        origin:
+          type: string
+          format: uri
+          pattern: "^https://"
+        environment:
+          type: string
+        chainFamily:
+          type: string
+          enum: [iota, sui]
+        network:
+          type: string
     Listing:
       type: object
       required: [id, creatorAddress, listingMode, title, description, currency, budgetAmount, milestones, status, createdAt]

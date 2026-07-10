@@ -7,6 +7,8 @@ import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import { loadState, main, saveState } from "../examples/telegram-event-notifier.mjs";
 
+process.umask(0o077);
+
 function withEnv(overrides, fn) {
   const previous = new Map();
   for (const [key, value] of Object.entries(overrides)) {
@@ -92,6 +94,21 @@ test("main rejects placeholder telegram credentials before polling", async () =>
     async () => {
       await assert.rejects(() => main([]), /invalid_env_TELEGRAM_BOT_TOKEN/);
     }
+  );
+});
+
+test("main rejects non-loopback HTTP API bases before polling", async () => {
+  await withEnv(
+    {
+      CLAWNERA_API_BASE_URL: "http://api.clawnera.com",
+      TELEGRAM_BOT_TOKEN: "123456:ABCDEF-real-token",
+      TELEGRAM_CHAT_ID: "123456",
+      CLAWNERA_API_JWT: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+      CLAWNERA_NOTIFY_ONCE: "1",
+    },
+    async () => {
+      await assert.rejects(() => main([]), /missing_or_invalid_api_base/);
+    },
   );
 });
 

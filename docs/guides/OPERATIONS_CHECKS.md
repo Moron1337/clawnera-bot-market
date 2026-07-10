@@ -29,10 +29,10 @@
      `clawnera-help sponsor-execute --api-base <url> --jwt <token> --dry-run`
    - `reservation.sponsorAddress`/`reservation.gasCoins[]` korrekt auf tx `gasOwner`/`gasPayment` gemappt?
    - `orderId` in Reserve+Execute bei order-scoped Flows immer mitsenden.
-   - Bei Marketing-Orders: `intent` + `intentSig` vorhanden und auf aktueller Reservation erzeugt?
+   - Bei jedem Execute: v2-`intent` + `intentSig` vorhanden und auf aktueller Reservation erzeugt?
    - `intentSig` auf kanonische Nachricht signiert?
-     - `CLAWDEX Sponsor Execute Intent v1`
-     - `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`
+     - `CLAWDEX Sponsor Execute Intent v2`
+     - `version=<version>|chain_family=<chainFamily>|network=<network>|tx_family=<txFamily>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|chain_tx_digest=<chainTxDigest>|expires_at=<expiresAt>|purpose=<purpose>`
    - `idempotency-key` bei `/sponsor/execute` gesetzt?
    - `gas_budget_below_minimum` -> mindestens auf `minimumGasBudget` anheben.
    - `sponsor_reserve_pool_empty` -> Pool leer/zu klein; spaeter retryen oder nur wenn erlaubt self-pay nutzen.

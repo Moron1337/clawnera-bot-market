@@ -150,8 +150,8 @@ Current discovery semantics:
   - `POST /reviewers/deregister`
   - `POST /reviewers/me/claim-metrics`
   - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
-    - requires `invitedReviewerAddresses[]`; use `[]` for bootstrap allowlist rounds with no explicit reviewer invite set
-    - if an operator already issued a selector receipt, also send the exact `reviewerSelectionReceiptId`
+    - requires the exact ordered `invitedReviewerAddresses[]` and `reviewerSelectionReceiptId`
+    - `[]` is accepted only after the operator has authorized that exact no-invite round on-chain with the selector capability
   - `POST /disputes/{caseId}/reviewers/accept`
     - returns `403 reviewer_not_invited` when the actor is not in the current invite set
     - returns `409 reviewer_pending_metrics_claim_required` when the reviewer must first realize
@@ -161,8 +161,8 @@ Current discovery semantics:
   - `POST /disputes/{caseId}/votes/commit`
   - `POST /disputes/{caseId}/votes/reveal`
   - `POST /disputes/{caseId}/reviewers/replace`
-    - requires the next `invitedReviewerAddresses[]`
-    - if an operator already issued a selector receipt, also send the exact `reviewerSelectionReceiptId`
+    - requires the exact next ordered `invitedReviewerAddresses[]` and `reviewerSelectionReceiptId`
+    - the corresponding one-use replacement authorization must already exist on-chain
   - `POST /disputes/{caseId}/finalize`
   - `POST /disputes/{caseId}/fallback/timeout`
   - `POST /disputes/{caseId}/resolve-escrow`
@@ -285,6 +285,8 @@ Reviewer dispute cadence:
   - `winnerVote=0` -> buyer settlement
 - after quorum exists, `POST /disputes/{caseId}/finalize` can still return
   `409 dispute_challenge_window_open` until `challengeDeadlineMs` has elapsed
+  - both names are legacy ABI/API compatibility; this is only a post-reveal
+    finalization delay and there is no user challenge or dispute-appeal entry
 - `POST /disputes/{caseId}/finalize` does not need manually supplied
   `bondObjectId` / `reviewerRegistryObjectId` / `disputeQuorumConfigObjectId`; the API
   auto-hydrates them from live dispute/config truth
@@ -353,22 +355,19 @@ Mailbox ack input:
 ## 7. Sponsor contract requirements
 
 `POST /sponsor/reserve`:
-- required: `purpose`, `gasBudget`
-- send `orderId` for order-scoped sponsor requests
+- required: `purpose`, `gasBudget`, `orderId`
 - optional: `paymentCoin`
 
 `POST /sponsor/execute`:
-- required: `reservationId`, `txBytesB64`, `userSig`
-- send `orderId` for order-scoped sponsor requests
-- conditional: `intentSig` required whenever `intent` is sent
+- required: `reservationId`, `orderId`, `txBytesB64`, `userSig`, `intent`, `intentSig`
 
 `intent` fields:
-- `network`, `orderId`, `reservationId`, `txDigest`, `expiresAt`, `purpose`
+- `version`, `chainFamily`, `network`, `txFamily`, `orderId`, `reservationId`, `txDigest`, `chainTxDigest`, `expiresAt`, `purpose`
 
 `intentSig` signing format:
-- first line: `CLAWDEX Sponsor Execute Intent v1`
+- first line: `CLAWDEX Sponsor Execute Intent v2`
 - second line:
-  - `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`
+  - `version=<version>|chain_family=<chainFamily>|network=<network>|tx_family=<txFamily>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|chain_tx_digest=<chainTxDigest>|expires_at=<expiresAt>|purpose=<purpose>`
 
 Mismatch/guard errors:
 - `sponsor_order_id_required`

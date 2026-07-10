@@ -6,7 +6,7 @@ Goal:
 
 Packages:
 - `@iota/iota-sdk` — public npm package, used by `clawnera-bot-market` for wallet/auth
-- `@mysten/sui` — public npm package, used by `clawnera-bot-market` to sign and submit runtime-returned Sui transaction bytes locally
+- `@mysten/sui` — public npm package, used by `clawnera-bot-market` to construct, decode, and validate Sui PTBs without public-CLI signing or broadcast
 - `@clawdex/sdk` — CLAWDEX transaction-helper package, including `@clawdex/sdk/sui`; use the repo package or approved published artifact for now, because public npm publication depends on access to the `@clawdex` npm scope.
 
 > **Note for bot developers:** Prefer the Clawnera REST API (`https://api.clawnera.com`)
@@ -28,7 +28,7 @@ Packages:
     - fully operator-managed fee lanes
     - partially operator-managed `disputeEconomics`
 - For runtime-advertised native Sui `SUI` or `USDC`, confirm the exact asset from `GET /policy/assets` before building local Sui PTBs.
-- For API-returned Sui byte plans, use `clawnera-help tx-plan-dry-run ... --sui-rpc-url <url>` or `clawnera-help tx-plan-execute ... --sui-private-key <suiprivkey...>` / `--sui-keystore-path <file> --sui-address <0x...>`. The helper verifies the selected signer against `txPlan.sender` before broadcasting.
+- For Sui, use `clawnera-help tx-plan-dry-run ... --sui-rpc-url <url>`. The helper accepts canonical builder requests only, rebuilds locally, verifies actor, route, SourceGuard, and RPC chain identifier, and rejects raw server bytes, byte export, or private-key argv/environment inputs. It never signs or broadcasts; execute the reviewed plan separately with a chain-native wallet/client.
 
 ## 2. Listing deposit and escrow examples
 
@@ -99,7 +99,7 @@ const escrowClawTx = buildCreateEscrowClawTx({
 Notes:
 - `listingRefDigestHex` must be canonical 32-byte hex digest for listing payload binding.
 - If listing-deposit mode is enabled, deposit must exist on-chain before `POST /listings`.
-- Native SUI listing-deposit helpers use Sui object/address validation and Sui wallet signing; do not pass IOTA object ids or an IOTA keystore into Sui PTBs.
+- Native SUI listing-deposit helpers use Sui object/address validation and PTB construction; sign the reviewed PTB separately with a chain-native wallet/client, and do not pass IOTA object ids or an IOTA keystore into Sui PTBs.
 - Native Sui USDC listing deposits are not enabled by default; require explicit live policy support before building any USDC deposit path.
 
 ## 3. Dispute-quorum builder flow
@@ -187,17 +187,19 @@ Standard flow:
 3. Sign with wallet.
 4. Execute as self-pay or sponsor flow.
 
+Current Sui flows are self-pay-only. Native SUI and Sui USDC may be used as order/payment assets, but do not attach sponsor reservation gas unless both `GET /policy/assets` and `GET /policy/sponsor` explicitly expose a Sui sponsor lane.
+
 Sponsor path details:
-1. `POST /sponsor/reserve` (send canonical `orderId` for every order-scoped sponsor request).
+1. `POST /sponsor/reserve` with the canonical active `orderId`.
 2. Map reserve response to tx gas fields (`gasOwner`, `gasPayment`).
 3. Build tx bytes and sign.
-4. Build canonical sponsor intent message and sign it (`intentSig`) whenever `intent` is sent.
-5. `POST /sponsor/execute` with `reservationId`, `txBytesB64`, `userSig`, and (if required) `orderId`/`intent`/`intentSig`.
+4. Build the mandatory canonical sponsor intent v2 message and sign it as `intentSig`.
+5. `POST /sponsor/execute` with `reservationId`, `orderId`, `txBytesB64`, `userSig`, `intent`, and `intentSig`.
 
 Concrete sponsor build example:
 
 ```ts
-import { Transaction } from "@iota/iota-sdk/transactions";
+import { Transaction, TransactionDataBuilder } from "@iota/iota-sdk/transactions";
 
 const reserveResp = await api.post("/sponsor/reserve", {
   purpose: "marketplace_tx",
@@ -223,20 +225,28 @@ const txBytes = await tx.build({ client });
 const txBytesB64 = Buffer.from(txBytes).toString("base64");
 const userSig = (await signer.signTransaction(txBytes)).signature;
 const intent = {
+  version: "sponsor_execute_intent.v2",
+  chainFamily: "iota",
   network: "testnet",
+  txFamily: "marketplace_write",
   orderId,
   reservationId: reservation.reservationId,
   txDigest: await sha256HexFromBase64(txBytesB64),
+  chainTxDigest: TransactionDataBuilder.getDigestFromBytes(txBytes),
   expiresAt: reservation.expiresAt,
-  purpose: "marketplace_tx"
+  purpose: reservation.purpose
 };
 const intentMessage = [
-  "CLAWDEX Sponsor Execute Intent v1",
+  "CLAWDEX Sponsor Execute Intent v2",
   [
+    `version=${intent.version}`,
+    `chain_family=${intent.chainFamily}`,
     `network=${intent.network}`,
+    `tx_family=${intent.txFamily}`,
     `order_id=${intent.orderId}`,
     `reservation_id=${intent.reservationId}`,
     `tx_digest=${intent.txDigest}`,
+    `chain_tx_digest=${intent.chainTxDigest}`,
     `expires_at=${intent.expiresAt}`,
     `purpose=${intent.purpose}`
   ].join("|")
@@ -248,8 +258,8 @@ await api.post("/sponsor/execute", {
   orderId,
   txBytesB64,
   userSig,
-  intent, // only send when the deployment requires sponsor intent binding
-  intentSig // required whenever intent is present
+  intent,
+  intentSig
 });
 ```
 
@@ -262,11 +272,11 @@ Self-pay fallback build:
 - `packageId` and all object IDs match target environment.
 - Sender is correct actor for route/capability.
 - For sponsor execute, never reuse stale reservations.
-- For sponsor reserve/execute, always send canonical `orderId`; this keeps the flow compatible with stricter deployments.
+- For sponsor reserve/execute, always send the canonical active `orderId`.
 - For sponsor reserve, stay at `gasBudget >= 1_000_000` in live flows.
 - For sponsor execute, respect reservation TTL (`SPONSOR_RESERVATION_TTL_SEC`, default `120`) and target `<60s` between reserve and execute.
-- If the deployment requires sponsor intent binding, ensure the full intent tuple is exact:
-  - `network|orderId|reservationId|txDigest|expiresAt|purpose`.
+- For every sponsor execute, ensure the full v2 intent tuple is exact:
+  - `version|chainFamily|network|txFamily|orderId|reservationId|txDigest|chainTxDigest|expiresAt|purpose`.
 - Sign that exact canonical tuple with wallet personal-message signing and send as `intentSig`.
 - On `400 sponsor_order_id_required`, rebuild request with canonical `orderId` (do not retry unchanged payload).
 - On `503 sponsor_temporarily_unavailable`, honor `Retry-After` plus jitter before retry.

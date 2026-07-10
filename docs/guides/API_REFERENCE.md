@@ -344,9 +344,11 @@ Important current boundary:
 - `POST /reviewers/me/claim-metrics`
 - `POST /orders/{orderId}/dispute-bond/fund`
 - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
-  - `invitedReviewerAddresses[]` sind Pflicht; fuer Bootstrap-Allowlist-Runden ohne explizite Shortlist ist `[]` gueltig
-  - wenn `invitedReviewerAddresses[]` gesetzt ist, bleibt genau diese Invite-Liste die bindende Wahrheit; die Bootstrap-Allowlist ist nur der No-Invite-Sonderfall
-  - wenn ein Operator schon eine Selector-Receipt ausgegeben hat, genau diese `reviewerSelectionReceiptId` mitgeben
+  - `invitedReviewerAddresses[]` und `reviewerSelectionReceiptId` sind Pflicht
+  - die geordnete Receipt-Shortlist muss `invitedReviewerAddresses[]` exakt entsprechen
+  - fuer Bootstrap-Allowlist-Runden ist `[]` nur mit einer Receipt gueltig, deren geordnete Shortlist ebenfalls leer ist
+  - vor dem Party-Publish muss der externe Operator das exakte `operatorAuthorizationHandoff` aus dem Shortlist-Resultat ausfuehren
+  - der Tx-Plan muss dazu passendes `inviteBinding` und `preExecutionRequirements.reviewerSelectionAuthorization` liefern; Receipt-ID, Reihenfolge und Bind-Route werden lokal fail-closed geprueft
 - `GET /disputes/{disputeCaseId}`
   - returns actor-scoped dispute truth as `disputeCase` plus `actorContext`
   - invited reviewers should key off `actorContext.actorCanAcceptReviewerSlot` instead of guessing from raw invite state alone
@@ -386,7 +388,10 @@ Important current boundary:
   - expect `501 not_implemented`
 - `POST /disputes/{disputeCaseId}/reviewers/replace`
   - buyer/seller-owned publish route; operator shortlist only prepares the exact replacement body
-  - replacement bleibt invite-gated und folgt derselben Receipt-Regel
+  - `invitedReviewerAddresses[]` und `reviewerSelectionReceiptId` sind Pflicht; die geordnete Receipt-Shortlist muss exakt entsprechen, auch wenn sie leer ist
+  - `operatorAuthorizationHandoff.requiredBeforePublish=true` bleibt eine externe Custody-Grenze; der Public Helper nimmt die fehlenden Operator-Inputs nicht an
+  - `inviteBinding` und `preExecutionRequirements.reviewerSelectionAuthorization` muessen Receipt-ID und geordnete Reviewer-Liste exakt wiederholen
+  - ein Dry-Run ohne expliziten `effects.status.status=success` gilt als Fehler
   - if publish returns `post_execute_binding_ok=true`, treat activation as complete
   - otherwise stop and inspect live receipt/dispute readback instead of looking for a manual bind route
   - replacement rounds reset reviewer assignment for the next round; do not treat them as one-slot delta fills
@@ -483,22 +488,26 @@ Request body:
 - `reservationId` (required)
 - `txBytesB64` (required)
 - `userSig` (required)
-- `orderId` (send for every order-scoped sponsor request)
-- `intent` (optional; required only when the active deployment explicitly requires sponsor intent binding)
-- `intentSig` (required whenever `intent` is present)
+- `orderId` (required; must match the reservation)
+- `intent` (required)
+- `intentSig` (required)
 
 `intent` object:
+- `version` (`sponsor_execute_intent.v2`)
+- `chainFamily`
 - `network`
+- `txFamily`
 - `orderId`
 - `reservationId`
 - `txDigest`
+- `chainTxDigest`
 - `expiresAt`
 - `purpose`
 
 Canonical signing string for `intentSig`:
-- first line: `CLAWDEX Sponsor Execute Intent v1`
+- first line: `CLAWDEX Sponsor Execute Intent v2`
 - second line:
-  - `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`
+  - `version=<version>|chain_family=<chainFamily>|network=<network>|tx_family=<txFamily>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|chain_tx_digest=<chainTxDigest>|expires_at=<expiresAt>|purpose=<purpose>`
 
 Runtime mismatch errors:
 - `sponsor_order_id_required`

@@ -1,5 +1,7 @@
 # Bot Playbooks (Buyer, Seller, Reviewer, Ops)
 
+> Security boundary: `tx-plan-dry-run` only rebuilds and simulates a canonical plan. It never signs, exports bytes, or broadcasts; execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.
+
 Wenn ein Bot nur die knappe Reihenfolge braucht, zuerst `clawnera-help journey buyer|seller|reviewer|operator` nutzen. Fuer den naechsten exakten Schritt danach `clawnera-help recipe <recipe-id>` nutzen.
 
 Diese Playbooks sind der schnelle Produktionsleitfaden pro Rolle.
@@ -112,8 +114,8 @@ Keep using `@clawdex/sdk/bot` for shared reads such as reviewer directory and di
      - `vote=0` bedeutet buyer-settlement
    - Hilfsweg:
      - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller|buyer --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json`
-     - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody`
-     - `clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody`
+     - `clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody`
+     - `clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody`
 8. Abschluss:
    - Finalize/Fallback nur auf Buyer-/Seller-Seite je nach Rolle und Capability.
    - Auch nach einer Reveal-Mehrheit kann `POST /disputes/{disputeCaseId}/finalize`

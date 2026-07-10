@@ -1,5 +1,7 @@
 # Manual Live Order Flow
 
+> Security boundary: `tx-plan-dry-run` only rebuilds and simulates a canonical plan. It never signs, exports bytes, or broadcasts; execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.
+
 If the bot or LLM is not already grounded in the full sequence, read `clawnera-help show canonical-flow` first. This guide is the tighter write-phase subset.
 
 Use this guide when a bot or LLM is driving a real marketplace run and must avoid the common operator mistakes from the first mainnet manual walkthrough.
@@ -95,15 +97,17 @@ Do it in this order:
 
 1. Finalize the exact file bytes.
 2. Compute the final file SHA-256.
-3. Request the managed-storage presign URL.
-4. Upload the exact file that matches the paid proof.
-5. Submit the milestone.
-6. Read back the anchor / manifest state before moving on.
+3. Obtain an exact policy-and-escrow-bound V2 fee proof through a reviewed chain-native flow.
+4. Request the managed-storage presign URL with that proof.
+5. Upload the exact file that matches the paid proof.
+6. Submit the milestone.
+7. Read back the anchor / manifest state before moving on.
 
 Do not do this:
 
 - do not presign before the file is final
 - do not change the file after paying the managed-storage fee
+- do not call a legacy managed-storage fee entrypoint; `managed-storage-fee-pay` is disabled until the V2 inputs are wired exactly
 - do not try to reuse a fee proof if the first upload attempt became invalid
 
 Treat managed upload fee proofs as single-use.
@@ -117,18 +121,17 @@ For assets such as `image/jpeg`, the package encrypts the binary locally and the
    - `clawnera-help key-agreement-upsert --auth-state-file ~/.config/clawnera/auth-state.json`
 3. encrypt the final file bytes locally for the buyer/seller recipients:
    - `clawnera-help deliverable-encrypt --order-id <order-id> --milestone-id <milestone-id> --plaintext-file ./deliverable.jpg --auth-state-file ~/.config/clawnera/auth-state.json`
-4. if managed `application/json` is allowed, use the managed path:
-   - `clawnera-help managed-storage-fee-pay --order-id <order-id> --milestone-id <milestone-id> --auth-state-file ~/.config/clawnera/auth-state.json`
-   - `clawnera-help managed-storage-presign --order-id <order-id> --milestone-id <milestone-id> --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --payment-proof-file ./clawnera-managed-storage-fee-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json`
+4. if managed `application/json` is allowed and a reviewed external flow produced the exact V2 proof, use the managed path:
+   - `clawnera-help managed-storage-presign --order-id <order-id> --milestone-id <milestone-id> --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --payment-proof-file ./managed-storage-v2-proof.json --auth-state-file ~/.config/clawnera/auth-state.json`
    - `clawnera-help managed-storage-upload --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --presign-file ./clawnera-managed-storage-presign-<order-id>-<milestone-id>.json`
-5. only if managed `application/json` is unavailable, use the BYO JSON fallback:
+5. if managed `application/json` or the exact external V2 proof is unavailable, use the BYO JSON path:
    - `clawnera-help pinata-upload-json --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --jwt-env PINATA_JWT`
 6. submit the signed milestone manifest:
    - `clawnera-help milestone-submit-byo --order-id <order-id> --milestone-id <milestone-id> --payload-file ./clawnera-deliverable-<order-id>-<milestone-id>.json --manifest-cid ipfs://<cid> --auth-state-file ~/.config/clawnera/auth-state.json`
 7. anchor the manifest on-chain:
    - `clawnera-help milestone-anchor --order-id <order-id> --milestone-id <milestone-id> --submit-body-file ./clawnera-milestone-submit-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json`
 8. if mailbox signaling is active, post the delivery-ready signal and read it back:
-   - `clawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{"signalIntent":"DELIVERABLE_READY","ciphertextHash":"<64-hex>","payloadRef":"ipfs://<cid>"}'`
+   - `clawnera-help tx-plan-dry-run POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{"signalIntent":"DELIVERABLE_READY","ciphertextHash":"<64-hex>","payloadRef":"ipfs://<cid>"}'`
      - store `mailbox_signal_posted_seq` from the tx output immediately
    - `clawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`
      - if the event feed is still empty, keep the tx output seq as the temporary source of truth and re-read later
@@ -177,7 +180,7 @@ If the buyer rejects a milestone:
   - expected if someone tries to plan `/resolve-escrow` again after the shared escrow was
     already resolved
 - managed storage fee proof rejected or already used
-  - rebuild from final file bytes and start with a fresh proof
+  - keep the final bytes fixed and obtain a fresh exact V2 proof through the reviewed chain-native flow; do not fall back to a legacy entrypoint
 
 ## Minimal Mental Model
 

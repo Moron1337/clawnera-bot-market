@@ -1,13 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { classifyDisputeTxPlanExecutionError, classifyTxPlanExecutionError } from "../lib/tx-plan-errors.mjs";
+import { buildAuthChallengeV2Message } from "../lib/runtime-auth.mjs";
+
+process.umask(0o077);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -406,9 +409,11 @@ test("reviewer shortlist help prints operator and publish role split", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Reviewer shortlist helper/);
   assert.match(result.stdout, /Replacement usage:/);
-  assert.match(result.stdout, /writes the exact publish body for dispute-open or reviewer-replace/);
+  assert.match(result.stdout, /writes the exact future publish body for dispute-open or reviewer-replace/);
   assert.match(result.stdout, /buyer\/seller GET \/orders\/\{orderId\}\/timeline readback/);
-  assert.match(result.stdout, /The shortlist call itself uses operator auth and only prepares the receipt plus the exact publish body/);
+  assert.match(result.stdout, /only prepares the receipt, operatorAuthorizationHandoff, and exact future publish body/);
+  assert.match(result.stdout, /publish_ready=false/);
+  assert.match(result.stdout, /matching inviteBinding and preExecutionRequirements/);
   assert.match(result.stdout, /OPEN publish is buyer\/seller-owned/);
   assert.match(result.stdout, /REPLACEMENT publish is buyer\/seller-owned/);
   assert.match(result.stdout, /post_execute_binding_ok/);
@@ -556,7 +561,7 @@ test("tx plan error classifier marks shared object version races as retryable", 
     code: "shared_object_version_race",
     retryable: true,
     hint:
-      "A shared dispute object advanced while this tx was being built or executed. Rerun the same tx-plan-execute command once. If you are driving multiple reviewer wallets for the same dispute from one machine, submit commit/reveal steps sequentially.",
+      "A shared dispute object advanced while this tx was being built or simulated. Rerun the same tx-plan-dry-run command once, review the rebuilt plan, and submit eventual chain-native commit/reveal writes sequentially.",
   });
 });
 
@@ -902,6 +907,7 @@ test("key agreement compact output points only to real next recipes", () => {
   assert.match(result.stdout, /^do:clawnera-help key-agreement-upsert --auth-state-file ~\/\.config\/clawnera\/auth-state\.json/m);
   assert.match(result.stdout, /^next:mailbox-handshake \| reputation-init \| reviewer-register/m);
   assert.doesNotMatch(result.stdout, /seller-deliverable-flow/);
+  assert.doesNotMatch(result.stdout, /privateKeyMultibase|privateKeyEnvelope|master-secret|passphrase/i);
 });
 
 test("seller review compact output stays read-only and marks the buyer handoff", () => {
@@ -938,7 +944,7 @@ test("dispute-open compact output highlights the canonical dispute-open route", 
   assert.equal(result.status, 0);
   assert.match(
     result.stdout,
-    /^do:clawnera-help tx-plan-execute POST \/orders\/<orderId>\/milestones\/<milestoneId>\/disputes\/open --auth-state-file ~\/\.config\/clawnera\/auth-state\.json --body-file \.\/clawnera-dispute-open-<orderId>-<milestoneId>\.json/m
+    /^do:clawnera-help tx-plan-dry-run POST \/orders\/<orderId>\/milestones\/<milestoneId>\/disputes\/open --auth-state-file ~\/\.config\/clawnera\/auth-state\.json --body-file \.\/clawnera-dispute-open-<orderId>-<milestoneId>\.json/m
   );
   assert.match(
     result.stdout,
@@ -990,7 +996,7 @@ test("recipe json output is parseable", () => {
   assert.equal(typeof payload.recipe.compactHints?.do, "string");
   assert.equal(payload.recipe.compactHints.write, "POST /disputes/{disputeCaseId}/votes/commit | POST /disputes/{disputeCaseId}/votes/reveal");
   assert.equal(payload.recipe.compactHints.next, "reviewer-claim-metrics[after_buyer_or_seller_closeout]");
-  assert.ok(payload.recipe.steps.some((step) => /tx-plan-execute POST .*votes\/commit/.test(step)));
+  assert.ok(payload.recipe.steps.some((step) => /tx-plan-dry-run POST .*votes\/commit/.test(step)));
   assert.ok(payload.recipe.steps.some((step) => /reviewer-vote-prepare/.test(step)));
   assert.ok(payload.recipe.steps.some((step) => /sequentially, not in parallel/.test(step)));
   assert.ok(payload.recipe.steps.some((step) => /buyer or seller closes the dispute/i.test(step)));
@@ -1035,7 +1041,8 @@ test("journey json includes machine-readable next hints", () => {
 test("dispute-open recipe explains activation proof and no-manual-bind fallback", () => {
   const result = runCli(["recipe", "dispute-open"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /post_execute_binding_ok=true/);
+  assert.match(result.stdout, /live binding readback/);
+  assert.match(result.stdout, /chain-native wallet\/client/);
   assert.match(result.stdout, /stop and inspect live receipt\/dispute readback/i);
   assert.match(result.stdout, /do not invent a manual bind step/i);
 });
@@ -1053,8 +1060,8 @@ test("mailbox handshake recipe explains tx output seq fallback", () => {
 test("next mailbox-handshake includes the explicit bind handoff after init-plan", () => {
   const result = runCli(["next", "mailbox-handshake"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /^do:clawnera-help tx-plan-execute POST \/orders\/<orderId>\/mailbox\/init-plan/m);
-  assert.match(result.stdout, /then bind POST \/orders\/<orderId>\/mailbox with order_mailbox_object_id/);
+  assert.match(result.stdout, /^do:clawnera-help tx-plan-dry-run POST \/orders\/<orderId>\/mailbox\/init-plan/m);
+  assert.match(result.stdout, /execute the reviewed canonical plan in a chain-native client and bind its verified order_mailbox_object_id/);
 });
 
 test("replacement recipe explains full reassignment semantics", () => {
@@ -1305,6 +1312,38 @@ test("curated docs do not contain stale reviewer vote redirection examples", () 
     const matches = text.matchAll(/reviewer-vote-prepare[\s\S]{0,240}> *reviewer-vote\.json/g);
     for (const match of matches) {
       assert.match(match[0], /--json/, `${relativePath} contains a stale reviewer-vote redirect example without --json`);
+    }
+  }
+});
+
+test("public guidance never recommends generic tx-plan execution", () => {
+  const files = [
+    "README.md",
+    "config/journeys.json",
+    "config/recipes.json",
+    "config/topics.json",
+    ...readdirSync(path.join(repoRoot, "docs", "guides"))
+      .filter((entry) => entry.endsWith(".md") && entry !== "SECURITY_GUIDELINES.md")
+      .map((entry) => path.join("docs", "guides", entry)),
+  ];
+  for (const relativePath of files) {
+    assert.doesNotMatch(
+      readFileSync(path.join(repoRoot, relativePath), "utf8"),
+      /tx-plan-execute/,
+      `${relativePath} still recommends the disabled generic execute command`,
+    );
+  }
+  assert.match(
+    readFileSync(path.join(repoRoot, "docs", "guides", "SECURITY_GUIDELINES.md"), "utf8"),
+    /tx-plan-execute.*fail-closed deaktiviert/,
+  );
+
+  const recipes = JSON.parse(readFileSync(path.join(repoRoot, "config", "recipes.json"), "utf8"));
+  for (const recipe of recipes.recipes || []) {
+    for (const entry of [...(recipe.steps || []), ...(recipe.examples || [])]) {
+      if (entry.includes("tx-plan-dry-run")) {
+        assert.match(entry, /Security boundary:.*never signs, exports bytes, or broadcasts/);
+      }
     }
   }
 });
@@ -2796,7 +2835,7 @@ test("auth-login help prints usage", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Auth login helper/);
   assert.match(result.stdout, /--state-out/);
-  assert.match(result.stdout, /auto-refresh sessions/);
+  assert.match(result.stdout, /Tokens are never printed/);
 });
 
 test("ensure-auth help prints usage", () => {
@@ -2859,14 +2898,32 @@ test("auth-login falls back to the sole keystore entry when no IOTA CLI address 
 
     if (req.url === "/auth/challenge" && req.method === "POST") {
       assert.equal(body.address, createdAddress);
+      assert.equal(body.chainFamily, "iota");
+      const nowMs = Date.now();
+      const context = {
+        origin: apiBase,
+        audience: "clawdex-client",
+        environment: "test",
+        chainFamily: "iota",
+        network: "localnet",
+        address: createdAddress,
+        nonce: "nonce-1",
+        issuedAtMs: nowMs - 1_000,
+        expiresAtMs: nowMs + 60_000
+      };
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ messageToSign: "clawnera-auth-test", nonce: "nonce-1" }));
+      res.end(JSON.stringify({
+        protocol: "clawdex.auth",
+        version: 2,
+        ...context,
+        messageToSign: buildAuthChallengeV2Message(context)
+      }));
       return;
     }
 
     if (req.url === "/auth/verify" && req.method === "POST") {
       assert.equal(body.address, createdAddress);
-      assert.equal(body.message, "clawnera-auth-test");
+      assert.match(body.message, /^CLAWDEX Sign-In v2\n/);
       assert.equal(typeof body.signature, "string");
       res.writeHead(200, { "content-type": "application/json" });
       res.end(
@@ -2914,6 +2971,7 @@ test("auth-login falls back to the sole keystore entry when no IOTA CLI address 
 
     assert.equal(result.status, 0);
     assert.match(result.stdout, /auth_login_ok/);
+    assert.doesNotMatch(result.stdout, new RegExp(issuedToken.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.equal(existsSync(stateFile), true);
     assert.equal(existsSync(envFile), true);
 

@@ -69,7 +69,7 @@ Quellen:
 | `cancel_pending_order_dispute_bond` | Ungenutzten Bond abbrechen + Refund | buyer/seller | bond `PENDING`, kein aktiver Case |
 | `fund_bond_as_buyer` | Buyer Bond Funding | buyer | side/caller match |
 | `fund_bond_as_seller` | Seller Bond Funding | seller | side/caller match |
-| `open_milestone_dispute_case_entry` | Dispute Case eroefnen | buyer/seller | escrow + bond Bezug konsistent |
+| `open_milestone_dispute_case_entry_v2` | Dispute Case ohne Invite-Liste eroefnen | buyer/seller | autorisierter No-Invite-Receipt, Escrow und Bond konsistent |
 | `accept_dispute_case_with_reputation_cfg` | Reviewer nimmt Case an | reviewer | configured-runtime canonical path; `ReputationProfile` als activation/proof anchor, Thresholds aus shared participant state |
 | `commit_vote` | Commit Phase | reviewer | commit window offen |
 | `reveal_vote` | Reveal Phase | reviewer | reveal window offen + commit vorhanden |
@@ -119,7 +119,7 @@ Quellen:
 | `N/A (pre-listing Sui on-chain step)` | `buildSuiCreateListingDepositTx` / `buildSuiCreateListingDepositSharedTx` | `listing_deposit::create_listing_deposit_sui_entry` / `listing_deposit::create_listing_deposit_sui_shared_entry` |
 | `POST /reviewers/register` | `disputeQuorum.registerReviewer` | `dispute_quorum::register_reviewer_entry_with_reputation_cfg` |
 | `POST /orders/{orderId}/dispute-bond/fund` | `disputeQuorum.fundBondAsBuyer/Seller` | `dispute_quorum::fund_bond_as_buyer/seller` |
-| `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` | `disputeQuorum.openMilestoneDisputeCase` | `dispute_quorum::open_milestone_dispute_case_entry` |
+| `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` | `disputeQuorum.openMilestoneDisputeCase` | `dispute_quorum::open_milestone_dispute_case_entry_v2` oder Invite-V2-Pfad |
 | `POST /disputes/{id}/reviewers/accept` | `disputeQuorum.acceptDisputeCase` | `dispute_quorum::accept_dispute_case_with_reputation_cfg` |
 | `POST /disputes/{id}/votes/commit` | `disputeQuorum.commitVote` | `dispute_quorum::commit_vote` |
 | `POST /disputes/{id}/votes/reveal` | `disputeQuorum.revealVote` | `dispute_quorum::reveal_vote` |

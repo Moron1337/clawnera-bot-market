@@ -5,7 +5,9 @@ import os from "node:os";
 import path from "node:path";
 import {
   appendEd25519KeystoreEntry,
+  buildAuthChallengeV2Message,
   buildAuthEnvText,
+  createEd25519KeystoreEntry,
   loadKeystoreEntries,
   refreshAuthState,
   loadAuthState,
@@ -13,6 +15,7 @@ import {
   parseEnvAssignmentValue,
   resolveKeystoreEntry,
   saveAuthState,
+  signInWithKeystoreEntry,
   tokenExpiresSoon,
   validateRuntimeAuthState
 } from "../lib/runtime-auth.mjs";
@@ -287,5 +290,97 @@ test("refreshAuthState preserves existing refresh token when server omits a new 
     assert.equal(refreshed.refreshToken, "refresh-1");
   } finally {
     globalThis.fetch = previousFetch;
+  }
+});
+
+test("signInWithKeystoreEntry reconstructs and verifies auth challenge v2 before signing", async () => {
+  const entry = await createEd25519KeystoreEntry("auth-v2");
+  const nowMs = Date.now();
+  const context = {
+    origin: "https://api.clawnera.com",
+    audience: "clawdex-client",
+    environment: "prod",
+    chainFamily: "iota",
+    network: "mainnet",
+    address: entry.address,
+    nonce: "nonce-auth-v2",
+    issuedAtMs: nowMs - 1_000,
+    expiresAtMs: nowMs + 60_000,
+  };
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    requests.push({ url: String(url), body: JSON.parse(init.body) });
+    if (String(url).endsWith("/auth/challenge")) {
+      return new Response(JSON.stringify({
+        protocol: "clawdex.auth",
+        version: 2,
+        ...context,
+        messageToSign: buildAuthChallengeV2Message(context),
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    return new Response(JSON.stringify({
+      token: buildJwt({ exp: Math.floor((nowMs + 60_000) / 1000) }),
+      refreshToken: "refresh-v2",
+      expiresAtMs: nowMs + 60_000,
+      session: { id: "session-v2", refreshAvailable: true },
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  try {
+    const state = await signInWithKeystoreEntry({
+      apiBase: "https://api.clawnera.com",
+      entry: { address: entry.address, alias: entry.alias, secretKey: entry.key.value },
+      chainFamily: "iota",
+      network: "mainnet",
+    });
+    assert.equal(state.authContext.origin, "https://api.clawnera.com");
+    assert.equal(state.authContext.chainFamily, "iota");
+    assert.deepEqual(requests[0].body, { address: entry.address, chainFamily: "iota" });
+    assert.equal(requests[1].body.message, buildAuthChallengeV2Message(context));
+    assert.equal(requests[1].body.origin, "https://api.clawnera.com");
+    assert.equal(typeof requests[1].body.signature, "string");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("signInWithKeystoreEntry rejects relayed or changed auth challenges before signing", async () => {
+  const entry = await createEd25519KeystoreEntry("auth-v2-relay");
+  const nowMs = Date.now();
+  let requestCount = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    requestCount += 1;
+    const context = {
+      origin: "https://attacker.example",
+      audience: "clawdex-client",
+      environment: "prod",
+      chainFamily: "iota",
+      network: "mainnet",
+      address: entry.address,
+      nonce: "relayed-nonce",
+      issuedAtMs: nowMs - 1_000,
+      expiresAtMs: nowMs + 60_000,
+    };
+    return new Response(JSON.stringify({
+      protocol: "clawdex.auth",
+      version: 2,
+      ...context,
+      messageToSign: buildAuthChallengeV2Message(context),
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  try {
+    await assert.rejects(
+      () => signInWithKeystoreEntry({
+        apiBase: "https://api.clawnera.com",
+        entry: { address: entry.address, alias: entry.alias, secretKey: entry.key.value },
+        chainFamily: "iota",
+        network: "mainnet",
+      }),
+      /auth_challenge_context_mismatch/,
+    );
+    assert.equal(requestCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });

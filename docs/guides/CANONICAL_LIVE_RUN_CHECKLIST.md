@@ -1,5 +1,7 @@
 # Canonical Live Run Checklist
 
+> Security boundary: `tx-plan-dry-run` only rebuilds and simulates a canonical plan. It never signs, exports bytes, or broadcasts; execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.
+
 Read this first if a bot or weaker LLM must drive a real CLAWNERA run without getting lost.
 
 This is the shortest safe sequence. It does not try to explain every API detail. It tells you what to do, in what order, and when to stop.
@@ -153,18 +155,17 @@ The standard live path is:
    - `clawnera-help key-agreement-upsert --auth-state-file ~/.config/clawnera/auth-state.json`
 2. encrypt the final bytes locally:
    - `clawnera-help deliverable-encrypt --order-id <order-id> --milestone-id <milestone-id> --plaintext-file ./deliverable.jpg --auth-state-file ~/.config/clawnera/auth-state.json`
-3. if `/policy/storage` allows managed `application/json`, use:
-   - `clawnera-help managed-storage-fee-pay --order-id <order-id> --milestone-id <milestone-id> --auth-state-file ~/.config/clawnera/auth-state.json`
-   - `clawnera-help managed-storage-presign --order-id <order-id> --milestone-id <milestone-id> --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --payment-proof-file ./clawnera-managed-storage-fee-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json`
+3. if `/policy/storage` allows managed `application/json` and a reviewed external flow produced the exact policy-and-escrow-bound V2 proof, use:
+   - `clawnera-help managed-storage-presign --order-id <order-id> --milestone-id <milestone-id> --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --payment-proof-file ./managed-storage-v2-proof.json --auth-state-file ~/.config/clawnera/auth-state.json`
    - `clawnera-help managed-storage-upload --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --presign-file ./clawnera-managed-storage-presign-<order-id>-<milestone-id>.json`
-4. only if managed `application/json` is unavailable, use the BYO JSON fallback:
+4. if managed `application/json` or the exact external V2 proof is unavailable, use the BYO JSON path:
    - `clawnera-help pinata-upload-json --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --jwt-env PINATA_JWT`
 5. submit the signed manifest:
    - `clawnera-help milestone-submit-byo --order-id <order-id> --milestone-id <milestone-id> --payload-file ./clawnera-deliverable-<order-id>-<milestone-id>.json --manifest-cid ipfs://<cid> --auth-state-file ~/.config/clawnera/auth-state.json`
 6. anchor the manifest on-chain:
    - `clawnera-help milestone-anchor --order-id <order-id> --milestone-id <milestone-id> --submit-body-file ./clawnera-milestone-submit-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json`
 7. if mailbox is active, signal the checkpoint and read it back:
-   - `clawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{"signalIntent":"DELIVERABLE_READY","ciphertextHash":"<64-hex>","payloadRef":"ipfs://<cid>"}'`
+   - `clawnera-help tx-plan-dry-run POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{"signalIntent":"DELIVERABLE_READY","ciphertextHash":"<64-hex>","payloadRef":"ipfs://<cid>"}'`
      - store `mailbox_signal_posted_seq` from the tx output
    - `clawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`
      - if indexing still lags, do not guess; keep the tx output seq and re-read later
@@ -178,7 +179,7 @@ If you use managed storage, the safe order is:
 
 1. finalize exact file bytes
 2. compute final SHA-256
-3. pay the storage fee / obtain proof
+3. obtain an exact policy-and-escrow-bound V2 fee proof through a reviewed chain-native flow; the public `managed-storage-fee-pay` builder is disabled
 4. request presign
 5. upload the exact same bytes
 6. submit the milestone
@@ -197,7 +198,7 @@ For milestone disputes, trust the API plan sequence:
      - if publish fails with `manifest_recipient_key_agreement_expired` or `manifest_recipient_key_agreement_not_found`, refresh the original buyer/seller key-agreement records before retrying publish; that error is not fixed by reviewer-update
      - if the helper reports `reviewer_key_agreement_expired_for_transport_pubkey` or `reviewer_key_agreement_not_found_for_transport_pubkey`, refresh that reviewer with `key-agreement-upsert`
      - only rerun `reviewer-update` when the reviewer rotated or bumped key version, and wait for the fresh non-expired reviewer key-agreement GET readback before retrying publish
-   - buyer/seller build complaint, rebuttal, mailbox, checkpoint, or supporting evidence with `clawnera-help dispute-evidence-bundle-build --case-id <caseId> --evidence-class <class> --bundle-plaintext-file <file> ...`, upload the generated payload via managed storage, then publish it with `clawnera-help dispute-evidence-publish --kind supplemental-bundle ...`
+   - buyer/seller build complaint, rebuttal, mailbox, checkpoint, or supporting evidence with `clawnera-help dispute-evidence-bundle-build --case-id <caseId> --evidence-class <class> --bundle-plaintext-file <file> ...`, upload the generated payload via managed storage only with an exact external V2 proof or use BYO storage, then publish it with `clawnera-help dispute-evidence-publish --kind supplemental-bundle ...`
    - for mailbox coordination, prefer `clawnera-help mailbox-evidence-export --case-id <caseId> ...` as the direct live path; it now retries with a smaller recent-event window before it asks you to fall back to a saved events snapshot
    - reviewers list with `clawnera-help dispute-evidence-list --case-id <caseId> ...`
    - reviewers fetch actor-scoped content with `clawnera-help dispute-evidence-content --case-id <caseId> --evidence-id <evidenceId> ...`
@@ -234,15 +235,20 @@ If the operator uses the reviewer selector:
    - if zero-confidence reviewers must not participate yet, set `allowNewReviewers=false`
    - if new reviewers should still be allowed but only with some history, also set `minDecisionsTotal`
 2. if `selectionComplete=false`, stop
-3. if `selectionComplete=true`, copy `publishTarget.requestPatch` exactly
-4. canonical operator shortlist publishes carry the exact `reviewerSelectionReceiptId`
-5. omit the receipt only for explicit manual recovery / hand-curated fallback
-6. `checkpointDigest` must match the latest finalized checkpoint digest at request time
+3. if `selectionComplete=true`, validate and store `operatorAuthorizationHandoff`
+4. stop unless its state is `BLOCKED_EXTERNAL_CUSTODY_INPUTS`, its receipt id and ordered reviewer list are exact, and `requiredBeforePublish=true`
+5. complete the indicated authorization `txBuilder` inside the external custody/operator workflow before party publish
+6. copy `publishTarget.requestPatch` exactly
+7. every open/replacement publish carries the exact `reviewerSelectionReceiptId`
+8. require the receipt's ordered shortlist to exactly equal `invitedReviewerAddresses`, including an empty bootstrap shortlist
+9. `checkpointDigest` must match the latest finalized checkpoint digest at request time
    - the selector receipt records checkpoint provenance (`checkpointSequenceNumber`,
      `checkpointTimestampMs`, `checkpointSource`)
-7. execute that real open/replace tx locally
-8. wait for indexed `ReviewerInvited`
-9. only then expect `GET /reviewers/me/invites` to show the invite
+10. require matching `inviteBinding` and `preExecutionRequirements.reviewerSelectionAuthorization` in the returned party plan
+11. require the locally rebuilt chain dry-run to contain an explicit successful effects status
+12. execute that real open/replace tx locally in the reviewed party wallet
+13. wait for indexed `ReviewerInvited`
+14. only then expect `GET /reviewers/me/invites` to show the invite
 
 If `clawnera-help reviewer-invites` or `GET /reviewers/me/invites` returns
 `recommendedPollIntervalMs` / `x-clawdex-recommended-poll-interval-ms`, use that
@@ -300,7 +306,7 @@ Use the mailbox only for signals such as:
 Do not use the mailbox as file transport.
 
 Large or binary payloads stay off-chain. The mailbox carries refs, hashes, and acknowledgements.
-Use `clawnera-help mailbox-events --order-id <order-id> ...` to read the current posted and acked sequence back. If it is still empty right after a mailbox write, use `mailbox_signal_posted_seq` or `mailbox_signal_acked_seq` from the preceding `tx-plan-execute` output until indexing catches up.
+Use `clawnera-help mailbox-events --order-id <order-id> ...` to read the current posted and acked sequence back. If it is still empty right after a mailbox write, use `mailbox_signal_posted_seq` or `mailbox_signal_acked_seq` only from the verified chain-native receipt until indexing catches up.
 
 ## Milestone Accept Rule
 

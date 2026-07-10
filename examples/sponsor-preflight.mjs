@@ -15,7 +15,7 @@ if (hasHelpFlag(process.argv.slice(2))) {
   process.exit(0);
 }
 
-const { apiBase, jwt } = requireApiEnv();
+const { apiBase } = requireApiEnv();
 const purpose = String(process.env.CLAWNERA_SPONSOR_PURPOSE || "marketplace_tx").trim();
 const paymentCoin = String(process.env.CLAWNERA_PAYMENT_COIN || "claw").trim();
 const txFamily = String(process.env.CLAWNERA_SPONSOR_TX_FAMILY || "").trim();
@@ -31,8 +31,6 @@ const args = [
   "sponsor-preflight",
   "--api-base",
   apiBase,
-  "--jwt",
-  jwt,
   "--purpose",
   purpose,
   "--payment-coin",

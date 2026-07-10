@@ -4856,23 +4856,37 @@ components:
 
             sponsor intent message:
 
-            first line `CLAWDEX Sponsor Execute Intent v1`, second line
+            first line `CLAWDEX Sponsor Execute Intent v2`, second line
 
-            `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`.
+            `version=<version>|chain_family=<chainFamily>|network=<network>|tx_family=<txFamily>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|chain_tx_digest=<chainTxDigest>|expires_at=<expiresAt>|purpose=<purpose>`.
 
-            Required whenever `intent` is provided.
+            Required for every sponsor execution.
       type: object
       additionalProperties: false
       required:
         - reservationId
+        - orderId
         - txBytesB64
         - userSig
+        - intent
+        - intentSig
     SponsorExecutionIntentRequest:
       properties:
+        version:
+          type: string
+          enum:
+            - sponsor_execute_intent.v2
+        chainFamily:
+          type: string
+          enum:
+            - iota
+            - sui
         network:
           type: string
           minLength: 1
           maxLength: 64
+        txFamily:
+          $ref: '#/components/schemas/SponsorTxFamily'
         orderId:
           type: string
           minLength: 1
@@ -4884,6 +4898,10 @@ components:
         txDigest:
           type: string
           pattern: ^[a-f0-9]{64}$
+        chainTxDigest:
+          type: string
+          minLength: 16
+          maxLength: 128
         expiresAt:
           type: string
           format: date-time
@@ -4894,12 +4912,28 @@ components:
       type: object
       additionalProperties: false
       required:
+        - version
+        - chainFamily
         - network
+        - txFamily
         - orderId
         - reservationId
         - txDigest
+        - chainTxDigest
         - expiresAt
         - purpose
+    SponsorTxFamily:
+      type: string
+      enum:
+        - marketplace_write
+        - mailbox_signal
+        - milestone_submit
+        - review_post
+        - deadline_extension
+        - dispute_bond
+        - dispute_vote
+        - dispute_resolution
+        - claw_payment
     SponsorReserveResponse:
       properties:
         reservation:
@@ -4975,18 +5009,6 @@ components:
         - tier
         - fastLane
         - planning
-    SponsorTxFamily:
-      type: string
-      enum:
-        - marketplace_write
-        - mailbox_signal
-        - milestone_submit
-        - review_post
-        - deadline_extension
-        - dispute_bond
-        - dispute_vote
-        - dispute_resolution
-        - claw_payment
     SponsorUsage:
       properties:
         address:
@@ -5066,7 +5088,6 @@ components:
           type: string
           enum:
             - claw_payment
-            - bond
             - marketplace_tx
         gasBudget:
           type: integer
@@ -5086,6 +5107,7 @@ components:
       required:
         - purpose
         - gasBudget
+        - orderId
     SponsorFailureResponse:
       properties:
         error:
@@ -5163,6 +5185,8 @@ components:
           type: boolean
         intentSignatureRequired:
           type: boolean
+        executionSupported:
+          type: boolean
         selfPayFallbackAvailable:
           type: boolean
         reservationTtlSec:
@@ -5192,6 +5216,7 @@ components:
         - strictMode
         - intentRequired
         - intentSignatureRequired
+        - executionSupported
         - selfPayFallbackAvailable
         - reservationTtlSec
     SponsorRetryPolicy:
@@ -5280,6 +5305,8 @@ components:
               type: boolean
             intentSignatureRequired:
               type: boolean
+            executionSupported:
+              type: boolean
             authGate:
               properties:
                 mode:
@@ -5298,6 +5325,7 @@ components:
             - strictMode
             - intentRequired
             - intentSignatureRequired
+            - executionSupported
             - authGate
         providedGasBudget:
           type: integer
@@ -5452,7 +5480,6 @@ components:
         orderIdMode:
           type: string
           enum:
-            - optional
             - required
         reservationTtlSec:
           type: integer
@@ -5499,6 +5526,16 @@ components:
               type: boolean
             intentSignatureRequired:
               type: boolean
+            executableTxFamilies:
+              type: array
+              minItems: 2
+              maxItems: 2
+              uniqueItems: true
+              items:
+                type: string
+                enum:
+                  - marketplace_write
+                  - claw_payment
           type: object
           additionalProperties: false
           required:
@@ -5506,23 +5543,10 @@ components:
             - intentSupported
             - intentRequired
             - intentSignatureRequired
+            - executableTxFamilies
         recommendedGasBudgets:
           properties:
             marketplace_write:
-              $ref: '#/components/schemas/SponsorGasEstimate'
-            mailbox_signal:
-              $ref: '#/components/schemas/SponsorGasEstimate'
-            milestone_submit:
-              $ref: '#/components/schemas/SponsorGasEstimate'
-            review_post:
-              $ref: '#/components/schemas/SponsorGasEstimate'
-            deadline_extension:
-              $ref: '#/components/schemas/SponsorGasEstimate'
-            dispute_bond:
-              $ref: '#/components/schemas/SponsorGasEstimate'
-            dispute_vote:
-              $ref: '#/components/schemas/SponsorGasEstimate'
-            dispute_resolution:
               $ref: '#/components/schemas/SponsorGasEstimate'
             claw_payment:
               $ref: '#/components/schemas/SponsorGasEstimate'
@@ -5530,13 +5554,6 @@ components:
           additionalProperties: false
           required:
             - marketplace_write
-            - mailbox_signal
-            - milestone_submit
-            - review_post
-            - deadline_extension
-            - dispute_bond
-            - dispute_vote
-            - dispute_resolution
             - claw_payment
       type: object
       additionalProperties: false
@@ -5587,7 +5604,6 @@ components:
           type: string
           enum:
             - claw_payment
-            - bond
             - marketplace_tx
         paymentCoin:
           type: string
@@ -5607,6 +5623,7 @@ components:
       additionalProperties: false
       required:
         - purpose
+        - orderId
     DisputeResolveEscrowRequest:
       properties:
         escrowObjectId:
@@ -5657,15 +5674,15 @@ components:
           type: string
         invitedReviewerAddresses:
           type: array
-          minItems: 1
+          minItems: 0
           maxItems: 32
           items:
             type: string
         reviewerSelectionReceiptId:
           type: string
           description: >-
-            Canonical operator shortlist publishes should carry the exact selector receipt id. Omit only for explicit
-            manual recovery / hand-curated fallback publishing.
+            Required selector receipt id. Its ordered shortlist must exactly match invitedReviewerAddresses, including
+            an empty bootstrap shortlist.
         clockObjectId:
           type: string
       type: object
@@ -5673,6 +5690,7 @@ components:
       required:
         - reviewerRegistryObjectId
         - invitedReviewerAddresses
+        - reviewerSelectionReceiptId
     DisputeVoteRevealRequest:
       properties:
         reviewerEntryObjectId:
@@ -6486,8 +6504,8 @@ components:
         reviewerSelectionReceiptId:
           type: string
           description: >-
-            Canonical operator shortlist publishes should carry the exact selector receipt id. Omit only for explicit
-            manual recovery / hand-curated fallback publishing.
+            Required selector receipt id. Its ordered shortlist must exactly match invitedReviewerAddresses, including
+            an empty bootstrap shortlist.
         clockObjectId:
           type: string
       type: object
@@ -6496,6 +6514,7 @@ components:
         - escrowObjectId
         - bondObjectId
         - invitedReviewerAddresses
+        - reviewerSelectionReceiptId
     OrderMilestoneTimeoutResolveRequest:
       properties:
         escrowObjectId:
@@ -7597,6 +7616,8 @@ components:
         - escrowObjectId
     TxPlanResponse:
       properties:
+        chainIdentifier:
+          $ref: '#/components/schemas/ChainIdentifier'
         status:
           type: string
           enum:
@@ -7606,6 +7627,10 @@ components:
         request:
           type: object
           additionalProperties: true
+        inviteBinding:
+          $ref: '#/components/schemas/ReviewerSelectionInviteBinding'
+        preExecutionRequirements:
+          $ref: '#/components/schemas/TxPlanPreExecutionRequirements'
         txMoveCall:
           allOf:
             - $ref: '#/components/schemas/TxMoveCallSummary'
@@ -7615,6 +7640,7 @@ components:
         - status
         - txBuilder
         - request
+        - chainIdentifier
     TxMoveCallSummary:
       properties:
         target:
@@ -7628,6 +7654,76 @@ components:
         - target
         - module
         - fn
+    TxPlanPreExecutionRequirements:
+      properties:
+        reviewerSelectionAuthorization:
+          $ref: '#/components/schemas/ReviewerSelectionAuthorizationRequirement'
+      type: object
+      additionalProperties: false
+      required:
+        - reviewerSelectionAuthorization
+    ReviewerSelectionAuthorizationRequirement:
+      properties:
+        required:
+          type: boolean
+          enum:
+            - true
+        state:
+          type: string
+          enum:
+            - EXTERNAL_OPERATOR_ACTION_REQUIRED
+        reviewerSelectionReceiptId:
+          type: string
+          minLength: 1
+        orderedReviewerAddresses:
+          type: array
+          description: Exact ordered reviewer sequence that the external operator must authorize on-chain before publish.
+          uniqueItems: true
+          items:
+            type: string
+      type: object
+      additionalProperties: false
+      required:
+        - required
+        - state
+        - reviewerSelectionReceiptId
+        - orderedReviewerAddresses
+    ReviewerSelectionInviteBinding:
+      properties:
+        mode:
+          type: string
+          enum:
+            - selection_receipt_activation
+        invitedReviewerAddresses:
+          type: array
+          description: Exact ordered reviewer sequence committed by the selection receipt. Duplicates are forbidden.
+          uniqueItems: true
+          items:
+            type: string
+        reviewerSelectionReceiptId:
+          type: string
+          minLength: 1
+        postExecuteBindingRequired:
+          type: boolean
+          enum:
+            - true
+        bindRoute:
+          type: string
+          description: Route that must bind the executed dispute case to this receipt after publish.
+      type: object
+      additionalProperties: false
+      required:
+        - mode
+        - invitedReviewerAddresses
+        - reviewerSelectionReceiptId
+        - postExecuteBindingRequired
+        - bindRoute
+    ChainIdentifier:
+      type: string
+      pattern: ^[0-9a-f]{8}$
+      description: >-
+        RPC-verified chain identifier. Wallets must compare it with their selected RPC before approval, dry-run, or
+        signing.
     OrderEscrowReleaseRequest:
       properties:
         escrowObjectId:
@@ -8938,9 +9034,7 @@ components:
           type: string
           enum:
             - IOTA
-            - CLAW
             - SUI
-            - TESTUSD
         recipientAddress:
           type: string
           minLength: 3
@@ -9202,6 +9296,23 @@ components:
         id:
           type: string
           format: uuid
+        authVersion:
+          type: integer
+          enum:
+            - 2
+        origin:
+          type: string
+          format: uri
+          pattern: ^https://
+        environment:
+          type: string
+        chainFamily:
+          type: string
+          enum:
+            - iota
+            - sui
+        network:
+          type: string
         refreshAvailable:
           type: boolean
         issuedAtMs:
@@ -9219,7 +9330,17 @@ components:
           nullable: true
       type: object
       required:
+        - id
+        - authVersion
+        - origin
+        - environment
+        - chainFamily
+        - network
         - refreshAvailable
+        - issuedAtMs
+        - refreshExpiresAtMs
+        - lastRefreshedAtMs
+        - revokedAtMs
     AuthClaims:
       properties:
         sub:
@@ -9247,6 +9368,23 @@ components:
           type: string
           enum:
             - access
+        authVersion:
+          type: integer
+          enum:
+            - 2
+        origin:
+          type: string
+          format: uri
+          pattern: ^https://
+        environment:
+          type: string
+        chainFamily:
+          type: string
+          enum:
+            - iota
+            - sui
+        network:
+          type: string
       type: object
       required:
         - sub
@@ -9255,6 +9393,13 @@ components:
         - jti
         - iss
         - aud
+        - sid
+        - tokenType
+        - authVersion
+        - origin
+        - environment
+        - chainFamily
+        - network
     AuthRefreshRequest:
       properties:
         refreshToken:
@@ -9303,6 +9448,11 @@ components:
           type: string
           minLength: 1
           maxLength: 8192
+        chainFamily:
+          type: string
+          enum:
+            - iota
+            - sui
       type: object
       additionalProperties: false
       required:
@@ -9312,20 +9462,58 @@ components:
         - message
     AuthChallengeResponse:
       properties:
+        protocol:
+          type: string
+          enum:
+            - clawdex.auth
+        version:
+          type: integer
+          enum:
+            - 2
+        origin:
+          type: string
+          format: uri
+          pattern: ^https://
+        audience:
+          type: string
+          enum:
+            - clawdex-client
+        environment:
+          type: string
+        chainFamily:
+          type: string
+          enum:
+            - iota
+            - sui
+        network:
+          type: string
         nonce:
           type: string
         address:
           type: string
         messageToSign:
           type: string
+          description: Canonical CLAWDEX Sign-In v2 message containing every response field in fixed order.
+        issuedAtMs:
+          type: integer
+          format: int64
         expiresAtMs:
           type: integer
           format: int64
       type: object
+      additionalProperties: false
       required:
+        - protocol
+        - version
+        - origin
+        - audience
+        - environment
+        - chainFamily
+        - network
         - nonce
         - address
         - messageToSign
+        - issuedAtMs
         - expiresAtMs
     AuthChallengeRequest:
       properties:
@@ -9333,6 +9521,11 @@ components:
           type: string
           minLength: 1
           maxLength: 200
+        chainFamily:
+          type: string
+          enum:
+            - iota
+            - sui
       type: object
       additionalProperties: false
       required:

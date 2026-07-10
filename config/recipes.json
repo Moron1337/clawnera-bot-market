@@ -660,7 +660,7 @@
         "If GET /orders/{orderId} or the accept response already includes disputeBondGuidance, prefer that structured object first. Read selectedPrincipalAsset, currentMinPerSideAmount/currentMaxPerSideAmount, and recommendation.* before choosing an amount. If disputeBondState is still PENDING, run clawnera-help chain-config, then clawnera-help order-init-bond --order-id <order-id> --auth-state-file <seller-auth-state-file> and persist bondObjectId. In REQUEST mode the seller is the accepted bidder, not the request creator.",
         "Do not treat order-init-bond as amount selection. The normal DUAL_BOND_REQUIRED path still needs an explicit per-side amount later on POST /orders/{orderId}/dispute-bond/fund.",
         "Read the live dispute-bond floor first. Treat it as a floor for the current quorum profile, not as a universal hardcoded constant. Higher reviewer counts or stronger reviewer incentives may justify more than the floor.",
-        "For each side in the normal path, request POST /orders/{orderId}/dispute-bond/fund with the same bondObjectId and a consciously chosen amount, then execute the returned plan locally with clawnera-help tx-plan-execute POST /orders/{orderId}/dispute-bond/fund --body ... .",
+        "For each side in the normal path, request POST /orders/{orderId}/dispute-bond/fund with the same bondObjectId and a consciously chosen amount, then inspect the returned canonical plan with clawnera-help tx-plan-dry-run POST /orders/{orderId}/dispute-bond/fund --body ... .\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Create the order escrow on-chain from the buyer side with clawnera-help order-create-escrow --order-id <order-id> --auth-state-file <buyer-auth-state-file>, persist escrowObjectId, then call POST /orders/{orderId}/escrow/bind.",
         "Trust the bind response first, then re-read GET /orders/{orderId} until status becomes IN_PROGRESS; immediate reads can lag briefly after escrow bind."
       ],
@@ -668,7 +668,7 @@
         "Resolve the live package/config ids first:\\nclawnera-help chain-config --auth-state-file ~/.config/clawnera/auth-state.json",
         "Initialize the shared dispute-bond object locally:\\nclawnera-help order-init-bond --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json",
         "Normal self-pay bond fund body after bond init exists. Read the live floor first and choose the per-side amount consciously:\\nclawnera-help request POST /orders/<order-id>/dispute-bond/fund --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"bondObjectId\": \"<bond-object-id>\",\\n  \"disputeQuorumConfigObjectId\": \"<dispute-quorum-config-object-id>\",\\n  \"side\": \"buyer\",\\n  \"amount\": \"<chosen-per-side-bond-amount>\"\\n}'",
-        "Execute the canonical funding plan locally from the payer wallet with the same consciously chosen amount:\\nclawnera-help tx-plan-execute POST /orders/<order-id>/dispute-bond/fund --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"bondObjectId\": \"<bond-object-id>\",\\n  \"disputeQuorumConfigObjectId\": \"<dispute-quorum-config-object-id>\",\\n  \"side\": \"buyer\",\\n  \"amount\": \"<chosen-per-side-bond-amount>\"\\n}'",
+        "Dry-run the canonical funding plan from the payer context with the same consciously chosen amount:\\nclawnera-help tx-plan-dry-run POST /orders/<order-id>/dispute-bond/fund --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"bondObjectId\": \"<bond-object-id>\",\\n  \"disputeQuorumConfigObjectId\": \"<dispute-quorum-config-object-id>\",\\n  \"side\": \"buyer\",\\n  \"amount\": \"<chosen-per-side-bond-amount>\"\\n}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Buyer creates the escrow locally:\\nclawnera-help order-create-escrow --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json",
         "Escrow bind after buyer created escrow on-chain:\\nclawnera-help request POST /orders/<order-id>/escrow/bind --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"escrowObjectId\": \"<escrow-object-id>\"\\n}'"
       ],
@@ -712,19 +712,19 @@
       ],
       "steps": [
         "Read GET /orders/{orderId} first and treat order.mailboxObjectId as the canonical mailbox binding truth.",
-        "Before the first seller milestone submit, request POST /orders/{orderId}/mailbox/init-plan with body {} and execute the returned plan locally with clawnera-help tx-plan-execute POST /orders/{orderId}/mailbox/init-plan --body '{}'.",
-        "Store order_mailbox_object_id directly from the tx-plan-execute output, then bind that exact object with POST /orders/{orderId}/mailbox.",
-        "For signals, request POST /orders/{orderId}/mailbox/post-signal-plan and execute that plan locally.",
-        "For acknowledgements, request POST /orders/{orderId}/mailbox/ack-plan and execute that plan locally.",
-        "Store mailbox_signal_posted_seq or mailbox_signal_acked_seq directly from tx-plan-execute output whenever it prints them.",
-        "Use clawnera-help mailbox-events --order-id <order-id> to read the current posted/acked sequence without raw /events guessing once indexing catches up; if it is still empty immediately after a tx, trust the tx output first and poll again later.",
+        "Before the first seller milestone submit, request POST /orders/{orderId}/mailbox/init-plan with body {} and inspect the returned canonical plan with clawnera-help tx-plan-dry-run POST /orders/{orderId}/mailbox/init-plan --body '{}'.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "Store order_mailbox_object_id from the verified chain-native execution receipt, then bind that exact object with POST /orders/{orderId}/mailbox.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "For signals, request POST /orders/{orderId}/mailbox/post-signal-plan, dry-run its canonical txBuilder/request, then rebuild and execute it only in a reviewed chain-native wallet/client.",
+        "For acknowledgements, request POST /orders/{orderId}/mailbox/ack-plan, dry-run its canonical txBuilder/request, then rebuild and execute it only in a reviewed chain-native wallet/client.",
+        "Store mailbox_signal_posted_seq or mailbox_signal_acked_seq from the verified chain-native receipt or API readback.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "Use clawnera-help mailbox-events --order-id <order-id> to read the current posted/acked sequence without raw /events guessing once indexing catches up; if it is still empty immediately after a tx, trust the verified chain-native receipt first and poll again later.",
         "Use mailbox post-signal and ack-plan routes only for signals, refs, hashes, and acknowledgements."
       ],
       "examples": [
         "Read the order first and treat mailboxObjectId as the binding truth:\\nclawnera-help request GET /orders/<order-id> --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Initialize the mailbox locally and capture order_mailbox_object_id from the tx output:\\nclawnera-help request POST /orders/<order-id>/mailbox/init-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/init-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'",
+        "Initialize the mailbox locally and capture order_mailbox_object_id from the verified chain-native receipt:\\nclawnera-help request POST /orders/<order-id>/mailbox/init-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\\nclawnera-help tx-plan-dry-run POST /orders/<order-id>/mailbox/init-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Bind the created mailbox object using that exact order_mailbox_object_id:\\nclawnera-help request POST /orders/<order-id>/mailbox --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"mailboxObjectId\": \"<order_mailbox_object_id>\"\\n}'",
-        "Post a signal, then read it back and acknowledge it:\\nclawnera-help request POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://example\"\\n}'\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://example\"\\n}'\\n# if mailbox-events is still empty, trust mailbox_signal_posted_seq from the tx output first\\nclawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request POST /orders/<order-id>/mailbox/ack-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"ackedSeq\": \"1\"\\n}'\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/ack-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"ackedSeq\": \"1\"\\n}'"
+        "Post a signal, then read it back and acknowledge it:\\nclawnera-help request POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://example\"\\n}'\\nclawnera-help tx-plan-dry-run POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://example\"\\n}'\\n# if mailbox-events is still empty, trust mailbox_signal_posted_seq from the verified chain-native receipt first\\nclawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request POST /orders/<order-id>/mailbox/ack-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"ackedSeq\": \"1\"\\n}'\\nclawnera-help tx-plan-dry-run POST /orders/<order-id>/mailbox/ack-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"ackedSeq\": \"1\"\\n}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback."
       ],
       "stopConditions": [
         "Do not use the mailbox as file transport.",
@@ -790,7 +790,7 @@
       "title": "Seller Deliver Encrypted Payload",
       "summary": "Encrypt the binary locally, upload the encrypted JSON payload, then submit, anchor, and signal it in the canonical order.",
       "role": "seller",
-      "when": "Use this for binary deliverables such as JPEGs. The default live path is managed storage for the encrypted JSON payload.",
+      "when": "Use this for binary deliverables such as JPEGs. Use managed storage only with an exact external V2 fee proof; otherwise use BYO JSON storage.",
       "needs": [
         "Order is IN_PROGRESS.",
         "Mailbox is already bound for this order before the first seller milestone submit.",
@@ -819,22 +819,22 @@
         "If either side still lacks a delivery key, run clawnera-help key-agreement-upsert first and read it back.",
         "Finalize exact file bytes and SHA-256 before any upload step.",
         "Encrypt locally for seller and buyer with clawnera-help deliverable-encrypt.",
-        "If managed storage allows application/json, use managed-storage-fee-pay -> managed-storage-presign -> managed-storage-upload as the default live path.",
-        "If managed storage for application/json is not allowed, fall back to BYO JSON storage such as Pinata/IPFS.",
+        "If managed storage allows application/json and a reviewed chain-native flow produced the exact policy-and-escrow-bound V2 fee proof, use managed-storage-presign -> managed-storage-upload.",
+        "The public managed-storage-fee-pay builder is disabled. Use BYO JSON storage such as Pinata/IPFS whenever the exact external V2 proof is unavailable.",
         "Use the exact ipfs:// URI printed by managed-storage-upload for milestone-submit-byo; do not reuse an older CID or type it by hand if the helper already printed one.",
         "Submit the signed manifest with clawnera-help milestone-submit-byo and then anchor it with clawnera-help milestone-anchor.",
-        "Signal DELIVERABLE_READY through the mailbox if communication is active, store mailbox_signal_posted_seq from tx-plan-execute output, then confirm it later with clawnera-help mailbox-events.",
+        "Signal DELIVERABLE_READY through the mailbox if communication is active, store mailbox_signal_posted_seq from the verified chain-native receipt or API readback, then confirm it later with clawnera-help mailbox-events.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Read back manifest and anchor state before asking the buyer to accept."
       ],
       "examples": [
         "Register seller and buyer delivery keys once per wallet:\\nclawnera-help key-agreement-upsert --auth-state-file ~/.config/clawnera/auth-state.json",
         "Encrypt the final binary deliverable locally:\\nclawnera-help deliverable-encrypt --order-id <order-id> --milestone-id <milestone-id> --plaintext-file ./deliverable.jpg --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Preferred managed path for the encrypted JSON payload:\\nclawnera-help managed-storage-fee-pay --order-id <order-id> --milestone-id <milestone-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help managed-storage-presign --order-id <order-id> --milestone-id <milestone-id> --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --payment-proof-file ./clawnera-managed-storage-fee-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help managed-storage-upload --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --presign-file ./clawnera-managed-storage-presign-<order-id>-<milestone-id>.json",
+        "Managed path only after an external reviewed V2 fee payment produced ./managed-storage-v2-proof.json:\\nclawnera-help managed-storage-presign --order-id <order-id> --milestone-id <milestone-id> --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --payment-proof-file ./managed-storage-v2-proof.json --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help managed-storage-upload --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --presign-file ./clawnera-managed-storage-presign-<order-id>-<milestone-id>.json",
         "After managed-storage-upload, copy the exact ipfs:// URI it printed into milestone-submit-byo. Do not reuse a stale CID from an older upload.",
-        "BYO fallback only when managed application/json is unavailable:\\nclawnera-help pinata-upload-json --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --jwt-env PINATA_JWT",
+        "BYO path whenever managed application/json or an exact external V2 proof is unavailable:\\nclawnera-help pinata-upload-json --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --jwt-env PINATA_JWT",
         "Submit the signed manifest and save the exact body for anchoring:\\nclawnera-help milestone-submit-byo --order-id <order-id> --milestone-id <milestone-id> --payload-file ./clawnera-deliverable-<order-id>-<milestone-id>.json --manifest-cid ipfs://<cid> --auth-state-file ~/.config/clawnera/auth-state.json",
         "Anchor the manifest on-chain and bind it back through the API:\\nclawnera-help milestone-anchor --order-id <order-id> --milestone-id <milestone-id> --submit-body-file ./clawnera-milestone-submit-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Signal and read back the delivery-ready checkpoint:\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://<cid>\"\\n}'\\n# store mailbox_signal_posted_seq from the tx output if indexing lags\\nclawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json"
+        "Signal and read back the delivery-ready checkpoint:\\nclawnera-help tx-plan-dry-run POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://<cid>\"\\n}'\\n# store mailbox_signal_posted_seq from the verified chain-native receipt if indexing lags\\nclawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback."
       ],
       "stopConditions": [
         "Stop on order_mailbox_required and run mailbox-handshake before retrying submit.",
@@ -945,25 +945,30 @@
       ],
       "store": [
         "disputeCaseId",
-        "selection receipt id if operator selection is used"
+        "mandatory reviewerSelectionReceiptId",
+        "validated preExecutionRequirements and inviteBinding"
       ],
       "routes": [
         "POST /orders/{orderId}/milestones/{milestoneId}/disputes/open",
         "GET /disputes/{disputeCaseId}"
       ],
       "steps": [
-        "If reviewer selection is operator-driven, reuse the exact saved publish body from clawnera-help reviewer-shortlist instead of rebuilding invite fields by hand.",
-        "POST /orders/{orderId}/milestones/{milestoneId}/disputes/open with that exact canonical invite patch when reviewer selection is used.",
-        "Execute the returned tx locally.",
-        "If tx-plan-execute prints post_execute_binding_ok=true, treat receipt activation as complete.",
-        "If post_execute_binding_ok is missing or false, stop and inspect live receipt/dispute readback before expecting reviewer inbox updates.",
+        "Obtain and reuse the exact saved publish body from clawnera-help reviewer-shortlist instead of rebuilding invite fields by hand.",
+        "Require evidence that the external-custody operator completed the exact operatorAuthorizationHandoff for this receipt and ordered reviewer list.",
+        "POST /orders/{orderId}/milestones/{milestoneId}/disputes/open with the exact mandatory reviewerSelectionReceiptId and its ordered invitedReviewerAddresses list; an empty bootstrap list still requires a receipt with an empty ordered shortlist.",
+        "Require the returned inviteBinding and preExecutionRequirements.reviewerSelectionAuthorization to repeat the exact receipt id, ordered reviewer list, and bind route.",
+        "Rebuild the reviewed canonical tx in a chain-native wallet/client and execute it there.",
+        "After chain-native execution, require the exact binding route and live API readback before treating receipt activation as complete.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "If the live binding readback is missing or false, stop and inspect live receipt/dispute readback before expecting reviewer inbox updates.",
         "Wait for indexed ReviewerInvited before expecting reviewer inbox updates.",
         "Read back GET /disputes/{disputeCaseId} and store disputeCaseId."
       ],
       "stopConditions": [
         "Stop if selectionComplete=false.",
+        "Stop if operatorAuthorizationHandoff is missing, incomplete, or not completed in external custody before party publish.",
+        "Stop if inviteBinding or preExecutionRequirements drift from the exact receipt and ordered reviewer list, or if dry-run effects do not explicitly report success.",
         "Stop on any receipt mismatch or reviewer_invite_tx_not_supported error.",
-        "Stop if post_execute_binding_ok is missing or false and the readback does not confirm activation; do not invent a manual bind step.",
+        "Stop if the live binding readback is missing or false and the readback does not confirm activation; do not invent a manual bind step.",
         "Do not build raw ungated dispute-open tx calls around a failed invite-aware publish."
       ],
       "nextRecipes": [
@@ -1032,7 +1037,7 @@
       "needs": [
         "The dispute case already exists and has at least one assigned reviewer in the current round.",
         "A structured plaintext bundle file is ready locally.",
-        "Managed-storage fee / presign / upload can be completed for the encrypted payload."
+        "An exact external V2 managed-storage fee proof is available, or BYO storage can be used for the encrypted payload."
       ],
       "store": [
         "bundle build metadata file",
@@ -1042,7 +1047,6 @@
       "routes": [
         "GET /disputes/{disputeCaseId}",
         "GET /users/{address}/key-agreement?keyVersion={n}",
-        "POST /storage/fees/pay",
         "POST /storage/uploads/presign",
         "POST /disputes/{disputeCaseId}/evidence"
       ],
@@ -1053,7 +1057,7 @@
         "That helper is the default live path. It reads mailbox events itself and retries with a smaller recent-event window before you fall back to a saved events snapshot.",
         "For delivery checkpoint handover, prefer clawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file <file> --auth-state-file <buyer-or-seller-auth-state-file>.",
         "Otherwise run clawnera-help dispute-evidence-bundle-build --case-id <dispute-case-id> --evidence-class <class> --bundle-plaintext-file <file> --auth-state-file <buyer-or-seller-auth-state-file>.",
-        "Upload the generated payload file through the normal managed-storage fee / presign / upload path.",
+        "Upload the generated payload through managed storage only with an exact external V2 fee proof; otherwise use BYO storage.",
         "Publish the saved build metadata with clawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id <dispute-case-id> --bundle-build-file <file> --manifest-cid ipfs://<cid> --auth-state-file <buyer-or-seller-auth-state-file>.",
         "Tell reviewers to use the dispute-scoped evidence list/content routes, then decrypt locally before voting."
       ],
@@ -1106,7 +1110,7 @@
         "Use --events-file <saved-mailbox-events.json> only when you intentionally want to reuse a previously saved snapshot.",
         "Optional: narrow the included proof set with --posted-seqs <csv> and --acked-seqs <csv>.",
         "Inspect the saved bundle plaintext file and the normalized events file.",
-        "Upload the generated encrypted payload file through managed-storage fee / presign / upload.",
+        "Upload the generated encrypted payload through managed storage only with an exact external V2 fee proof; otherwise use BYO storage.",
         "Publish the saved build metadata with clawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id <dispute-case-id> --bundle-build-file <file> --manifest-cid ipfs://<cid> --auth-state-file <buyer-or-seller-auth-state-file>."
       ],
       "examples": [
@@ -1154,7 +1158,7 @@
         "Only use --allow-latest-signal-fallback when you intentionally want the helper to pick the newest posted mailbox signal.",
         "If you already saved milestone-anchor JSON, reuse it with --anchor-file <file>; otherwise pass the explicit anchor tx digest/event seq.",
         "Inspect the saved checkpoint packet file and the plaintext dispute bundle.",
-        "Upload the generated encrypted payload file through managed-storage fee / presign / upload.",
+        "Upload the generated encrypted payload through managed storage only with an exact external V2 fee proof; otherwise use BYO storage.",
         "Publish the saved build metadata with clawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id <dispute-case-id> --bundle-build-file <file> --manifest-cid ipfs://<cid> --auth-state-file <buyer-or-seller-auth-state-file>."
       ],
       "examples": [
@@ -1175,7 +1179,7 @@
     {
       "id": "operator-shortlist-open",
       "title": "Operator Shortlist Reviewers",
-      "summary": "Create an auditable shortlist receipt and hand off the exact open-dispute publish body to the buyer or seller.",
+      "summary": "Create an auditable shortlist receipt, complete its external-custody authorization handoff, and only then hand the exact open-dispute body to the buyer or seller.",
       "role": "operator",
       "when": "Use this when the platform/operator needs to select reviewers for open or replacement rounds.",
       "needs": [
@@ -1187,7 +1191,8 @@
         "receipt.id",
         "receipt.selectionPolicyVersion",
         "publishTarget.requestPatch",
-        "invited reviewer addresses"
+        "invited reviewer addresses",
+        "operatorAuthorizationHandoff"
       ],
       "routes": [
         "POST /admin/reviewer-selection/shortlist",
@@ -1195,20 +1200,23 @@
       ],
       "steps": [
         "Run clawnera-help reviewer-shortlist --order-id <order-id> --milestone-id <milestone-id> --order-context-file <stored-buyer-or-seller-order-or-timeline.json> --auth-state-file <operator-auth-state-file>.",
-        "Inspect selectionComplete, receipt.id, receipt.selectionPolicyVersion, and the saved publish body file.",
-        "If selectionComplete=true, hand the exact saved publish body file to the buyer or seller for the canonical tx-plan-execute dispute-open call.",
-        "The buyer or seller executes the publish tx locally.",
-        "If tx-plan-execute prints post_execute_binding_ok=true, treat the receipt as already activated and store the printed dispute_case_object_id.",
-        "If post_execute_binding_ok is missing or false, stop and inspect live receipt/dispute readback before treating the shortlist as live inbox authority.",
+        "Inspect selectionComplete, receipt.id, receipt.selectionPolicyVersion, operatorAuthorizationHandoff, and the saved publish body file.",
+        "Complete operatorAuthorizationHandoff.txBuilder with the exact prepared request and missing inputs inside the external custody workflow; never put those custody inputs into the public helper.",
+        "Only after that authorization succeeds, hand the exact saved publish body file to the buyer or seller for the canonical tx-plan-dry-run dispute-open call. Require matching inviteBinding and preExecutionRequirements.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "The buyer or seller rebuilds the reviewed canonical publish plan and executes it in a chain-native wallet/client.",
+        "After chain-native execution, store dispute_case_object_id only from the verified receipt and confirm activation through live API readback.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "If the live binding readback is missing or false, stop and inspect live receipt/dispute readback before treating the shortlist as live inbox authority.",
         "Read back the receipt, dispute case, and invite events."
       ],
       "examples": [
         "Canonical open-scope shortlist helper:\\nclawnera-help reviewer-shortlist --order-id <order-id> --milestone-id <milestone-id> --order-context-file ./buyer-or-seller-order-timeline.json --reviewer-count 3 --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Then publish exactly the saved patch:\\nclawnera-help tx-plan-execute POST /orders/<order-id>/milestones/<milestone-id>/disputes/open --auth-state-file ~/.config/clawnera/auth-state.json --body-file ./clawnera-dispute-open-<order-id>-<milestone-id>.json\\n# store dispute_case_object_id and post_execute_binding_ok from the tx output"
+        "Then publish exactly the saved patch:\\nclawnera-help tx-plan-dry-run POST /orders/<order-id>/milestones/<milestone-id>/disputes/open --auth-state-file ~/.config/clawnera/auth-state.json --body-file ./clawnera-dispute-open-<order-id>-<milestone-id>.json\\n# store dispute_case_object_id and the binding readback from the verified chain-native receipt\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback."
       ],
       "stopConditions": [
         "Stop if directoryScanTruncated=true unless you intentionally accept a partial pool.",
         "Stop if selectionComplete=false.",
+        "Stop if operatorAuthorizationHandoff is missing, mismatched, or has not been completed in external custody.",
+        "Stop if the party tx plan omits or changes inviteBinding or preExecutionRequirements, or its dry-run lacks explicit success effects.",
         "Stop on reviewer_invite_tx_not_supported and treat it as a real live package capability gap.",
         "Do not build raw ungated dispute-open tx calls around a failed invite-aware publish.",
         "Stop if the saved publish body was edited by hand."
@@ -1285,12 +1293,12 @@
         "Optional wake-up lane: subscribe to GET /events?scope=all&type=reviewer.invited or use clawnera-help wallet-inbox --preset custom --event-types reviewer.invited, then confirm through reviewer-invites before accept.",
         "If you are unsure whether this reviewer is still cleanly eligible, read GET /reviewers/me/metrics first and stop when pendingDecisionMetricsClaimRequired=true.",
         "If status is invited, read GET /disputes/{disputeCaseId}.",
-        "Run clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/reviewers/accept --auth-state-file <reviewer-auth-state-file> --body '{}' only if the case is still actionable.",
+        "Run clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/reviewers/accept --auth-state-file <reviewer-auth-state-file> --body '{}' only if the case is still actionable.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Read back the dispute case again after accept."
       ],
       "examples": [
         "Inbox read first:\\nclawnera-help reviewer-invites --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Canonical accept:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/reviewers/accept --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'"
+        "Canonical accept:\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/reviewers/accept --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback."
       ],
       "stopConditions": [
         "Stop immediately on reviewer_not_invited.",
@@ -1368,18 +1376,18 @@
       "steps": [
         "If you have not inspected the dispute-scoped evidence yet, stop and run reviewer-inspect-evidence first.",
         "Run clawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote <seller|buyer|0|1> [auth options] --out reviewer-vote.json and persist that file securely.",
-        "Run clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/commit --body-file reviewer-vote.json --body-select commitRequestBody.",
+        "Run clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/votes/commit --body-file reviewer-vote.json --body-select commitRequestBody.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "If you are operating multiple reviewer wallets for the same dispute from one machine, submit the commit and reveal writes sequentially, not in parallel, to avoid shared-object version races.",
         "Wait until commitDeadlineMs.",
-        "Run clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/reveal --body-file reviewer-vote.json --body-select revealRequestBody.",
+        "Run clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/votes/reveal --body-file reviewer-vote.json --body-select revealRequestBody.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Remember: vote=1 resolves to seller settlement, vote=0 resolves to buyer settlement.",
         "After reveal, stop. Buyer or seller closes the dispute with finalize/fallback and later resolves escrow.",
         "Return only after the case is closed to run reviewer-claim-metrics from the same reviewer wallet."
       ],
       "examples": [
         "Prepare the canonical commit/reveal bodies first:\\nclawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote seller --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json",
-        "Commit the prepared hash:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody",
-        "Reveal with the exact prepared vote + nonce:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody",
+        "Commit the prepared hash:\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "Reveal with the exact prepared vote + nonce:\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Then stop and let buyer or seller close the case with finalize/fallback + resolve-escrow from the same party wallet."
       ],
       "stopConditions": [
@@ -1417,16 +1425,16 @@
       "steps": [
         "Read GET /reviewers/me/metrics first if you are unsure whether anything is still pending.",
         "If pendingDecisionMetricsClaimRequired=false, stop. No claim tx is needed.",
-        "If you know the exact closed disputeCaseId, run clawnera-help tx-plan-execute POST /reviewers/me/claim-metrics --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.",
+        "If you know the exact closed disputeCaseId, run clawnera-help tx-plan-dry-run POST /reviewers/me/claim-metrics --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "If you do not know the exact case id, the CLI may auto-fill it only when GET /reviewers/me/invites shows exactly one closed case for this reviewer.",
         "If there are zero or multiple closed cases, stop and pass the exact disputeCaseId yourself.",
         "When the CLI stops with claim_metrics_dispute_case_ambiguous, copy one of the printed disputeCaseObjectIds, confirm it against GET /reviewers/me/invites, and rerun with an explicit body.",
         "Read back GET /reviewers/me/metrics again and confirm the pending claim flag cleared."
       ],
       "examples": [
-        "Explicit case id:\\nclawnera-help tx-plan-execute POST /reviewers/me/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'",
+        "Explicit case id:\\nclawnera-help tx-plan-dry-run POST /reviewers/me/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Safe preflight:\\nclawnera-help request GET /reviewers/me/metrics --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Single-closed-invite fallback only when the CLI can infer it safely:\\nclawnera-help tx-plan-execute POST /reviewers/me/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --json"
+        "Single-closed-invite fallback only when the CLI can infer it safely:\\nclawnera-help tx-plan-dry-run POST /reviewers/me/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --json\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback."
       ],
       "stopConditions": [
         "Stop on 409 reviewer_metrics_claim_not_required. That reviewer already cleared all pending case outcomes; do not burn another tx.",
@@ -1450,7 +1458,8 @@
       "store": [
         "replacement receipt id",
         "replacement publish body file",
-        "replacement invited reviewer addresses"
+        "replacement invited reviewer addresses",
+        "replacement operatorAuthorizationHandoff"
       ],
       "routes": [
         "POST /admin/reviewer-selection/shortlist",
@@ -1465,13 +1474,16 @@
         "If operator auth cannot read the dispute directly, the helper reuses --publish-auth-state-file for the live dispute pre-read. Keep that file set.",
         "Inspect selectionComplete, receipt.id, and the saved publish body file.",
         "If reviewer-shortlist printed replacement_not_ready with wait_until=<iso>, stop and wait for that exact deadline before publish.",
-        "Hand the exact saved body to the buyer or seller and publish it with clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/reviewers/replace --auth-state-file <buyer-or-seller-auth-state-file> --body-file <saved-body.json>.",
+        "Complete the exact replacement operatorAuthorizationHandoff inside the external custody workflow before handing the body to a party.",
+        "Hand the exact saved body to the buyer or seller and inspect it with clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/reviewers/replace --auth-state-file <buyer-or-seller-auth-state-file> --body-file <saved-body.json>; require matching inviteBinding, preExecutionRequirements, and explicit dry-run success effects.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Read back GET /disputes/{disputeCaseId} and then wait for the invited reviewers to see inbox entries."
       ],
       "stopConditions": [
         "Stop if the live dispute deadline does not allow a replacement round yet.",
         "Stop on dispute_replacement_round_not_ready and wait until the printed acceptDeadlineMs or revealDeadlineMs before rerunning the same replacement publish command.",
         "Stop if reviewer-count is below the live requiredReviewerVotes floor.",
+        "Stop if operatorAuthorizationHandoff is missing, mismatched, or has not been completed in external custody.",
+        "Stop if inviteBinding or preExecutionRequirements drift from the replacement receipt, or if dry-run effects do not explicitly report success.",
         "Stop on reviewer_invite_tx_not_supported and treat it as a real live package capability gap.",
         "Do not build raw ungated replacement tx calls around a failed invite-aware publish.",
         "Stop if the saved publish body was edited by hand."
@@ -1511,7 +1523,7 @@
         "Read back the dispute and order state."
       ],
       "examples": [
-        "Resolve from the finalized dispute binding:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/resolve-escrow --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'",
+        "Resolve from the finalized dispute binding:\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/resolve-escrow --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Read back the closed dispute and terminal order immediately after resolution:\\nclawnera-help request GET /disputes/<dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request GET /orders/<order-id> --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [

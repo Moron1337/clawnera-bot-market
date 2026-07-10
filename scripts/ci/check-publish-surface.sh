@@ -17,6 +17,11 @@ const payloadPath = process.argv[2];
 const payload = JSON.parse(fs.readFileSync(payloadPath, "utf8"));
 const publishedPaths = new Set((payload[0]?.files || []).map((entry) => entry.path));
 const bannedPaths = [
+  "docs/docsources/README.md",
+  "docs/docsources/SOURCE_MIRROR.md",
+  "docs/docsources/claw/CLAW_LOCAL_ORACLE_SYNC_RUNBOOK.md",
+  "docs/docsources/claw/CLAW_OPERATIONS_CURRENT.md",
+  "docs/docsources/claw/CLAW_SWAP_GATEWAY_CURRENT.md",
   "docs/docsources/core/apiContract.json",
   "docs/docsources/core/openapi.yaml",
   "docs/docsources/core/openapi.public.yaml",
@@ -109,6 +114,13 @@ if grep -q 'doctor --api-base' "$tmp_dir/help-min.txt"; then
   echo "default_text_help_still_exposes_doctor_in_minimal_path" >&2
   exit 1
 fi
+
+while IFS= read -r action_ref; do
+  if [[ ! "$action_ref" =~ @[a-f0-9]{40}$ ]]; then
+    echo "mutable_github_action_ref: $action_ref" >&2
+    exit 1
+  fi
+done < <(sed -nE 's/^[[:space:]]*uses:[[:space:]]*([^[:space:]#]+).*/\1/p' .github/workflows/*.yml)
 
 echo "default_surface_docs_guard_ok"
 echo "default_machine_help_guard_ok"

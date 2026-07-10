@@ -589,9 +589,12 @@
           "requiredFields": [
             "address"
           ],
-          "optionalFields": [],
+          "optionalFields": [
+            "chainFamily"
+          ],
           "propertyNames": [
-            "address"
+            "address",
+            "chainFamily"
           ]
         },
         "responses": {
@@ -601,16 +604,32 @@
             "schemaRef": "#/components/schemas/AuthChallengeResponse",
             "schemaName": "AuthChallengeResponse",
             "requiredFields": [
+              "protocol",
+              "version",
+              "origin",
+              "audience",
+              "environment",
+              "chainFamily",
+              "network",
               "nonce",
               "address",
               "messageToSign",
+              "issuedAtMs",
               "expiresAtMs"
             ],
             "optionalFields": [],
             "propertyNames": [
+              "protocol",
+              "version",
+              "origin",
+              "audience",
+              "environment",
+              "chainFamily",
+              "network",
               "nonce",
               "address",
               "messageToSign",
+              "issuedAtMs",
               "expiresAtMs"
             ]
           },
@@ -653,12 +672,15 @@
             "signature",
             "message"
           ],
-          "optionalFields": [],
+          "optionalFields": [
+            "chainFamily"
+          ],
           "propertyNames": [
             "nonce",
             "address",
             "signature",
-            "message"
+            "message",
+            "chainFamily"
           ]
         },
         "responses": {
@@ -3518,17 +3540,22 @@
             "schemaName": "SuiUsdcTxPlanOnlyResponse",
             "requiredFields": [],
             "optionalFields": [
+              "chainIdentifier",
               "chainFamily",
               "chainNetwork",
               "status",
               "asset",
               "executionAllowed",
+              "txPlanOnly",
+              "signerRequired",
               "publicLaunchReady",
               "apiSideExecution",
+              "runtimeAccessScope",
               "repositoryMutation",
               "objectBindingCreated",
-              "canaryActorAllowlistEnforced",
+              "actorAllowlistEnforced",
               "transactionBytesBase64",
+              "sourceGuard",
               "orderId",
               "target",
               "orderBinding",
@@ -3538,17 +3565,22 @@
               "txPlan"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "chainFamily",
               "chainNetwork",
               "status",
               "asset",
               "executionAllowed",
+              "txPlanOnly",
+              "signerRequired",
               "publicLaunchReady",
               "apiSideExecution",
+              "runtimeAccessScope",
               "repositoryMutation",
               "objectBindingCreated",
-              "canaryActorAllowlistEnforced",
+              "actorAllowlistEnforced",
               "transactionBytesBase64",
+              "sourceGuard",
               "orderId",
               "target",
               "orderBinding",
@@ -3684,17 +3716,22 @@
             "schemaName": "SuiUsdcTxPlanOnlyResponse",
             "requiredFields": [],
             "optionalFields": [
+              "chainIdentifier",
               "chainFamily",
               "chainNetwork",
               "status",
               "asset",
               "executionAllowed",
+              "txPlanOnly",
+              "signerRequired",
               "publicLaunchReady",
               "apiSideExecution",
+              "runtimeAccessScope",
               "repositoryMutation",
               "objectBindingCreated",
-              "canaryActorAllowlistEnforced",
+              "actorAllowlistEnforced",
               "transactionBytesBase64",
+              "sourceGuard",
               "orderId",
               "target",
               "orderBinding",
@@ -3704,17 +3741,22 @@
               "txPlan"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "chainFamily",
               "chainNetwork",
               "status",
               "asset",
               "executionAllowed",
+              "txPlanOnly",
+              "signerRequired",
               "publicLaunchReady",
               "apiSideExecution",
+              "runtimeAccessScope",
               "repositoryMutation",
               "objectBindingCreated",
-              "canaryActorAllowlistEnforced",
+              "actorAllowlistEnforced",
               "transactionBytesBase64",
+              "sourceGuard",
               "orderId",
               "target",
               "orderBinding",
@@ -3848,15 +3890,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -3986,15 +4034,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -4122,15 +4176,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -4483,15 +4543,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -4619,15 +4685,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -4755,15 +4827,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -4888,15 +4966,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -5386,15 +5470,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -6098,15 +6188,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -6386,15 +6482,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -6634,15 +6736,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -6763,15 +6871,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -6950,15 +7064,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -7188,15 +7308,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -7845,15 +7971,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -7935,15 +8067,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -8029,15 +8167,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -8134,15 +8278,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -8262,15 +8412,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -8386,10 +8542,10 @@
           "requiredFields": [
             "escrowObjectId",
             "bondObjectId",
-            "invitedReviewerAddresses"
+            "invitedReviewerAddresses",
+            "reviewerSelectionReceiptId"
           ],
           "optionalFields": [
-            "reviewerSelectionReceiptId",
             "clockObjectId"
           ],
           "propertyNames": [
@@ -8409,15 +8565,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -8933,15 +9095,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -9041,15 +9209,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -9144,15 +9318,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -9273,10 +9453,10 @@
           "schemaName": "DisputeReplaceReviewersRequest",
           "requiredFields": [
             "reviewerRegistryObjectId",
-            "invitedReviewerAddresses"
+            "invitedReviewerAddresses",
+            "reviewerSelectionReceiptId"
           ],
           "optionalFields": [
-            "reviewerSelectionReceiptId",
             "clockObjectId"
           ],
           "propertyNames": [
@@ -9295,15 +9475,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -9395,15 +9581,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -9498,15 +9690,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -9598,15 +9796,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -9694,15 +9898,21 @@
             "requiredFields": [
               "status",
               "txBuilder",
-              "request"
+              "request",
+              "chainIdentifier"
             ],
             "optionalFields": [
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ],
             "propertyNames": [
+              "chainIdentifier",
               "status",
               "txBuilder",
               "request",
+              "inviteBinding",
+              "preExecutionRequirements",
               "txMoveCall"
             ]
           },
@@ -9779,11 +9989,11 @@
           "schemaRef": "#/components/schemas/SponsorPreflightRequest",
           "schemaName": "SponsorPreflightRequest",
           "requiredFields": [
-            "purpose"
+            "purpose",
+            "orderId"
           ],
           "optionalFields": [
             "paymentCoin",
-            "orderId",
             "gasBudget",
             "txFamily"
           ],
@@ -10014,11 +10224,11 @@
           "schemaName": "SponsorReserveRequest",
           "requiredFields": [
             "purpose",
-            "gasBudget"
+            "gasBudget",
+            "orderId"
           ],
           "optionalFields": [
-            "paymentCoin",
-            "orderId"
+            "paymentCoin"
           ],
           "propertyNames": [
             "purpose",
@@ -10360,14 +10570,13 @@
           "schemaName": "SponsorExecuteRequest",
           "requiredFields": [
             "reservationId",
-            "txBytesB64",
-            "userSig"
-          ],
-          "optionalFields": [
             "orderId",
+            "txBytesB64",
+            "userSig",
             "intent",
             "intentSig"
           ],
+          "optionalFields": [],
           "propertyNames": [
             "reservationId",
             "txBytesB64",
@@ -12751,14 +12960,16 @@
               "receipt",
               "selectionComplete",
               "directoryScanTruncated",
-              "publishTarget"
+              "publishTarget",
+              "operatorAuthorizationHandoff"
             ],
             "optionalFields": [],
             "propertyNames": [
               "receipt",
               "selectionComplete",
               "directoryScanTruncated",
-              "publishTarget"
+              "publishTarget",
+              "operatorAuthorizationHandoff"
             ]
           },
           "400": {
@@ -13509,9 +13720,12 @@
         "requiredFields": [
           "address"
         ],
-        "optionalFields": [],
+        "optionalFields": [
+          "chainFamily"
+        ],
         "propertyNames": [
-          "address"
+          "address",
+          "chainFamily"
         ]
       },
       "responses": {
@@ -13521,16 +13735,32 @@
           "schemaRef": "#/components/schemas/AuthChallengeResponse",
           "schemaName": "AuthChallengeResponse",
           "requiredFields": [
+            "protocol",
+            "version",
+            "origin",
+            "audience",
+            "environment",
+            "chainFamily",
+            "network",
             "nonce",
             "address",
             "messageToSign",
+            "issuedAtMs",
             "expiresAtMs"
           ],
           "optionalFields": [],
           "propertyNames": [
+            "protocol",
+            "version",
+            "origin",
+            "audience",
+            "environment",
+            "chainFamily",
+            "network",
             "nonce",
             "address",
             "messageToSign",
+            "issuedAtMs",
             "expiresAtMs"
           ]
         },
@@ -13570,12 +13800,15 @@
           "signature",
           "message"
         ],
-        "optionalFields": [],
+        "optionalFields": [
+          "chainFamily"
+        ],
         "propertyNames": [
           "nonce",
           "address",
           "signature",
-          "message"
+          "message",
+          "chainFamily"
         ]
       },
       "responses": {
@@ -16355,17 +16588,22 @@
           "schemaName": "SuiUsdcTxPlanOnlyResponse",
           "requiredFields": [],
           "optionalFields": [
+            "chainIdentifier",
             "chainFamily",
             "chainNetwork",
             "status",
             "asset",
             "executionAllowed",
+            "txPlanOnly",
+            "signerRequired",
             "publicLaunchReady",
             "apiSideExecution",
+            "runtimeAccessScope",
             "repositoryMutation",
             "objectBindingCreated",
-            "canaryActorAllowlistEnforced",
+            "actorAllowlistEnforced",
             "transactionBytesBase64",
+            "sourceGuard",
             "orderId",
             "target",
             "orderBinding",
@@ -16375,17 +16613,22 @@
             "txPlan"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "chainFamily",
             "chainNetwork",
             "status",
             "asset",
             "executionAllowed",
+            "txPlanOnly",
+            "signerRequired",
             "publicLaunchReady",
             "apiSideExecution",
+            "runtimeAccessScope",
             "repositoryMutation",
             "objectBindingCreated",
-            "canaryActorAllowlistEnforced",
+            "actorAllowlistEnforced",
             "transactionBytesBase64",
+            "sourceGuard",
             "orderId",
             "target",
             "orderBinding",
@@ -16518,17 +16761,22 @@
           "schemaName": "SuiUsdcTxPlanOnlyResponse",
           "requiredFields": [],
           "optionalFields": [
+            "chainIdentifier",
             "chainFamily",
             "chainNetwork",
             "status",
             "asset",
             "executionAllowed",
+            "txPlanOnly",
+            "signerRequired",
             "publicLaunchReady",
             "apiSideExecution",
+            "runtimeAccessScope",
             "repositoryMutation",
             "objectBindingCreated",
-            "canaryActorAllowlistEnforced",
+            "actorAllowlistEnforced",
             "transactionBytesBase64",
+            "sourceGuard",
             "orderId",
             "target",
             "orderBinding",
@@ -16538,17 +16786,22 @@
             "txPlan"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "chainFamily",
             "chainNetwork",
             "status",
             "asset",
             "executionAllowed",
+            "txPlanOnly",
+            "signerRequired",
             "publicLaunchReady",
             "apiSideExecution",
+            "runtimeAccessScope",
             "repositoryMutation",
             "objectBindingCreated",
-            "canaryActorAllowlistEnforced",
+            "actorAllowlistEnforced",
             "transactionBytesBase64",
+            "sourceGuard",
             "orderId",
             "target",
             "orderBinding",
@@ -16679,15 +16932,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -16814,15 +17073,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -16947,15 +17212,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -17301,15 +17572,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -17434,15 +17711,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -17567,15 +17850,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -17697,15 +17986,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -18183,15 +18478,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -18879,15 +19180,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -19161,15 +19468,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -19405,15 +19718,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -19531,15 +19850,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -19712,15 +20037,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -19944,15 +20275,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -20583,15 +20920,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -20670,15 +21013,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -20761,15 +21110,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -20863,15 +21218,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -20988,15 +21349,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -21109,10 +21476,10 @@
         "requiredFields": [
           "escrowObjectId",
           "bondObjectId",
-          "invitedReviewerAddresses"
+          "invitedReviewerAddresses",
+          "reviewerSelectionReceiptId"
         ],
         "optionalFields": [
-          "reviewerSelectionReceiptId",
           "clockObjectId"
         ],
         "propertyNames": [
@@ -21132,15 +21499,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -21643,15 +22016,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -21748,15 +22127,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -21848,15 +22233,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -21971,10 +22362,10 @@
         "schemaName": "DisputeReplaceReviewersRequest",
         "requiredFields": [
           "reviewerRegistryObjectId",
-          "invitedReviewerAddresses"
+          "invitedReviewerAddresses",
+          "reviewerSelectionReceiptId"
         ],
         "optionalFields": [
-          "reviewerSelectionReceiptId",
           "clockObjectId"
         ],
         "propertyNames": [
@@ -21993,15 +22384,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -22090,15 +22487,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -22190,15 +22593,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -22287,15 +22696,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -22380,15 +22795,21 @@
           "requiredFields": [
             "status",
             "txBuilder",
-            "request"
+            "request",
+            "chainIdentifier"
           ],
           "optionalFields": [
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ],
           "propertyNames": [
+            "chainIdentifier",
             "status",
             "txBuilder",
             "request",
+            "inviteBinding",
+            "preExecutionRequirements",
             "txMoveCall"
           ]
         },
@@ -22462,11 +22883,11 @@
         "schemaRef": "#/components/schemas/SponsorPreflightRequest",
         "schemaName": "SponsorPreflightRequest",
         "requiredFields": [
-          "purpose"
+          "purpose",
+          "orderId"
         ],
         "optionalFields": [
           "paymentCoin",
-          "orderId",
           "gasBudget",
           "txFamily"
         ],
@@ -22694,11 +23115,11 @@
         "schemaName": "SponsorReserveRequest",
         "requiredFields": [
           "purpose",
-          "gasBudget"
+          "gasBudget",
+          "orderId"
         ],
         "optionalFields": [
-          "paymentCoin",
-          "orderId"
+          "paymentCoin"
         ],
         "propertyNames": [
           "purpose",
@@ -23037,14 +23458,13 @@
         "schemaName": "SponsorExecuteRequest",
         "requiredFields": [
           "reservationId",
-          "txBytesB64",
-          "userSig"
-        ],
-        "optionalFields": [
           "orderId",
+          "txBytesB64",
+          "userSig",
           "intent",
           "intentSig"
         ],
+        "optionalFields": [],
         "propertyNames": [
           "reservationId",
           "txBytesB64",
@@ -25368,14 +25788,16 @@
             "receipt",
             "selectionComplete",
             "directoryScanTruncated",
-            "publishTarget"
+            "publishTarget",
+            "operatorAuthorizationHandoff"
           ],
           "optionalFields": [],
           "propertyNames": [
             "receipt",
             "selectionComplete",
             "directoryScanTruncated",
-            "publishTarget"
+            "publishTarget",
+            "operatorAuthorizationHandoff"
           ]
         },
         "400": {
@@ -25786,25 +26208,44 @@
     "AuthChallengeRequest": {
       "name": "AuthChallengeRequest",
       "propertyNames": [
-        "address"
+        "address",
+        "chainFamily"
       ],
       "requiredFields": [
         "address"
       ],
-      "optionalFields": []
+      "optionalFields": [
+        "chainFamily"
+      ]
     },
     "AuthChallengeResponse": {
       "name": "AuthChallengeResponse",
       "propertyNames": [
+        "protocol",
+        "version",
+        "origin",
+        "audience",
+        "environment",
+        "chainFamily",
+        "network",
         "nonce",
         "address",
         "messageToSign",
+        "issuedAtMs",
         "expiresAtMs"
       ],
       "requiredFields": [
+        "protocol",
+        "version",
+        "origin",
+        "audience",
+        "environment",
+        "chainFamily",
+        "network",
         "nonce",
         "address",
         "messageToSign",
+        "issuedAtMs",
         "expiresAtMs"
       ],
       "optionalFields": []
@@ -25815,7 +26256,8 @@
         "nonce",
         "address",
         "signature",
-        "message"
+        "message",
+        "chainFamily"
       ],
       "requiredFields": [
         "nonce",
@@ -25823,7 +26265,9 @@
         "signature",
         "message"
       ],
-      "optionalFields": []
+      "optionalFields": [
+        "chainFamily"
+      ]
     },
     "AuthRefreshRequest": {
       "name": "AuthRefreshRequest",
@@ -25839,6 +26283,11 @@
       "name": "AuthSessionView",
       "propertyNames": [
         "id",
+        "authVersion",
+        "origin",
+        "environment",
+        "chainFamily",
+        "network",
         "refreshAvailable",
         "issuedAtMs",
         "refreshExpiresAtMs",
@@ -25846,15 +26295,19 @@
         "revokedAtMs"
       ],
       "requiredFields": [
-        "refreshAvailable"
-      ],
-      "optionalFields": [
         "id",
+        "authVersion",
+        "origin",
+        "environment",
+        "chainFamily",
+        "network",
+        "refreshAvailable",
         "issuedAtMs",
         "refreshExpiresAtMs",
         "lastRefreshedAtMs",
         "revokedAtMs"
-      ]
+      ],
+      "optionalFields": []
     },
     "AuthVerifyResponse": {
       "name": "AuthVerifyResponse",
@@ -26399,11 +26852,11 @@
       ],
       "requiredFields": [
         "purpose",
-        "gasBudget"
+        "gasBudget",
+        "orderId"
       ],
       "optionalFields": [
-        "paymentCoin",
-        "orderId"
+        "paymentCoin"
       ]
     },
     "SponsorPreflightRequest": {
@@ -26416,11 +26869,11 @@
         "txFamily"
       ],
       "requiredFields": [
-        "purpose"
+        "purpose",
+        "orderId"
       ],
       "optionalFields": [
         "paymentCoin",
-        "orderId",
         "gasBudget",
         "txFamily"
       ]
@@ -26437,30 +26890,37 @@
       ],
       "requiredFields": [
         "reservationId",
-        "txBytesB64",
-        "userSig"
-      ],
-      "optionalFields": [
         "orderId",
+        "txBytesB64",
+        "userSig",
         "intent",
         "intentSig"
-      ]
+      ],
+      "optionalFields": []
     },
     "SponsorExecutionIntentRequest": {
       "name": "SponsorExecutionIntentRequest",
       "propertyNames": [
+        "version",
+        "chainFamily",
         "network",
+        "txFamily",
         "orderId",
         "reservationId",
         "txDigest",
+        "chainTxDigest",
         "expiresAt",
         "purpose"
       ],
       "requiredFields": [
+        "version",
+        "chainFamily",
         "network",
+        "txFamily",
         "orderId",
         "reservationId",
         "txDigest",
+        "chainTxDigest",
         "expiresAt",
         "purpose"
       ],
@@ -26613,6 +27073,7 @@
         "strictMode",
         "intentRequired",
         "intentSignatureRequired",
+        "executionSupported",
         "selfPayFallbackAvailable",
         "reservationTtlSec",
         "retryAfterSec",
@@ -26633,6 +27094,7 @@
         "strictMode",
         "intentRequired",
         "intentSignatureRequired",
+        "executionSupported",
         "selfPayFallbackAvailable",
         "reservationTtlSec",
         "retryAfterSec",
@@ -26900,10 +27362,10 @@
       "requiredFields": [
         "escrowObjectId",
         "bondObjectId",
-        "invitedReviewerAddresses"
+        "invitedReviewerAddresses",
+        "reviewerSelectionReceiptId"
       ],
       "optionalFields": [
-        "reviewerSelectionReceiptId",
         "clockObjectId"
       ]
     },
@@ -27385,10 +27847,10 @@
       ],
       "requiredFields": [
         "reviewerRegistryObjectId",
-        "invitedReviewerAddresses"
+        "invitedReviewerAddresses",
+        "reviewerSelectionReceiptId"
       ],
       "optionalFields": [
-        "reviewerSelectionReceiptId",
         "clockObjectId"
       ]
     },
@@ -27469,20 +27931,70 @@
       ],
       "optionalFields": []
     },
+    "ReviewerSelectionInviteBinding": {
+      "name": "ReviewerSelectionInviteBinding",
+      "propertyNames": [
+        "mode",
+        "invitedReviewerAddresses",
+        "reviewerSelectionReceiptId",
+        "postExecuteBindingRequired",
+        "bindRoute"
+      ],
+      "requiredFields": [
+        "mode",
+        "invitedReviewerAddresses",
+        "reviewerSelectionReceiptId",
+        "postExecuteBindingRequired",
+        "bindRoute"
+      ],
+      "optionalFields": []
+    },
+    "ReviewerSelectionAuthorizationRequirement": {
+      "name": "ReviewerSelectionAuthorizationRequirement",
+      "propertyNames": [
+        "required",
+        "state",
+        "reviewerSelectionReceiptId",
+        "orderedReviewerAddresses"
+      ],
+      "requiredFields": [
+        "required",
+        "state",
+        "reviewerSelectionReceiptId",
+        "orderedReviewerAddresses"
+      ],
+      "optionalFields": []
+    },
+    "TxPlanPreExecutionRequirements": {
+      "name": "TxPlanPreExecutionRequirements",
+      "propertyNames": [
+        "reviewerSelectionAuthorization"
+      ],
+      "requiredFields": [
+        "reviewerSelectionAuthorization"
+      ],
+      "optionalFields": []
+    },
     "TxPlanResponse": {
       "name": "TxPlanResponse",
       "propertyNames": [
+        "chainIdentifier",
         "status",
         "txBuilder",
         "request",
+        "inviteBinding",
+        "preExecutionRequirements",
         "txMoveCall"
       ],
       "requiredFields": [
         "status",
         "txBuilder",
-        "request"
+        "request",
+        "chainIdentifier"
       ],
       "optionalFields": [
+        "inviteBinding",
+        "preExecutionRequirements",
         "txMoveCall"
       ]
     },
@@ -27523,17 +28035,22 @@
     "SuiUsdcTxPlanOnlyResponse": {
       "name": "SuiUsdcTxPlanOnlyResponse",
       "propertyNames": [
+        "chainIdentifier",
         "chainFamily",
         "chainNetwork",
         "status",
         "asset",
         "executionAllowed",
+        "txPlanOnly",
+        "signerRequired",
         "publicLaunchReady",
         "apiSideExecution",
+        "runtimeAccessScope",
         "repositoryMutation",
         "objectBindingCreated",
-        "canaryActorAllowlistEnforced",
+        "actorAllowlistEnforced",
         "transactionBytesBase64",
+        "sourceGuard",
         "orderId",
         "target",
         "orderBinding",
@@ -27544,17 +28061,22 @@
       ],
       "requiredFields": [],
       "optionalFields": [
+        "chainIdentifier",
         "chainFamily",
         "chainNetwork",
         "status",
         "asset",
         "executionAllowed",
+        "txPlanOnly",
+        "signerRequired",
         "publicLaunchReady",
         "apiSideExecution",
+        "runtimeAccessScope",
         "repositoryMutation",
         "objectBindingCreated",
-        "canaryActorAllowlistEnforced",
+        "actorAllowlistEnforced",
         "transactionBytesBase64",
+        "sourceGuard",
         "orderId",
         "target",
         "orderBinding",
@@ -27563,6 +28085,28 @@
         "objectReadback",
         "txPlan"
       ]
+    },
+    "ChainIdentifier": {
+      "name": "ChainIdentifier",
+      "propertyNames": [],
+      "requiredFields": [],
+      "optionalFields": []
+    },
+    "SuiTxPlanSourceGuard": {
+      "name": "SuiTxPlanSourceGuard",
+      "propertyNames": [
+        "kind",
+        "chainIdentifier",
+        "transactionBytesSha256",
+        "transactionBytesHashAlgorithm"
+      ],
+      "requiredFields": [
+        "kind",
+        "chainIdentifier",
+        "transactionBytesSha256",
+        "transactionBytesHashAlgorithm"
+      ],
+      "optionalFields": []
     },
     "ReviewerSummary": {
       "name": "ReviewerSummary",
@@ -28140,13 +28684,15 @@
         "receipt",
         "selectionComplete",
         "directoryScanTruncated",
-        "publishTarget"
+        "publishTarget",
+        "operatorAuthorizationHandoff"
       ],
       "requiredFields": [
         "receipt",
         "selectionComplete",
         "directoryScanTruncated",
-        "publishTarget"
+        "publishTarget",
+        "operatorAuthorizationHandoff"
       ],
       "optionalFields": []
     },
@@ -28513,7 +29059,12 @@
         "iss",
         "aud",
         "sid",
-        "tokenType"
+        "tokenType",
+        "authVersion",
+        "origin",
+        "environment",
+        "chainFamily",
+        "network"
       ],
       "requiredFields": [
         "sub",
@@ -28521,12 +29072,16 @@
         "exp",
         "jti",
         "iss",
-        "aud"
-      ],
-      "optionalFields": [
+        "aud",
         "sid",
-        "tokenType"
-      ]
+        "tokenType",
+        "authVersion",
+        "origin",
+        "environment",
+        "chainFamily",
+        "network"
+      ],
+      "optionalFields": []
     },
     "Listing": {
       "name": "Listing",

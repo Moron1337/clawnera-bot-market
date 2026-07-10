@@ -872,6 +872,8 @@ components:
         - type
     TxPlanResponse:
       properties:
+        chainIdentifier:
+          $ref: '#/components/schemas/ChainIdentifier'
         status:
           type: string
           enum:
@@ -881,6 +883,10 @@ components:
         request:
           type: object
           additionalProperties: true
+        inviteBinding:
+          $ref: '#/components/schemas/ReviewerSelectionInviteBinding'
+        preExecutionRequirements:
+          $ref: '#/components/schemas/TxPlanPreExecutionRequirements'
         txMoveCall:
           allOf:
             - $ref: '#/components/schemas/TxMoveCallSummary'
@@ -890,6 +896,7 @@ components:
         - status
         - txBuilder
         - request
+        - chainIdentifier
     TxMoveCallSummary:
       properties:
         target:
@@ -903,6 +910,76 @@ components:
         - target
         - module
         - fn
+    TxPlanPreExecutionRequirements:
+      properties:
+        reviewerSelectionAuthorization:
+          $ref: '#/components/schemas/ReviewerSelectionAuthorizationRequirement'
+      type: object
+      additionalProperties: false
+      required:
+        - reviewerSelectionAuthorization
+    ReviewerSelectionAuthorizationRequirement:
+      properties:
+        required:
+          type: boolean
+          enum:
+            - true
+        state:
+          type: string
+          enum:
+            - EXTERNAL_OPERATOR_ACTION_REQUIRED
+        reviewerSelectionReceiptId:
+          type: string
+          minLength: 1
+        orderedReviewerAddresses:
+          type: array
+          description: Exact ordered reviewer sequence that the external operator must authorize on-chain before publish.
+          uniqueItems: true
+          items:
+            type: string
+      type: object
+      additionalProperties: false
+      required:
+        - required
+        - state
+        - reviewerSelectionReceiptId
+        - orderedReviewerAddresses
+    ReviewerSelectionInviteBinding:
+      properties:
+        mode:
+          type: string
+          enum:
+            - selection_receipt_activation
+        invitedReviewerAddresses:
+          type: array
+          description: Exact ordered reviewer sequence committed by the selection receipt. Duplicates are forbidden.
+          uniqueItems: true
+          items:
+            type: string
+        reviewerSelectionReceiptId:
+          type: string
+          minLength: 1
+        postExecuteBindingRequired:
+          type: boolean
+          enum:
+            - true
+        bindRoute:
+          type: string
+          description: Route that must bind the executed dispute case to this receipt after publish.
+      type: object
+      additionalProperties: false
+      required:
+        - mode
+        - invitedReviewerAddresses
+        - reviewerSelectionReceiptId
+        - postExecuteBindingRequired
+        - bindRoute
+    ChainIdentifier:
+      type: string
+      pattern: ^[0-9a-f]{8}$
+      description: >-
+        RPC-verified chain identifier. Wallets must compare it with their selected RPC before approval, dry-run, or
+        signing.
     ReviewerRegisterRequest:
       properties:
         reviewerRegistryObjectId:

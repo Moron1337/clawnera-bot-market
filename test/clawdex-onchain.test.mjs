@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { IotaClient } from "@iota/iota-sdk/client";
 
 import {
+  assertDryRunSuccess,
   assertExecutionSuccess,
   buildClawdexTxFromPlan,
   buildCreateListingDepositTx,
@@ -265,37 +267,7 @@ test("buildCreateOrderEscrowTx admits arbitrary Sui typed order assets but keeps
   );
 });
 
-test("buildManagedStorageFeeTx builds Sui native and exact typed fee calls", () => {
-  const nativeTx = buildManagedStorageFeeTx({
-    chainFamily: "sui",
-    packageId: addr("1"),
-    sender: addr("a"),
-    orderId: "order-sui-storage-1",
-    milestoneId: "milestone-1",
-    recipientAddress: addr("b"),
-    amountAtomic: 1000n,
-    currency: "SUI",
-  });
-  assert.equal(extractLastMoveCallFunction(nativeTx), "pay_managed_storage_fee_sui");
-
-  const typedTx = buildManagedStorageFeeTx({
-    chainFamily: "sui",
-    packageId: addr("1"),
-    sender: addr("a"),
-    orderId: "order-sui-storage-2",
-    milestoneId: "milestone-1",
-    recipientAddress: addr("b"),
-    amountAtomic: 1000n,
-    currency: "USDC",
-    coinType: SUI_USDC_TESTNET_COIN_TYPE,
-    paymentCoinObjectId: addr("c"),
-  });
-  const typedMoveCall = extractLastMoveCall(typedTx);
-  assert.equal(typedMoveCall.function, "pay_managed_storage_fee_typed_order_asset");
-  assert.deepEqual(typedMoveCall.typeArguments, [SUI_USDC_TESTNET_COIN_TYPE]);
-});
-
-test("buildManagedStorageFeeTx fails closed for unsupported Sui managed-storage fee currencies", () => {
+test("buildManagedStorageFeeTx stays closed when the canonical SDK has no builder", () => {
   assert.throws(
     () =>
       buildManagedStorageFeeTx({
@@ -308,22 +280,14 @@ test("buildManagedStorageFeeTx fails closed for unsupported Sui managed-storage 
         amountAtomic: 1000n,
         currency: "CLAW",
       }),
-    /unsupported_sui_managed_storage_fee_asset/
+    /managed_storage_fee_builder_not_in_canonical_sdk/
   );
-  assert.throws(
-    () =>
-      buildManagedStorageFeeTx({
-        chainFamily: "sui",
-        packageId: addr("1"),
-        sender: addr("a"),
-        orderId: "order-sui-storage-unsupported-2",
-        milestoneId: "milestone-1",
-        recipientAddress: addr("b"),
-        amountAtomic: 1000n,
-        currency: "USDC",
-      }),
-    /sui_managed_storage_fee_coin_type_required/
-  );
+});
+
+test("managed-storage helper source contains no abort-only legacy Move targets", () => {
+  const source = readFileSync(new URL("../lib/clawdex-onchain.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /pay_managed_storage_fee_sui(?!_v2)/u);
+  assert.doesNotMatch(source, /pay_managed_storage_fee_typed_order_asset/u);
 });
 
 
@@ -380,7 +344,7 @@ test("buildClawdexTxFromPlan rejects legacy quorum-ticket settlement on Sui", ()
           disputeQuorumConfigObjectId: addr("d"),
         },
       }),
-    /unsupported_sui_order_escrow_quorum_ticket/,
+    /unsupported_order_escrow_quorum_ticket/,
   );
 });
 
@@ -442,7 +406,7 @@ test("dryRunTransaction supports direct Sui transaction objects", async () => {
       },
     );
 
-    assert.equal(result.rpcUrl, "https://sui-rpc.example.test");
+    assert.equal(result.rpcUrl, "https://sui-rpc.example.test/");
     assert.equal(result.network, "testnet");
     assert.equal(result.txBytesB64, expectedBase64);
     assert.equal(result.transactionBytesBase64, expectedBase64);
@@ -503,7 +467,7 @@ test("executeTransaction supports direct Sui transaction objects", async () => {
       },
     );
 
-    assert.equal(result.rpcUrl, "https://sui-rpc.example.test");
+    assert.equal(result.rpcUrl, "https://sui-rpc.example.test/");
     assert.equal(result.network, "testnet");
     assert.equal(result.txBytesB64, expectedBase64);
     assert.equal(result.signature, "sui-signature-1");
@@ -549,20 +513,21 @@ test("executeTransaction rejects mismatched pre-signed Sui bytes", async () => {
   }
 });
 
-test("buildClawdexTxFromPlan keeps legacy quorum-ticket settlement as explicit compat path", () => {
-  const tx = buildClawdexTxFromPlan({
-    txBuilder: "orderEscrow.resolveDisputeWithQuorumTicket",
-    request: {
-      packageId: addr("1"),
-      sender: addr("a"),
-      escrowObjectId: addr("b"),
-      escrowCoinType: `${addr("2")}::coin::COIN`,
-      quorumResolutionTicketObjectId: addr("c"),
-      disputeQuorumConfigObjectId: addr("d"),
-    },
-  });
-
-  assert.equal(extractLastMoveCallFunction(tx), "resolve_dispute_with_quorum_ticket");
+test("buildClawdexTxFromPlan rejects removed quorum-ticket compatibility builders", () => {
+  assert.throws(
+    () => buildClawdexTxFromPlan({
+      txBuilder: "orderEscrow.resolveDisputeWithQuorumTicket",
+      request: {
+        packageId: addr("1"),
+        sender: addr("a"),
+        escrowObjectId: addr("b"),
+        escrowCoinType: `${addr("2")}::coin::COIN`,
+        quorumResolutionTicketObjectId: addr("c"),
+        disputeQuorumConfigObjectId: addr("d"),
+      },
+    }),
+    /unsupported_order_escrow_quorum_ticket/,
+  );
 });
 
 test("buildClawdexTxFromPlan allows bootstrap whitelist dispute open with an empty invite list", () => {
@@ -589,7 +554,42 @@ test("buildClawdexTxFromPlan allows bootstrap whitelist dispute open with an emp
 
   assert.equal(firstMoveCall?.function, "open_dispute_guarded");
   assert.equal(firstMoveCall?.arguments?.length, 4);
-  assert.equal(extractLastMoveCallFunction(tx), "open_milestone_dispute_case_entry");
+  assert.equal(extractLastMoveCallFunction(tx), "open_milestone_dispute_case_entry_v2");
+});
+
+test("buildClawdexTxFromPlan uses Sui V2 no-invite dispute-open entrypoints", () => {
+  const baseRequest = {
+    chainFamily: "sui",
+    packageId: addr("1"),
+    sender: addr("a"),
+    milestoneId: "milestone-bootstrap-sui-1",
+    escrowObjectId: addr("b"),
+    bondObjectId: addr("c"),
+    disputeQuorumConfigObjectId: addr("d"),
+    governanceConfigObjectId: addr("e"),
+    reputationFeeConfigObjectId: addr("f"),
+    openDisputeArgMode: "guarded_governance_and_clock",
+    escrowCoinType: SUI_NATIVE_COIN_TYPE,
+    invitedReviewerAddresses: [],
+  };
+
+  const nativeTx = buildClawdexTxFromPlan({
+    txBuilder: "disputeQuorum.openMilestoneDisputeCase",
+    request: baseRequest,
+  });
+  assert.equal(extractLastMoveCallFunction(nativeTx), "open_milestone_dispute_case_entry_v2");
+
+  const typedTx = buildClawdexTxFromPlan({
+    txBuilder: "disputeQuorum.openMilestoneDisputeCase",
+    request: {
+      ...baseRequest,
+      bondCoinType: `${addr("2")}::coin::COIN`,
+    },
+  });
+  assert.equal(
+    extractLastMoveCallFunction(typedTx),
+    "open_milestone_dispute_case_entry_typed_v2",
+  );
 });
 
 test("buildClawdexTxFromPlan accepts chain-neutral reviewer minimum reward", () => {
@@ -773,6 +773,7 @@ test("resolveClawdexChainConfig uses Sui JSON-RPC methods for Sui runtimes", asy
   try {
     const config = await resolveClawdexChainConfig({
       chainFamily: "sui",
+      chainNetwork: "testnet",
       packageId,
       rpcUrl: "https://sui-rpc.example.test",
       disputeQuorumConfigObjectId,
@@ -819,4 +820,18 @@ test("execution helpers ignore successful effects.status payloads", () => {
 
   assert.equal(getExecutionFailure(executionResult), "");
   assert.doesNotThrow(() => assertExecutionSuccess(executionResult, "transaction_execution_failed"));
+});
+
+test("dry-run helper requires an explicit successful effects status", () => {
+  assert.doesNotThrow(() => assertDryRunSuccess({
+    effects: { status: { status: "success" } },
+  }, "tx_plan_dry_run_failed"));
+  assert.throws(
+    () => assertDryRunSuccess({ effects: { status: { status: "failure", error: "MoveAbort(42)" } } }),
+    /dry_run_failed:MoveAbort\(42\)/,
+  );
+  assert.throws(
+    () => assertDryRunSuccess({ effects: { gasUsed: {} } }),
+    /dry_run_failed:missing_success_status/,
+  );
 });

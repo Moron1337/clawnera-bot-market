@@ -1,5 +1,7 @@
 # Bot Function Map
 
+> Security boundary: `tx-plan-dry-run` only rebuilds and simulates a canonical plan. It never signs, exports bytes, or broadcasts; execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.
+
 This is the narrow public bot-function inventory for `clawnera-help`.
 
 Use it for two things:
@@ -48,14 +50,14 @@ Use it for two things:
 | Lane | Helper / Route | Status | Notes |
 | --- | --- | --- | --- |
 | Bond init | `clawnera-help order-init-bond` | `live-green` | Creates the shared bond object and reviewer-vote policy. |
-| Bond funding | `tx-plan-execute POST /orders/{orderId}/dispute-bond/fund` | `live-green` | Exact body must include `bondObjectId`, `disputeQuorumConfigObjectId`, `side`, and `amount`. |
-| Escrow create / bind | `tx-plan-execute POST /orders/{orderId}/escrow/create`, `POST /orders/{orderId}/escrow/bind` | `live-green` | Covered live. |
+| Bond funding | `tx-plan-dry-run POST /orders/{orderId}/dispute-bond/fund` | `live-green` | Exact body must include `bondObjectId`, `disputeQuorumConfigObjectId`, `side`, and `amount`. |
+| Escrow create / bind | `tx-plan-dry-run POST /orders/{orderId}/escrow/create`, `POST /orders/{orderId}/escrow/bind` | `live-green` | Covered live. |
 | Mailbox init / bind | mailbox setup routes | `live-green` | Covered live. |
 | Mailbox event readback | `clawnera-help mailbox-events` | `live-green` | Use `--events-out` for the saved JSON file. |
 | Deliverable encryption | `clawnera-help deliverable-encrypt` | `live-green` | Covered on both milestones in the live dispute run. |
-| Managed storage fee / presign / upload | `managed-storage-fee-pay`, `managed-storage-presign`, `managed-storage-upload` | `live-green` | Covered for milestone payloads and supplemental dispute bundles. |
-| Deliverable submit / anchor | `milestone-submit-byo`, `milestone-anchor` | `live-green` | Covered live. |
-| Mailbox signal | `tx-plan-execute POST /orders/{orderId}/mailbox/post-signal-plan` | `live-green` | Current event feed can map seller `DELIVERABLE_READY` signals back as `CHECKPOINT`; key off `seq`, `payloadRef`, and `ciphertextHash`, not only the label. |
+| Managed storage presign / upload | `managed-storage-presign`, `managed-storage-upload` | `external-v2-proof-required` | `managed-storage-fee-pay` fails closed until the helper has an exact policy-and-escrow-bound V2 builder. Use BYO storage when that proof is unavailable. |
+| Deliverable submit / anchor | `milestone-submit-byo`, `milestone-anchor` | `iota-live` | IOTA is covered. The helper keeps Sui signing closed until Sui auth and manifest verification are bound end to end. |
+| Mailbox signal | `tx-plan-dry-run POST /orders/{orderId}/mailbox/post-signal-plan` | `live-green` | Current event feed can map seller `DELIVERABLE_READY` signals back as `CHECKPOINT`; key off `seq`, `payloadRef`, and `ciphertextHash`, not only the label. |
 | Buyer manifest read / decrypt | `GET /orders/{orderId}/milestones/{milestoneId}/artifact-manifest/content`, `deliverable-decrypt` | `live-green` | Covered live. |
 | Milestone accept / reject | accept + reject routes | `live-green` | Both acceptance and dispute-triggering rejection were covered live. |
 
@@ -63,19 +65,19 @@ Use it for two things:
 
 | Lane | Helper / Route | Status | Notes |
 | --- | --- | --- | --- |
-| Dispute open | `tx-plan-execute POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` | `live-green` | Covered with reviewer1/reviewer2/reviewer4. |
-| Reviewer accept | `tx-plan-execute POST /disputes/{caseId}/reviewers/accept` | `live-green` | Requires the live minimum reviewer stake. |
+| Dispute open | `tx-plan-dry-run POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` | `live-green` | Covered with reviewer1/reviewer2/reviewer4. |
+| Reviewer accept | `tx-plan-dry-run POST /disputes/{caseId}/reviewers/accept` | `live-green` | Requires the live minimum reviewer stake. |
 | Linked deliverable evidence | `clawnera-help dispute-evidence-publish` | `live-green` | Buyer/seller publish; reviewers read via dispute-scoped evidence routes. |
 | Evidence list / content / decrypt | `dispute-evidence-list`, `dispute-evidence-content`, `dispute-evidence-decrypt` | `live-green` | Covered live as reviewer1. |
 | Mailbox evidence export | `clawnera-help mailbox-evidence-export` | `live-green` | Covered live, including subsequent upload + supplemental publish. |
 | Supplemental bundle build / publish | `dispute-evidence-bundle-build`, `dispute-evidence-publish --kind supplemental-bundle` | `live-green` | Covered live via `MAILBOX_COORDINATION` publish plus a direct `SUPPORTING_EXHIBIT` bundle build. |
 | Vote prepare | `clawnera-help reviewer-vote-prepare` | `live-green` | Covered for reviewer1/reviewer2/reviewer4. |
-| Vote commit | `tx-plan-execute POST /disputes/{caseId}/votes/commit` | `live-green` | Covered live. |
-| Vote reveal | `tx-plan-execute POST /disputes/{caseId}/votes/reveal` | `live-green` | Covered live on the reviewer1/reviewer2/reviewer4 quorum case after the real commit window opened. |
-| Finalize | `tx-plan-execute POST /disputes/{caseId}/finalize` | `live-green` | Covered live with helper-managed wait through the challenge window. |
-| Fallback timeout | `tx-plan-execute POST /disputes/{caseId}/fallback/timeout` | `pending` | Separate fallback lane; not yet covered in the current run. |
-| Resolve escrow | `tx-plan-execute POST /disputes/{caseId}/resolve-escrow` | `live-green` | Covered live on the same buyer wallet immediately after finalize; resulting order state reached `COMPLETED`. |
-| Reviewer claim metrics | `tx-plan-execute POST /reviewers/me/claim-metrics` | `live-green` | Covered live for reviewer1/reviewer2/reviewer4 on the freshly closed case. Majority payouts still happen at finalize. |
+| Vote commit | `tx-plan-dry-run POST /disputes/{caseId}/votes/commit` | `live-green` | Covered live. |
+| Vote reveal | `tx-plan-dry-run POST /disputes/{caseId}/votes/reveal` | `live-green` | Covered live on the reviewer1/reviewer2/reviewer4 quorum case after the real commit window opened. |
+| Finalize | `tx-plan-dry-run POST /disputes/{caseId}/finalize` | `live-green` | Covered live with helper-managed wait through the challenge window. |
+| Fallback timeout | `tx-plan-dry-run POST /disputes/{caseId}/fallback/timeout` | `pending` | Separate fallback lane; not yet covered in the current run. |
+| Resolve escrow | `tx-plan-dry-run POST /disputes/{caseId}/resolve-escrow` | `live-green` | Covered live on the same buyer wallet immediately after finalize; resulting order state reached `COMPLETED`. |
+| Reviewer claim metrics | `tx-plan-dry-run POST /reviewers/me/claim-metrics` | `live-green` | Covered live for reviewer1/reviewer2/reviewer4 on the freshly closed case. Majority payouts still happen at finalize. |
 
 ## Current Live Blockers
 

@@ -24,7 +24,6 @@ import {
   DEFAULT_ORDER_ESCROW_DEADLINE_DELTA_MS,
   buildCreateListingDepositTx,
   buildCreateReputationProfileTx,
-  buildManagedStorageFeeTx,
   buildMilestoneAnchorTx,
   buildClawdexTxFromPlan,
   buildCreateOrderEscrowTx,
@@ -41,6 +40,7 @@ import {
   resolveClawdexReputationProfileObjectIdByOwner,
   dryRunTransaction,
 } from "../lib/clawdex-onchain.mjs";
+import { persistVerifiedDryRunPlan } from "../lib/verified-plan-output.mjs";
 import {
   DEFAULT_E2EE_CIPHER_SUITE,
   assertIpfsManifestCid,
@@ -59,7 +59,9 @@ import {
   normalizeDisputeSupplementalBundlePayload,
   defaultKeyAgreementRecordPath,
   generateKeyAgreementKeypair,
+  isExactKeyAgreementNotFound,
   loadKeyAgreementRecord,
+  migrateLegacyKeyAgreementRecord,
   prepareMilestoneManifestForSigning,
   rewrapManagedDeliverableForRecipients,
   saveKeyAgreementRecord,
@@ -85,9 +87,17 @@ import {
 } from "../lib/iota-local.mjs";
 import { resolveRuntimeIotaOptions } from "../lib/runtime-iota-context.mjs";
 import {
+  normalizeAuthenticatedBaseUrl,
+  normalizeAuthenticatedUrl,
+  readPrivateFile,
+  withPrivateFileOperationLock,
+  writePrivateFileAtomicSync,
+} from "../lib/local-security.mjs";
+import {
   DEFAULT_TRANSFER_DRAFT_TTL_SEC,
+  claimIotaTransferDraft,
   defaultIotaTransferDraftsPath,
-  deleteIotaTransferDraft,
+  finalizeIotaTransferDraft,
   loadIotaTransferDraft,
   saveIotaTransferDraft
 } from "../lib/iota-transfer-drafts.mjs";
@@ -119,14 +129,21 @@ import {
   normalizeTxPlanErrorMessage,
 } from "../lib/tx-plan-errors.mjs";
 import {
+  assertReviewerShortlistAuthorizationHandoff,
+  assertTxPlanRouteAndActorIntent,
+} from "../lib/tx-plan-guard.mjs";
+import {
+  SPONSOR_EXECUTION_INTENT_PREFIX,
+  SPONSOR_EXECUTION_INTENT_VERSION,
+  assertCanonicalSponsorSignature,
+  assertSponsorExecutionIntentMatches,
+  prepareSponsorExecutionIntentV2,
+} from "../lib/sponsor-intent.mjs";
+import {
   canonicalPackageIdFromObjectType,
   isMissingResolveDisputeWithBindingFunctionError,
   resolveQuorumTicketFromFinalizeTx,
 } from "../lib/dispute-ticket-compat.mjs";
-import { decodeSuiPrivateKey, SIGNATURE_FLAG_TO_SCHEME } from "@mysten/sui/cryptography";
-import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
-import { Secp256k1Keypair } from "@mysten/sui/keypairs/secp256k1";
-import { Secp256r1Keypair } from "@mysten/sui/keypairs/secp256r1";
 import { isValidSuiAddress, normalizeSuiAddress } from "@mysten/sui/utils";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -138,7 +155,6 @@ const DEFAULT_SUI_RPC_URLS = Object.freeze({
   testnet: "https://fullnode.testnet.sui.io:443",
   devnet: "https://fullnode.devnet.sui.io:443",
 });
-const DEFAULT_SUI_KEYSTORE_PATH = path.join(os.homedir(), ".sui", "sui_config", "sui.keystore");
 const SUPPORTED_MARKET_ASSETS = Object.freeze({
   IOTA: {
     symbol: "IOTA",
@@ -496,6 +512,7 @@ function buildFullHelpJson(topics, journeys, recipes) {
       "tx-plan-execute",
       "order-init-bond",
       "order-create-escrow",
+      "key-agreement-migrate",
       "key-agreement-upsert",
       "reputation-init",
       "reviewer-register",
@@ -617,9 +634,10 @@ function printUsageAll() {
   console.log("  clawnera-help bid-accept [options]        Thin helper for the first POST /bids/{bidId}/accept write");
   console.log("  clawnera-help chain-config [options]      Resolve live Clawdex package/config object ids");
   console.log("  clawnera-help tx-plan-dry-run <METHOD> <path>  Fetch API tx plan, build it locally, then dry-run");
-  console.log("  clawnera-help tx-plan-execute <METHOD> <path>  Fetch API tx plan, build it locally, sign, and broadcast");
+  console.log("  clawnera-help tx-plan-execute <METHOD> <path>  Disabled: never fetches, signs, or broadcasts");
   console.log("  clawnera-help order-init-bond [options]   Build and execute the initial dispute-bond object locally");
   console.log("  clawnera-help order-create-escrow [options]  Build and execute the buyer escrow creation locally");
+  console.log("  clawnera-help key-agreement-migrate [options]  Encrypt one legacy plaintext local key record in place");
   console.log("  clawnera-help key-agreement-upsert [options]  Bind a local E2EE key-agreement key to the actor wallet");
   console.log("  clawnera-help reputation-init [options]   Create the actor reputation profile on-chain locally");
   console.log("  clawnera-help reviewer-register [options]  Register the actor as a reviewer with auto-filled live config");
@@ -632,7 +650,7 @@ function printUsageAll() {
   console.log("  clawnera-help dispute-evidence-decrypt [options]  Decrypt saved dispute evidence locally");
   console.log("  clawnera-help mailbox-evidence-export [options]  Export mailbox coordination into one encrypted dispute bundle");
   console.log("  clawnera-help checkpoint-evidence-export [options]  Export checkpoint handover evidence into one encrypted dispute bundle");
-  console.log("  clawnera-help managed-storage-fee-pay [options]  Pay the managed storage fee on-chain locally");
+  console.log("  clawnera-help managed-storage-fee-pay [options]  Disabled until the policy-bound V2 builder is wired");
   console.log("  clawnera-help managed-storage-presign [options]  Get a signed managed-storage upload URL");
   console.log("  clawnera-help managed-storage-upload [options]   Upload the encrypted JSON payload to managed storage");
   console.log("  clawnera-help reviewer-shortlist [options]   Build the canonical operator shortlist body with live checkpoint digest");
@@ -736,7 +754,7 @@ function compactRecipeCommand(recipe) {
     case "fund-order":
       return `clawnera-help request GET /orders/<orderId> ${auth}`;
     case "mailbox-handshake":
-      return `clawnera-help tx-plan-execute POST /orders/<orderId>/mailbox/init-plan ${auth} --body '{}' ; then bind POST /orders/<orderId>/mailbox with order_mailbox_object_id from the previous output`;
+      return `clawnera-help tx-plan-dry-run POST /orders/<orderId>/mailbox/init-plan ${auth} --body '{}' ; then execute the reviewed canonical plan in a chain-native client and bind its verified order_mailbox_object_id`;
     case "order-mutual-cancel":
       return "local SDK/PTB only: buildApproveMutualCancelOrderEscrowTx(...) from buyer and seller, then buildMutualCancelOrderEscrowTx(...) from either party";
     case "seller-deliver-encrypted":
@@ -746,7 +764,7 @@ function compactRecipeCommand(recipe) {
     case "buyer-reject-delivery":
       return `clawnera-help milestone-reject --order-id <orderId> --milestone-id <milestoneId> --reason-text '<reason>' ${auth}`;
     case "dispute-open":
-      return `clawnera-help tx-plan-execute POST /orders/<orderId>/milestones/<milestoneId>/disputes/open ${auth} --body-file ./clawnera-dispute-open-<orderId>-<milestoneId>.json`;
+      return `clawnera-help tx-plan-dry-run POST /orders/<orderId>/milestones/<milestoneId>/disputes/open ${auth} --body-file ./clawnera-dispute-open-<orderId>-<milestoneId>.json`;
     case "dispute-evidence-linked-deliverable":
       return `clawnera-help dispute-evidence-publish --case-id <disputeCaseId> ${auth}`;
     case "operator-shortlist-open":
@@ -760,11 +778,11 @@ function compactRecipeCommand(recipe) {
     case "reviewer-vote":
       return "clawnera-help reviewer-vote-prepare --case-id <disputeCaseId> --address <reviewerAddress> --vote seller|buyer --out reviewer-vote.json";
     case "reviewer-claim-metrics":
-      return `clawnera-help tx-plan-execute POST /reviewers/me/claim-metrics ${auth} --body-file claim-metrics.json`;
+      return `clawnera-help tx-plan-dry-run POST /reviewers/me/claim-metrics ${auth} --body-file claim-metrics.json`;
     case "operator-shortlist-replacement":
       return `clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <disputeCaseId> ${auth}`;
     case "resolve-dispute":
-      return `clawnera-help tx-plan-execute POST /disputes/<disputeCaseId>/resolve-escrow ${auth}`;
+      return `clawnera-help tx-plan-dry-run POST /disputes/<disputeCaseId>/resolve-escrow ${auth}`;
     case "local-iota-transfer":
       return "clawnera-help iota-prepare-transfer --to <address> --amount <amount>";
     default:
@@ -2151,8 +2169,8 @@ function buildMilestoneSubmitByoHintLines(result) {
     "cause=order_mailbox_required",
     "detail=bind_the_order_mailbox_before_retrying_the_first_seller_submit",
     "next_hint=clawnera-help recipe mailbox-handshake",
-    `next_init=clawnera-help tx-plan-execute POST /orders/${orderId}/mailbox/init-plan --auth-state-file <file> --body '{}'`,
-    "bind_source=use order_mailbox_object_id from the previous tx-plan-execute output",
+    `next_init=clawnera-help tx-plan-dry-run POST /orders/${orderId}/mailbox/init-plan --auth-state-file <file> --body '{}'`,
+    "bind_source=execute the reviewed canonical plan in a chain-native client and use order_mailbox_object_id from its verified receipt",
     `next_bind=clawnera-help request POST /orders/${orderId}/mailbox --auth-state-file <file> --body '{\"mailboxObjectId\":\"<order_mailbox_object_id>\"}'`,
   ];
 }
@@ -2490,12 +2508,7 @@ function normalizeApiBase(rawValue) {
     return null;
   }
   try {
-    const parsed = new URL(String(rawValue).trim());
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      return null;
-    }
-    const out = parsed.toString();
-    return out.endsWith("/") ? out.slice(0, -1) : out;
+    return normalizeAuthenticatedBaseUrl(String(rawValue), { errorCode: "invalid_authenticated_url" });
   } catch {
     return null;
   }
@@ -2507,6 +2520,7 @@ async function requestJson(url, init, timeoutMs) {
   try {
     const response = await fetch(url, {
       ...init,
+      redirect: "error",
       signal: controller.signal
     });
     const text = await response.text();
@@ -2569,6 +2583,10 @@ function parseBuildOutputPayload(stdout) {
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
         return null;
       }
+      const allowedKeys = new Set(["txBytesB64", "userSig", "intent", "intentSig"]);
+      if (Object.keys(parsed).some((key) => !allowedKeys.has(key))) {
+        return null;
+      }
       if (typeof parsed.txBytesB64 !== "string" || typeof parsed.userSig !== "string") {
         return null;
       }
@@ -2577,7 +2595,9 @@ function parseBuildOutputPayload(stdout) {
       }
       return {
         txBytesB64: parsed.txBytesB64.trim(),
-        userSig: parsed.userSig.trim()
+        userSig: parsed.userSig.trim(),
+        intent: parsed.intent,
+        intentSig: typeof parsed.intentSig === "string" ? parsed.intentSig.trim() : "",
       };
     } catch {
       return null;
@@ -2664,9 +2684,9 @@ function sponsorExecuteUsageLines() {
     "- Required auth: --auth-state-file <file> or --env-file <file> or --jwt <token>",
     "- Default flow: reserve -> run --build-cmd -> execute",
     "- Required unless --dry-run: --build-cmd '<shell command>'",
+    "- Required: --order-id <id>; execute also needs --chain-family iota|sui and --network <network> unless auth-state already binds both",
     "- Defaults: --purpose marketplace_tx --gas-budget 1000000 --payment-coin claw",
-    "- Optional: --order-id <id> --idempotency-key <key> --timeout-ms <ms> --builder-timeout-ms <ms> --reservation-out <file>",
-    "- Canonical live posture: pass --order-id <id> on every order-scoped reserve/execute call.",
+    "- Optional: --idempotency-key <key> --timeout-ms <ms> --builder-timeout-ms <ms> --reservation-out <file>",
     "- Build command receives env vars:",
     "  CLAWNERA_SPONSOR_RESERVATION_JSON",
     "  CLAWNERA_SPONSOR_RESERVATION_ID",
@@ -2674,10 +2694,40 @@ function sponsorExecuteUsageLines() {
     "  CLAWNERA_SPONSOR_PURPOSE",
     "  CLAWNERA_SPONSOR_PAYMENT_COIN",
     "  CLAWNERA_SPONSOR_GAS_COINS_JSON",
+    "  CLAWNERA_SPONSOR_ORDER_ID",
+    "  CLAWNERA_SPONSOR_CHAIN_FAMILY",
+    "  CLAWNERA_SPONSOR_NETWORK",
+    "  CLAWNERA_SPONSOR_TX_FAMILY",
+    "  CLAWNERA_SPONSOR_INTENT_VERSION",
+    "  CLAWNERA_SPONSOR_INTENT_PREFIX",
     "  CLAWNERA_SPONSOR_RESERVATION_FILE (only when --reservation-out is used)",
-    "- Build command must output JSON with fields: txBytesB64, userSig",
+    "- Build command must output exact JSON fields: txBytesB64, userSig, intent, intentSig",
+    "- intent must be the exact sponsor_execute_intent.v2 tuple; the helper recomputes both transaction digests and fails before execute on drift",
     "- For sponsored IOTA value tx: use user payment coin object for business amount; sponsor coins are gas-only."
   ];
+}
+
+function resolveSponsorExecutionChainContext(options, runtimeContext) {
+  const authChainFamily = normalizeString(runtimeContext.authState?.authContext?.chainFamily).toLowerCase();
+  const explicitChainFamily = normalizeString(options["chain-family"]).toLowerCase();
+  if (authChainFamily && explicitChainFamily && authChainFamily !== explicitChainFamily) {
+    throw new Error("sponsor_chain_family_context_mismatch");
+  }
+  const chainFamily = explicitChainFamily || authChainFamily;
+  if (chainFamily !== "iota" && chainFamily !== "sui") {
+    throw new Error("sponsor_chain_family_required");
+  }
+
+  const authNetwork = normalizeString(runtimeContext.authState?.authContext?.network).toLowerCase();
+  const explicitNetwork = normalizeString(options.network).toLowerCase();
+  if (authNetwork && explicitNetwork && authNetwork !== explicitNetwork) {
+    throw new Error("sponsor_network_context_mismatch");
+  }
+  const network = explicitNetwork || authNetwork;
+  if (!network || network.length > 64 || !/^[a-z0-9][a-z0-9:_./-]*$/.test(network)) {
+    throw new Error("sponsor_network_required");
+  }
+  return { chainFamily, network };
 }
 
 function authLoginUsageLines() {
@@ -2689,9 +2739,9 @@ function authLoginUsageLines() {
     "- If no selector is given, the active IOTA CLI address is used when available",
     "- Without the IOTA CLI, auth-login can still use the sole keystore entry automatically",
     "- Default network timeout: 60000ms (override with --timeout-ms <ms>)",
-    "- Optional outputs: --state-out <file> --env-out <file>",
-    "- Writes short-lived access token plus refresh token for long-lived runtimes",
-    "- Use --state-out for mailbox notifiers or bots that should auto-refresh sessions",
+    `- Secure auth-state output defaults to ${defaultAuthStatePath()}; override with --state-out <file>`,
+    "- Optional --env-out <file> writes credentials to an explicit owner-only file",
+    "- Tokens are never printed to stdout, stderr, or JSON output",
     "- Lower-level helper: prefer `clawnera-help ensure-auth` when a bot should reuse existing auth before minting a new session"
   ];
 }
@@ -2934,7 +2984,7 @@ async function runAuthLogin(commandArgs) {
   const stateOut =
     typeof options["state-out"] === "string" && options["state-out"].trim()
       ? path.resolve(String(options["state-out"]).trim())
-      : "";
+      : defaultAuthStatePath();
   const envOut =
     typeof options["env-out"] === "string" && options["env-out"].trim()
       ? path.resolve(String(options["env-out"]).trim())
@@ -2982,14 +3032,12 @@ async function runAuthLogin(commandArgs) {
     const authState = await signInWithKeystoreEntry({
       apiBase,
       entry,
+      chainFamily: "iota",
+      network: resolveRuntimeIotaOptions(options, { apiBase }).network || "",
       timeoutMs
     });
 
-    let savedStateFile = null;
-    if (stateOut) {
-      await saveAuthState(stateOut, authState);
-      savedStateFile = stateOut;
-    }
+    await saveAuthState(stateOut, authState);
 
     let savedEnvFile = null;
     if (envOut) {
@@ -3003,11 +3051,9 @@ async function runAuthLogin(commandArgs) {
       keystorePath,
       address: authState.address,
       alias: authState.alias || null,
-      token: authState.token,
-      refreshToken: authState.refreshToken,
       expiresAtMs: authState.expiresAtMs,
       refreshExpiresAtMs: authState.session.refreshExpiresAtMs,
-      stateOut: savedStateFile,
+      stateOut,
       envOut: savedEnvFile
     };
   } catch (error) {
@@ -3379,6 +3425,8 @@ async function runEnsureAuth(commandArgs) {
     const authState = await signInWithKeystoreEntry({
       apiBase: effectiveApiBase,
       entry: walletResolution.entry,
+      chainFamily: "iota",
+      network: resolveRuntimeIotaOptions(options, { apiBase: effectiveApiBase }).network || "",
       timeoutMs
     });
     await saveAuthState(authStateFile, authState);
@@ -3750,27 +3798,92 @@ async function runIotaExecuteTransfer(commandArgs) {
       typeof options["drafts-file"] === "string" && options["drafts-file"].trim()
         ? path.resolve(String(options["drafts-file"]).trim())
         : defaultIotaTransferDraftsPath();
-    const draft = await loadIotaTransferDraft(draftsPath, draftId);
-    const result = await executeIotaTransfer({
-      network: draft.network,
-      rpcUrl: draft.rpcUrl,
-      txBytesB64: draft.txBytesB64,
-      keystorePath:
-        typeof options["keystore-path"] === "string" && options["keystore-path"].trim()
-          ? path.resolve(String(options["keystore-path"]).trim())
-          : defaultIotaKeystorePath(),
-      address: typeof options["signer-address"] === "string" ? options["signer-address"].trim() : draft.signerAddress,
-      alias: typeof options["signer-alias"] === "string" ? options["signer-alias"].trim() : "",
-      signerAddress: draft.signerAddress,
-      signature: typeof options.signature === "string" ? options.signature.trim() : "",
-    });
-    assertExecutionSuccess(result, "iota_transfer_execution_failed");
-    await deleteIotaTransferDraft(draftsPath, draftId);
+    const claimId = randomUUID();
+    const draft = await claimIotaTransferDraft(draftsPath, draftId, claimId);
+    let result;
+    try {
+      result = await executeIotaTransfer({
+        network: draft.network,
+        rpcUrl: draft.rpcUrl,
+        txBytesB64: draft.txBytesB64,
+        keystorePath:
+          typeof options["keystore-path"] === "string" && options["keystore-path"].trim()
+            ? path.resolve(String(options["keystore-path"]).trim())
+            : defaultIotaKeystorePath(),
+        address: typeof options["signer-address"] === "string" ? options["signer-address"].trim() : draft.signerAddress,
+        alias: typeof options["signer-alias"] === "string" ? options["signer-alias"].trim() : "",
+        signerAddress: draft.signerAddress,
+        signature: typeof options.signature === "string" ? options.signature.trim() : "",
+      });
+      assertExecutionSuccess(result, "iota_transfer_execution_failed");
+    } catch (error) {
+      let tombstonePersisted = false;
+      try {
+        await finalizeIotaTransferDraft(draftsPath, draftId, {
+          claimId,
+          status: "UNCERTAIN",
+        });
+        tombstonePersisted = true;
+      } catch {
+        // The durable EXECUTING claim remains fail-closed when finalization cannot be persisted.
+      }
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "iota_execute_transfer_failed",
+        draftId,
+        draftsPath,
+        executionUncertain: true,
+        tombstonePersisted,
+        doNotRetry: true,
+        verifyHint: "Reconcile the transaction on the verified IOTA RPC before preparing a new transfer.",
+      };
+    }
+    const txDigest = result?.result?.digest || result?.result?.effects?.transactionDigest || null;
+    if (!txDigest) {
+      let tombstonePersisted = false;
+      try {
+        await finalizeIotaTransferDraft(draftsPath, draftId, {
+          claimId,
+          status: "UNCERTAIN",
+        });
+        tombstonePersisted = true;
+      } catch {
+        // The durable EXECUTING claim remains fail-closed when finalization cannot be persisted.
+      }
+      return {
+        ok: false,
+        error: "iota_transfer_execution_digest_missing",
+        draftId,
+        draftsPath,
+        executionUncertain: true,
+        tombstonePersisted,
+        doNotRetry: true,
+        verifyHint: "Execution returned no digest. Reconcile the signer activity on the verified IOTA RPC before preparing a new transfer.",
+      };
+    }
+    try {
+      await finalizeIotaTransferDraft(draftsPath, draftId, {
+        claimId,
+        status: "EXECUTED",
+        txDigest: txDigest || "",
+      });
+    } catch {
+      return {
+        ok: false,
+        error: "transfer_draft_tombstone_persist_failed",
+        draftId,
+        draftsPath,
+        txDigest,
+        executionUncertain: true,
+        doNotRetry: true,
+        verifyHint: "The transaction succeeded, but local finalization failed. Reconcile by digest and do not reuse this draft.",
+      };
+    }
     return {
       ok: true,
       draftId,
       draftsPath,
-      txDigest: result?.result?.digest || result?.result?.effects?.transactionDigest || null,
+      txDigest,
       signerAddress: result?.verifyResult?.signerAddress || draft.signerAddress,
       result: result.result,
       signature: result.signature,
@@ -3833,6 +3946,10 @@ function writeModeForPath(targetPath) {
 }
 
 function writeTextFile(targetPath, content, mode) {
+  if (mode === 0o600) {
+    writePrivateFileAtomicSync(targetPath, content);
+    return;
+  }
   const resolvedPath = path.resolve(targetPath);
   const tempFile = `${resolvedPath}.${process.pid}.${Date.now()}.tmp`;
   fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
@@ -4516,6 +4633,8 @@ async function runNotifications(commandArgs) {
       authState = await signInWithKeystoreEntry({
         apiBase,
         entry,
+        chainFamily: "iota",
+        network: resolveRuntimeIotaOptions(options, { apiBase }).network || "",
         timeoutMs
       });
       await saveAuthState(authStateFile, authState);
@@ -4991,16 +5110,36 @@ function detectTxPlanPayload(body) {
     return null;
   }
   const txBuilder = typeof body.txBuilder === "string" ? body.txBuilder.trim() : "";
-  const request = body.request;
-  if (!txBuilder || !request || typeof request !== "object" || Array.isArray(request)) {
+  const rawRequest = body.request;
+  if (!txBuilder || !rawRequest || typeof rawRequest !== "object" || Array.isArray(rawRequest)) {
     return null;
+  }
+  const request = { ...rawRequest };
+  if (!request.chainFamily && body.chainFamily) {
+    request.chainFamily = body.chainFamily;
+  }
+  if (!request.chainNetwork && body.chainNetwork) {
+    request.chainNetwork = body.chainNetwork;
   }
   return {
     txBuilder,
     request,
+    chainFamily: normalizeString(body.chainFamily || request.chainFamily).toLowerCase() || null,
+    chainNetwork: normalizeString(body.chainNetwork || request.chainNetwork).toLowerCase() || null,
+    chainIdentifier: normalizeString(body.chainIdentifier) || null,
+    sourceGuard:
+      body.sourceGuard && typeof body.sourceGuard === "object" && !Array.isArray(body.sourceGuard)
+        ? body.sourceGuard
+        : null,
     inviteBinding:
       body.inviteBinding && typeof body.inviteBinding === "object" && !Array.isArray(body.inviteBinding)
         ? body.inviteBinding
+        : null,
+    preExecutionRequirements:
+      body.preExecutionRequirements &&
+      typeof body.preExecutionRequirements === "object" &&
+      !Array.isArray(body.preExecutionRequirements)
+        ? body.preExecutionRequirements
         : null,
     txMoveCall: body.txMoveCall ?? null,
   };
@@ -5021,12 +5160,19 @@ function detectSuiTransactionBytesPayload(body) {
     return null;
   }
   const chainNetwork = normalizeString(body.chainNetwork).toLowerCase() || null;
+  const chainIdentifier = normalizeString(body.chainIdentifier) || null;
+  const sourceGuard =
+    body.sourceGuard && typeof body.sourceGuard === "object" && !Array.isArray(body.sourceGuard)
+      ? body.sourceGuard
+      : null;
   const target = normalizeString(body.target || txPlan?.target) || null;
   return {
     chainFamily: "sui",
     chainNetwork,
+    chainIdentifier,
     transactionBytesBase64,
-    transactionBytesSha256: normalizeString(body.sourceGuard?.transactionBytesSha256) || null,
+    transactionBytesSha256: normalizeString(sourceGuard?.transactionBytesSha256) || null,
+    sourceGuardChainIdentifier: normalizeString(sourceGuard?.chainIdentifier) || null,
     txBuilder: normalizeString(body.status) || txPlanKind || "sui_ptb",
     txPlanKind: txPlanKind || "sui_ptb",
     target,
@@ -5042,7 +5188,10 @@ function resolveSuiRpcUrlForHelper(options = {}, chainNetwork = "") {
     return explicit;
   }
   const normalizedNetwork = normalizeString(chainNetwork || options.network).toLowerCase();
-  return DEFAULT_SUI_RPC_URLS[normalizedNetwork] || DEFAULT_SUI_RPC_URLS.mainnet;
+  if (!normalizedNetwork || !DEFAULT_SUI_RPC_URLS[normalizedNetwork]) {
+    throw new Error("sui_network_required_or_unsupported");
+  }
+  return DEFAULT_SUI_RPC_URLS[normalizedNetwork];
 }
 
 async function callSuiJsonRpcForHelper(options = {}, body, chainNetwork = "") {
@@ -5086,6 +5235,83 @@ async function dryRunSuiTransactionBytes(suiTxBytesPlan, options = {}) {
   );
 }
 
+function assertSuiRawTransactionPlanIntegrity(suiTxBytesPlan) {
+  const bytes = Buffer.from(suiTxBytesPlan.transactionBytesBase64, "base64");
+  if (bytes.length === 0 || bytes.toString("base64") !== suiTxBytesPlan.transactionBytesBase64) {
+    throw new Error("invalid_sui_transaction_bytes");
+  }
+  if (!suiTxBytesPlan.transactionBytesSha256) {
+    throw new Error("sui_transaction_bytes_sha256_required");
+  }
+  const actualHash = createHash("sha256").update(bytes).digest("hex");
+  if (actualHash !== suiTxBytesPlan.transactionBytesSha256.toLowerCase()) {
+    throw new Error("sui_transaction_bytes_sha256_mismatch");
+  }
+  if (
+    !suiTxBytesPlan.chainIdentifier ||
+    !suiTxBytesPlan.sourceGuardChainIdentifier ||
+    suiTxBytesPlan.chainIdentifier !== suiTxBytesPlan.sourceGuardChainIdentifier
+  ) {
+    throw new Error("tx_plan_chain_identifier_missing_or_mismatched");
+  }
+  if (!suiTxBytesPlan.chainNetwork) {
+    throw new Error("sui_chain_network_required");
+  }
+  return actualHash;
+}
+
+async function readRpcChainIdentifier(chainFamily, options = {}, chainNetwork = "") {
+  const method = chainFamily === "sui" ? "sui_getChainIdentifier" : "iota_getChainIdentifier";
+  if (chainFamily === "sui") {
+    const response = await callSuiJsonRpcForHelper(
+      options,
+      { jsonrpc: "2.0", id: "clawnera-chain-identifier", method, params: [] },
+      chainNetwork,
+    );
+    const identifier = normalizeString(response.result);
+    if (!identifier) {
+      throw new Error("invalid_rpc_chain_identifier");
+    }
+    return { rpcUrl: response.rpcUrl, chainIdentifier: identifier };
+  }
+  const { rpcUrl } = resolveIotaRpcUrl({ network: chainNetwork, rpcUrl: options["rpc-url"] });
+  const response = await requestJson(
+    rpcUrl,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: "clawnera-chain-identifier", method, params: [] }),
+    },
+    parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+  );
+  const identifier = normalizeString(response.body?.result);
+  if (!response.ok || !identifier || response.body?.error) {
+    throw new Error("invalid_rpc_chain_identifier");
+  }
+  return { rpcUrl, chainIdentifier: identifier };
+}
+
+async function assertTxPlanChainIdentity(plan, options = {}) {
+  const chainFamily = normalizeString(plan.chainFamily || plan.request?.chainFamily).toLowerCase();
+  const chainNetwork = normalizeString(plan.chainNetwork || plan.request?.chainNetwork).toLowerCase();
+  const chainIdentifier = normalizeString(plan.chainIdentifier);
+  const guardedIdentifier = normalizeString(plan.sourceGuard?.chainIdentifier);
+  if (!["iota", "sui"].includes(chainFamily) || !chainNetwork) {
+    throw new Error("tx_plan_chain_context_required");
+  }
+  if (!chainIdentifier) {
+    throw new Error("tx_plan_chain_identifier_missing_or_mismatched");
+  }
+  if (plan.sourceGuard && (!guardedIdentifier || chainIdentifier !== guardedIdentifier)) {
+    throw new Error("tx_plan_chain_identifier_missing_or_mismatched");
+  }
+  const rpc = await readRpcChainIdentifier(chainFamily, options, chainNetwork);
+  if (rpc.chainIdentifier !== chainIdentifier) {
+    throw new Error("tx_plan_rpc_chain_identifier_mismatch");
+  }
+  return { chainFamily, chainNetwork, chainIdentifier, rpcUrl: rpc.rpcUrl };
+}
+
 function normalizeSuiAddressOrEmpty(value) {
   const normalized = normalizeString(value);
   if (!normalized) {
@@ -5097,234 +5323,6 @@ function normalizeSuiAddressOrEmpty(value) {
   } catch {
     return "";
   }
-}
-
-function suiKeypairFromParsedSecret(scheme, secretKey) {
-  if (scheme === "ED25519") {
-    return Ed25519Keypair.fromSecretKey(secretKey);
-  }
-  if (scheme === "Secp256k1") {
-    return Secp256k1Keypair.fromSecretKey(secretKey);
-  }
-  if (scheme === "Secp256r1") {
-    return Secp256r1Keypair.fromSecretKey(secretKey);
-  }
-  throw new Error("unsupported_sui_signature_scheme");
-}
-
-function suiKeypairFromSecretKey(value) {
-  const normalized = normalizeString(value);
-  if (!normalized) {
-    throw new Error("missing_sui_private_key");
-  }
-  if (normalized.startsWith("suiprivkey")) {
-    const parsed = decodeSuiPrivateKey(normalized);
-    return {
-      keypair: suiKeypairFromParsedSecret(parsed.scheme, parsed.secretKey),
-      scheme: parsed.scheme,
-    };
-  }
-
-  const decoded = Buffer.from(normalized, "base64");
-  if (decoded.length !== 33) {
-    throw new Error("invalid_sui_private_key");
-  }
-  const scheme = SIGNATURE_FLAG_TO_SCHEME[decoded[0]];
-  if (!scheme) {
-    throw new Error("unsupported_sui_signature_scheme");
-  }
-  return {
-    keypair: suiKeypairFromParsedSecret(scheme, decoded.subarray(1)),
-    scheme,
-  };
-}
-
-function collectSuiKeystoreSecrets(value) {
-  if (Array.isArray(value)) {
-    return value.flatMap((entry, index) => {
-      if (typeof entry === "string") {
-        return [{ secretKey: entry, alias: "", index }];
-      }
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-        return [];
-      }
-      const secretKey = normalizeString(
-        entry.privateKey || entry.secretKey || entry.key || entry.value || entry.encoded || entry.keystore,
-      );
-      if (!secretKey) {
-        return [];
-      }
-      return [{
-        secretKey,
-        alias: normalizeString(entry.alias || entry.name),
-        index,
-      }];
-    });
-  }
-  if (value && typeof value === "object") {
-    for (const field of ["keystore", "keys", "accounts", "entries"]) {
-      if (Array.isArray(value[field])) {
-        return collectSuiKeystoreSecrets(value[field]);
-      }
-    }
-  }
-  return [];
-}
-
-async function loadSuiKeystoreEntries(keystorePath = DEFAULT_SUI_KEYSTORE_PATH) {
-  let parsed;
-  try {
-    parsed = JSON.parse(await fs.promises.readFile(keystorePath, "utf8"));
-  } catch (error) {
-    if (error && error.code === "ENOENT") {
-      return [];
-    }
-    throw new Error("invalid_sui_keystore");
-  }
-
-  const entries = [];
-  for (const item of collectSuiKeystoreSecrets(parsed)) {
-    try {
-      const { keypair, scheme } = suiKeypairFromSecretKey(item.secretKey);
-      entries.push({
-        address: keypair.toSuiAddress(),
-        alias: item.alias || null,
-        index: item.index,
-        scheme,
-        keypair,
-      });
-    } catch {
-      // Ignore malformed entries so one stale key does not hide usable keys.
-    }
-  }
-  return entries;
-}
-
-function summarizeSuiSignerCandidates(entries = []) {
-  return entries.map((entry) => ({
-    address: entry.address,
-    alias: entry.alias,
-    index: entry.index,
-    scheme: entry.scheme,
-  }));
-}
-
-async function resolveSuiSignerForPlan(suiTxBytesPlan, options = {}) {
-  const expectedSender = normalizeSuiAddressOrEmpty(suiTxBytesPlan.sender || "");
-  const explicitAddress = normalizeSuiAddressOrEmpty(options["sui-address"] || "");
-  const explicitAlias = normalizeString(options["sui-alias"] || "");
-  const explicitPrivateKey = normalizeString(
-    options["sui-private-key"] || process.env.CLAWNERA_SUI_PRIVATE_KEY || process.env.SUI_PRIVATE_KEY,
-  );
-
-  if (explicitPrivateKey) {
-    const { keypair, scheme } = suiKeypairFromSecretKey(explicitPrivateKey);
-    const address = keypair.toSuiAddress();
-    if (explicitAddress && address !== explicitAddress) {
-      throw new Error("sui_private_key_address_mismatch");
-    }
-    if (expectedSender && address !== expectedSender) {
-      throw new Error("sui_signer_does_not_match_tx_sender");
-    }
-    return {
-      address,
-      alias: null,
-      scheme,
-      keypair,
-      source: "private_key",
-      keystorePath: null,
-    };
-  }
-
-  const keystorePath =
-    typeof options["sui-keystore-path"] === "string" && options["sui-keystore-path"].trim()
-      ? path.resolve(String(options["sui-keystore-path"]).trim())
-      : normalizeString(process.env.CLAWNERA_SUI_KEYSTORE_PATH || process.env.SUI_KEYSTORE_PATH) ||
-        DEFAULT_SUI_KEYSTORE_PATH;
-  const entries = await loadSuiKeystoreEntries(keystorePath);
-  const candidates = summarizeSuiSignerCandidates(entries);
-  let selected = null;
-  if (explicitAddress) {
-    selected = entries.find((entry) => entry.address === explicitAddress) || null;
-  } else if (explicitAlias) {
-    selected = entries.find((entry) => entry.alias && entry.alias.toLowerCase() === explicitAlias.toLowerCase()) || null;
-  } else if (expectedSender) {
-    selected = entries.find((entry) => entry.address === expectedSender) || null;
-  } else if (entries.length === 1) {
-    selected = entries[0];
-  } else if (entries.length > 1) {
-    const error = new Error("ambiguous_sui_keystore");
-    error.candidates = candidates;
-    error.keystorePath = keystorePath;
-    throw error;
-  }
-
-  if (!selected) {
-    const error = new Error(entries.length === 0 ? "sui_keystore_empty_or_missing" : "sui_keystore_entry_not_found");
-    error.candidates = candidates;
-    error.keystorePath = keystorePath;
-    throw error;
-  }
-  if (expectedSender && selected.address !== expectedSender) {
-    throw new Error("sui_signer_does_not_match_tx_sender");
-  }
-
-  return {
-    ...selected,
-    source: "keystore",
-    keystorePath,
-  };
-}
-
-function suiExecutionStatus(result) {
-  const status = result?.effects?.status;
-  if (typeof status === "string") {
-    return status;
-  }
-  return normalizeString(status?.status);
-}
-
-function suiExecutionError(result) {
-  const status = result?.effects?.status;
-  return normalizeString(status?.error || result?.errors?.join("; ") || result?.error);
-}
-
-async function executeSuiTransactionBytes(suiTxBytesPlan, options = {}) {
-  const signer = await resolveSuiSignerForPlan(suiTxBytesPlan, options);
-  const txBytes = Buffer.from(suiTxBytesPlan.transactionBytesBase64, "base64");
-  if (txBytes.length === 0) {
-    throw new Error("invalid_sui_transaction_bytes");
-  }
-  const signed = await signer.keypair.signTransaction(txBytes);
-  const executed = await callSuiJsonRpcForHelper(
-    options,
-    {
-      jsonrpc: "2.0",
-      id: "clawnera-sui-execute-1",
-      method: "sui_executeTransactionBlock",
-      params: [
-        signed.bytes,
-        [signed.signature],
-        {
-          showEffects: true,
-          showEvents: true,
-          showObjectChanges: true,
-          showBalanceChanges: true,
-          showInput: true,
-        },
-      ],
-    },
-    suiTxBytesPlan.chainNetwork || "",
-  );
-  return {
-    ...executed,
-    signer,
-    signedBytesBase64: signed.bytes,
-    signature: signed.signature,
-    txDigest: normalizeString(executed.result?.digest) || null,
-    executionStatus: suiExecutionStatus(executed.result),
-    executionError: suiExecutionError(executed.result),
-  };
 }
 
 function resolveTxExecutionDigest(executed) {
@@ -5412,6 +5410,32 @@ function resolveKeyAgreementRecordPathOption(address, keyVersion, value, authSta
   }
   const inferredHome = inferHomeDirFromAuthStatePath(authStateFile);
   return defaultKeyAgreementRecordPath(address, keyVersion, inferredHome || undefined);
+}
+
+function assertNoInlineKeyAgreementProtectionSecret(options = {}) {
+  const forbidden = ["passphrase", "master-secret", "master-key", "key-secret", "private-key"];
+  if (forbidden.some((name) => options[name] !== undefined)) {
+    throw new Error("inline_key_agreement_secret_rejected");
+  }
+  if (
+    process.env.CLAWNERA_KEY_AGREEMENT_PASSPHRASE !== undefined ||
+    process.env.CLAWNERA_KEY_AGREEMENT_MASTER_SECRET !== undefined
+  ) {
+    throw new Error("inline_key_agreement_secret_rejected");
+  }
+}
+
+function keyAgreementOperationError(error, fallback) {
+  const message = error instanceof Error ? error.message : fallback;
+  if (message !== "secret_file_write_in_progress") {
+    return { ok: false, error: message };
+  }
+  return {
+    ok: false,
+    error: message,
+    lockFile: typeof error?.lockPath === "string" ? error.lockPath : null,
+    hint: "Fail closed: stop key-agreement writers; verify the .lock file is owner-only, regular, names the exact target, and its recorded PID is no longer running; then remove only that stale .lock file and retry. Never remove the key record or master key.",
+  };
 }
 
 function listKeyAgreementRecordCandidatePaths(address, authStateFile = "", keyVersion = null) {
@@ -5507,19 +5531,6 @@ async function resolveLocalKeyAgreementRecord(address, keyVersion, {
 }
 
 function buildTxPlanNextCommandHint(method, rawPath, { body, bodyFile, bodySelect } = {}) {
-  const parts = ["clawnera-help", "tx-plan-execute", method, shellQuote(rawPath)];
-  if (bodyFile) {
-    parts.push("--body-file", shellQuote(bodyFile));
-    if (bodySelect) {
-      parts.push("--body-select", shellQuote(bodySelect));
-    }
-  } else if (body) {
-    parts.push("--body", shellQuote(body));
-  }
-  return parts.join(" ");
-}
-
-function buildSuiTxBytesNextCommandHint(method, rawPath, { body, bodyFile, bodySelect } = {}) {
   const parts = ["clawnera-help", "tx-plan-dry-run", method, shellQuote(rawPath)];
   if (bodyFile) {
     parts.push("--body-file", shellQuote(bodyFile));
@@ -5529,7 +5540,6 @@ function buildSuiTxBytesNextCommandHint(method, rawPath, { body, bodyFile, bodyS
   } else if (body) {
     parts.push("--body", shellQuote(body));
   }
-  parts.push("--tx-bytes-out", "./sui-tx.b64");
   return parts.join(" ");
 }
 
@@ -5715,7 +5725,7 @@ function resolveClaimMetricsDisputeCaseCandidateFromMetricsContext(metricsBody) 
 
 function buildClaimMetricsContextUnavailableHint(rawPath) {
   const normalizedPath = canonicalClaimMetricsDisplayPath();
-  return `Read GET /reviewers/me/metrics and inspect pendingMetricsClaimContext. If the server cannot prove the binding yet, rerun clawnera-help tx-plan-execute POST '${normalizedPath}' --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.`;
+  return `Read GET /reviewers/me/metrics and inspect pendingMetricsClaimContext. If the server cannot prove the binding yet, rerun clawnera-help tx-plan-dry-run POST '${normalizedPath}' --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.`;
 }
 
 function buildClaimMetricsDisputeCaseHint(rawPath, disputeCaseObjectIds = [], source = "metrics") {
@@ -5725,9 +5735,9 @@ function buildClaimMetricsDisputeCaseHint(rawPath, disputeCaseObjectIds = [], so
       ? ` Candidate disputeCaseObjectIds: ${disputeCaseObjectIds.join(", ")}.`
       : "";
   if (source === "invites") {
-    return `Read GET /reviewers/me/invites, choose the correct closed disputeCaseObjectId, then rerun clawnera-help tx-plan-execute POST '${normalizedPath}' --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.${candidateSuffix}`;
+    return `Read GET /reviewers/me/invites, choose the correct closed disputeCaseObjectId, then rerun clawnera-help tx-plan-dry-run POST '${normalizedPath}' --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.${candidateSuffix}`;
   }
-  return `Read GET /reviewers/me/metrics and inspect pendingMetricsClaimContext, choose the correct closed disputeCaseObjectId, then rerun clawnera-help tx-plan-execute POST '${normalizedPath}' --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.${candidateSuffix}`;
+  return `Read GET /reviewers/me/metrics and inspect pendingMetricsClaimContext, choose the correct closed disputeCaseObjectId, then rerun clawnera-help tx-plan-dry-run POST '${normalizedPath}' --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.${candidateSuffix}`;
 }
 
 function reviewerSelfRouteNeedsHydration(route, currentBody) {
@@ -6270,13 +6280,12 @@ async function runApiRequest(commandArgs) {
     nextPollAfterMs: bodyNextPollAfterMs,
     retryAfterMs: responseTimingHints.retryAfterMs,
     response: result.body,
-    txPlanDetected: Boolean(txPlan || suiTxBytesPlan),
+    txPlanDetected: Boolean(txPlan),
     txPlanFamily: suiTxBytesPlan ? "sui" : txPlan ? "iota" : null,
+    rawTransactionBytesUnverified: Boolean(suiTxBytesPlan),
     nextCommandHint: txPlan
       ? buildTxPlanNextCommandHint(method, rawPath, apiCall)
-      : suiTxBytesPlan
-        ? buildSuiTxBytesNextCommandHint(method, rawPath, apiCall)
-        : null,
+      : null,
     raw: result.raw || "",
     error: result.ok ? null : summarizeApiFailure(result)
   };
@@ -7363,9 +7372,12 @@ function writeOptionalOutputFile(targetPath, payload, mode = 0o600) {
   if (!targetPath) {
     return null;
   }
+  if (mode === 0o600) {
+    writePrivateFileAtomicSync(targetPath, payload);
+    return targetPath;
+  }
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-  fs.writeFileSync(targetPath, payload, { mode });
-  fs.chmodSync(targetPath, mode);
+  fs.writeFileSync(targetPath, payload, { mode, flag: "wx" });
   return targetPath;
 }
 
@@ -7449,6 +7461,7 @@ async function callIotaJsonRpcForHelper(options = {}, body) {
   });
   const response = await fetch(rpcUrl, {
     method: "POST",
+    redirect: "error",
     headers: {
       "content-type": "application/json",
     },
@@ -7569,7 +7582,7 @@ async function maybeExecuteResolveEscrowCompatFallback({
       hint:
         `The current chain package still resolves escrow with the finalize ticket, and that ticket belongs to ${compatTicket.finalizeSignerAddress}. ` +
         `Rerun the same resolve-escrow command with that wallet, or rerun finalize+resolve with the same buyer/seller wallet on a fresh case.`,
-      nextCommandHint: `clawnera-help tx-plan-execute POST '${rawPath}' --auth-state-file <finalize-wallet-auth-state-file>`,
+      nextCommandHint: `clawnera-help tx-plan-dry-run POST '${rawPath}' --auth-state-file <finalize-wallet-auth-state-file>`,
       compatResolveEscrowFallback: {
         attempted: true,
         finalizeTxDigest: compatTicket.txDigest,
@@ -8490,7 +8503,7 @@ async function resolveLatestUserKeyAgreement(options, address, timeoutMs, maxKey
       timeoutMs: perKeyTimeoutMs,
     });
     if (!keyAgreementCall.result.ok) {
-      if (keyAgreementCall.result.status === 404) {
+      if (isExactKeyAgreementNotFound(keyAgreementCall.result)) {
         if (matched) {
           break;
         }
@@ -9095,6 +9108,27 @@ async function runTxPlanCommand(commandArgs, mode) {
       usage: txPlanUsageLines(mode),
     };
   }
+  if (mode !== "dry_run") {
+    return {
+      ok: false,
+      error: "generic_tx_plan_execution_disabled",
+      hint: "Use a reviewed chain-native wallet/client or a purpose-built helper. The generic CLI never signs or broadcasts API tx plans.",
+    };
+  }
+  if (options["tx-bytes-out"] !== undefined) {
+    return {
+      ok: false,
+      error: "tx_plan_bytes_output_disabled",
+      hint: "Dry-run reports effects only. It never exports transaction bytes as an executable or verified artifact.",
+    };
+  }
+  if (options["sui-private-key"]) {
+    return {
+      ok: false,
+      error: "sui_private_key_argv_disabled",
+      hint: "Use a protected Sui keystore or hardware-backed signer; never pass private keys in process arguments.",
+    };
+  }
 
   let method;
   let rawPath;
@@ -9237,208 +9271,69 @@ async function runTxPlanCommand(commandArgs, mode) {
   }
 
   const planOut = resolveOptionalPathOption(options["plan-out"]);
-  const txBytesOut = resolveOptionalPathOption(options["tx-bytes-out"]);
-  if (suiTxBytesPlan) {
-    if (planOut) {
-      writeOptionalOutputFile(planOut, JSON.stringify(apiCall.result.body, null, 2));
-    }
-    if (txBytesOut) {
-      writeOptionalOutputFile(txBytesOut, `${suiTxBytesPlan.transactionBytesBase64}\n`);
-    }
-    if (mode === "dry_run") {
-      try {
-        const dryRun = await dryRunSuiTransactionBytes(suiTxBytesPlan, options);
-        return {
-          ok: true,
-          mode,
-          method,
-          rawPath,
-          apiBase: apiCall.apiBase,
-          chainFamily: "sui",
-          chainNetwork: suiTxBytesPlan.chainNetwork,
-          txBuilder: suiTxBytesPlan.txBuilder,
-          target: suiTxBytesPlan.target,
-          signerAddress: suiTxBytesPlan.sender,
-          txBytesOut: txBytesOut || null,
-          planOut: planOut || null,
-          suiRpcUrl: dryRun.rpcUrl,
-          dryRun: dryRun.result,
-          gasSummary: formatDryRunGasSummary(dryRun.result),
-        };
-      } catch (error) {
-        return {
-          ok: false,
-          error: error instanceof Error ? error.message : "sui_tx_plan_dry_run_failed",
-          mode,
-          method,
-          rawPath,
-          apiBase: apiCall.apiBase,
-          chainFamily: "sui",
-          chainNetwork: suiTxBytesPlan.chainNetwork,
-          txBuilder: suiTxBytesPlan.txBuilder,
-          target: suiTxBytesPlan.target,
-          txBytesOut: txBytesOut || null,
-          planOut: planOut || null,
-          hint: "Sui tx-plan dry-run needs a reachable Sui fullnode RPC. Pass --sui-rpc-url <url> if the default network RPC is not reachable.",
-        };
-      }
-    }
-    try {
-      const executed = await executeSuiTransactionBytes(suiTxBytesPlan, options);
-      if (txBytesOut) {
-        writeOptionalOutputFile(txBytesOut, `${executed.signedBytesBase64}\n`);
-      }
-      const baseResult = {
-        ok: executed.executionStatus === "success",
-        mode,
-        method,
-        rawPath,
-        apiBase: apiCall.apiBase,
-        chainFamily: "sui",
-        chainNetwork: suiTxBytesPlan.chainNetwork,
-        txBuilder: suiTxBytesPlan.txBuilder,
-        target: suiTxBytesPlan.target,
-        signerAddress: executed.signer.address,
-        signerSource: executed.signer.source,
-        signatureScheme: executed.signer.scheme,
-        txDigest: executed.txDigest,
-        suiRpcUrl: executed.rpcUrl,
-        txBytesOut: txBytesOut || null,
-        planOut: planOut || null,
-        executionStatus: executed.executionStatus || null,
-        execution: executed.result,
-      };
-      if (baseResult.ok) {
-        return baseResult;
-      }
-      return {
-        ...baseResult,
-        error: "sui_transaction_execution_failed",
-        rawError: executed.executionError || null,
-      };
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "sui_tx_plan_execution_failed",
-        mode,
-        method,
-        rawPath,
-        apiBase: apiCall.apiBase,
-        chainFamily: "sui",
-        chainNetwork: suiTxBytesPlan.chainNetwork,
-        txBuilder: suiTxBytesPlan.txBuilder,
-        target: suiTxBytesPlan.target,
-        signerAddress: suiTxBytesPlan.sender,
-        txBytesOut: txBytesOut || null,
-        planOut: planOut || null,
-        keystorePath: error?.keystorePath || null,
-        candidates: Array.isArray(error?.candidates) ? error.candidates : undefined,
-        hint:
-          "Sui tx-plan execution needs a matching Sui signer. Pass --sui-private-key, CLAWNERA_SUI_PRIVATE_KEY, or --sui-keystore-path plus --sui-address/--sui-alias when the default Sui keystore is ambiguous.",
-      };
-    }
+  if (suiTxBytesPlan && !txPlan) {
+    return {
+      ok: false,
+      error: "raw_transaction_bytes_unverified",
+      mode,
+      method,
+      rawPath,
+      apiBase: apiCall.apiBase,
+      chainFamily: "sui",
+      chainNetwork: suiTxBytesPlan.chainNetwork,
+      hint: "Raw server transaction bytes are never treated as verified, written to disk, dry-run, signed, or broadcast. Require a canonical txBuilder/request plan that can be rebuilt locally.",
+    };
   }
 
-  const signer = resolveRuntimeSigner(options, apiCall.context);
-  const iotaRuntime = resolveRuntimeIotaOptions(options, apiCall.context);
-  let autoRetriedExecutionCount = 0;
-  while (true) {
-    try {
-      const transaction = buildClawdexTxFromPlan(txPlan);
-    if (planOut) {
-      writeOptionalOutputFile(planOut, JSON.stringify(apiCall.result.body, null, 2));
-    }
-
-    if (mode === "dry_run") {
-      const dryRun = await dryRunTransaction(transaction, {
-        ...iotaRuntime,
-      });
-      if (txBytesOut) {
-        writeOptionalOutputFile(txBytesOut, `${dryRun.txBytesB64}\n`);
-      }
-      return {
-        ok: true,
-        mode,
-        method,
-        rawPath,
-        apiBase: apiCall.apiBase,
-        txBuilder: txPlan.txBuilder,
-        signerAddress: txPlan.request.sender || null,
-        autoHydratedReviewerContext,
-        autoRetriedExecutionCount,
-        autoWaitUntilReadyCount,
-        txBytesOut: txBytesOut || null,
-        planOut: planOut || null,
-        dryRun: dryRun.result,
-        gasSummary: formatDryRunGasSummary(dryRun.result),
-      };
-    }
-
-    const executed = await executeTransaction(transaction, {
-      alias: signer.alias,
-      address: signer.address,
-      keystorePath: signer.keystorePath,
-      ...iotaRuntime,
+  let chainIdentity;
+  let reviewerSelectionAuthorization = null;
+  try {
+    reviewerSelectionAuthorization = assertTxPlanRouteAndActorIntent({
+      method,
+      rawPath,
+      actorAddress:
+        apiCall.context?.authState?.address || apiCall.context?.envValues?.CLAWNERA_API_ADDRESS || "",
+      txPlan: { ...txPlan, originalRequest: apiCall.jsonBody },
     });
-    if (txBytesOut) {
-      writeOptionalOutputFile(txBytesOut, `${executed.txBytesB64}\n`);
-    }
-    const disputeCaseObjectId = resolveDisputeCaseObjectIdForInviteBinding(txPlan, executed);
-    const executedSignerAddress =
-      normalizeIotaAddress(executed.verifyResult?.signerAddress || "") ||
-      normalizeIotaAddress(signer.address || "") ||
-      normalizeIotaAddress(txPlan.request.sender || "");
-    let postExecuteBinding = null;
-    const inviteBinding = txPlan.inviteBinding;
-    if (
-      inviteBinding &&
-      typeof inviteBinding === "object" &&
-      !Array.isArray(inviteBinding) &&
-      inviteBinding.postExecuteBindingRequired === true &&
-      typeof inviteBinding.bindRoute === "string" &&
-      inviteBinding.bindRoute.trim()
-    ) {
-      if (!disputeCaseObjectId) {
-        return {
-          ok: false,
-          error: "post_execute_invite_binding_missing_dispute_case_id",
-          txBuilder: txPlan.txBuilder,
-          txDigest: resolveTxExecutionDigest(executed),
-          bindRoute: inviteBinding.bindRoute.trim(),
-        };
+    chainIdentity = await assertTxPlanChainIdentity(txPlan, options);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "tx_plan_intent_validation_failed",
+      mode,
+      method,
+      rawPath,
+      txBuilder: txPlan.txBuilder,
+    };
+  }
+  const isSuiLocalPlan = chainIdentity.chainFamily === "sui";
+  const resolvedIotaRuntime = isSuiLocalPlan ? null : resolveRuntimeIotaOptions(options, apiCall.context);
+  const runtimeOptions = isSuiLocalPlan
+    ? {
+        chainFamily: "sui",
+        chainNetwork: chainIdentity.chainNetwork,
+        suiNetwork: chainIdentity.chainNetwork,
+        network: chainIdentity.chainNetwork,
+        suiRpcUrl: chainIdentity.rpcUrl,
+        rpcUrl: chainIdentity.rpcUrl,
       }
-      const bindCall = await callApiRoute({
-        method: "POST",
-        rawPath: inviteBinding.bindRoute.trim(),
-        options: {
-          ...options,
-          body: JSON.stringify({
-            disputeCaseObjectId,
-            activationTxDigest: resolveTxExecutionDigest(executed),
-          }),
-        },
-        timeoutMs,
-      });
-      postExecuteBinding = {
-        route: inviteBinding.bindRoute.trim(),
-        disputeCaseObjectId,
-        ok: bindCall.result.ok,
-        status: bindCall.result.status,
-        response: bindCall.result.body,
+    : {
+        ...resolvedIotaRuntime,
+        chainFamily: "iota",
+        chainNetwork: chainIdentity.chainNetwork,
+        network: chainIdentity.chainNetwork,
+        rpcUrl: chainIdentity.rpcUrl,
       };
-      if (!bindCall.result.ok) {
-        return {
-          ok: false,
-          error: "post_execute_invite_binding_failed",
-          txBuilder: txPlan.txBuilder,
-          txDigest: resolveTxExecutionDigest(executed),
-          disputeCaseObjectId,
-          bindRoute: inviteBinding.bindRoute.trim(),
-          status: bindCall.result.status,
-          response: bindCall.result.body,
-        };
-      }
-    }
+  try {
+    const transaction = buildClawdexTxFromPlan(txPlan);
+    const dryRun = await dryRunTransaction(transaction, {
+      ...runtimeOptions,
+    });
+    persistVerifiedDryRunPlan({
+      targetPath: planOut,
+      responseBody: apiCall.result.body,
+      dryRunResult: dryRun.result,
+    });
     return {
       ok: true,
       mode,
@@ -9446,97 +9341,31 @@ async function runTxPlanCommand(commandArgs, mode) {
       rawPath,
       apiBase: apiCall.apiBase,
       txBuilder: txPlan.txBuilder,
-      signerAddress: executedSignerAddress || null,
+      signerAddress: txPlan.request.sender || null,
+      chainFamily: chainIdentity.chainFamily,
+      chainNetwork: chainIdentity.chainNetwork,
+      chainIdentifier: chainIdentity.chainIdentifier,
       autoHydratedReviewerContext,
-      autoRetriedExecutionCount,
       autoWaitUntilReadyCount,
-      txDigest: resolveTxExecutionDigest(executed),
-      txBytesOut: txBytesOut || null,
+      reviewerSelectionAuthorization,
+      externalOperatorAuthorizationPreconditionDryRunSatisfied:
+        reviewerSelectionAuthorization?.required === true ? true : null,
+      inviteBinding: txPlan.inviteBinding,
+      preExecutionRequirements: txPlan.preExecutionRequirements,
       planOut: planOut || null,
-      execution: executed.result,
-      createdObjects: extractCreatedObjects(executed),
-      disputeCaseObjectId,
-      postExecuteBinding,
-      mailboxSignalPosted: extractMailboxSignalPosted(executed),
-      mailboxSignalAcked: extractMailboxSignalAcked(executed),
-      quorumResolutionTicketObjectId:
-        extractCreatedObjectIdByTypeSuffix(executed, "::dispute_quorum::QuorumResolutionTicket") || null,
-      disputeBondObjectId:
-        extractCreatedObjectIdByTypeSuffix(executed, "::dispute_quorum::OrderDisputeBond") || null,
-      orderMailboxObjectId:
-        extractCreatedObjectIdByTypeSuffix(executed, "::order_mailbox::OrderMailbox") || null,
-      orderEscrowObjectId:
-        extractCreatedObjectIdByTypeFragment(executed, "::order_escrow::OrderEscrow<") || null,
-      keepSameWalletForResolve:
-        txPlan.txBuilder === "disputeQuorum.finalizeCase" &&
-        Boolean(extractCreatedObjectIdByTypeSuffix(executed, "::dispute_quorum::QuorumResolutionTicket")),
+      dryRun: dryRun.result,
+      gasSummary: formatDryRunGasSummary(dryRun.result),
     };
-    } catch (error) {
-      const rawError = normalizeTxPlanErrorMessage(error) || "tx_plan_execute_failed";
-      let compatFallback = null;
-      let compatFallbackError = null;
-      try {
-        compatFallback = await maybeExecuteResolveEscrowCompatFallback({
-          errorMessage: rawError,
-          txPlan,
-          rawPath,
-          options,
-          timeoutMs,
-          signer,
-          autoHydratedReviewerContext,
-          autoRetriedExecutionCount,
-          txBytesOut,
-          planOut,
-        });
-      } catch (compatError) {
-        compatFallbackError =
-          normalizeTxPlanErrorMessage(compatError) || "resolve_escrow_compat_fallback_failed";
-      }
-      if (compatFallback) {
-        return compatFallback;
-      }
-      const classified =
-        (await maybeClassifyLiveDisputeTxPlanExecutionError({
-          errorMessage: rawError,
-          txBuilder: txPlan.txBuilder,
-          rawPath,
-          options,
-          timeoutMs,
-        })) ||
-        classifyTxPlanExecutionError({
-          errorMessage: rawError,
-          txBuilder: txPlan.txBuilder,
-        });
-      if (classified?.retryable === true && autoRetriedExecutionCount < 1) {
-        autoRetriedExecutionCount += 1;
-        continue;
-      }
-      const waitUntilReadyPlan = buildTxPlanWaitUntilReadyPlan({
-        classifiedFailure: classified,
-        waitUntilReadyEnabled: waitUntilReady,
-        waitUntilReadyDeadlineMs,
-      });
-      if (waitUntilReadyPlan?.allowed === true) {
-        autoWaitUntilReadyCount += 1;
-        await sleep(waitUntilReadyPlan.sleepMs);
-        continue;
-      }
-      return {
-        ok: false,
-        error: classified?.code || rawError,
-        rawError,
-        hint: classified?.hint,
-        retryable: classified?.retryable === true,
-        autoRetriedExecutionCount,
-        autoWaitUntilReadyCount,
-        compatFallbackError,
-        txBuilder: txPlan.txBuilder,
-        disputeCaseObjectId: classified?.disputeCaseObjectId || resolveDisputeCaseIdFromTxPlanPath(rawPath),
-        waitUntilMs: classified?.waitUntilMs || null,
-        waitUntilIso: classified?.waitUntilIso || null,
-        nextCommandHint: classified?.nextCommandHint || null,
-      };
-    }
+  } catch (error) {
+    return {
+      ok: false,
+      error: normalizeTxPlanErrorMessage(error) || "tx_plan_dry_run_failed",
+      txBuilder: txPlan.txBuilder,
+      chainFamily: chainIdentity.chainFamily,
+      chainNetwork: chainIdentity.chainNetwork,
+      chainIdentifier: chainIdentity.chainIdentifier,
+      planOut: planOut || null,
+    };
   }
 }
 
@@ -9864,6 +9693,7 @@ async function runKeyAgreementUpsert(commandArgs) {
   }
 
   try {
+    assertNoInlineKeyAgreementProtectionSecret(options);
     const runtimeContext = await resolveApiRuntimeContext(options);
     if (!runtimeContext.apiBase) {
       return {
@@ -9901,15 +9731,39 @@ async function runKeyAgreementUpsert(commandArgs) {
       options["key-file"],
       runtimeContext.authStateFile,
     );
-    const rotate = parseBooleanOption(options.rotate, false);
-    const readPath = `/users/${actorAddress}/key-agreement?keyVersion=${keyVersion}`;
+    return await withPrivateFileOperationLock(keyFile, async () => {
+      const rotate = parseBooleanOption(options.rotate, false);
+      const readPath = `/users/${actorAddress}/key-agreement?keyVersion=${keyVersion}`;
     const initialRead = await callApiRoute({
       method: "GET",
       rawPath: readPath,
       options,
       timeoutMs,
     });
-    const remoteKeyAgreement = initialRead.result.ok ? initialRead.result.body?.keyAgreement || null : null;
+    let remoteKeyAgreement = null;
+    if (initialRead.result.ok) {
+      if (
+        !initialRead.result.body?.keyAgreement ||
+        typeof initialRead.result.body.keyAgreement !== "object" ||
+        Array.isArray(initialRead.result.body.keyAgreement)
+      ) {
+        return {
+          ok: false,
+          error: "invalid_key_agreement_initial_readback",
+          status: initialRead.result.status,
+          response: initialRead.result.body,
+        };
+      }
+      remoteKeyAgreement = initialRead.result.body.keyAgreement;
+    } else if (!isExactKeyAgreementNotFound(initialRead.result)) {
+      return {
+        ok: false,
+        error: "key_agreement_initial_read_failed",
+        status: initialRead.result.status,
+        response: initialRead.result.body,
+        hint: "No local key was created or changed. Retry only after the exact key-agreement GET succeeds or returns 404 key_agreement_not_found.",
+      };
+    }
     const remoteExpiresAtMs =
       remoteKeyAgreement && typeof remoteKeyAgreement.expiresAt === "string"
         ? Date.parse(remoteKeyAgreement.expiresAt)
@@ -10061,10 +9915,14 @@ async function runKeyAgreementUpsert(commandArgs) {
       ) {
         break;
       }
+      if (!readCall.result.ok && !isExactKeyAgreementNotFound(readCall.result)) {
+        break;
+      }
     }
     if (!readCall || !readCall.result.ok) {
       return {
-        ok: true,
+        ok: false,
+        error: "key_agreement_readback_pending",
         apiBase: putCall.apiBase,
         address: actorAddress,
         keyVersion,
@@ -10075,6 +9933,7 @@ async function runKeyAgreementUpsert(commandArgs) {
         requestBody,
         readback: null,
         writeResponseKeyAgreement: putResponseKeyAgreement,
+        writeCommitted: true,
         readbackPending: true,
         warning: "key_agreement_readback_pending",
         verifyHint: `clawnera-help request GET '/users/${actorAddress}/key-agreement?keyVersion=${keyVersion}' --auth-state-file ${shellQuote(putCall.context.authStateFile || "~/.config/clawnera/auth-state.json")}`,
@@ -10096,7 +9955,8 @@ async function runKeyAgreementUpsert(commandArgs) {
       storedIsExpired
     ) {
       return {
-        ok: true,
+        ok: false,
+        error: "key_agreement_readback_mismatch",
         apiBase: putCall.apiBase,
         address: actorAddress,
         keyVersion,
@@ -10107,8 +9967,9 @@ async function runKeyAgreementUpsert(commandArgs) {
         requestBody,
         readback: stored || null,
         writeResponseKeyAgreement: putResponseKeyAgreement,
-        readbackPending: true,
-        warning: "key_agreement_readback_pending",
+        writeCommitted: true,
+        readbackPending: false,
+        warning: "key_agreement_readback_mismatch",
         verifyHint: `clawnera-help request GET '/users/${actorAddress}/key-agreement?keyVersion=${keyVersion}' --auth-state-file ${shellQuote(putCall.context.authStateFile || "~/.config/clawnera/auth-state.json")}`,
         readbackStatus: readCall.result.status,
         readbackResponse: readCall.result.body,
@@ -10116,7 +9977,23 @@ async function runKeyAgreementUpsert(commandArgs) {
         authStateRefreshed: putCall.context.authStateRefreshed || readCall.context.authStateRefreshed,
       };
     }
-    return {
+      const confirmedLocalKey = await loadKeyAgreementRecord(keyFile, {
+        expectedAddress: actorAddress,
+        expectedKeyVersion: keyVersion,
+      });
+      if (confirmedLocalKey.publicKeyMultibase !== stored.publicKeyMultibase) {
+        return {
+          ok: false,
+          error: "key_agreement_local_remote_readback_mismatch",
+          keyFile,
+          keyVersion,
+          localPublicKeyMultibase: confirmedLocalKey.publicKeyMultibase,
+          remotePublicKeyMultibase: stored.publicKeyMultibase,
+          writeCommitted: true,
+          verifyHint: `clawnera-help request GET '/users/${actorAddress}/key-agreement?keyVersion=${keyVersion}' --auth-state-file ${shellQuote(putCall.context.authStateFile || "~/.config/clawnera/auth-state.json")}`,
+        };
+      }
+      return {
       ok: true,
       apiBase: putCall.apiBase,
       address: actorAddress,
@@ -10129,12 +10006,55 @@ async function runKeyAgreementUpsert(commandArgs) {
       readback: stored,
       authStateFile: putCall.context.authStateFile,
       authStateRefreshed: putCall.context.authStateRefreshed || readCall.context.authStateRefreshed,
-    };
+      };
+    }, "key-agreement-upsert");
   } catch (error) {
+    return keyAgreementOperationError(error, "key_agreement_upsert_failed");
+  }
+}
+
+async function runKeyAgreementMigrate(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: keyAgreementMigrateUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "key_agreement_upsert_failed",
+      error: "unexpected_positional_arguments",
+      details: positionals,
     };
+  }
+  try {
+    assertNoInlineKeyAgreementProtectionSecret(options);
+    const keyFile =
+      typeof options["key-file"] === "string" && options["key-file"].trim()
+        ? path.resolve(options["key-file"].trim())
+        : "";
+    if (!keyFile) {
+      return {
+        ok: false,
+        error: "missing_key_file",
+      };
+    }
+    const migrated = await migrateLegacyKeyAgreementRecord(keyFile);
+    return {
+      ok: true,
+      migrated: true,
+      keyFile: migrated.filePath,
+      version: migrated.version,
+      address: migrated.address,
+      keyVersion: migrated.keyVersion,
+      publicKeyMultibase: migrated.publicKeyMultibase,
+      expiresAtMs: migrated.expiresAtMs,
+      expired: migrated.expired,
+    };
+  } catch (error) {
+    return keyAgreementOperationError(error, "key_agreement_migration_failed");
   }
 }
 
@@ -10909,8 +10829,8 @@ async function runDeliverableEncrypt(commandArgs) {
         storagePolicyCall.result.body.policy.modes.managed.allowedMimeTypes.includes("application/json"),
     );
     const authStateHint = shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json");
-    const managedNextUploadHint = managedJsonAllowed
-      ? `clawnera-help managed-storage-fee-pay --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} --auth-state-file ${authStateHint}`
+    const managedStorageHint = managedJsonAllowed
+      ? "Managed storage requires an externally obtained policy-and-escrow-bound V2 payment proof; the public fee-payment builder is disabled."
       : null;
     return {
       ok: true,
@@ -10927,9 +10847,8 @@ async function runDeliverableEncrypt(commandArgs) {
       ciphertextSha256: encrypted.blob.ciphertextSha256,
       payloadOut,
       payload,
-      nextUploadHint:
-        managedNextUploadHint ||
-        `clawnera-help pinata-upload-json --file ${shellQuote(payloadOut)} --jwt-env PINATA_JWT`,
+      managedStorageHint,
+      nextUploadHint: `clawnera-help pinata-upload-json --file ${shellQuote(payloadOut)} --jwt-env PINATA_JWT`,
       nextSubmitHint:
         `clawnera-help milestone-submit-byo --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} ` +
         `--payload-file ${shellQuote(payloadOut)} --manifest-cid 'ipfs://<cid>' --auth-state-file ${authStateHint}`,
@@ -12147,7 +12066,7 @@ async function runDisputeEvidenceDecrypt(commandArgs) {
 }
 
 async function runManagedStorageFeePay(commandArgs) {
-  const { options, positionals } = parseLongOptions(commandArgs);
+  const { options } = parseLongOptions(commandArgs);
   if (options.help || options.h) {
     return {
       ok: true,
@@ -12155,232 +12074,12 @@ async function runManagedStorageFeePay(commandArgs) {
       usage: managedStorageFeePayUsageLines(),
     };
   }
-  if (positionals.length > 0) {
-    return {
-      ok: false,
-      error: "unexpected_positional_arguments",
-      details: positionals,
-    };
-  }
-
-  const orderId = typeof options["order-id"] === "string" ? options["order-id"].trim() : "";
-  const milestoneId = typeof options["milestone-id"] === "string" ? options["milestone-id"].trim() : "";
-  if (!orderId || !milestoneId) {
-    return {
-      ok: false,
-      error: "missing_order_id_or_milestone_id",
-    };
-  }
-
-  try {
-    const runtimeContext = await resolveApiRuntimeContext(options);
-    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
-    const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
-    const actorAddress = resolveActorAddressForSignedRun(options, runtimeContext) || normalizeIotaAddress(signer.entry.address || "");
-    if (!actorAddress) {
-      return {
-        ok: false,
-        error: "missing_actor_address",
-      };
-    }
-    if (actorAddress !== normalizeIotaAddress(signer.entry.address || "")) {
-      return {
-        ok: false,
-        error: "signer_actor_mismatch",
-      };
-    }
-    const orderCall = await callApiRoute({
-      method: "GET",
-      rawPath: `/orders/${orderId}`,
-      options,
-      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
-    });
-    if (!orderCall.result.ok) {
-      return {
-        ok: false,
-        error: summarizeApiFailure(orderCall.result),
-        status: orderCall.result.status,
-        response: orderCall.result.body,
-      };
-    }
-    const order = ensureOrderPayload(orderCall.result.body);
-    const parties = new Set([
-      normalizeIotaAddress(order.sellerAddress || ""),
-      normalizeIotaAddress(order.buyerAddress || ""),
-    ]);
-    if (!parties.has(actorAddress)) {
-      return {
-        ok: false,
-        error: "actor_not_order_party",
-      };
-    }
-
-    const storagePolicyCall = await callApiRoute({
-      method: "GET",
-      rawPath: "/policy/storage",
-      options,
-      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
-    });
-    if (!storagePolicyCall.result.ok) {
-      return {
-        ok: false,
-        error: summarizeApiFailure(storagePolicyCall.result),
-        status: storagePolicyCall.result.status,
-        response: storagePolicyCall.result.body,
-      };
-    }
-    const managedPolicy = storagePolicyCall.result.body?.policy?.modes?.managed;
-    const feePolicy = managedPolicy?.fee;
-    if (!managedPolicy?.enabled || !feePolicy) {
-      return {
-        ok: false,
-        error: "managed_storage_disabled",
-      };
-    }
-    const feeAsset = String(feePolicy.asset || "").trim().toUpperCase();
-    const isSuiFeeAsset = feeAsset === "SUI";
-    if (feeAsset !== "IOTA" && !isSuiFeeAsset) {
-      return {
-        ok: false,
-        error: "managed_storage_fee_asset_unsupported",
-        feeAsset: feePolicy.asset || null,
-      };
-    }
-    const amountAtomic = parsePositiveBigIntOption(feePolicy.minAtomic, "managed_storage_fee_min_atomic");
-    const recipientAddress = isSuiFeeAsset
-      ? normalizeSuiAddressOrEmpty(feePolicy.recipient || "")
-      : normalizeIotaAddress(feePolicy.recipient || "");
-    if (!recipientAddress) {
-      return {
-        ok: false,
-        error: "managed_storage_fee_recipient_missing",
-      };
-    }
-
-    let packageId = "";
-    let transactionRuntime = {};
-    if (isSuiFeeAsset) {
-      const feesCall = await callApiRoute({
-        method: "GET",
-        rawPath: "/policy/fees",
-        options,
-        timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
-      });
-      if (!feesCall.result.ok) {
-        return {
-          ok: false,
-          error: summarizeApiFailure(feesCall.result),
-          status: feesCall.result.status,
-          response: feesCall.result.body,
-        };
-      }
-      packageId = extractPackageIdFromPolicyResponse(feesCall.result.body);
-      transactionRuntime = {
-        chainFamily: "sui",
-        network: String(options["sui-network"] || options["chain-network"] || options.network || "").trim() || "mainnet",
-        rpcUrl: String(options["sui-rpc-url"] || options["rpc-url"] || "").trim() || undefined,
-      };
-    } else {
-      const resolved = await fetchPolicyAndChainConfig(options, {
-        ...iotaRuntime,
-      });
-      packageId = resolved.packageId;
-      transactionRuntime = resolved.iotaRuntime;
-    }
-    const tx = buildManagedStorageFeeTx({
-      chainFamily: isSuiFeeAsset ? "sui" : "iota",
-      packageId,
-      sender: actorAddress,
-      orderId,
-      milestoneId,
-      recipientAddress,
-      amountAtomic,
-      currency: feeAsset,
-    });
-    const dryRun = parseBooleanOption(options["dry-run"], false);
-    if (dryRun) {
-      const dryRunResult = await dryRunTransaction(tx, {
-        alias: signer.alias,
-        address: signer.address,
-        keystorePath: signer.keystorePath,
-        ...transactionRuntime,
-      });
-      return {
-        ok: true,
-        mode: "dry_run",
-        orderId,
-        milestoneId,
-        actorAddress,
-        packageId,
-        managedStoragePolicy: managedPolicy,
-        paymentProof: {
-          txDigest: null,
-          amountAtomic: amountAtomic.toString(),
-          asset: feeAsset,
-          recipientAddress,
-        },
-        dryRun: dryRunResult,
-      };
-    }
-
-    const executed = await executeTransaction(tx, {
-      alias: signer.alias,
-      address: signer.address,
-      keystorePath: signer.keystorePath,
-      ...transactionRuntime,
-    });
-    const txDigest = executed.result?.digest || null;
-    if (!txDigest) {
-      return {
-        ok: false,
-        error: "managed_storage_fee_tx_digest_missing",
-      };
-    }
-    const paymentProof = {
-      txDigest,
-      amountAtomic: amountAtomic.toString(),
-      asset: feeAsset,
-      recipientAddress,
-    };
-    const proofOut =
-      resolveOptionalPathOption(options["proof-out"]) ||
-      defaultGeneratedOutputPath(`clawnera-managed-storage-fee-${orderId}-${milestoneId}.json`, {
-        authStateFile: runtimeContext.authStateFile,
-      });
-    writeOptionalOutputFile(
-      proofOut,
-      `${JSON.stringify(
-        {
-          orderId,
-          milestoneId,
-          actorAddress,
-          paymentProof,
-        },
-        null,
-        2,
-      )}\n`,
-    );
-    return {
-      ok: true,
-      mode: "execute",
-      orderId,
-      milestoneId,
-      actorAddress,
-      packageId,
-      txDigest,
-      paymentProof,
-      proofOut,
-      execution: executed.result,
-      nextPresignHint:
-        `clawnera-help managed-storage-presign --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} ` +
-        `--file <payload.json> --payment-proof-file ${shellQuote(proofOut)} --auth-state-file ${shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json")}`,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "managed_storage_fee_pay_failed",
-    };
-  }
+  return {
+    ok: false,
+    error: "managed_storage_fee_payment_builder_disabled",
+    requiredEntrypoint: "manifest_anchor::pay_managed_storage_fee_*_v2",
+    hint: "Obtain an exact policy-and-escrow-bound V2 payment proof through a reviewed chain-native flow, or use BYO storage.",
+  };
 }
 
 async function runManagedStoragePresign(commandArgs) {
@@ -12583,6 +12282,7 @@ async function runManagedStorageUpload(commandArgs) {
         error: "missing_signed_url_or_presign_file",
       };
     }
+    const uploadUrl = normalizeAuthenticatedUrl(signedUrl, { errorCode: "invalid_signed_upload_url" });
     const expiresAtMs = parseOptionalIsoTimestamp(presign.expiresAt);
     if (expiresAtMs !== null && expiresAtMs <= Date.now() + 5_000) {
       return {
@@ -12616,8 +12316,9 @@ async function runManagedStorageUpload(commandArgs) {
         : presign.fileName || fileMetadata.fileName;
     const formData = new FormData();
     formData.set("file", new Blob([fileMetadata.buffer], { type: fileMetadata.mimeType }), uploadFileName);
-    const response = await fetch(signedUrl, {
+    const response = await fetch(uploadUrl, {
       method: "POST",
+      redirect: "error",
       body: formData,
     });
     const raw = await response.text();
@@ -12724,16 +12425,32 @@ async function runPinataUploadJson(commandArgs) {
     typeof options["jwt-file"] === "string" && options["jwt-file"].trim()
       ? path.resolve(String(options["jwt-file"]).trim())
       : "";
-  const fileJwt = jwtFile && fs.existsSync(jwtFile) ? fs.readFileSync(jwtFile, "utf8").trim() : "";
-  const jwt =
-    (typeof options.jwt === "string" && options.jwt.trim() ? String(options.jwt).trim() : "") ||
-    fileJwt ||
-    (typeof process.env[jwtEnvName] === "string" ? process.env[jwtEnvName].trim() : "");
+  if (typeof options.jwt === "string" && options.jwt.trim()) {
+    return {
+      ok: false,
+      error: "pinata_jwt_argv_disabled",
+      hint: `use an owner-only --jwt-file <file> or export ${jwtEnvName}=...`,
+    };
+  }
+  let fileJwt = "";
+  if (jwtFile) {
+    try {
+      fileJwt = String(await readPrivateFile(jwtFile, "utf8")).trim();
+    } catch (error) {
+      return {
+        ok: false,
+        error: "invalid_pinata_jwt_file",
+        detail: error instanceof Error ? error.message : String(error),
+        jwtFile,
+      };
+    }
+  }
+  const jwt = fileJwt || (typeof process.env[jwtEnvName] === "string" ? process.env[jwtEnvName].trim() : "");
   if (!jwt) {
     return {
       ok: false,
       error: "missing_pinata_jwt",
-      hint: `set --jwt <token>, --jwt-file <file>, or export ${jwtEnvName}=...`,
+      hint: `use an owner-only --jwt-file <file> or export ${jwtEnvName}=...`,
     };
   }
 
@@ -12745,6 +12462,7 @@ async function runPinataUploadJson(commandArgs) {
         : path.basename(filePath);
     const response = await fetch("https://api.pinata.cloud/pinning/pinJSONToIPFS", {
       method: "POST",
+      redirect: "error",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${jwt}`,
@@ -12819,11 +12537,6 @@ async function runMilestoneSubmitByo(commandArgs) {
 
   try {
     const runtimeContext = await resolveApiRuntimeContext(options);
-    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
-    const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
-    const actorAddress =
-      normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
-      normalizeIotaAddress(signer.entry.address || "");
     const orderCall = await callApiRoute({
       method: "GET",
       rawPath: `/orders/${orderId}`,
@@ -12839,6 +12552,18 @@ async function runMilestoneSubmitByo(commandArgs) {
       };
     }
     const order = ensureOrderPayload(orderCall.result.body);
+    const orderChainFamily = normalizeString(order.chainFamily || order.chain?.family).toLowerCase() || "iota";
+    if (orderChainFamily === "sui") {
+      return {
+        ok: false,
+        error: "unsupported_sui_milestone_submit_signer",
+        hint: "The public helper does not advertise Sui milestone signing until Sui auth and manifest signature verification are end-to-end bound.",
+      };
+    }
+    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const actorAddress =
+      normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
+      normalizeIotaAddress(signer.entry.address || "");
     const sellerAddress = normalizeIotaAddress(order.sellerAddress || "");
     if (actorAddress !== sellerAddress) {
       return {
@@ -12944,11 +12669,6 @@ async function runMilestoneAnchor(commandArgs) {
 
   try {
     const runtimeContext = await resolveApiRuntimeContext(options);
-    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
-    const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
-    const actorAddress =
-      normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
-      normalizeIotaAddress(signer.entry.address || "");
     const orderCall = await callApiRoute({
       method: "GET",
       rawPath: `/orders/${orderId}`,
@@ -12964,6 +12684,19 @@ async function runMilestoneAnchor(commandArgs) {
       };
     }
     const order = ensureOrderPayload(orderCall.result.body);
+    const orderChainFamily = normalizeString(order.chainFamily || order.chain?.family).toLowerCase() || "iota";
+    if (orderChainFamily === "sui") {
+      return {
+        ok: false,
+        error: "unsupported_sui_milestone_anchor_signer",
+        hint: "Use a reviewed Sui-native client; this helper keeps the Sui milestone anchor surface closed.",
+      };
+    }
+    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
+    const actorAddress =
+      normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
+      normalizeIotaAddress(signer.entry.address || "");
     const sellerAddress = normalizeIotaAddress(order.sellerAddress || "");
     if (actorAddress !== sellerAddress) {
       return {
@@ -13203,8 +12936,7 @@ async function runDeliverableDecrypt(commandArgs) {
         },
       );
     fs.mkdirSync(path.dirname(plaintextOut), { recursive: true });
-    fs.writeFileSync(plaintextOut, Buffer.from(plaintext), { mode: 0o600 });
-    fs.chmodSync(plaintextOut, 0o600);
+    writePrivateFileAtomicSync(plaintextOut, Buffer.from(plaintext));
     return {
       ok: true,
       orderId: payload.orderId,
@@ -13727,35 +13459,10 @@ async function runReviewerShortlist(commandArgs) {
       };
     }
     const payload = asRecord(shortlistCall.result.body) || {};
-    const publishTarget = asRecord(payload.publishTarget) || {};
-    const requestPatch = asRecord(publishTarget.requestPatch) || null;
-    const publishRoute = typeof publishTarget.route === "string" ? publishTarget.route.trim() : "";
-    const receipt = asRecord(payload.receipt) || null;
-    const publishBody =
-      scope === "OPEN" && requestPatch
-        ? {
-            escrowObjectId,
-            bondObjectId: disputeBondObjectId,
-            ...requestPatch,
-          }
-        : scope === "REPLACEMENT" && requestPatch
-          ? {
-              reviewerRegistryObjectId: chainConfig?.reviewerRegistryObjectId || "",
-              ...requestPatch,
-            }
-        : requestPatch;
     const receiptOut =
       resolveOptionalPathOption(options["receipt-out"]) ||
       defaultReviewerShortlistReceiptPath(orderId || "replacement", milestoneId || "case");
     writeOptionalOutputFile(receiptOut, `${JSON.stringify(payload, null, 2)}\n`);
-    const publishBodyOut =
-      publishBody && publishRoute
-        ? resolveOptionalPathOption(options["publish-body-out"]) ||
-          defaultReviewerShortlistPublishPath(orderId || "replacement", milestoneId || "case")
-        : null;
-    if (publishBodyOut && publishBody) {
-      writeOptionalOutputFile(publishBodyOut, `${JSON.stringify(publishBody, null, 2)}\n`);
-    }
 
     const selectionComplete = payload.selectionComplete === true;
     const directoryScanTruncated = payload.directoryScanTruncated === true;
@@ -13766,7 +13473,7 @@ async function runReviewerShortlist(commandArgs) {
         error: "selection_incomplete",
         checkpointDigest: effectiveCheckpointDigest,
         receiptOut,
-        publishBodyOut,
+        publishBodyOut: null,
         response: payload,
       };
     }
@@ -13776,10 +13483,59 @@ async function runReviewerShortlist(commandArgs) {
         error: "directory_scan_truncated",
         checkpointDigest: effectiveCheckpointDigest,
         receiptOut,
-        publishBodyOut,
+        publishBodyOut: null,
         response: payload,
       };
     }
+
+    let shortlistAuthorization;
+    try {
+      shortlistAuthorization = assertReviewerShortlistAuthorizationHandoff({
+        payload,
+        scope,
+        orderId,
+        milestoneId,
+        disputeCaseObjectId: normalizeIotaAddress(options["dispute-case-id"] || ""),
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "reviewer_shortlist_authorization_handoff_invalid",
+        checkpointDigest: effectiveCheckpointDigest,
+        receiptOut,
+        publishBodyOut: null,
+        response: payload,
+      };
+    }
+    if (scope === "REPLACEMENT" && !normalizeIotaAddress(chainConfig?.reviewerRegistryObjectId || "")) {
+      return {
+        ok: false,
+        error: "missing_reviewer_registry_object_id",
+        checkpointDigest: effectiveCheckpointDigest,
+        receiptOut,
+        publishBodyOut: null,
+        response: payload,
+      };
+    }
+    const publishRoute = shortlistAuthorization.publishRoute;
+    const requestPatch = shortlistAuthorization.publishRequestPatch;
+    const receipt = asRecord(payload.receipt) || null;
+    const publishBody =
+      scope === "OPEN"
+        ? {
+            escrowObjectId,
+            bondObjectId: disputeBondObjectId,
+            ...requestPatch,
+          }
+        : {
+            reviewerRegistryObjectId: chainConfig.reviewerRegistryObjectId,
+            ...requestPatch,
+          };
+    const publishBodyOut =
+      resolveOptionalPathOption(options["publish-body-out"]) ||
+      defaultReviewerShortlistPublishPath(orderId || "replacement", milestoneId || "case");
+    writeOptionalOutputFile(publishBodyOut, `${JSON.stringify(publishBody, null, 2)}\n`);
+
     const publishAuthHint = publishAuthStateFile
       ? shellQuote(publishAuthStateFile)
       : "<buyer-or-seller-auth-state-file>";
@@ -13823,6 +13579,9 @@ async function runReviewerShortlist(commandArgs) {
       receiptOut,
       publishRoute,
       publishBodyOut,
+      publishReady: false,
+      operatorAuthorizationRequired: true,
+      operatorAuthorizationHandoff: shortlistAuthorization.operatorAuthorizationHandoff,
       contextOrderStatus: orderStatus,
       contextMilestoneStatus: milestoneStatus,
       shortlistedReviewerAddresses: Array.isArray(receipt?.shortlistedReviewerAddresses)
@@ -13833,9 +13592,10 @@ async function runReviewerShortlist(commandArgs) {
       requiredReviewerVotes: replacementRequiredReviewerVotes,
       replacementReadyAtMs: replacementReadiness?.waitUntilMs || null,
       replacementReadyAtIso: replacementReadiness?.waitUntilIso || null,
-      nextPublishHint:
+      nextPublishHint: null,
+      nextPostAuthorizationDryRunHint:
         publishRoute && publishBodyOut
-          ? `clawnera-help tx-plan-execute POST ${shellQuote(publishRoute)} --auth-state-file ${publishAuthHint} --body-file ${shellQuote(publishBodyOut)}`
+          ? `clawnera-help tx-plan-dry-run POST ${shellQuote(publishRoute)} --auth-state-file ${publishAuthHint} --body-file ${shellQuote(publishBodyOut)}`
           : null,
     };
   } catch (error) {
@@ -14118,6 +13878,13 @@ async function runSponsorExecute(commandArgs) {
   const reservationOut = typeof options["reservation-out"] === "string" ? options["reservation-out"].trim() : "";
 
   try {
+    if (!orderId) {
+      return {
+        ok: false,
+        error: "sponsor_order_id_required",
+        hint: "set --order-id to the canonical active order id",
+      };
+    }
     const gasBudget = parsePositiveIntOption(options["gas-budget"], "gas_budget", 1_000_000);
     const builderTimeoutMs = parsePositiveIntOption(options["builder-timeout-ms"], "builder_timeout_ms", 60_000);
     const idempotencyKey = typeof options["idempotency-key"] === "string" ? options["idempotency-key"] : randomUUID();
@@ -14175,12 +13942,29 @@ async function runSponsorExecute(commandArgs) {
         response: reserveResult.body
       };
     }
+    const reservationOrderId = normalizeString(reservation?.orderId);
+    const reservationPurpose = normalizeString(reservation?.purpose).toLowerCase();
+    const reservationExpiresAt = normalizeString(reservation?.expiresAt);
+    const reservationExpiresAtMs = Date.parse(reservationExpiresAt);
+    const txFamily = normalizeString(reserveResult.body?.planning?.txFamily).toLowerCase();
+    if (
+      reservationOrderId !== orderId ||
+      reservationPurpose !== purpose ||
+      !Number.isFinite(reservationExpiresAtMs) ||
+      reservationExpiresAtMs <= Date.now() ||
+      !txFamily
+    ) {
+      return {
+        ok: false,
+        error: "invalid_sponsor_reservation_context",
+        reservationId,
+      };
+    }
 
     const safeReservationOut = reservationOut ? path.resolve(repoRoot, reservationOut) : "";
     if (safeReservationOut) {
       fs.mkdirSync(path.dirname(safeReservationOut), { recursive: true });
-      fs.writeFileSync(safeReservationOut, JSON.stringify(reserveResult.body, null, 2), { mode: 0o600 });
-      fs.chmodSync(safeReservationOut, 0o600);
+      writePrivateFileAtomicSync(safeReservationOut, `${JSON.stringify(reserveResult.body, null, 2)}\n`);
     }
 
     if (dryRun) {
@@ -14189,10 +13973,13 @@ async function runSponsorExecute(commandArgs) {
         mode: "dry_run",
         reservationId,
         orderId: orderId || null,
+        txFamily,
         sponsorAddress: reservation?.sponsorAddress || null,
         reservationOut: safeReservationOut || null
       };
     }
+
+    const { chainFamily, network } = resolveSponsorExecutionChainContext(options, runtimeContext);
 
     const buildEnv = {
       ...process.env,
@@ -14201,7 +13988,13 @@ async function runSponsorExecute(commandArgs) {
       CLAWNERA_SPONSOR_API_BASE_URL: apiBase,
       CLAWNERA_SPONSOR_PURPOSE: purpose,
       CLAWNERA_SPONSOR_PAYMENT_COIN: paymentCoin || "",
-      CLAWNERA_SPONSOR_GAS_COINS_JSON: JSON.stringify(Array.isArray(reservation?.gasCoins) ? reservation.gasCoins : [])
+      CLAWNERA_SPONSOR_GAS_COINS_JSON: JSON.stringify(Array.isArray(reservation?.gasCoins) ? reservation.gasCoins : []),
+      CLAWNERA_SPONSOR_ORDER_ID: orderId,
+      CLAWNERA_SPONSOR_CHAIN_FAMILY: chainFamily,
+      CLAWNERA_SPONSOR_NETWORK: network,
+      CLAWNERA_SPONSOR_TX_FAMILY: txFamily,
+      CLAWNERA_SPONSOR_INTENT_VERSION: SPONSOR_EXECUTION_INTENT_VERSION,
+      CLAWNERA_SPONSOR_INTENT_PREFIX: SPONSOR_EXECUTION_INTENT_PREFIX,
     };
     if (safeReservationOut) {
       buildEnv.CLAWNERA_SPONSOR_RESERVATION_FILE = safeReservationOut;
@@ -14215,6 +14008,26 @@ async function runSponsorExecute(commandArgs) {
         reservationId
       };
     }
+    if (!built.payload.intent || !built.payload.intentSig) {
+      return {
+        ok: false,
+        error: "builder_sponsor_intent_v2_required",
+        reservationId,
+      };
+    }
+    const preparedIntent = prepareSponsorExecutionIntentV2({
+      txBytesB64: built.payload.txBytesB64,
+      chainFamily,
+      network,
+      txFamily,
+      orderId,
+      reservationId,
+      expiresAt: reservationExpiresAt,
+      purpose,
+    });
+    assertSponsorExecutionIntentMatches(built.payload.intent, preparedIntent.intent);
+    const userSig = assertCanonicalSponsorSignature(built.payload.userSig, "sponsor_user_signature");
+    const intentSig = assertCanonicalSponsorSignature(built.payload.intentSig, "sponsor_intent_signature");
 
     const { result: executeResult } = await requestJsonWithRuntimeContext({
       runtimeContext,
@@ -14226,8 +14039,11 @@ async function runSponsorExecute(commandArgs) {
       },
       body: JSON.stringify({
         reservationId,
+        orderId,
         txBytesB64: built.payload.txBytesB64,
-        userSig: built.payload.userSig
+        userSig,
+        intent: preparedIntent.intent,
+        intentSig,
       }),
       timeoutMs
     });
@@ -14256,6 +14072,10 @@ async function runSponsorExecute(commandArgs) {
       mode: "execute",
       reservationId,
       orderId: orderId || null,
+      intentVersion: preparedIntent.intent.version,
+      chainFamily,
+      network,
+      txFamily,
       txDigest: executeResult.body?.execution?.txDigest || null,
       sponsorAddress: reservation?.sponsorAddress || null
     };
@@ -14321,24 +14141,30 @@ function chainConfigUsageLines() {
 
 function txPlanUsageLines(mode) {
   const label = mode === "dry_run" ? "dry-run" : "execute";
-  const verb = mode === "dry_run" ? "dry-runs" : "signs and broadcasts";
+  if (mode !== "dry_run") {
+    return [
+      "Generic tx-plan execute helper is disabled:",
+      "- `clawnera-help tx-plan-execute` never fetches, signs, or broadcasts a transaction",
+      "- Use a reviewed chain-native wallet/client or a purpose-built helper for execution",
+      "- Use `clawnera-help tx-plan-dry-run` only to rebuild and inspect canonical txBuilder/request plans",
+    ];
+  }
   return [
     `Tx-plan ${label} helper:`,
     `- Usage: clawnera-help tx-plan-${label} <GET|POST|PUT|PATCH|DELETE> </path>`,
     "- Reuses the same auth/body flags as `clawnera-help request`",
     "- Use API paths only; full URLs are rejected to avoid leaking auth tokens to other hosts",
-    "- Fetches a canonical API tx plan. IOTA plans are built locally; Sui plans are unsigned transaction bytes from the API.",
+    "- Fetches a canonical API txBuilder/request plan and rebuilds it locally",
     "- Optional auth shortcuts: --auth-state-file <file> or --env-file <file>",
     "- Optional explicit auth: --api-base <url> --jwt <token>",
     "- Optional body: --body '{\"json\":true}' or --body-file ./payload.json",
     "- Optional nested body selection: --body-file ./vote-prepare.json --body-select commitRequestBody",
-    "- Optional signer overrides for IOTA execution: --alias <wallet-alias> --address <0x...> --keystore-path <file>",
-    "- Optional Sui signer overrides for execution: --sui-private-key <suiprivkey...> or --sui-keystore-path <file> --sui-address <0x...>",
-    "- Optional Sui RPC override: --sui-rpc-url <url> (or --rpc-url <url> on a Sui byte plan)",
-    "- Optional outputs: --plan-out <file> --tx-bytes-out <file>",
+    "- Raw transaction bytes are always unverified and are never dry-run, exported, signed, or broadcast",
+    "- The dry-run RPC is the exact RPC whose chain identifier was verified for the plan",
+    "- Optional RPC override: --sui-rpc-url <url> for Sui or --rpc-url <url> for IOTA",
+    "- Optional output: --plan-out <file>; --tx-bytes-out is disabled",
     "- Optional timer-aware retry: --wait-until-ready [--max-ready-wait-ms <ms>] waits through known commit/challenge/settlement windows before rerunning the same command",
-    "- Sui execution signs returned unsigned transaction bytes locally with a matching Sui signer and submits directly to the selected Sui RPC",
-    `- The package never sends a generic user PTB through the Clawnera worker; it ${verb} locally when the local wallet lane supports the chain`
+    "- Generic execution is disabled; this command reports dry-run effects only"
   ];
 }
 
@@ -14352,7 +14178,7 @@ function orderInitBondUsageLines() {
     "- Optional signer overrides: --alias <wallet-alias> --address <0x...> --keystore-path <file>",
     "- This creates the shared dispute-bond object and reviewer-vote policy only; it does not fund the amount",
     "- Normal DUAL_BOND_REQUIRED funding still needs an explicit amount later on POST /orders/{orderId}/dispute-bond/fund",
-    "- Use this before `tx-plan-execute POST /orders/{orderId}/dispute-bond/fund ...`"
+    "- Use this before `tx-plan-dry-run POST /orders/{orderId}/dispute-bond/fund ...`"
   ];
 }
 
@@ -14579,11 +14405,26 @@ function keyAgreementUpsertUsageLines() {
     "Key agreement upsert helper:",
     "- Usage: clawnera-help key-agreement-upsert --auth-state-file <file>",
     "- Generates or reuses a local X25519 key-agreement key, wallet-signs the binding message, then PUTs /users/me/key-agreement",
+    "- The private key is stored only in an authenticated encrypted envelope; the adjacent master-key default protects only against a record-only leak",
+    "- Production: pre-provision a cryptographically random owner-only 32-byte key outside the record directory, set CLAWNERA_KEY_AGREEMENT_MASTER_KEY_FILE to its path, and set CLAWNERA_KEY_AGREEMENT_REQUIRE_EXTERNAL_MASTER_KEY=1",
+    "- The strict flag accepts only 0 or 1 and fails closed for a missing or adjacent key; never put the secret itself in argv or env",
     "- Optional key selection: --key-version <int> --key-file <file> --rotate",
     "- Optional lifetime: --ttl-sec <sec> or --expires-at-ms <unix-ms>",
     "- Optional signer overrides: --alias <wallet-alias> --address <0x...> --keystore-path <file>",
     "- Run this for seller and buyer before encrypted milestone delivery",
-    "- The helper now keeps retrying readback for indexer lag; if it still prints readback_pending, re-run GET /users/{address}/key-agreement before encrypted delivery"
+    "- The helper retries readback for indexer lag; pending or mismatched post-PUT readback exits nonzero with write_committed=true and an exact verification command"
+  ];
+}
+
+function keyAgreementMigrateUsageLines() {
+  return [
+    "Legacy key agreement migration helper:",
+    "- Usage: clawnera-help key-agreement-migrate --key-file <legacy-record.json>",
+    "- Replaces one owner-only plaintext v1 record atomically with an authenticated encrypted v2 envelope",
+    "- No private key or protection secret is printed; plaintext legacy records remain rejected by every normal command",
+    "- The adjacent master-key default is for local convenience and protects only against a record-only leak",
+    "- Production: pre-provision a cryptographically random owner-only 32-byte key outside the record directory, set CLAWNERA_KEY_AGREEMENT_MASTER_KEY_FILE, and set CLAWNERA_KEY_AGREEMENT_REQUIRE_EXTERNAL_MASTER_KEY=1",
+    "- Migration also encrypts an expired legacy record, but normal use continues to reject it as expired",
   ];
 }
 
@@ -14764,11 +14605,11 @@ function checkpointEvidenceExportUsageLines() {
 
 function managedStorageFeePayUsageLines() {
   return [
-    "Managed storage fee helper:",
+    "Managed storage fee helper (disabled):",
     "- Usage: clawnera-help managed-storage-fee-pay --order-id <id> --milestone-id <id> --auth-state-file <file>",
-    "- Reads /policy/storage + /policy/fees, builds the IOTA or Sui `manifest_anchor::pay_managed_storage_fee_*` transaction locally, then signs and broadcasts locally",
-    "- Optional: --proof-out <file> --dry-run --alias <wallet-alias> --address <0x...> --keystore-path <file> --sui-network <mainnet|testnet> --sui-rpc-url <url>",
-    "- Use this before managed-storage presign. The same actor must later use the payment proof."
+    "- The legacy fee builders are disabled because they do not bind the payment to the authoritative policy and milestone escrow.",
+    "- Obtain an exact `manifest_anchor::pay_managed_storage_fee_*_v2` proof through a reviewed chain-native flow, then pass the saved proof to managed-storage-presign.",
+    "- Use BYO storage while that exact V2 payment flow is unavailable."
   ];
 }
 
@@ -14798,17 +14639,19 @@ function reviewerShortlistUsageLines() {
     "Reviewer shortlist helper:",
     "- Usage: clawnera-help reviewer-shortlist --order-id <id> --milestone-id <id> --order-context-file <file> --auth-state-file <operator-auth-state>",
     "- Replacement usage: clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <0x...> --auth-state-file <operator-auth-state>",
-    "- Fetches the latest finalized checkpoint digest, builds the canonical shortlist body, and writes the exact publish body for dispute-open or reviewer-replace",
+    "- Fetches the latest finalized checkpoint digest, validates the receipt plus external-custody operator authorization handoff, and writes the exact future publish body for dispute-open or reviewer-replace",
     "- The safest --order-context-file is a freshly saved buyer/seller GET /orders/{orderId}/timeline readback; operators may not be allowed to read actor-scoped order timeline routes directly",
     "- Optional: --reviewer-count <n> --allow-new-reviewers <true|false> --min-decisions-total <n> --allow-truncated-scan <true|false>",
     "- Optional: --escrow-object-id <0x...> --bond-object-id <0x...> when no stored order/timeline file is available",
     "- Optional outputs: --receipt-out <file> --publish-body-out <file> --publish-auth-state-file <buyer-or-seller-auth-state> --rpc-url <url>",
-    "- The shortlist call itself uses operator auth and only prepares the receipt plus the exact publish body.",
+    "- The shortlist call itself uses operator auth and only prepares the receipt, operatorAuthorizationHandoff, and exact future publish body.",
+    "- publish_ready=false until the external custody workflow completes the exact operatorAuthorizationHandoff; never pass its missing operator inputs into this public helper.",
+    "- After operator authorization, the buyer/seller tx plan must return matching inviteBinding and preExecutionRequirements and must dry-run with explicit success effects.",
     "- OPEN publish is buyer/seller-owned: POST /orders/{orderId}/milestones/{milestoneId}/disputes/open.",
     "- REPLACEMENT publish is buyer/seller-owned: POST /disputes/{disputeCaseId}/reviewers/replace.",
     "- Reviewer-self routes begin only after the publish tx succeeds and ReviewerInvited is indexed.",
     "- After publish, trust post_execute_binding_ok=true as the activation proof. If it is missing or false, stop and inspect live receipt/dispute readback instead of reaching for a manual bind route.",
-    "- Important: shortlist success only prepares the exact publish body; current runtimes can still hard-stop on 409 reviewer_invite_tx_not_supported until the live package exposes invite-aware callables.",
+    "- Important: shortlist success only prepares a blocked authorization handoff plus the future publish body; current runtimes can still hard-stop on 409 reviewer_invite_tx_not_supported until the live package exposes invite-aware callables.",
     "- Important: replacement rounds are full reassignment rounds; do not request only the missing delta slots unless the live case already lowered requiredReviewerVotes."
   ];
 }
@@ -14822,7 +14665,7 @@ function mailboxEventsUsageLines() {
     "- If the wider event read times out transiently, the helper automatically retries with a smaller recent-event window",
     "- When the API event feed is empty, the helper only falls back to on-chain reads if you explicitly pass --network or --rpc-url",
     "- Use this instead of guessing seq numbers from raw /events queries",
-    "- If indexing is still catching up, use the mailbox_signal_posted_seq or mailbox_signal_acked_seq printed by tx-plan-execute as the temporary source of truth and re-read later"
+    "- If indexing is still catching up, use mailbox sequence values only from the verified chain-native receipt and re-read later"
   ];
 }
 
@@ -14830,7 +14673,8 @@ function pinataUploadJsonUsageLines() {
   return [
     "Pinata JSON upload helper:",
     "- Usage: clawnera-help pinata-upload-json --file <payload.json>",
-    "- Auth: --jwt <token>, --jwt-file <file>, or export PINATA_JWT=...",
+    "- Auth: owner-only --jwt-file <file>, or export PINATA_JWT=...",
+    "- JWT values in process arguments are rejected",
     "- Optional: --jwt-env <ENV_NAME> --name <pin-name>",
     "- Uploads one JSON file with pinJSONToIPFS and prints cid + ipfs:// URI"
   ];
@@ -14890,7 +14734,7 @@ function reviewerVotePrepareUsageLines() {
     "- Canonical secure file path: --out reviewer-vote.json",
     "- Alternative secure file path: --json > reviewer-vote.json",
     "- Default stdout redacts commit and reveal payloads; plain stdout redirection alone is not a usable reveal file unless you also pass --json",
-    "- Direct next step: tx-plan-execute ... --body-file ./reviewer-vote.json --body-select commitRequestBody",
+    "- Direct inspection step: tx-plan-dry-run ... --body-file ./reviewer-vote.json --body-select commitRequestBody",
     "- Commit hash rule: sha256(vote_byte || case_id_bytes || reviewer_address_bytes || nonce_bytes)",
     "- Contract truth: vote=1 means seller settlement, vote=0 means buyer settlement",
   ];
@@ -15894,15 +15738,6 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
       console.log(`env_file=${result.envOut}`);
       console.log(`source ${shellQuote(result.envOut)}`);
     }
-    if (!result.stateOut && !result.envOut) {
-      console.log(`export CLAWNERA_API_BASE_URL=${shellQuote(result.apiBase)}`);
-      console.log(`export CLAWNERA_API_JWT=${shellQuote(result.token)}`);
-      console.log(`export CLAWNERA_API_REFRESH_TOKEN=${shellQuote(result.refreshToken)}`);
-      console.log(`export CLAWNERA_API_ADDRESS=${shellQuote(result.address)}`);
-      if (result.alias) {
-        console.log(`export CLAWNERA_API_ADDRESS_ALIAS=${shellQuote(result.alias)}`);
-      }
-    }
   } else {
     console.error(`auth_login_helper_error: ${result.error}`);
     process.exitCode = 1;
@@ -16271,6 +16106,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.chainFamily) {
       console.log(`chain_family=${result.chainFamily}`);
     }
+    if (result.chainIdentifier) {
+      console.log(`chain_identifier=${result.chainIdentifier}`);
+    }
     if (result.suiRpcUrl) {
       console.log(`sui_rpc_url=${result.suiRpcUrl}`);
     }
@@ -16283,6 +16121,13 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.planOut) {
       console.log(`plan_file=${result.planOut}`);
     }
+    if (result.reviewerSelectionAuthorization?.required === true) {
+      console.log("external_operator_authorization_required=true");
+      console.log(`reviewer_selection_authorization_state=${result.reviewerSelectionAuthorization.state}`);
+      console.log(`reviewer_selection_receipt_id=${result.reviewerSelectionAuthorization.reviewerSelectionReceiptId}`);
+      console.log(`reviewer_selection_bind_route=${result.reviewerSelectionAuthorization.bindRoute}`);
+      console.log("external_operator_authorization_precondition_dry_run_satisfied=true");
+    }
     if (result.txBytesOut) {
       console.log(`tx_bytes_file=${result.txBytesOut}`);
     }
@@ -16293,6 +16138,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
     if (result.chainFamily) {
       console.error(`chain_family=${result.chainFamily}`);
+    }
+    if (result.chainIdentifier) {
+      console.error(`chain_identifier=${result.chainIdentifier}`);
     }
     if (result.target) {
       console.error(`target=${result.target}`);
@@ -16305,6 +16153,15 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
     if (result.hint) {
       console.error(`hint=${result.hint}`);
+    }
+    if (result.waitUntilIso) {
+      console.error(`wait_until=${result.waitUntilIso}`);
+    }
+    if (Number.isInteger(result.retryAfterMs) && result.retryAfterMs >= 0) {
+      console.error(`retry_after_ms=${result.retryAfterMs}`);
+    }
+    if (result.nextCommandHint) {
+      console.error(`next_command=${result.nextCommandHint}`);
     }
     process.exitCode = 1;
   }
@@ -16324,6 +16181,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`tx_digest=${result.txDigest || "unknown"}`);
     if (result.chainFamily) {
       console.log(`chain_family=${result.chainFamily}`);
+    }
+    if (result.chainIdentifier) {
+      console.log(`chain_identifier=${result.chainIdentifier}`);
     }
     if (result.suiRpcUrl) {
       console.log(`sui_rpc_url=${result.suiRpcUrl}`);
@@ -16411,6 +16271,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
     if (result.chainFamily) {
       console.error(`chain_family=${result.chainFamily}`);
+    }
+    if (result.chainIdentifier) {
+      console.error(`chain_identifier=${result.chainIdentifier}`);
     }
     if (result.target) {
       console.error(`target=${result.target}`);
@@ -16518,6 +16381,32 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   if (!result.ok && !result.help) {
     process.exitCode = 1;
   }
+} else if (effectiveCommand === "key-agreement-migrate") {
+  const result = await runKeyAgreementMigrate(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`key_agreement_migrate_ok address=${result.address}`);
+    console.log(`key_version=${result.keyVersion}`);
+    console.log(`key_file=${result.keyFile}`);
+    console.log(`record_version=${result.version}`);
+    if (result.expired) {
+      console.log("warning=key_agreement_record_expired");
+    }
+  } else {
+    console.error(`key_agreement_migrate_error: ${result.error}`);
+    if (result.hint) {
+      console.error(`hint=${result.hint}`);
+    }
+    process.exitCode = 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = 1;
+  }
 } else if (effectiveCommand === "key-agreement-upsert") {
   const result = await runKeyAgreementUpsert(commandArgs);
   if (flags.json) {
@@ -16539,6 +16428,15 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`key_agreement_upsert_error: ${result.error}`);
+    if (result.hint) {
+      console.error(`hint=${result.hint}`);
+    }
+    if (result.writeCommitted) {
+      console.error("write_committed=true");
+    }
+    if (result.verifyHint) {
+      console.error(`verify_readback=${result.verifyHint}`);
+    }
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {
@@ -16912,19 +16810,11 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     for (const line of result.usage) {
       console.log(line);
     }
-  } else if (result.ok) {
-    console.log(`managed_storage_fee_pay_ok order_id=${result.orderId} milestone_id=${result.milestoneId}`);
-    if (result.txDigest) {
-      console.log(`tx_digest=${result.txDigest}`);
-    }
-    if (result.proofOut) {
-      console.log(`payment_proof_file=${result.proofOut}`);
-    }
-    if (result.nextPresignHint) {
-      console.log(`next_presign=${result.nextPresignHint}`);
-    }
   } else {
     console.error(`managed_storage_fee_pay_error: ${result.error}`);
+    if (result.hint) {
+      console.error(`hint=${result.hint}`);
+    }
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {
@@ -17005,6 +16895,12 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.publishBodyOut) {
       console.log(`publish_body_file=${result.publishBodyOut}`);
     }
+    if (result.operatorAuthorizationRequired === true) {
+      console.log("external_operator_authorization_required=true");
+      console.log(`operator_authorization_state=${result.operatorAuthorizationHandoff?.state || "unknown"}`);
+      console.log(`operator_authorization_tx_builder=${result.operatorAuthorizationHandoff?.txBuilder || "unknown"}`);
+      console.log("publish_ready=false");
+    }
     if (Array.isArray(result.shortlistedReviewerAddresses) && result.shortlistedReviewerAddresses.length > 0) {
       console.log(`shortlisted_reviewers=${result.shortlistedReviewerAddresses.join(",")}`);
     }
@@ -17013,8 +16909,8 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         console.log(`warning=${warning}`);
       }
     }
-    if (result.nextPublishHint) {
-      console.log(`next_publish=${result.nextPublishHint}`);
+    if (result.nextPostAuthorizationDryRunHint) {
+      console.log(`next_after_operator_authorization=${result.nextPostAuthorizationDryRunHint}`);
     }
   } else {
     console.error(`reviewer_shortlist_error: ${result.error}`);
@@ -17049,10 +16945,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
       const status = typeof invite?.status === "string" ? invite.status : "unknown";
       console.log(`invite dispute_case_object_id=${disputeCaseObjectId} status=${status}`);
       if (status === "invited") {
-        console.log(`next_accept=clawnera-help tx-plan-execute POST /disputes/${disputeCaseObjectId}/reviewers/accept --auth-state-file <reviewer-auth-state-file> --body '{}'`);
+        console.log(`next_accept=clawnera-help tx-plan-dry-run POST /disputes/${disputeCaseObjectId}/reviewers/accept --auth-state-file <reviewer-auth-state-file> --body '{}'`);
       }
       if (status === "closed") {
-        console.log(`next_claim_metrics=clawnera-help tx-plan-execute POST /reviewers/me/claim-metrics --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"${disputeCaseObjectId}\"}'`);
+        console.log(`next_claim_metrics=clawnera-help tx-plan-dry-run POST /reviewers/me/claim-metrics --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"${disputeCaseObjectId}\"}'`);
       }
     }
   } else {
@@ -17389,6 +17285,16 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log("next_readback=use tx_digest as the canonical on-chain lookup handle");
   } else {
     console.error(`iota_execute_transfer_error: ${result.error}`);
+    if (result.executionUncertain) {
+      console.error("execution_uncertain=true");
+      console.error("do_not_retry=true");
+    }
+    if (result.txDigest) {
+      console.error(`tx_digest=${result.txDigest}`);
+    }
+    if (result.verifyHint) {
+      console.error(`verify_hint=${result.verifyHint}`);
+    }
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {

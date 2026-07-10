@@ -1,6 +1,6 @@
 {
   "name": "clawnera-bot-market",
-  "version": "0.1.103",
+  "version": "0.1.104",
   "description": "Bot-first Clawnera CLI and knowledge base. Start with clawnera-help journey <role> --compact",
   "type": "module",
   "private": false,
@@ -55,10 +55,6 @@
     "docs/guides/SPONSOR_POLICY.md",
     "docs/guides/TASK_RECIPES.md",
     "docs/guides/TROUBLESHOOTING_SUPPORT.md",
-    "docs/docsources/README.md",
-    "docs/docsources/claw/CLAW_LOCAL_ORACLE_SYNC_RUNBOOK.md",
-    "docs/docsources/claw/CLAW_OPERATIONS_CURRENT.md",
-    "docs/docsources/claw/CLAW_SWAP_GATEWAY_CURRENT.md",
     "docs/docsources/core/BOT_PROTOCOL_V1.md",
     "docs/docsources/core/BOT_QUICKSTART.md",
     "docs/docsources/core/NEXT_SESSION_STATUS.md",
@@ -113,21 +109,28 @@
     "search": "node ./bin/clawnera-help.mjs search sponsor",
     "test": "node --test ./test/*.test.mjs",
     "lint": "node --check ./bin/clawnera-help.mjs ./examples/*.mjs ./lib/*.mjs ./test/*.test.mjs",
-    "pack:dry-run": "npm pack --dry-run",
+    "pack:dry-run": "npm pack --dry-run --ignore-scripts",
     "check:publish-surface": "bash ./scripts/ci/check-publish-surface.sh",
-    "release:check": "npm run lint && npm run test && npm run validate:strict && npm run check:publish-surface && npm run pack:dry-run",
+    "check:sync-provenance": "node ./scripts/ci/check-sync-provenance.mjs",
+    "check:workflow-security": "node ./scripts/ci/check-workflow-security.mjs",
+    "check:release-security": "node ./scripts/ci/check-release-security.mjs",
+    "check:release-live-prerequisites": "node ./scripts/release/check-live-publish-prerequisites.mjs",
+    "release:check": "npm run lint && npm run test && npm run validate:strict && npm run check:sync-provenance && npm run check:workflow-security && npm run check:release-security && npm run check:publish-surface && npm run pack:dry-run",
     "release:sync-global": "bash ./scripts/release/sync-global-published.sh",
-    "prepack": "npm run lint && npm run test && npm run validate:strict && npm run check:publish-surface",
+    "prepack": "npm run lint && npm run test && npm run validate:strict && npm run check:workflow-security && npm run check:release-security && npm run check:publish-surface",
     "sync:local": "bash ./scripts/sync-local-sources.sh",
     "bootstrap": "bash ./scripts/bootstrap.sh"
   },
   "dependencies": {
-    "@iota/iota-sdk": "1.10.1",
-    "@mysten/sui": "^2.16.2",
+    "@iota/iota-sdk": "1.13.0",
+    "@mysten/sui": "2.16.0",
     "@noble/ciphers": "^1.2.1",
     "@noble/curves": "^1.8.1",
     "@noble/hashes": "^1.8.0",
     "bs58": "^6.0.0"
+  },
+  "devDependencies": {
+    "js-yaml": "4.2.0"
   },
   "engines": {
     "node": ">=24 <25"

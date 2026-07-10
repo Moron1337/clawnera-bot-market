@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -9,6 +8,11 @@ import {
   tokenExpiresSoon,
   validateRuntimeAuthState
 } from "../lib/runtime-auth.mjs";
+import {
+  normalizeAuthenticatedBaseUrl,
+  readPrivateFile,
+  writePrivateJsonAtomic
+} from "../lib/local-security.mjs";
 import {
   CUSTOM_NOTIFICATION_PRESET,
   DEFAULT_NOTIFICATION_BATCH_LIMIT,
@@ -82,12 +86,9 @@ function readRequiredEnv(name) {
 
 function normalizeApiBase(value) {
   try {
-    const parsed = new URL(String(value || "").trim());
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      throw new Error("invalid_protocol");
-    }
-    const normalized = parsed.toString();
-    return normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+    return normalizeAuthenticatedBaseUrl(String(value || ""), {
+      errorCode: "missing_or_invalid_api_base"
+    });
   } catch {
     return "";
   }
@@ -151,7 +152,7 @@ function backupStateFile(cursorFile) {
 }
 
 async function readCursorStateFile(cursorFile) {
-  const raw = await fs.readFile(cursorFile, "utf8");
+  const raw = await readPrivateFile(cursorFile, "utf8");
   const parsed = JSON.parse(raw);
   return typeof parsed.cursor === "string" && parsed.cursor ? { cursor: parsed.cursor } : { cursor: undefined };
 }
@@ -187,13 +188,10 @@ export async function loadState(cursorFile) {
 
 export async function saveState(cursorFile, state) {
   const target = path.resolve(cursorFile);
-  const tempFile = `${target}.${process.pid}.${Date.now()}.tmp`;
   const backupFile = backupStateFile(target);
-  await fs.mkdir(path.dirname(target), { recursive: true });
-  await fs.writeFile(tempFile, JSON.stringify(state, null, 2), { mode: 0o600 });
-  await fs.rename(tempFile, target);
+  await writePrivateJsonAtomic(target, state);
   try {
-    await fs.copyFile(target, backupFile);
+    await writePrivateJsonAtomic(backupFile, state);
     return {
       backupWarning: null
     };
@@ -221,6 +219,7 @@ async function fetchEventPage({ apiBase, jwt, cursor, batchLimit, timeoutMs, eve
 
   const response = await fetch(url, {
     method: "GET",
+    redirect: "error",
     headers: {
       accept: "application/json",
       authorization: `Bearer ${jwt}`
@@ -432,6 +431,7 @@ async function fetchEventPageWithRefresh({
 async function sendTelegramMessage({ botToken, chatId, text, timeoutMs }) {
   const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",
+    redirect: "error",
     headers: {
       "content-type": "application/json"
     },

@@ -68,23 +68,21 @@ This matrix defines the minimum release gate for two-party behavior and adversar
 
 ## Layer F: Sponsor Validation
 - Status:
-  - Sponsor runtime is active.
+  - Sponsor runtime is active only for the explicitly executable existing-escrow families.
   - Canonical matrix and remaining live-gap tracking moved to:
     - `docs/API_CONTRACT_SPONSOR_VALIDATION_BLUEPRINT.md`
-  - Mainnet `CLAW` sponsor proof is now green on package:
-    - `0x6f220d1f8776448f65abeb348c9372b23812a84f54e048c5afb7992724aae1cd`
-  - Canonical success evidence:
+  - The former mainnet CLAW create proof is historical v1 evidence only:
     - `docs/reports/claw-sponsor-mainnet-cutover-20260306.md`
-  - Historical pre-cutover blocker evidence remains:
+  - Current intent-v2 CLAW create remains self-pay and blocked pending an audited exact validator.
+  - Historical pre-cutover blocker evidence:
     - `docs/reports/claw-sponsor-mainnet-gap-20260306.md`
 - Suites:
   - `corepack pnpm --filter @clawdex/api exec vitest run test/sponsor.test.ts`
   - `corepack pnpm --filter @clawdex/api sponsor:live:smoke`
-  - Dedicated mainnet preflight/live runner:
-    - `corepack pnpm claw-sponsor:e2e:mainnet`
 - Gate:
-  - `reserve` and `execute` successful under target privilege mode.
+  - `reserve` and `execute` successful only for an advertised executable family under target privilege mode.
   - Capability denials and abuse limits return expected non-2xx errors.
+  - CLAW escrow creation is not green until a new intent-v2 validator and live proof are present.
 
 ## Runner
 - Local-only:

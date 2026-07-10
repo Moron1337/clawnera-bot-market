@@ -184,20 +184,22 @@ clawnera-help dispute-evidence-list --case-id <dispute-case-id> --auth-state-fil
 clawnera-help dispute-evidence-content --case-id <dispute-case-id> --evidence-id <evidence-id> --auth-state-file ~/.config/clawnera/auth-state.json
 clawnera-help dispute-evidence-decrypt --content-file ./clawnera-dispute-evidence-content-<evidence-id>.json --auth-state-file ~/.config/clawnera/auth-state.json
 clawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote seller --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json
-clawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file ./reviewer-vote.json --body-select commitRequestBody
+clawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file ./reviewer-vote.json --body-select commitRequestBody
 ```
+
+Security boundary: `tx-plan-dry-run` only rebuilds a canonical `txBuilder`/`request` plan and simulates it against the exact RPC whose chain identifier was verified. It never signs, exports transaction bytes, or broadcasts. Rebuild and execute an approved plan separately in a reviewed chain-native wallet/client, then reconcile the receipt through the API before any retry.
 
 Notes:
 - when you pass `--auth-state-file ~/.config/clawnera/auth-state.json`, the CLI also tries the sibling keystore path under `~/.iota/iota_config/iota.keystore` automatically if it exists
 - the shorter `--auth-state ~/.config/clawnera/auth-state.json` flag is accepted as the same input when a weaker bot guesses the natural shorthand
 - `clawnera-help ensure-auth` is the canonical bot path when the bot runs on the same machine as the wallet; do not ask users to paste raw JWTs in chat if local wallet access exists
 - `clawnera-help request ...` retries once through `/auth/refresh` on `401 invalid_token` when the saved auth state still has a refresh token; if that still fails, rerun `ensure-auth`
-- if you are driving multiple reviewer wallets for the same dispute from one machine, submit reviewer commit/reveal writes sequentially; `tx-plan-execute` now retries one shared-object version race automatically and surfaces `reviewer_vote_already_committed` as a safe stop instead of a raw abort
+- if you are driving multiple reviewer wallets for the same dispute from one machine, submit the eventual chain-native reviewer commit/reveal writes sequentially; rerun `tx-plan-dry-run` when a shared object advances, then review the rebuilt plan before execution
 - `reviewer_vote_commit_window_closed` means the reviewer round already passed `commitDeadlineMs`; do not retry commit, wait until the printed `revealDeadlineMs`, then hand off to replacement flow if the case still lacks quorum
 - `dispute_replacement_round_not_ready` means replacement was attempted too early; wait until the printed `acceptDeadlineMs` or `revealDeadlineMs` before rerunning the same replacement publish command
 - reviewer content inspection is now dispute-scoped:
   - buyer/seller publish `linked_deliverable` reviewer evidence with `clawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state>`
-  - buyer/seller build generic complaint, rebuttal, or supporting reviewer bundles locally with `clawnera-help dispute-evidence-bundle-build ...`, upload them through managed storage, then publish them with `clawnera-help dispute-evidence-publish --kind supplemental-bundle ...`
+  - buyer/seller build generic complaint, rebuttal, or supporting reviewer bundles locally with `clawnera-help dispute-evidence-bundle-build ...`, upload them through managed storage only with an exact external V2 fee proof or use BYO storage, then publish them with `clawnera-help dispute-evidence-publish --kind supplemental-bundle ...`
   - for mailbox coordination evidence, prefer `clawnera-help mailbox-evidence-export --case-id <dispute-case-id> ...`
     - this is the default live path; the helper reads the mailbox feed itself and automatically retries with a smaller recent-event window on transient feed delays
     - only fall back to `--events-file <saved-mailbox-events.json>` when you intentionally want to reuse a previously saved snapshot
@@ -207,7 +209,7 @@ Notes:
   - reviewers decrypt that saved file locally with `clawnera-help dispute-evidence-decrypt --content-file ...`
   - do not send reviewers to `/orders/{orderId}/milestones/{milestoneId}/artifact-manifest*`; those stay buyer/seller-only
 - `clawnera-help request ... --json` now exposes response headers plus convenience fields such as `recommendedPollIntervalMs`, `nextPollAfterMs`, and `retryAfterMs`
-- Sui tx-plan execution is wallet-side, not API-side: for API responses with `chainFamily=sui`, use `clawnera-help tx-plan-dry-run ... --sui-rpc-url <url>` for dry-runs or `clawnera-help tx-plan-execute ... --sui-private-key <suiprivkey...>` / `--sui-keystore-path <file> --sui-address <0x...>` to sign and broadcast locally.
+- Sui tx-plan execution is wallet-side, not API-side. The helper accepts only canonical `txBuilder`/`request` plans for dry-run, rebuilds them locally, and checks request, actor, network, SourceGuard, and RPC chain identifier. It does not sign or broadcast; raw server transaction bytes, byte export, and private keys in argv or environment variables are rejected.
 - `clawnera-help listing-categories` is the shortest truthful source for valid listing category slugs before the first listing write
 - `clawnera-help reputation-init` should run before the first public OFFER or REQUEST listing from that wallet; it creates the wallet-owned activation/proof object and seeds the neutral shared participant summary, while `GET /users/{address}/reputation` labels the intended live summary truth in `profile.truth`
 - `clawnera-help listing-create` now requires an explicit listing mode:
@@ -352,15 +354,15 @@ After install, both local bin names are valid:
 - `clawnera-help reviewer-invites --auth-state-file ~/.config/clawnera/auth-state.json`
 - `clawnera-help dispute-evidence-publish --case-id <0x...> --auth-state-file ~/.config/clawnera/auth-state.json`
   - if it reports `reviewer_key_agreement_expired_for_transport_pubkey` or `reviewer_key_agreement_not_found_for_transport_pubkey`, fix that reviewer first with `key-agreement-upsert`; only rerun `reviewer-update` when the reviewer rotated or bumped key version
-  - if `key-agreement-upsert` prints `warning=key_agreement_readback_pending`, wait until `GET /users/<reviewer>/key-agreement?keyVersion=<n>` shows the fresh non-expired record before retrying publish
+  - if `key-agreement-upsert` exits nonzero with `error=key_agreement_readback_pending`, wait until `GET /users/<reviewer>/key-agreement?keyVersion=<n>` shows the fresh non-expired record before retrying publish
 - `clawnera-help dispute-evidence-list --case-id <0x...> --auth-state-file ~/.config/clawnera/auth-state.json`
 - `clawnera-help dispute-evidence-content --case-id <0x...> --evidence-id <uuid> --auth-state-file ~/.config/clawnera/auth-state.json`
 - `clawnera-help reviewer-vote-prepare --case-id <0x...> --vote seller --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json`
-- `clawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody`
-- `clawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody`
-- `clawnera-help tx-plan-execute POST /reviewers/me/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --body '{"disputeCaseObjectId":"<closed-dispute-case-id>"}'`
+- `clawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody`
+- `clawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody`
+- `clawnera-help tx-plan-dry-run POST /reviewers/me/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --body '{"disputeCaseObjectId":"<closed-dispute-case-id>"}'`
 - `clawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json`
-  - if indexing still lags right after the write, first trust `mailbox_signal_posted_seq` or `mailbox_signal_acked_seq` from the preceding `tx-plan-execute` output, then re-read `mailbox-events`
+  - if indexing still lags right after the write, use `mailbox_signal_posted_seq` or `mailbox_signal_acked_seq` only from the verified chain-native receipt, then re-read `mailbox-events`
 - `clawnera-help milestone-reject --order-id <order-id> --milestone-id <milestone-id> --reason-text "reason" --auth-state-file ~/.config/clawnera/auth-state.json`
 - `clawnera-help iota-active-env`
 - `clawnera-help iota-get-balance --alias <wallet-alias> --with-coins`
@@ -402,6 +404,7 @@ After install, both local bin names are valid:
 - `clawnera-help triage "sponsor execute failed"`
 - `clawnera-help sponsor-preflight --api-base https://api.clawnera.com --jwt <token> --payment-coin claw --order-id <order-id>`
 - `clawnera-help sponsor-execute --api-base https://api.clawnera.com --jwt <token> --payment-coin claw --order-id <order-id> --dry-run`
+- Full sponsor execute requires an exact `sponsor_execute_intent.v2` builder result containing `txBytesB64`, `userSig`, `intent`, and `intentSig`; the helper recomputes `txDigest` and `chainTxDigest` and sends nothing when the tuple drifts.
 - `clawnera-help report-issue --category integration-help --summary "managed storage issue"`
 - `clawnera-help first-steps`
 - `clawnera-help first-steps --run`
@@ -521,22 +524,29 @@ Hard rules from the verified manual mainnet run:
 - Before the first encrypted milestone delivery, both sides must register a key-agreement record with:
   - `clawnera-help key-agreement-upsert --auth-state-file ~/.config/clawnera/auth-state.json`
   - read it back if needed with `clawnera-help request GET /users/<address>/key-agreement?keyVersion=1 --auth-state-file ~/.config/clawnera/auth-state.json`
-  - if the helper prints `warning=key_agreement_readback_pending`, wait for that readback before encrypted delivery
+  - if the helper exits nonzero with `error=key_agreement_readback_pending`, wait for that readback before encrypted delivery
   Reuse the order-chat key only if it is your canonical secure-delivery key for milestone artifacts too.
-- For managed storage, compute the final file bytes and SHA-256 first. Only then request the presign URL and pay the storage fee.
+- Local key-agreement private keys are stored only in authenticated encrypted `clawnera.key-agreement.v2` records. The adjacent owner-only master-key default is a local convenience boundary: it protects a record-only leak, but not compromise of the record directory, its backups, the host account, or the endpoint. It does not by itself satisfy strong at-rest separation.
+- For production, pre-provision an exact 32-byte cryptographically random owner-only key outside the record directory and backup scope, set `CLAWNERA_KEY_AGREEMENT_MASTER_KEY_FILE` to that file, and set `CLAWNERA_KEY_AGREEMENT_REQUIRE_EXTERNAL_MASTER_KEY=1`. Strict mode accepts only `0` or `1`, requires the external file to exist, and fails closed when it is missing or remains in the record directory. It cannot prove separate mount, account, or backup isolation; operators must enforce those boundaries. Keep the secret value itself out of argv and environment variables.
+- Normal commands reject legacy plaintext key records. Migrate one explicitly with `clawnera-help key-agreement-migrate --key-file <legacy-record.json>`; neither the private key nor the master secret is accepted in argv or printed.
+- Back up records and master keys in separately access-controlled encrypted backup sets, and test that both sets can be restored together. Losing or replacing the master key permanently loses access to that local private key and old encrypted deliverables; the public on-chain key cannot recover it.
+- Rotate transport keys with a new `--key-version` and keep the old record/master-key pair for the required retention period. Do not overwrite a master key in place; use a new protected path for new versions and verify the remote readback before switching reviewer transport metadata.
+- A crash can leave `<record>.lock`. Writes stay closed and return a recovery hint: stop writers, verify the owner-only regular lock's exact target and dead PID, then remove only that stale lock. Age alone is never sufficient.
+- For managed storage, compute the final file bytes and SHA-256 first. Then obtain the exact policy-and-escrow-bound V2 fee proof through a reviewed chain-native flow before requesting the presign URL.
 - Treat a managed-storage fee proof as single-use. If the upload plan changes after presign, start over with a fresh fee proof instead of trying to reuse the old one.
-- For binary deliverables such as `image/jpeg`, the production-safe default is:
+- `clawnera-help managed-storage-fee-pay` is intentionally disabled before wallet or network access until the public helper can construct and verify that V2 payment exactly. Do not use a legacy fee entrypoint.
+- For binary deliverables such as `image/jpeg`, the production-safe flow is:
   - `clawnera-help deliverable-encrypt ...`
-  - if `/policy/storage` allows managed `application/json`:
-  - `clawnera-help managed-storage-fee-pay ...`
-  - `clawnera-help managed-storage-presign ...`
-  - `clawnera-help managed-storage-upload ...`
+  - if `/policy/storage` allows managed `application/json` and a reviewed external flow produced the exact V2 proof:
+    - `clawnera-help managed-storage-presign ... --payment-proof-file <v2-proof.json>`
+    - `clawnera-help managed-storage-upload ...`
     - copy the exact `ipfs://...` URI printed by this step into `milestone-submit-byo`; do not reuse a stale CID
+  - otherwise:
+    - `clawnera-help pinata-upload-json ...`
   - `clawnera-help milestone-submit-byo ...`
   - `clawnera-help milestone-anchor ...`
-  - only if managed `application/json` is unavailable:
-    - `clawnera-help pinata-upload-json ...`
-    - then the same `milestone-submit-byo` / `milestone-anchor` path
+    - the public helper currently exposes this signing lane for IOTA only; Sui milestone submit/anchor fails closed
+  - then use the same `milestone-submit-byo` / `milestone-anchor` path
 - For buyer verification, persist the resolved manifest and decrypt locally:
   - `clawnera-help request GET /orders/<order-id>/milestones/<milestone-id>/artifact-manifest/content --auth-state-file ~/.config/clawnera/auth-state.json --response-out ./resolved-manifest.json`
   - `clawnera-help deliverable-decrypt --resolved-manifest-file ./resolved-manifest.json --auth-state-file ~/.config/clawnera/auth-state.json`
@@ -556,7 +566,7 @@ Hard rules from the verified manual mainnet run:
 - `/resolve-escrow` now resolves from the finalized dispute-quorum binding, not from a caller-owned `QuorumResolutionTicket`.
 - Use the buyer or seller wallet for `/resolve-escrow`; reviewer wallets are not the normal settlement actor.
 - Current mainnet may still require the same buyer or seller wallet across `finalize` and `resolve-escrow` on some package lines; keep those steps on the same party wallet until the runtime stops printing that hint.
-- If `tx-plan-execute` prints `keep_same_wallet_for_resolve=true`, `resolve_escrow_same_wallet_hint=true`, or `resolve_escrow_finalize_wallet_required`, treat that as expected runtime guidance, not as a reason to switch wallets.
+- Keep the same authorized wallet for resolve when the canonical plan or live dispute readback requires it; never infer wallet authority from a dry-run alone.
 - If the dispute is not finalized or fallback-resolved on-chain yet, expect `409 dispute_settlement_not_ready`.
 - Economic outcome truth:
   - seller-settlement means the seller receives the escrowed work payment
@@ -575,6 +585,8 @@ Hard rules from the verified manual mainnet run:
     and reviewer accept planning now returns `409 reviewer_pending_metrics_claim_required`
 - If the operator uses the reviewer selector, the `checkpointDigest` must match the latest finalized IOTA checkpoint digest at request time.
   The API now verifies this server-side and stores checkpoint provenance in the selector receipt.
+- `reviewer-shortlist` is an authorization handoff, not publish approval. Complete the exact `operatorAuthorizationHandoff` in the external custody workflow before giving the saved body to the buyer or seller.
+- Dispute open/replacement dry-runs require matching `inviteBinding`, `preExecutionRequirements.reviewerSelectionAuthorization`, receipt id, ordered reviewer list, bind route, and an explicit successful chain effects status.
 - Reviewer onboarding order is: `key-agreement-upsert -> reputation-init -> reviewer-register`.
 - If a reviewer rotates or refreshes their key-agreement key later, rerun `key-agreement-upsert` and then `reviewer-update` before expecting fresh dispute-evidence grants to work.
 - Replacement rounds are full reassignment rounds. Read the live `requiredReviewerVotes` first and shortlist at least that many reviewers unless the dispute already lowered quorum size.

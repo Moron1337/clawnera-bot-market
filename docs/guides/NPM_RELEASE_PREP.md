@@ -29,7 +29,7 @@ Bevor irgendein Version Bump oder Publish-Versuch passiert:
    - `npm run test`
    - `npm run release:check`
 3. Doku/Topics sync:
-   - `npm run sync:local` (falls Core/CLAW geaendert wurde)
+   - `MARKETPLACE_SOURCE_ROOT=/path/to/clawdex MARKETPLACE_SOURCE_COMMIT=<reviewed-full-40-char-sha> npm run sync:local` (falls Core/SDK geaendert wurde)
    - `npm run validate -- --strict`
 4. Evidence-Datei anlegen:
    - z. B. `docs/reports/bot-market-release-hardening-YYYYMMDD.md`
@@ -37,7 +37,7 @@ Bevor irgendein Version Bump oder Publish-Versuch passiert:
      - `git rev-parse HEAD`
      - `git status --short`
      - `git diff --name-only`
-     - ob `sync:local` gefahren wurde oder bewusst nicht
+     - welcher saubere Clawdex-Commit mit `MARKETPLACE_SOURCE_ROOT=/path/to/clawdex MARKETPLACE_SOURCE_COMMIT=<reviewed-full-40-char-sha> npm run sync:local` synchronisiert wurde
      - Ergebnis von `npm run release:check`
 
 ## 3) Versionieren
@@ -66,34 +66,34 @@ Wichtig:
 - der installierte Bin-Name bleibt `clawnera-help`
 - `npx clawnera-help --help` ist nicht die kanonische Registry-Truth
 
-## 5) Publish (wenn Token gesetzt)
+## 5) Publish
 
 1. Bevorzugter offizieller Publish-Pfad:
    - GitHub Actions Trusted Publish ueber `.github/workflows/publish.yml`
-   - Trigger:
-     - bevorzugt GitHub Release `published`
-     - alternativ kontrolliert per `workflow_dispatch`
+   - Trigger: ausschliesslich ein veroeffentlichtes GitHub Release mit Tag `v<package-version>`
+   - geschuetztes GitHub Environment: `npm-publish`
    - wichtig:
      - `publish.yml` bleibt bewusst auf GitHub-hosted Actions
-     - der normale `ci`-Workflow darf auf dem Hetzner self-hosted Runner laufen, der Publish-Workflow aber nicht
-2. Publish:
-   - `npm publish --access public --provenance`
-3. Wichtiger Hinweis:
-   - lokaler Maintainer-Publish mit `--provenance` kann ausserhalb eines unterstuetzten CI/OIDC-Providers mit
-     `Automatic provenance generation not supported for provider: null`
-     scheitern
+     - Pull-Request-, CI-, Nightly- und Publish-Workflows laufen nur auf literal konfigurierten GitHub-hosted Runnern
+2. Der Workflow prueft vor dem Publish:
+   - Tag entspricht exakt der Package-Version
+   - Checkout-Commit entspricht exakt dem Tag-Commit
+   - Tag-Commit liegt auf `origin/main`
+   - der Source-Checkout ist nach Install und Tests weiterhin sauber; Tag/Main-Bindung wird unmittelbar vor dem Pack erneut geprueft
+   - Registry-Version existiert noch nicht
+   - Build/Test/Pack laufen in einem separaten Job mit ausschliesslich `contents: read`; dort ist kein OIDC-Token-Scope vorhanden
+   - der Environment-geschuetzte Publish-Job hat als einziger `id-token: write`, fuehrt weder Checkout noch Repo-Code, Installationen oder Nachtests aus und akzeptiert nur das heruntergeladene, inline erneut gepruefte Evidence-Artefakt
+3. Publish:
+   - genau ein Tarball wird mit `npm pack --json --ignore-scripts` erzeugt
+   - Tarball, SHA-256-Manifest und Source-Commit-Evidence werden als Workflow-Artefakt gespeichert
+   - ausschliesslich dieser bereits gehashte Tarball wird als letzter OIDC-Schritt mit `npm publish <artifact.tgz> --access public --provenance --ignore-scripts` publiziert
+4. Wichtiger Hinweis:
    - npm Trusted Publishing verlangt aktuell `npm CLI 11.5.1+` und einen GitHub-hosted Runner
-4. Rescue-only Fallback:
-   - nur wenn GitHub Trusted Publish gerade nicht verfuegbar ist, darf ein lokaler Maintainer-Publish als expliziter Ausnahmefall gefahren werden
-   - Kommando:
-     - `npm publish --access public --provenance=false`
-   - dabei immer festhalten:
-     - warum der GitHub Publish-Pfad nicht genutzt wurde
-     - wer lokal publiziert hat
-     - welche Version betroffen war
-   - dieser Fallback ist ein dokumentierter Rescue-Pfad, nicht der Normalfall
+   - lokale oder tokenbasierte Publishes sowie `--provenance=false` sind kein erlaubter Fallback; bei Ausfall bleibt das Release blockiert
 5. Registry-Truth verifizieren:
    - `npm view clawnera-bot-market version dist --json`
+   - ein separater GitHub-hosted Folgejob ohne OIDC vergleicht `dist.shasum` (SHA-1) und `dist.integrity` (SHA-512) zwingend mit den lokal vor dem Publish berechneten Digests desselben Tarballs
+   - ein vorhandener Versionsstring ohne passenden Digest ist kein erfolgreicher Readback
    - `npx clawnera-bot-market --help`
 6. Release-Paritaet pruefen:
    - `bash ./scripts/release/verify-release-parity.sh <version>`
@@ -111,6 +111,16 @@ Wichtig:
 
 ## 5a) Externe Pflicht-Config fuer npm Trusted Publishing
 
+**Live-Blocker (Read-only-Stand 2026-07-10):** `main` liefert fuer Branch Protection `404`, und die Environment-Liste enthaelt kein `npm-publish`. Der Workflow-Code ist repo-seitig vorbereitet, aber ein Publish ist absichtlich durch `check:release-live-prerequisites` blockiert. Der Environment-Name im YAML ist fuer sich allein kein Schutz und darf nicht als konfigurierte Freigabe gewertet werden.
+
+Vor dem ersten Publish muessen extern und anschliessend read-only verifiziert werden:
+
+- Branch Protection fuer `main` mit den vorgesehenen Reviews und Pflichtchecks
+- GitHub Environment `npm-publish` mit Required Reviewers und ohne unkontrollierten Admin-Bypass
+- Deployment-Policy ausschliesslich fuer die vorgesehenen geschuetzten Release-Tags
+- npm Trusted Publisher fuer Repository `Moron1337/clawnera-bot-market`, Workflow `publish.yml`, Environment `npm-publish`
+- frische Evidence in `docs/reports/npm-publish-live-prerequisites.json`; erst danach darf `status` auf `ready` wechseln
+
 Auf `npmjs.com` unter `Packages -> clawnera-bot-market -> Settings -> Trusted publishing`:
 
 1. Provider:
@@ -122,7 +132,8 @@ Auf `npmjs.com` unter `Packages -> clawnera-bot-market -> Settings -> Trusted pu
 4. Workflow filename:
    - `publish.yml`
 5. Environment name:
-   - leer lassen, solange kein GitHub Environment fuer Publish-Gates genutzt wird
+   - `npm-publish`
+   - im GitHub Environment mindestens Required Reviewers und Schutz vor unkontrolliertem Admin-Bypass konfigurieren
 
 Danach als sicherer Folge-Schritt unter `Settings -> Publishing access`:
 - `Require two-factor authentication and disallow tokens`
@@ -132,12 +143,11 @@ Erst nachdem der Trusted Publisher erfolgreich getestet wurde.
 ## 6) Post Release
 
 1. GitHub Release/Notes erstellen.
-2. Falls der Publish lokal als Rescue-Pfad lief, Tag + GitHub Release sofort nachziehen und danach erneut `bash ./scripts/release/verify-release-parity.sh <version>` fahren.
-3. Integratoren ueber neue Version informieren.
-4. Pflicht auf den lokalen Operator-Maschinen:
+2. Integratoren ueber neue Version informieren.
+3. Pflicht auf den lokalen Operator-Maschinen:
    - `npm run release:sync-global`
    - nur danach mit dem globalen `clawnera-help` weiterarbeiten
-5. Optional: vorherige Version als Rollback-Referenz dokumentieren.
+4. Optional: vorherige Version als Rollback-Referenz dokumentieren.
 
 ## 7) Abort / Containment
 

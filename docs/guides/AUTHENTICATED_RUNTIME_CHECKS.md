@@ -147,7 +147,7 @@ Das prueft:
 - JWT ist fuer den Actor gueltig
 - `/sponsor/preflight` ist erreichbar
 - die Runtime liefert Strategie, Diagnostics und Gas-Empfehlungen
-- order-id- und eventuelle execute-intent-Policy ist klar
+- order-id- und mandatory execute-intent-v2-Kontext ist klar
 - `minimumGasBudget` und `recommendedGasBudget` sind ohne echte Reservation sichtbar
 
 Aktuelle Production-Truth:
@@ -182,12 +182,16 @@ clawnera-help sponsor-execute \
   --purpose marketplace_tx \
   --payment-coin claw \
   --order-id "<order-id>" \
+  --chain-family iota \
+  --network mainnet \
   --reservation-out .tmp/sponsor-reservation.json \
   --build-cmd 'node ./scripts/build-sponsored-tx.mjs'
 ```
 
 Wichtig:
-- `--build-cmd` muss JSON mit `txBytesB64` und `userSig` ausgeben
+- `--build-cmd` muss JSON mit `txBytesB64`, `userSig`, vollstaendigem `intent` v2 und `intentSig` ausgeben
+- bei Raw-JWT-Auth `--chain-family iota|sui` und `--network <network>` explizit setzen; eine v2 Auth-State-Datei liefert diesen gebundenen Kontext bereits
+- der Helper berechnet `txDigest` und `chainTxDigest` selbst und stoppt vor `/sponsor/execute`, wenn der Builder-Intent abweicht
 - Sponsor-Gas-Coins sind nur fuer Gas, nicht fuer den Business-Payment-Betrag
 - fuer IOTA-Value-Transfers ein eigenes User-`paymentCoinObjectId` verwenden
 

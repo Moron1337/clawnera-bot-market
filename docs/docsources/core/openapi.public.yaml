@@ -79,6 +79,42 @@ paths:
                   - status
                   - sponsorLiveConfigured
                   - runtimeControlPlane
+        '503':
+          description: Worker is not ready, including the closed IOTA Fresh prepublish phase.
+          content:
+            application/json:
+              schema:
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - not_ready
+                  releasePhase:
+                    type: string
+                    enum:
+                      - prepublish_closed
+                  checks:
+                    properties:
+                      iotaFreshRelease:
+                        type: string
+                        enum:
+                          - prepublish_closed
+                      repository:
+                        type: string
+                        enum:
+                          - failed
+                          - not_checked
+                    type: object
+                    required:
+                      - repository
+                  detail:
+                    type: string
+                    nullable: true
+                type: object
+                required:
+                  - status
+                  - checks
+                  - detail
   /capabilities:
     get:
       tags:
@@ -106,6 +142,7 @@ paths:
                             enum:
                               - experimental_dark
                               - experimental_open
+                              - prepublish_closed
                           audience:
                             type: string
                             enum:
@@ -151,11 +188,13 @@ paths:
                             enum:
                               - wallet_auth
                               - bot_only
+                              - disabled
                           writeInteractionMode:
                             type: string
                             enum:
                               - wallet_auth
                               - bot_only
+                              - disabled
                           privilegedSponsor:
                             properties:
                               enabled:
@@ -165,6 +204,7 @@ paths:
                                 enum:
                                   - wallet_auth
                                   - bot_only
+                                  - disabled
                               policy:
                                 $ref: '#/components/schemas/SponsorPolicySnapshot'
                             type: object
@@ -280,6 +320,35 @@ paths:
                           - helper
                           - publicRead
                           - portalMirror
+                      marketplaceRuntime:
+                        properties:
+                          releasePhase:
+                            type: string
+                            enum:
+                              - 'off'
+                              - prepublish_closed
+                          reads:
+                            type: string
+                            enum:
+                              - live
+                              - blocked
+                          writes:
+                            type: string
+                            enum:
+                              - live
+                              - blocked
+                          txPlans:
+                            type: string
+                            enum:
+                              - live
+                              - blocked
+                        type: object
+                        additionalProperties: false
+                        required:
+                          - releasePhase
+                          - reads
+                          - writes
+                          - txPlans
                       features:
                         properties:
                           runtimeModes:
@@ -294,11 +363,17 @@ paths:
                                   - normal
                                   - preflight_only
                                   - disabled
+                              iotaFreshReleasePhase:
+                                type: string
+                                enum:
+                                  - 'off'
+                                  - prepublish_closed
                             type: object
                             required:
                               - discoverySnapshotOnly
                               - actorReadThrottle
                               - sponsorEmergencyMode
+                              - iotaFreshReleasePhase
                           disputeQuorum:
                             type: boolean
                           orderMailbox:
@@ -409,6 +484,7 @@ paths:
                       - interaction
                       - auth
                       - onboarding
+                      - marketplaceRuntime
                       - features
                       - runtimeControlPlane
                 type: object
@@ -4849,6 +4925,8 @@ components:
           type: string
           enum:
             - sponsor_policy.v2
+        enabled:
+          type: boolean
         emergencyMode:
           type: string
           enum:
@@ -4897,6 +4975,8 @@ components:
           minimum: 1
         reserve:
           properties:
+            enabled:
+              type: boolean
             orderIdRequired:
               type: boolean
             rateLimitPerMin:
@@ -4914,6 +4994,7 @@ components:
           type: object
           additionalProperties: false
           required:
+            - enabled
             - orderIdRequired
             - rateLimitPerMin
             - windowSec
@@ -4921,6 +5002,8 @@ components:
             - windowGasCap
         execute:
           properties:
+            enabled:
+              type: boolean
             idempotencyHeader:
               type: string
               enum:
@@ -4933,7 +5016,7 @@ components:
               type: boolean
             executableTxFamilies:
               type: array
-              minItems: 2
+              minItems: 0
               maxItems: 2
               uniqueItems: true
               items:
@@ -4944,6 +5027,7 @@ components:
           type: object
           additionalProperties: false
           required:
+            - enabled
             - idempotencyHeader
             - intentSupported
             - intentRequired
@@ -4957,13 +5041,11 @@ components:
               $ref: '#/components/schemas/SponsorGasEstimate'
           type: object
           additionalProperties: false
-          required:
-            - marketplace_write
-            - claw_payment
       type: object
       additionalProperties: false
       required:
         - version
+        - enabled
         - emergencyMode
         - allowedPurposes
         - allowedPaymentCoins
@@ -9043,6 +9125,35 @@ components:
             - requestListingsPath
             - listingDetailPathTemplate
             - guidePath
+        release:
+          properties:
+            phase:
+              type: string
+              enum:
+                - 'off'
+                - prepublish_closed
+            marketplaceReads:
+              type: string
+              enum:
+                - live
+                - blocked
+            marketplaceWrites:
+              type: string
+              enum:
+                - live
+                - blocked
+            txPlans:
+              type: string
+              enum:
+                - live
+                - blocked
+          type: object
+          additionalProperties: false
+          required:
+            - phase
+            - marketplaceReads
+            - marketplaceWrites
+            - txPlans
         runtime:
           $ref: '#/components/schemas/RuntimeReadLanePolicy'
         guidance:
@@ -9064,12 +9175,6 @@ components:
                 disputePathTemplate:
                   type: string
               type: object
-              required:
-                - eventsPath
-                - ordersPath
-                - orderTimelinePathTemplate
-                - orderMailboxPathTemplate
-                - disputePathTemplate
             sponsor:
               properties:
                 emergencyMode:
@@ -9115,6 +9220,7 @@ components:
         - helper
         - publicRead
         - portalMirror
+        - release
         - runtime
         - guidance
     RuntimeControlPlaneSummary:

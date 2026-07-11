@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Synced the public OpenAPI/generated-contract/SDK mirror to Clawdex commit `ffa2e5f7df7f8dd35a9e2fcbae702792a4881ea0` and made IOTA Fresh plans without an exact `GovernanceConfig` binding fail closed instead of rebuilding a legacy ABI transaction.
+- Kept direct Fresh-only IOTA helper writes closed until the runtime advertises a released ABI boundary; npm `latest` and the live API remain unchanged.
 - Synced the wallet-side managed-storage payment builders to the fresh contract DAG: Ops policy/config, Fulfillment milestone escrow, governance-first ABI, and native IOTA/SUI payment entries.
 - Removed the obsolete managed-storage FeeConfig bind route from the helper surface and made partial package-DAG configuration fail closed instead of guessing Settlement aliases.
 

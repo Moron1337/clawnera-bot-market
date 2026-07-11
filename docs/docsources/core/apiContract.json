@@ -75,6 +75,15 @@
               "publicApiWrites",
               "publicWeb"
             ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": null,
+            "schemaName": null,
+            "requiredFields": [],
+            "optionalFields": [],
+            "propertyNames": []
           }
         }
       }
@@ -102,6 +111,7 @@
             "requiredFields": [],
             "optionalFields": [
               "version",
+              "enabled",
               "emergencyMode",
               "allowedPurposes",
               "allowedPaymentCoins",
@@ -118,6 +128,7 @@
             ],
             "propertyNames": [
               "version",
+              "enabled",
               "emergencyMode",
               "allowedPurposes",
               "allowedPaymentCoins",
@@ -162,6 +173,7 @@
               "helper",
               "publicRead",
               "portalMirror",
+              "release",
               "runtime",
               "guidance"
             ],
@@ -172,6 +184,7 @@
               "helper",
               "publicRead",
               "portalMirror",
+              "release",
               "runtime",
               "guidance"
             ]
@@ -202,6 +215,7 @@
             "requiredFields": [],
             "optionalFields": [
               "version",
+              "enabled",
               "emergencyMode",
               "allowedPurposes",
               "allowedPaymentCoins",
@@ -218,6 +232,7 @@
             ],
             "propertyNames": [
               "version",
+              "enabled",
               "emergencyMode",
               "allowedPurposes",
               "allowedPaymentCoins",
@@ -433,6 +448,7 @@
             "requiredFields": [],
             "optionalFields": [
               "version",
+              "enabled",
               "emergencyMode",
               "allowedPurposes",
               "allowedPaymentCoins",
@@ -449,6 +465,7 @@
             ],
             "propertyNames": [
               "version",
+              "enabled",
               "emergencyMode",
               "allowedPurposes",
               "allowedPaymentCoins",
@@ -13242,6 +13259,15 @@
             "publicApiWrites",
             "publicWeb"
           ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": null,
+          "schemaName": null,
+          "requiredFields": [],
+          "optionalFields": [],
+          "propertyNames": []
         }
       }
     },
@@ -13266,6 +13292,7 @@
           "requiredFields": [],
           "optionalFields": [
             "version",
+            "enabled",
             "emergencyMode",
             "allowedPurposes",
             "allowedPaymentCoins",
@@ -13282,6 +13309,7 @@
           ],
           "propertyNames": [
             "version",
+            "enabled",
             "emergencyMode",
             "allowedPurposes",
             "allowedPaymentCoins",
@@ -13323,6 +13351,7 @@
             "helper",
             "publicRead",
             "portalMirror",
+            "release",
             "runtime",
             "guidance"
           ],
@@ -13333,6 +13362,7 @@
             "helper",
             "publicRead",
             "portalMirror",
+            "release",
             "runtime",
             "guidance"
           ]
@@ -13360,6 +13390,7 @@
           "requiredFields": [],
           "optionalFields": [
             "version",
+            "enabled",
             "emergencyMode",
             "allowedPurposes",
             "allowedPaymentCoins",
@@ -13376,6 +13407,7 @@
           ],
           "propertyNames": [
             "version",
+            "enabled",
             "emergencyMode",
             "allowedPurposes",
             "allowedPaymentCoins",
@@ -13576,6 +13608,7 @@
           "requiredFields": [],
           "optionalFields": [
             "version",
+            "enabled",
             "emergencyMode",
             "allowedPurposes",
             "allowedPaymentCoins",
@@ -13592,6 +13625,7 @@
           ],
           "propertyNames": [
             "version",
+            "enabled",
             "emergencyMode",
             "allowedPurposes",
             "allowedPaymentCoins",
@@ -26810,6 +26844,7 @@
       "name": "SponsorPolicySnapshot",
       "propertyNames": [
         "version",
+        "enabled",
         "emergencyMode",
         "allowedPurposes",
         "allowedPaymentCoins",
@@ -26827,6 +26862,7 @@
       "requiredFields": [],
       "optionalFields": [
         "version",
+        "enabled",
         "emergencyMode",
         "allowedPurposes",
         "allowedPaymentCoins",
@@ -30272,6 +30308,7 @@
         "helper",
         "publicRead",
         "portalMirror",
+        "release",
         "runtime",
         "guidance"
       ],
@@ -30281,6 +30318,7 @@
         "helper",
         "publicRead",
         "portalMirror",
+        "release",
         "runtime",
         "guidance"
       ],

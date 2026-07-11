@@ -69,6 +69,33 @@ paths:
                     type: boolean
                   runtimeControlPlane:
                     $ref: "#/components/schemas/RuntimeControlPlaneSummary"
+        "503":
+          description: Worker is not ready, including the closed IOTA Fresh prepublish phase.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, checks, detail]
+                properties:
+                  status:
+                    type: string
+                    enum: [not_ready]
+                  releasePhase:
+                    type: string
+                    enum: [prepublish_closed]
+                  checks:
+                    type: object
+                    required: [repository]
+                    properties:
+                      iotaFreshRelease:
+                        type: string
+                        enum: [prepublish_closed]
+                      repository:
+                        type: string
+                        enum: [failed, not_checked]
+                  detail:
+                    type: string
+                    nullable: true
   /capabilities:
     get:
       tags: [Policy]
@@ -85,7 +112,7 @@ paths:
                 properties:
                   capabilities:
                     type: object
-                    required: [version, generatedAt, posture, interaction, auth, onboarding, features, runtimeControlPlane]
+                    required: [version, generatedAt, posture, interaction, auth, onboarding, marketplaceRuntime, features, runtimeControlPlane]
                     properties:
                       version:
                         type: string
@@ -107,7 +134,7 @@ paths:
                         properties:
                           state:
                             type: string
-                            enum: [experimental_dark, experimental_open]
+                            enum: [experimental_dark, experimental_open, prepublish_closed]
                           audience:
                             type: string
                             enum: [b2b_only, mixed]
@@ -132,10 +159,10 @@ paths:
                         properties:
                           listingCreateMode:
                             type: string
-                            enum: [wallet_auth, bot_only]
+                            enum: [wallet_auth, bot_only, disabled]
                           writeInteractionMode:
                             type: string
-                            enum: [wallet_auth, bot_only]
+                            enum: [wallet_auth, bot_only, disabled]
                           privilegedSponsor:
                             type: object
                             required: [enabled, mode, policy]
@@ -144,7 +171,7 @@ paths:
                                 type: boolean
                               mode:
                                 type: string
-                                enum: [wallet_auth, bot_only]
+                                enum: [wallet_auth, bot_only, disabled]
                               policy:
                                 $ref: "#/components/schemas/SponsorPolicySnapshot"
                       auth:
@@ -246,6 +273,23 @@ paths:
                                 type: string
                               guidePath:
                                 type: string
+                      marketplaceRuntime:
+                        type: object
+                        additionalProperties: false
+                        required: [releasePhase, reads, writes, txPlans]
+                        properties:
+                          releasePhase:
+                            type: string
+                            enum: [off, prepublish_closed]
+                          reads:
+                            type: string
+                            enum: [live, blocked]
+                          writes:
+                            type: string
+                            enum: [live, blocked]
+                          txPlans:
+                            type: string
+                            enum: [live, blocked]
                       features:
                         type: object
                         required:
@@ -266,7 +310,7 @@ paths:
                         properties:
                           runtimeModes:
                             type: object
-                            required: [discoverySnapshotOnly, actorReadThrottle, sponsorEmergencyMode]
+                            required: [discoverySnapshotOnly, actorReadThrottle, sponsorEmergencyMode, iotaFreshReleasePhase]
                             properties:
                               discoverySnapshotOnly:
                                 type: boolean
@@ -275,6 +319,9 @@ paths:
                               sponsorEmergencyMode:
                                 type: string
                                 enum: [normal, preflight_only, disabled]
+                              iotaFreshReleasePhase:
+                                type: string
+                                enum: [off, prepublish_closed]
                           disputeQuorum:
                             type: boolean
                           orderMailbox:
@@ -5475,6 +5522,7 @@ components:
       required:
         [
           version,
+          enabled,
           emergencyMode,
           allowedPurposes,
           allowedPaymentCoins,
@@ -5493,6 +5541,8 @@ components:
         version:
           type: string
           enum: [sponsor_policy.v2]
+        enabled:
+          type: boolean
         emergencyMode:
           type: string
           enum: [normal, preflight_only, disabled]
@@ -5534,8 +5584,10 @@ components:
         reserve:
           type: object
           additionalProperties: false
-          required: [orderIdRequired, rateLimitPerMin, windowSec, windowTxCap, windowGasCap]
+          required: [enabled, orderIdRequired, rateLimitPerMin, windowSec, windowTxCap, windowGasCap]
           properties:
+            enabled:
+              type: boolean
             orderIdRequired:
               type: boolean
             rateLimitPerMin:
@@ -5553,8 +5605,10 @@ components:
         execute:
           type: object
           additionalProperties: false
-          required: [idempotencyHeader, intentSupported, intentRequired, intentSignatureRequired, executableTxFamilies]
+          required: [enabled, idempotencyHeader, intentSupported, intentRequired, intentSignatureRequired, executableTxFamilies]
           properties:
+            enabled:
+              type: boolean
             idempotencyHeader:
               type: string
               enum: [idempotency-key]
@@ -5566,7 +5620,7 @@ components:
               type: boolean
             executableTxFamilies:
               type: array
-              minItems: 2
+              minItems: 0
               maxItems: 2
               uniqueItems: true
               items:
@@ -5575,11 +5629,6 @@ components:
         recommendedGasBudgets:
           type: object
           additionalProperties: false
-          required:
-            [
-              marketplace_write,
-              claw_payment
-            ]
           properties:
             marketplace_write:
               $ref: "#/components/schemas/SponsorGasEstimate"
@@ -10630,7 +10679,7 @@ components:
           enum: [runtime_db, stale_cache, unavailable_default_normal]
     BotDiscoverySnapshot:
       type: object
-      required: [version, generatedAt, helper, publicRead, portalMirror, runtime, guidance]
+      required: [version, generatedAt, helper, publicRead, portalMirror, release, runtime, guidance]
       properties:
         version:
           type: string
@@ -10727,6 +10776,23 @@ components:
               type: string
             guidePath:
               type: string
+        release:
+          type: object
+          additionalProperties: false
+          required: [phase, marketplaceReads, marketplaceWrites, txPlans]
+          properties:
+            phase:
+              type: string
+              enum: [off, prepublish_closed]
+            marketplaceReads:
+              type: string
+              enum: [live, blocked]
+            marketplaceWrites:
+              type: string
+              enum: [live, blocked]
+            txPlans:
+              type: string
+              enum: [live, blocked]
         runtime:
           $ref: "#/components/schemas/RuntimeReadLanePolicy"
         guidance:
@@ -10739,8 +10805,6 @@ components:
                 type: string
             actorFeeds:
               type: object
-              required:
-                [eventsPath, ordersPath, orderTimelinePathTemplate, orderMailboxPathTemplate, disputePathTemplate]
               properties:
                 eventsPath:
                   type: string

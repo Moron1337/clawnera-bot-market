@@ -10,7 +10,9 @@ import {
   buildCreateListingDepositTx,
   buildCreateOrderEscrowTx,
   buildCreateReputationProfileTx,
+  buildInitOrderBondTx,
   buildManagedStorageFeeTx,
+  buildMilestoneAnchorTx,
   dryRunTransaction,
   executeTransaction,
   extractLatestEventByTypeSuffix,
@@ -616,8 +618,11 @@ test("buildClawdexTxFromPlan accepts chain-neutral reviewer minimum reward", () 
   const tx = buildClawdexTxFromPlan({
     txBuilder: "disputeQuorum.registerReviewer",
     request: {
+      chainFamily: "iota",
+      chainNetwork: "mainnet",
       packageId: addr("1"),
       sender: addr("a"),
+      governanceConfigObjectId: addr("f"),
       reviewerRegistryObjectId: addr("b"),
       disputeQuorumConfigObjectId: addr("c"),
       reputationFeeConfigObjectId: addr("d"),
@@ -630,6 +635,36 @@ test("buildClawdexTxFromPlan accepts chain-neutral reviewer minimum reward", () 
   });
 
   assert.equal(extractLastMoveCallFunction(tx), "register_reviewer_entry_with_reputation_cfg");
+});
+
+test("buildClawdexTxFromPlan rejects legacy IOTA plans without Fresh governance binding", () => {
+  for (const txBuilder of [
+    "orderMailbox.init",
+    "orderMailbox.postSignal",
+    "orderMailbox.ackSignal",
+    "disputeQuorum.registerReviewer",
+    "disputeQuorum.fundBondAsBuyer",
+    "disputeQuorum.fundBondAsSeller",
+    "disputeQuorum.fundTypedBondAsBuyer",
+    "disputeQuorum.fundTypedBondAsSeller",
+  ]) {
+    assert.throws(
+      () => buildClawdexTxFromPlan({ txBuilder, request: { chainFamily: "iota" } }),
+      /iota_fresh_governance_config_required/,
+      txBuilder,
+    );
+  }
+});
+
+test("direct IOTA Fresh builders reject missing governance binding", () => {
+  for (const [name, build] of [
+    ["order bond", () => buildInitOrderBondTx({ chainFamily: "iota" })],
+    ["reputation profile", () => buildCreateReputationProfileTx({ chainFamily: "iota" })],
+    ["listing deposit", () => buildCreateListingDepositTx({ chainFamily: "iota" })],
+    ["milestone anchor", () => buildMilestoneAnchorTx({ chainFamily: "iota" })],
+  ]) {
+    assert.throws(build, /iota_fresh_governance_config_required/, name);
+  }
 });
 
 test("Sui helper builders cover reputation and listing-deposit entrypoints", () => {

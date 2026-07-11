@@ -1,4 +1,4 @@
-# Next Session Status (2026-07-10)
+# Next Session Status (2026-07-11)
 
 ## Purpose
 
@@ -33,11 +33,12 @@ is running this candidate.
 
 Live production truth is unchanged by this work. No Move publish or upgrade,
 package/object/cap rotation, production deploy, secret rotation, policy
-mutation, database migration, or fund-bearing canary was executed. The current
-Sui payout-sink ownership, separated 2-of-3 hardware custody, independent
-contract audit, green mainnet UpgradeCap dry-runs, existing-object bootstrap/migration,
+mutation, database migration, or fund-bearing canary was executed. For the IOTA
+wave, separated 2-of-3 hardware custody, an independent exact-
+commit audit, Fresh-publish/resume evidence, old-object drain/lineage handling,
 GitHub/npm controls, Cloudflare policy, and systemd isolation still require
-external readback evidence. `docs/security/mainnet-security-evidence.json`
+source work or external readback evidence. Sui payout-sink ownership remains a
+separate later Sui gate. `docs/security/mainnet-security-evidence.json`
 therefore remains `pending`, and all affected production/mainnet widening stays
 fail-closed.
 
@@ -49,6 +50,19 @@ Fresh roots are below the `98304`-byte release budget:
 | --- | ---: | ---: | ---: |
 | IOTA | `91434` | `9556` | `11344` |
 | Sui | `89545` | `10995` | `11588` |
+
+A newer local IOTA working candidate on 2026-07-11 adds the default-closed
+on-chain launch-admission gate and a truthful HTTP `prepublish_closed` profile.
+Its pinned IOTA size-only result is `95897/9748/11534`, with `2407` bytes of
+Settlement headroom and zero chain writes. Move tests are `267/36/45`, abort
+coverage is `92.68%/92.31%/93.33%`, and ABI/security-stress gates are green.
+Productive reviewer-selection and bootstrap authorization, fallback-sink
+queue/apply revalidation, and explicit admission cancel are covered; the
+redundant public native policy initializer is removed. This is source evidence
+only, recorded in
+`docs/reports/iota-016-move-source-slice-evidence-20260711.md`; it does not
+replace the clean-checkpoint testnet dry-run above or prove any live package,
+object, policy, owner, or runtime state.
 
 The pinned IOTA `1.27.0-rc` and Sui `1.75.1` No-Sign helpers matched testnet
 chain IDs, expected senders, Foundation package readbacks, and a
@@ -70,21 +84,31 @@ because they do not bridge the replaced object families. Selector state would
 be initialized by a future Fresh publish. Direct Fresh policy seeding is closed:
 Managed Storage and the incomplete Fresh Sui policy families remain disabled
 until `SEC-027` supplies exact builders, separate signer/cap-owner preflights,
-and active/pending readbacks. The active old IOTA case must still be closed or
-explicitly quarantined.
+and active/pending readbacks. The known active old testnet IOTA case must still
+be closed or explicitly quarantined; mainnet requires an independent fresh
+DB/RPC census and must not infer that case's presence or absence.
 
-Next technical work: complete `SEC-027` and the evidence-bound sequential
-publish resume/readback workflow, then bind an independent audit to that exact
-final source commit. Old-line drain/quarantine, cumulative gas-coin budgeting,
-custody, and rollback evidence remain separate live gates. Review and merge only
-after CI and human review; satisfy the sequence in `docs/NEXT_FAMILY_QUEUE.md`
-and `docs/MOVE_CONTRACT_ROTATION_CHECKLIST.md` before any live mutation.
+Planning priority changed on 2026-07-11: finish IOTA first, handle Sui in a
+later separate wave, and leave sponsor expansion last. This does not change the
+live Cloudflare, package, object, policy, or sponsor state.
 
-## Current Sui Testnet Parity Dev Note
+Next technical work: complete the remaining IOTA `SEC-027` readback/operator
+paths and signed deployment generation, then handle old-line drain/quarantine,
+lineage, and the evidence-bound sequential publish resume/readback workflow.
+Bind an independent IOTA release audit to that exact final source commit.
+Cumulative gas-coin budgeting, custody, and rollback evidence remain separate
+live gates. Review and merge only after CI and human review; satisfy
+`docs/IOTA_FIRST_MAINNET_ROLLOUT_PREP.md`,
+`docs/NEXT_FAMILY_QUEUE.md`, and `docs/MOVE_CONTRACT_ROTATION_CHECKLIST.md`
+before any live mutation.
 
-Current Sui operator truth on 2026-05-16: `SUI-PARITY-51` is the fresh
-current-head Sui testnet line and the Sui `Published.toml` plus staging pointers
-have been refreshed. Foundation is
+## Deferred / Historical Sui Testnet Parity Note
+
+Historical Sui operator truth captured on 2026-05-16: `SUI-PARITY-51` was the
+fresh current-head Sui testnet line and the Sui `Published.toml` plus staging
+pointers had been refreshed. This evidence is input for the later Sui wave; it
+does not open a current Sui launch action before `IOTA_EXIT_ACCEPTED`.
+Foundation is
 `0x60c369e4e4e22476f71025ba97b3ebcccf2dea2c4165e9f54e6aae6ca9aebfab`;
 Settlement-Core is
 `0x650f5dd3768808a8c9dc0aa882876747dd9924dc6c88947b19075c32c4c58ccd`.
@@ -119,10 +143,11 @@ the current production-like testnet config keeps a one-hour commit window,
 four-hour reveal window, and thirty-minute post-reveal finalization delay.
 Evidence lives under
 `docs/reports/sui-parity-48d-public-truth-reconciliation-20260516T094956Z/`.
-The remaining exact-line launch-readiness gap is only the natural-window resume
-to reveal/finalize/resolve that recorded current-line API dispute case, if a
-fresh current-line finality proof is required before mainnet preflight. Current
-local gates are green for Sui Foundation, Sui Settlement-Core, SDK/API focused
+The recorded exact-line launch-readiness gap was the natural-window resume to
+reveal/finalize/resolve that API dispute case if a fresh finality proof were
+required before a later Sui mainnet preflight. It is not the current next
+action. The recorded local gates were green for Sui Foundation, Sui
+Settlement-Core, SDK/API focused
 tests/typechecks, external `clawnera-bot-market` release checks, OpenAPI
 contract checks, Sui typed coin live smoke, and the current-line API
 dispute-route guarded commit proof.
@@ -571,6 +596,10 @@ currently proven Sui surfaces; expire/delete remain SDK/direct-chain
 maintenance builders only.
 
 ## Current Sui USDC Finality Note
+
+This section preserves current live-production truth; it is not the active
+implementation priority. The IOTA-first wave must inventory and contain this
+surface through `IOTA-005` before Fresh IOTA runtime rotation.
 
 Direct autonomous mode is active: no new Pro handoff packets are required by
 default. Current live/source finalization is the Pro-approved fresh Sui mainnet
@@ -1131,19 +1160,27 @@ Do not treat the separate dirty main repo under `/home/codex/clawdex` as the act
 
 ## Current Broad-Launch Blockers
 
-These are still the true broader-launch gates, including any promotion of this
-Fresh candidate:
+The current legacy controlled-live matrix remains separate. Any promotion of
+the Fresh IOTA candidate additionally requires:
 
-1. final hardware-backed `2-of-3` multisig cutover
-2. `SEC-027` dual-chain policy control plane and distinct signer/cap ownership
-3. evidence-bound sequential publish resume and exact per-stage readbacks
-4. independent audit bound to the final commit with no unresolved high finding
-5. old-line closure/quarantine, cumulative gas budget, and rollback evidence
+1. `SEC-027-IOTA`, signed generation, on-chain launch admission, and distinct
+   final signer/cap ownership after the audited bootstrap sequence
+2. evidence-bound sequential publish/resume, exact per-stage readbacks, and the
+   two-phase `iota_fresh_publish` evidence contract
+3. independent exact-commit audit plus post-testnet recheck with no unresolved
+   critical/high finding
+4. separate testnet/mainnet old-line inventories, signed containment/closeout,
+   cumulative gas reserve, and pre-/post-boundary recovery evidence
+5. hardware custody, mainnet no-sign compatibility, generation-safe 100%
+   promotion, on-chain allowlisted self-pay canary, and soak
 
 These are already no longer blockers:
 
 - `SPONSOR_ORDER_ID_MODE=required` is live and proven
 - the first controlled `browse_only` production window is already open
+
+The sponsor item proves only legacy order-ID binding, not deployed `SEC-006` or
+`SEC-021`; Fresh sponsor execution remains disabled in the IOTA-first plan.
 
 Their current truth and evidence requirements live in:
 
@@ -1175,7 +1212,11 @@ Their current truth and evidence requirements live in:
 
 ## Decision
 
-Current decision: keep the system at `OPEN` for the first controlled `browse_only` window while `LAUNCH-OPS-01` stays in live-soak posture on top of the green required-host bundle, the live scanner-path deny proof, the now-green controlled-open dossier, the completed `MAN-RUN-01a` bounded walkthrough, and the now-live `SPONSOR_ORDER_ID_MODE=required` proof; keep `TASK-MKT-012` deferred until the remaining hardware signer inputs are ready and an explicit custody execution window is chosen.
+Current live decision: keep the existing system at `OPEN` for the controlled
+`browse_only` window while `LAUNCH-OPS-01` stays in live-soak posture. Current
+engineering priority is the source-safe IOTA-first work in
+`docs/IOTA_FIRST_MAINNET_ROLLOUT_PREP.md`; this planning work does not authorize
+a Fresh publish, production mutation, Sui expansion, or sponsor expansion.
 
 That means:
 
@@ -1183,8 +1224,13 @@ That means:
 - no live contract publish, policy activation, or pointer mutation
 - no new frontend build
 - no hardware dry-run or mainnet custody execution until the real signer inputs arrive and the hardware-backed evidence path starts
+- Sui new-create containment and sponsor emergency disablement require their own
+  explicit operator-approved steps; they have not happened from this docs change
 
-The next honest moves are: keep the active `browse_only` window green, decide later `EXPAND` versus `PAUSE` from real soak evidence, and keep multisig custody frozen until the final hardware signer inputs are inserted into the real signer file for the later hardware-backed cutover.
+The next honest moves are: keep the active legacy `browse_only` window green,
+work only the ready IOTA source/local-proof tasks, capture the separate read-only
+inventories when live inputs are available, and leave every signed mutation or
+external gate closed until the detailed IOTA sequence reaches it.
 
 ## Sui USDC Pre-Testnet 01k Local Update
 

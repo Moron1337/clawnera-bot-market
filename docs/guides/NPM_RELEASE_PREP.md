@@ -113,6 +113,8 @@ Wichtig:
 
 **Live-Blocker (Read-only-Stand 2026-07-10):** `main` liefert fuer Branch Protection `404`, und die Environment-Liste enthaelt kein `npm-publish`. Der Workflow-Code ist repo-seitig vorbereitet, aber ein Publish ist absichtlich durch `check:release-live-prerequisites` blockiert. Der Environment-Name im YAML ist fuer sich allein kein Schutz und darf nicht als konfigurierte Freigabe gewertet werden.
 
+**IOTA-Fresh-Blocker (Repo-Stand 2026-07-11):** Die eingecheckte Version `0.1.104` ist ein ungepublizierter Kandidat fuer die Governance-gebundene Fresh-ABI. Sie darf nicht publiziert werden, solange Clawdex den Fresh-Runtime- und ABI-Release nicht explizit freigegeben und per Readback belegt hat. npm `latest` bleibt bis dahin `0.1.103`; ein Legacy-ABI-Fallback wird nicht eingebaut.
+
 Vor dem ersten Publish muessen extern und anschliessend read-only verifiziert werden:
 
 - Branch Protection fuer `main` mit den vorgesehenen Reviews und Pflichtchecks

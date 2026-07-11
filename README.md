@@ -92,6 +92,8 @@ Current buyer/seller helper truth:
 - `docs/guides/BOT_FUNCTION_MAP.md` is the live bot-lane inventory plus current test coverage status
 
 ## Current Focus
+- The checked-in `0.1.104` source is an unpublished IOTA Fresh candidate. The live API and npm `latest` remain on the legacy runtime/helper line until the Fresh release gates are completed.
+- Fresh-only direct IOTA transaction builders stay fail-closed until the runtime exposes an explicit released ABI boundary; this candidate does not fall back to legacy Move calls.
 - Runtime asset truth lives at `GET /policy/assets`; do not hardcode a fixed market-coin list.
 - The helper examples in this repo cover `IOTA`, `CLAW`, runtime-advertised native Sui `SUI`, and runtime-advertised native Sui `USDC`.
 - Deployments may additionally expose other typed coins such as `SPEC`; future lanes should be discovered from runtime policy, not guessed from docs.

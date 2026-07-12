@@ -1,4 +1,4 @@
-# Next Session Status (2026-07-11)
+# Next Session Status (2026-07-12)
 
 ## Purpose
 
@@ -13,9 +13,42 @@ Longer-horizon planning lives in `docs/PRODUCT_EXECUTION_BACKLOG.md`.
 Near-term family sequencing lives in `docs/NEXT_FAMILY_QUEUE.md`.
 Detailed historical evidence stays in `docs/reports/` and git history.
 
+## IOTA Containment Checkpoint
+
+Current live production truth on 2026-07-12:
+
+- Runtime control-plane version `283` is in `write_freeze`, effective
+  `2026-07-12T01:01:23.239Z`. Public and Admin readbacks agree that reads remain
+  live and marketplace writes are blocked.
+- The Hetzner synthetic timer is disabled. Both source unit variants now pin
+  Production read-only behavior after env loading, load no funding credential,
+  and cannot turn `FORCE_FULL_WRITE` into a Production chain write without a
+  future reviewed closeout implementation.
+- `workers.dev` and previews are disabled for the API and shadow Worker;
+  `api-shadow.clawnera.com` is detached. The canonical API remains live behind
+  the write freeze.
+- The last Hetzner self-hosted repository runner is stopped, disabled, and
+  deregistered; GitHub reports zero repository runners.
+- No Move publish/upgrade, package/object/cap/policy/secret rotation, database
+  migration, runtime-pointer change, or fund-bearing closeout was performed.
+
+The read-only mainnet inventory covers `623` DB-referenced objects with zero
+missing objects or dual-RPC mismatches: `200` funded IOTA escrows hold
+`13.890000002 IOTA`, ten funded CLAW escrows hold `100008000` atomic units, and
+`222` funded bonds hold `0.222 IOTA`. `418` of `432` funded objects are attached
+to DB-terminal orders. This is operator evidence, not the independent complete
+checkpoint census required by `IOTA-020`; migrations `0055` through `0059` are
+not live and no bulk closeout is authorized.
+
+The source lineage map now covers all twelve observed immutable legacy package
+origins and `135` unique module streams. Provenance coverage is repaired, but
+old direct-call surfaces remain reachable and `IOTA-025` is not accepted.
+Detailed facts and hashes are in
+`docs/reports/iota-first-live-containment-and-nosign-20260712.md`.
+
 ## Security Remediation Candidate
 
-Repository truth on 2026-07-10: `agent/security-review-remediation` contains a
+Repository truth on 2026-07-12: `agent/security-review-remediation` contains a
 security-remediation candidate for `SEC-001` through `SEC-028`. The candidate
 adds additive Move V2 controls, published-surface compatibility gates, exact
 runtime/auth/sponsor/indexer provenance checks, transactional bot and consumer
@@ -33,9 +66,8 @@ are still required. Local
 results are not evidence that Cloudflare, Hetzner, npm, Postgres, or either
 chain is running this candidate.
 
-Live production truth is unchanged by this work. No Move publish or upgrade,
-package/object/cap rotation, production deploy, secret rotation, policy
-mutation, database migration, or fund-bearing canary was executed. For the IOTA
+The candidate is not deployed. Only the reversible containment recorded above
+changed live state; it did not rotate contract or runtime truth. For the IOTA
 wave, separated 2-of-3 hardware custody, an independent exact-
 commit audit, Fresh-publish/resume evidence, old-object drain/lineage handling,
 GitHub/npm controls, Cloudflare policy, and systemd isolation still require
@@ -44,7 +76,8 @@ separate later Sui gate. `docs/security/mainnet-security-evidence.json`
 therefore remains `pending`, and all affected production/mainnet widening stays
 fail-closed.
 
-The current controlled testnet checkpoint used clean source commit
+The historical successful 2026-07-10 pre-remediation No-Sign checkpoint used
+clean source commit
 `2fde4560c0c1924e251b9affe03ffe870805cef8` and made no chain write. All six
 Fresh roots are below the `98304`-byte release budget:
 
@@ -52,6 +85,8 @@ Fresh roots are below the `98304`-byte release budget:
 | ----- | ---------: | ----------: | ------: |
 | IOTA  |    `91434` |      `9556` | `11344` |
 | Sui   |    `89545` |     `10995` | `11588` |
+
+It does not attest the current remediation candidate.
 
 A newer local IOTA working candidate on 2026-07-11 adds the default-closed
 on-chain launch-admission gate, a truthful HTTP `prepublish_closed` profile,
@@ -88,7 +123,7 @@ legacy post-cutoff event as an explicit closeout or incident. These are source
 facts only: none of the migrations, fences, cutoffs, generations, or publishers
 has been applied or exercised in production.
 
-The pinned IOTA `1.27.0-rc` and Sui `1.75.1` No-Sign helpers matched testnet
+The earlier pinned IOTA `1.27.0-rc` and Sui `1.75.1` No-Sign helpers matched testnet
 chain IDs, expected senders, Foundation package readbacks, and a
 `500000000`-atomic-unit balance floor. IOTA held `50.2131348 IOTA`; Sui held
 `1,328,901,534 MIST`. Settlement publish dry-runs succeeded with estimated
@@ -97,6 +132,20 @@ facts do not prove a cumulative three-publish gas budget: Fulfillment and Ops
 dry-runs are correctly deferred until their real predecessor package IDs exist.
 Both manifests report `chainWritesAttempted=0`, `chainWritesCompleted=0`,
 `commitEligible=false`, and `livePublishAvailable=false`.
+
+An exact clean rerun at `035fff85...` subsequently found a real IOTA protocol
+failure before dispatch: Fresh `admin::GovernanceConfig` had `37` fields while
+Protocol 29 permits `32`. Exact pushed source
+`c2ea6427501497442440c14806d79d1069e85eda` now stores `31` fields and adds a
+compiled-bytecode CI/meter gate for `max_fields_in_struct=32`. It measures
+`98137/9748/12062` IOTA bytes with `167` Settlement bytes of headroom, passes
+`286/36/47` Move tests, the `217/217` security-control suite, the full workspace
+matrix, and all five exact-SHA PR checks. Clean pinned testnet No-Sign binds an
+empty pre-run git status, successful Settlement dry-run, deferred successor
+dry-runs, and writes `0/0`; manifest SHA-256 is
+`bc990766d2c4543771228626d21834c6ea6df60c6afe58317742ed84bf19d196`.
+The prior diagnostic is superseded. `IOTA-043` remains open only for independent
+review/audit and formal acceptance; none of this authorizes publication.
 
 The follow-up no-sign old-package audit makes the deployment decision stricter:
 in-place upgrade is `NO-GO` on both chains. Old V1 managed-storage payments
@@ -113,26 +162,26 @@ testnet IOTA case must still
 be closed or explicitly quarantined; mainnet requires an independent fresh
 DB/RPC census and must not infer that case's presence or absence.
 
-Planning priority changed on 2026-07-11: finish IOTA first, handle Sui in a
-later separate wave, and leave sponsor expansion last. This does not change the
-live Cloudflare, package, object, policy, or sponsor state.
+Planning priority remains: finish IOTA first, handle Sui in a later separate
+wave, and leave sponsor expansion last. The write freeze contains the old live
+sponsor/Sui exposure but does not make the undeployed Fresh source live truth.
 
-Read-only operator audit on 2026-07-11 found ample IOTA balances and working
+Read-only operator audit through 2026-07-12 found working
 GitHub/Cloudflare/Hetzner read access, but the release remains `NO-GO`: the
 exact mainnet IOTA `1.26.1` bytes/version and official archive hash are known,
 but the mutable release asset has no accepted independent artifact attestation
 or reproducible-build proof. Approved hardware custody and distinct final owners
 do not exist, branch/environment review enforcement is absent, an external
-exact-commit audit is missing, alternate Cloudflare ingress and legacy/sponsor
-surfaces remain reachable, Hetzner release isolation is not yet immutable, and
-no complete Fresh testnet publish/E2E/soak or legacy census exists. The
-production mutation guard correctly remained closed; no live mutation was
-attempted.
+exact-commit audit is missing, WAF/rate-limit control and Hetzner immutable
+service isolation are incomplete, legacy direct-call surfaces remain reachable,
+and no complete Fresh testnet publish/E2E/soak or accepted legacy census exists.
+Alternate Worker ingress and the repository runner are now contained, but those
+narrow closures do not authorize a release.
 
-Next technical work: freeze and review the exact broad-local-green commit,
-obtain green GitHub CI, and capture the separate read-only old-line inventories.
-Then bind an independent IOTA release
-audit to that exact commit and establish the approved hardware custody/release
+Next technical work: obtain independent review and audit of exact source
+`c2ea6427501497442440c14806d79d1069e85eda`, then turn the read-only old-line
+inventory into an independently attested full census and signed per-object
+closeout/quarantine plan. Establish the approved hardware custody/release
 authority before any controlled testnet publish. Cumulative gas-coin budgeting,
 testnet publication/E2E/soak, mainnet no-sign acceptance, platform-control
 evidence, and rollback rehearsal remain separate external/live gates. Review

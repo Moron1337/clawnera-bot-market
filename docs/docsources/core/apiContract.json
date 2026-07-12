@@ -23,8 +23,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ComplianceFlags",
             "schemaName": "ComplianceFlags",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "enableConsumers",
               "enforceB2bOnly",
               "enableTraderVerification",
@@ -32,6 +31,7 @@
               "enableAnalytics",
               "enableEmail"
             ],
+            "optionalFields": [],
             "propertyNames": [
               "enableConsumers",
               "enforceB2bOnly",
@@ -88,6 +88,55 @@
         }
       }
     },
+    "/__iota_fresh_rollout_write_freeze_probe__": {
+      "post": {
+        "path": "/__iota_fresh_rollout_write_freeze_probe__",
+        "method": "post",
+        "operationId": "probeIotaFreshWriteFreeze",
+        "tags": [
+          "Health"
+        ],
+        "parameters": {
+          "path": [],
+          "query": [],
+          "header": []
+        },
+        "requestBody": null,
+        "responses": {
+          "401": {
+            "status": "401",
+            "reusableResponseRef": "#/components/responses/Unauthorized",
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "409": {
+            "status": "409",
+            "reusableResponseRef": null,
+            "schemaRef": null,
+            "schemaName": null,
+            "requiredFields": [],
+            "optionalFields": [],
+            "propertyNames": []
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": null,
+            "schemaName": null,
+            "requiredFields": [],
+            "optionalFields": [],
+            "propertyNames": []
+          }
+        }
+      }
+    },
     "/capabilities": {
       "get": {
         "path": "/capabilities",
@@ -108,8 +157,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/SponsorPolicySnapshot",
             "schemaName": "SponsorPolicySnapshot",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "version",
               "enabled",
               "emergencyMode",
@@ -126,6 +174,7 @@
               "execute",
               "recommendedGasBudgets"
             ],
+            "optionalFields": [],
             "propertyNames": [
               "version",
               "enabled",
@@ -212,8 +261,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/SponsorPolicySnapshot",
             "schemaName": "SponsorPolicySnapshot",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "version",
               "enabled",
               "emergencyMode",
@@ -230,6 +278,7 @@
               "execute",
               "recommendedGasBudgets"
             ],
+            "optionalFields": [],
             "propertyNames": [
               "version",
               "enabled",
@@ -317,8 +366,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/AssetPolicy",
             "schemaName": "AssetPolicy",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "version",
               "chainConfig",
               "controlPlane",
@@ -328,6 +376,7 @@
               "liveAssets",
               "experimentalAssets"
             ],
+            "optionalFields": [],
             "propertyNames": [
               "version",
               "chainConfig",
@@ -362,8 +411,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/FeePolicy",
             "schemaName": "FeePolicy",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "version",
               "chainConfig",
               "controlPlane",
@@ -373,6 +421,7 @@
               "reputationInitFee",
               "disputeEconomics"
             ],
+            "optionalFields": [],
             "propertyNames": [
               "version",
               "chainConfig",
@@ -445,8 +494,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/SponsorPolicySnapshot",
             "schemaName": "SponsorPolicySnapshot",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "version",
               "enabled",
               "emergencyMode",
@@ -463,6 +511,7 @@
               "execute",
               "recommendedGasBudgets"
             ],
+            "optionalFields": [],
             "propertyNames": [
               "version",
               "enabled",
@@ -1001,8 +1050,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/UserKeyAgreement",
             "schemaName": "UserKeyAgreement",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "address",
               "keyVersion",
               "publicKeyMultibase",
@@ -1014,6 +1062,7 @@
               "createdAt",
               "updatedAt"
             ],
+            "optionalFields": [],
             "propertyNames": [
               "address",
               "keyVersion",
@@ -1222,14 +1271,14 @@
           "required": true,
           "schemaRef": "#/components/schemas/KeyAgreementUpsertRequest",
           "schemaName": "KeyAgreementUpsertRequest",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "publicKeyMultibase",
             "keyVersion",
             "expiresAtMs",
             "walletBindingMessage",
             "walletBindingSignature"
           ],
+          "optionalFields": [],
           "propertyNames": [
             "publicKeyMultibase",
             "keyVersion",
@@ -1244,8 +1293,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/UserKeyAgreement",
             "schemaName": "UserKeyAgreement",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "address",
               "keyVersion",
               "publicKeyMultibase",
@@ -1257,6 +1305,7 @@
               "createdAt",
               "updatedAt"
             ],
+            "optionalFields": [],
             "propertyNames": [
               "address",
               "keyVersion",
@@ -1665,8 +1714,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
             "schemaName": "BusinessWritePreconditionResponse",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "error",
               "detail",
               "redirectTo",
@@ -1675,7 +1723,9 @@
               "route",
               "preconditionStatus",
               "documentVersions",
-              "businessOnboarding",
+              "businessOnboarding"
+            ],
+            "optionalFields": [
               "currentTermsVersion",
               "currentRiskDisclosureVersion"
             ],
@@ -2210,8 +2260,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
             "schemaName": "BusinessWritePreconditionResponse",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "error",
               "detail",
               "redirectTo",
@@ -2220,7 +2269,9 @@
               "route",
               "preconditionStatus",
               "documentVersions",
-              "businessOnboarding",
+              "businessOnboarding"
+            ],
+            "optionalFields": [
               "currentTermsVersion",
               "currentRiskDisclosureVersion"
             ],
@@ -2380,8 +2431,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
             "schemaName": "BusinessWritePreconditionResponse",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "error",
               "detail",
               "redirectTo",
@@ -2390,7 +2440,9 @@
               "route",
               "preconditionStatus",
               "documentVersions",
-              "businessOnboarding",
+              "businessOnboarding"
+            ],
+            "optionalFields": [
               "currentTermsVersion",
               "currentRiskDisclosureVersion"
             ],
@@ -2662,8 +2714,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
             "schemaName": "BusinessWritePreconditionResponse",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "error",
               "detail",
               "redirectTo",
@@ -2672,7 +2723,9 @@
               "route",
               "preconditionStatus",
               "documentVersions",
-              "businessOnboarding",
+              "businessOnboarding"
+            ],
+            "optionalFields": [
               "currentTermsVersion",
               "currentRiskDisclosureVersion"
             ],
@@ -3389,25 +3442,26 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/Order",
             "schemaName": "Order",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "listingId",
               "buyerAddress",
               "sellerAddress",
               "amount",
               "currency",
+              "disputeBondPolicy",
+              "disputeBondState",
+              "status",
+              "createdAt",
+              "updatedAt"
+            ],
+            "optionalFields": [
               "communicationAgreement",
               "mailboxObjectId",
               "escrowObjectId",
               "disputeBondObjectId",
-              "disputeBondPolicy",
-              "disputeBondState",
               "disputeBondActivatedAt",
-              "deadlineMs",
-              "status",
-              "createdAt",
-              "updatedAt"
+              "deadlineMs"
             ],
             "propertyNames": [
               "id",
@@ -3555,11 +3609,10 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/SuiUsdcTxPlanOnlyResponse",
             "schemaName": "SuiUsdcTxPlanOnlyResponse",
-            "requiredFields": [],
-            "optionalFields": [
-              "chainIdentifier",
+            "requiredFields": [
               "chainFamily",
               "chainNetwork",
+              "chainIdentifier",
               "status",
               "asset",
               "executionAllowed",
@@ -3568,18 +3621,20 @@
               "publicLaunchReady",
               "apiSideExecution",
               "runtimeAccessScope",
-              "repositoryMutation",
-              "objectBindingCreated",
               "actorAllowlistEnforced",
               "transactionBytesBase64",
               "sourceGuard",
               "orderId",
               "target",
+              "txPlan"
+            ],
+            "optionalFields": [
+              "repositoryMutation",
+              "objectBindingCreated",
               "orderBinding",
               "packageIds",
               "paymentCoinReadback",
-              "objectReadback",
-              "txPlan"
+              "objectReadback"
             ],
             "propertyNames": [
               "chainIdentifier",
@@ -3731,11 +3786,10 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/SuiUsdcTxPlanOnlyResponse",
             "schemaName": "SuiUsdcTxPlanOnlyResponse",
-            "requiredFields": [],
-            "optionalFields": [
-              "chainIdentifier",
+            "requiredFields": [
               "chainFamily",
               "chainNetwork",
+              "chainIdentifier",
               "status",
               "asset",
               "executionAllowed",
@@ -3744,18 +3798,20 @@
               "publicLaunchReady",
               "apiSideExecution",
               "runtimeAccessScope",
-              "repositoryMutation",
-              "objectBindingCreated",
               "actorAllowlistEnforced",
               "transactionBytesBase64",
               "sourceGuard",
               "orderId",
               "target",
+              "txPlan"
+            ],
+            "optionalFields": [
+              "repositoryMutation",
+              "objectBindingCreated",
               "orderBinding",
               "packageIds",
               "paymentCoinReadback",
-              "objectReadback",
-              "txPlan"
+              "objectReadback"
             ],
             "propertyNames": [
               "chainIdentifier",
@@ -4399,25 +4455,26 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/Order",
             "schemaName": "Order",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "listingId",
               "buyerAddress",
               "sellerAddress",
               "amount",
               "currency",
+              "disputeBondPolicy",
+              "disputeBondState",
+              "status",
+              "createdAt",
+              "updatedAt"
+            ],
+            "optionalFields": [
               "communicationAgreement",
               "mailboxObjectId",
               "escrowObjectId",
               "disputeBondObjectId",
-              "disputeBondPolicy",
-              "disputeBondState",
               "disputeBondActivatedAt",
-              "deadlineMs",
-              "status",
-              "createdAt",
-              "updatedAt"
+              "deadlineMs"
             ],
             "propertyNames": [
               "id",
@@ -5108,8 +5165,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/OrderCommunicationAgreement",
             "schemaName": "OrderCommunicationAgreement",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "version",
               "status",
               "orderId",
@@ -5120,6 +5176,7 @@
               "negotiatedAt",
               "policySnapshot"
             ],
+            "optionalFields": [],
             "propertyNames": [
               "version",
               "status",
@@ -5200,25 +5257,26 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/Order",
             "schemaName": "Order",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "listingId",
               "buyerAddress",
               "sellerAddress",
               "amount",
               "currency",
+              "disputeBondPolicy",
+              "disputeBondState",
+              "status",
+              "createdAt",
+              "updatedAt"
+            ],
+            "optionalFields": [
               "communicationAgreement",
               "mailboxObjectId",
               "escrowObjectId",
               "disputeBondObjectId",
-              "disputeBondPolicy",
-              "disputeBondState",
               "disputeBondActivatedAt",
-              "deadlineMs",
-              "status",
-              "createdAt",
-              "updatedAt"
+              "deadlineMs"
             ],
             "propertyNames": [
               "id",
@@ -5329,25 +5387,26 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/Order",
             "schemaName": "Order",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "listingId",
               "buyerAddress",
               "sellerAddress",
               "amount",
               "currency",
+              "disputeBondPolicy",
+              "disputeBondState",
+              "status",
+              "createdAt",
+              "updatedAt"
+            ],
+            "optionalFields": [
               "communicationAgreement",
               "mailboxObjectId",
               "escrowObjectId",
               "disputeBondObjectId",
-              "disputeBondPolicy",
-              "disputeBondState",
               "disputeBondActivatedAt",
-              "deadlineMs",
-              "status",
-              "createdAt",
-              "updatedAt"
+              "deadlineMs"
             ],
             "propertyNames": [
               "id",
@@ -5617,8 +5676,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/MilestoneArtifactManifest",
             "schemaName": "MilestoneArtifactManifest",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "orderId",
               "milestoneId",
@@ -5631,6 +5689,7 @@
               "createdAt",
               "updatedAt"
             ],
+            "optionalFields": [],
             "propertyNames": [
               "id",
               "orderId",
@@ -5718,8 +5777,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/MilestoneArtifactManifest",
             "schemaName": "MilestoneArtifactManifest",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "orderId",
               "milestoneId",
@@ -5732,6 +5790,7 @@
               "createdAt",
               "updatedAt"
             ],
+            "optionalFields": [],
             "propertyNames": [
               "id",
               "orderId",
@@ -5828,21 +5887,22 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/MilestoneManifestAnchor",
             "schemaName": "MilestoneManifestAnchor",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "orderId",
               "milestoneId",
               "txDigest",
-              "eventSeq",
               "expectedManifestCid",
               "expectedManifestSha256",
               "status",
-              "mismatchReason",
-              "confirmedAt",
-              "lastCheckedAt",
               "createdAt",
               "updatedAt"
+            ],
+            "optionalFields": [
+              "eventSeq",
+              "mismatchReason",
+              "confirmedAt",
+              "lastCheckedAt"
             ],
             "propertyNames": [
               "id",
@@ -5945,21 +6005,22 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/MilestoneManifestAnchor",
             "schemaName": "MilestoneManifestAnchor",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "orderId",
               "milestoneId",
               "txDigest",
-              "eventSeq",
               "expectedManifestCid",
               "expectedManifestSha256",
               "status",
-              "mismatchReason",
-              "confirmedAt",
-              "lastCheckedAt",
               "createdAt",
               "updatedAt"
+            ],
+            "optionalFields": [
+              "eventSeq",
+              "mismatchReason",
+              "confirmedAt",
+              "lastCheckedAt"
             ],
             "propertyNames": [
               "id",
@@ -6076,25 +6137,26 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/Order",
             "schemaName": "Order",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "listingId",
               "buyerAddress",
               "sellerAddress",
               "amount",
               "currency",
+              "disputeBondPolicy",
+              "disputeBondState",
+              "status",
+              "createdAt",
+              "updatedAt"
+            ],
+            "optionalFields": [
               "communicationAgreement",
               "mailboxObjectId",
               "escrowObjectId",
               "disputeBondObjectId",
-              "disputeBondPolicy",
-              "disputeBondState",
               "disputeBondActivatedAt",
-              "deadlineMs",
-              "status",
-              "createdAt",
-              "updatedAt"
+              "deadlineMs"
             ],
             "propertyNames": [
               "id",
@@ -6346,25 +6408,26 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/Order",
             "schemaName": "Order",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "listingId",
               "buyerAddress",
               "sellerAddress",
               "amount",
               "currency",
+              "disputeBondPolicy",
+              "disputeBondState",
+              "status",
+              "createdAt",
+              "updatedAt"
+            ],
+            "optionalFields": [
               "communicationAgreement",
               "mailboxObjectId",
               "escrowObjectId",
               "disputeBondObjectId",
-              "disputeBondPolicy",
-              "disputeBondState",
               "disputeBondActivatedAt",
-              "deadlineMs",
-              "status",
-              "createdAt",
-              "updatedAt"
+              "deadlineMs"
             ],
             "propertyNames": [
               "id",
@@ -6724,13 +6787,13 @@
           "schemaRef": "#/components/schemas/ReviewPostRequest",
           "schemaName": "ReviewPostRequest",
           "requiredFields": [
-            "reviewRegistryObjectId",
             "escrowObjectId",
             "escrowType",
             "rating",
             "reviewHash"
           ],
           "optionalFields": [
+            "reviewRegistryObjectId",
             "escrowCoinType",
             "clockObjectId"
           ],
@@ -6863,12 +6926,12 @@
           "schemaRef": "#/components/schemas/DeadlineExtProposeRequest",
           "schemaName": "DeadlineExtProposeRequest",
           "requiredFields": [
-            "deadlineExtRegistryObjectId",
             "escrowId",
             "currentDeadlineMs",
             "proposedDeadlineMs"
           ],
           "optionalFields": [
+            "deadlineExtRegistryObjectId",
             "clockObjectId"
           ],
           "propertyNames": [
@@ -6997,10 +7060,9 @@
           "required": true,
           "schemaRef": "#/components/schemas/DeadlineExtActionRequest",
           "schemaName": "DeadlineExtActionRequest",
-          "requiredFields": [
-            "deadlineExtRegistryObjectId"
-          ],
+          "requiredFields": [],
           "optionalFields": [
+            "deadlineExtRegistryObjectId",
             "clockObjectId"
           ],
           "propertyNames": [
@@ -7061,10 +7123,9 @@
           "required": true,
           "schemaRef": "#/components/schemas/DeadlineExtActionRequest",
           "schemaName": "DeadlineExtActionRequest",
-          "requiredFields": [
-            "deadlineExtRegistryObjectId"
-          ],
+          "requiredFields": [],
           "optionalFields": [
+            "deadlineExtRegistryObjectId",
             "clockObjectId"
           ],
           "propertyNames": [
@@ -7193,25 +7254,26 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/Order",
             "schemaName": "Order",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "listingId",
               "buyerAddress",
               "sellerAddress",
               "amount",
               "currency",
+              "disputeBondPolicy",
+              "disputeBondState",
+              "status",
+              "createdAt",
+              "updatedAt"
+            ],
+            "optionalFields": [
               "communicationAgreement",
               "mailboxObjectId",
               "escrowObjectId",
               "disputeBondObjectId",
-              "disputeBondPolicy",
-              "disputeBondState",
               "disputeBondActivatedAt",
-              "deadlineMs",
-              "status",
-              "createdAt",
-              "updatedAt"
+              "deadlineMs"
             ],
             "propertyNames": [
               "id",
@@ -7292,16 +7354,17 @@
           "required": true,
           "schemaRef": "#/components/schemas/ReviewerRegisterRequest",
           "schemaName": "ReviewerRegisterRequest",
-          "requiredFields": [],
-          "optionalFields": [
-            "reviewerRegistryObjectId",
-            "disputeQuorumConfigObjectId",
+          "requiredFields": [
             "reputationProfileObjectId",
             "transportType",
             "transportPubkeyHex",
+            "stakeAmount"
+          ],
+          "optionalFields": [
+            "reviewerRegistryObjectId",
+            "disputeQuorumConfigObjectId",
             "minCaseRewardNative",
             "minCaseRewardIota",
-            "stakeAmount",
             "clockObjectId"
           ],
           "propertyNames": [
@@ -7638,8 +7701,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ReviewerInviteSummary",
             "schemaName": "ReviewerInviteSummary",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "disputeCaseObjectId",
               "reviewerAddress",
               "assignmentRound",
@@ -7647,7 +7709,9 @@
               "status",
               "actorCanAccept",
               "acceptReadiness",
-              "source",
+              "source"
+            ],
+            "optionalFields": [
               "disputeCase",
               "fetchError"
             ],
@@ -7808,13 +7872,9 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ReviewerSelectionReceipt",
             "schemaName": "ReviewerSelectionReceipt",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "scope",
-              "disputeCaseObjectId",
-              "orderId",
-              "milestoneId",
               "buyerAddress",
               "sellerAddress",
               "assignmentRound",
@@ -7822,9 +7882,6 @@
               "reviewerCountSelected",
               "selectionPolicyVersion",
               "checkpointDigest",
-              "checkpointSequenceNumber",
-              "checkpointTimestampMs",
-              "checkpointSource",
               "seedHash",
               "candidatePoolHash",
               "shortlistHash",
@@ -7835,10 +7892,18 @@
               "excludedReviewerAddresses",
               "candidatePool",
               "createdByActorAddress",
+              "createdAt"
+            ],
+            "optionalFields": [
+              "disputeCaseObjectId",
+              "orderId",
+              "milestoneId",
+              "checkpointSequenceNumber",
+              "checkpointTimestampMs",
+              "checkpointSource",
               "activatedAt",
               "activatedByActorAddress",
-              "activationTxDigest",
-              "createdAt"
+              "activationTxDigest"
             ],
             "propertyNames": [
               "id",
@@ -7957,15 +8022,16 @@
           "required": true,
           "schemaRef": "#/components/schemas/ReviewerUpdateRequest",
           "schemaName": "ReviewerUpdateRequest",
-          "requiredFields": [],
-          "optionalFields": [
-            "reviewerRegistryObjectId",
+          "requiredFields": [
             "reviewerEntryObjectId",
             "transportType",
             "transportPubkeyHex",
+            "active"
+          ],
+          "optionalFields": [
+            "reviewerRegistryObjectId",
             "minCaseRewardNative",
             "minCaseRewardIota",
-            "active",
             "clockObjectId"
           ],
           "propertyNames": [
@@ -8066,10 +8132,11 @@
           "schemaRef": "#/components/schemas/ReviewerDeregisterRequest",
           "schemaName": "ReviewerDeregisterRequest",
           "requiredFields": [
-            "reviewerRegistryObjectId",
             "reviewerEntryObjectId"
           ],
-          "optionalFields": [],
+          "optionalFields": [
+            "reviewerRegistryObjectId"
+          ],
           "propertyNames": [
             "reviewerRegistryObjectId",
             "reviewerEntryObjectId"
@@ -8269,11 +8336,11 @@
           "schemaName": "DisputeBondFundRequest",
           "requiredFields": [
             "bondObjectId",
-            "disputeQuorumConfigObjectId",
             "side",
             "amount"
           ],
           "optionalFields": [
+            "disputeQuorumConfigObjectId",
             "paymentCoinObjectId",
             "clockObjectId"
           ],
@@ -9469,11 +9536,11 @@
           "schemaRef": "#/components/schemas/DisputeReplaceReviewersRequest",
           "schemaName": "DisputeReplaceReviewersRequest",
           "requiredFields": [
-            "reviewerRegistryObjectId",
             "invitedReviewerAddresses",
             "reviewerSelectionReceiptId"
           ],
           "optionalFields": [
+            "reviewerRegistryObjectId",
             "clockObjectId"
           ],
           "propertyNames": [
@@ -9681,10 +9748,9 @@
           "required": true,
           "schemaRef": "#/components/schemas/DisputeFallbackResolveRequest",
           "schemaName": "DisputeFallbackResolveRequest",
-          "requiredFields": [
-            "arbCapObjectId"
-          ],
+          "requiredFields": [],
           "optionalFields": [
+            "arbCapObjectId",
             "bondObjectId",
             "reviewerRegistryObjectId",
             "disputeQuorumConfigObjectId",
@@ -10028,8 +10094,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/SponsorPreflightResponse",
             "schemaName": "SponsorPreflightResponse",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "actorAddress",
               "purpose",
               "paymentCoin",
@@ -10051,6 +10116,7 @@
               "sponsorWindow",
               "diagnostics"
             ],
+            "optionalFields": [],
             "propertyNames": [
               "actorAddress",
               "purpose",
@@ -10985,25 +11051,26 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ModerationNotice",
             "schemaName": "ModerationNotice",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
-              "reporterAddress",
-              "reporterContact",
               "targetType",
               "targetId",
-              "targetAddress",
               "reasonCode",
               "details",
               "evidenceUrls",
               "status",
+              "createdAt",
+              "updatedAt"
+            ],
+            "optionalFields": [
+              "reporterAddress",
+              "reporterContact",
+              "targetAddress",
               "moderatorAddress",
               "decisionAction",
               "decisionReason",
               "legalBasis",
-              "decidedAt",
-              "createdAt",
-              "updatedAt"
+              "decidedAt"
             ],
             "propertyNames": [
               "id",
@@ -11094,24 +11161,25 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ComplianceAppealCase",
             "schemaName": "ComplianceAppealCase",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "noticeId",
-              "appellantAddress",
-              "appellantContact",
               "reason",
               "details",
               "evidenceUrls",
               "status",
               "retentionClass",
+              "createdAt",
+              "updatedAt"
+            ],
+            "optionalFields": [
+              "appellantAddress",
+              "appellantContact",
               "reviewerAddress",
               "decisionOutcome",
               "decisionSummary",
               "legalBasis",
-              "decidedAt",
-              "createdAt",
-              "updatedAt"
+              "decidedAt"
             ],
             "propertyNames": [
               "id",
@@ -11213,24 +11281,25 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ComplianceAppealCase",
             "schemaName": "ComplianceAppealCase",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "noticeId",
-              "appellantAddress",
-              "appellantContact",
               "reason",
               "details",
               "evidenceUrls",
               "status",
               "retentionClass",
+              "createdAt",
+              "updatedAt"
+            ],
+            "optionalFields": [
+              "appellantAddress",
+              "appellantContact",
               "reviewerAddress",
               "decisionOutcome",
               "decisionSummary",
               "legalBasis",
-              "decidedAt",
-              "createdAt",
-              "updatedAt"
+              "decidedAt"
             ],
             "propertyNames": [
               "id",
@@ -11293,24 +11362,25 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ComplianceAppealCase",
             "schemaName": "ComplianceAppealCase",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "noticeId",
-              "appellantAddress",
-              "appellantContact",
               "reason",
               "details",
               "evidenceUrls",
               "status",
               "retentionClass",
+              "createdAt",
+              "updatedAt"
+            ],
+            "optionalFields": [
+              "appellantAddress",
+              "appellantContact",
               "reviewerAddress",
               "decisionOutcome",
               "decisionSummary",
               "legalBasis",
-              "decidedAt",
-              "createdAt",
-              "updatedAt"
+              "decidedAt"
             ],
             "propertyNames": [
               "id",
@@ -11728,8 +11798,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
             "schemaName": "BusinessWritePreconditionResponse",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "error",
               "detail",
               "redirectTo",
@@ -11738,7 +11807,9 @@
               "route",
               "preconditionStatus",
               "documentVersions",
-              "businessOnboarding",
+              "businessOnboarding"
+            ],
+            "optionalFields": [
               "currentTermsVersion",
               "currentRiskDisclosureVersion"
             ],
@@ -11791,25 +11862,26 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ModerationNotice",
             "schemaName": "ModerationNotice",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
-              "reporterAddress",
-              "reporterContact",
               "targetType",
               "targetId",
-              "targetAddress",
               "reasonCode",
               "details",
               "evidenceUrls",
               "status",
+              "createdAt",
+              "updatedAt"
+            ],
+            "optionalFields": [
+              "reporterAddress",
+              "reporterContact",
+              "targetAddress",
               "moderatorAddress",
               "decisionAction",
               "decisionReason",
               "legalBasis",
-              "decidedAt",
-              "createdAt",
-              "updatedAt"
+              "decidedAt"
             ],
             "propertyNames": [
               "id",
@@ -11907,25 +11979,26 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ModerationNotice",
             "schemaName": "ModerationNotice",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
-              "reporterAddress",
-              "reporterContact",
               "targetType",
               "targetId",
-              "targetAddress",
               "reasonCode",
               "details",
               "evidenceUrls",
               "status",
+              "createdAt",
+              "updatedAt"
+            ],
+            "optionalFields": [
+              "reporterAddress",
+              "reporterContact",
+              "targetAddress",
               "moderatorAddress",
               "decisionAction",
               "decisionReason",
               "legalBasis",
-              "decidedAt",
-              "createdAt",
-              "updatedAt"
+              "decidedAt"
             ],
             "propertyNames": [
               "id",
@@ -12034,24 +12107,25 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ComplianceAppealCase",
             "schemaName": "ComplianceAppealCase",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "noticeId",
-              "appellantAddress",
-              "appellantContact",
               "reason",
               "details",
               "evidenceUrls",
               "status",
               "retentionClass",
+              "createdAt",
+              "updatedAt"
+            ],
+            "optionalFields": [
+              "appellantAddress",
+              "appellantContact",
               "reviewerAddress",
               "decisionOutcome",
               "decisionSummary",
               "legalBasis",
-              "decidedAt",
-              "createdAt",
-              "updatedAt"
+              "decidedAt"
             ],
             "propertyNames": [
               "id",
@@ -12144,24 +12218,25 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ComplianceAppealCase",
             "schemaName": "ComplianceAppealCase",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "noticeId",
-              "appellantAddress",
-              "appellantContact",
               "reason",
               "details",
               "evidenceUrls",
               "status",
               "retentionClass",
+              "createdAt",
+              "updatedAt"
+            ],
+            "optionalFields": [
+              "appellantAddress",
+              "appellantContact",
               "reviewerAddress",
               "decisionOutcome",
               "decisionSummary",
               "legalBasis",
-              "decidedAt",
-              "createdAt",
-              "updatedAt"
+              "decidedAt"
             ],
             "propertyNames": [
               "id",
@@ -12287,18 +12362,19 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/StatementOfReason",
             "schemaName": "StatementOfReason",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "noticeId",
-              "subjectAddress",
               "targetType",
               "targetId",
               "action",
               "reason",
               "legalBasis",
               "createdAt",
-              "submittedToDsaDb",
+              "submittedToDsaDb"
+            ],
+            "optionalFields": [
+              "subjectAddress",
               "submittedAt"
             ],
             "propertyNames": [
@@ -12371,18 +12447,19 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/StatementOfReason",
             "schemaName": "StatementOfReason",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "noticeId",
-              "subjectAddress",
               "targetType",
               "targetId",
               "action",
               "reason",
               "legalBasis",
               "createdAt",
-              "submittedToDsaDb",
+              "submittedToDsaDb"
+            ],
+            "optionalFields": [
+              "subjectAddress",
               "submittedAt"
             ],
             "propertyNames": [
@@ -12482,20 +12559,21 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/UserComplianceProfile",
             "schemaName": "UserComplianceProfile",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "address",
               "tier",
               "acceptsClaw",
               "accountType",
+              "traderVerificationStatus",
+              "traderVerificationUpdatedAt",
+              "isBot"
+            ],
+            "optionalFields": [
               "useContext",
               "consumerAcknowledgement",
               "professionalAcknowledgement",
-              "traderVerificationStatus",
               "traderVerificationPayload",
-              "traderVerificationNote",
-              "traderVerificationUpdatedAt",
-              "isBot"
+              "traderVerificationNote"
             ],
             "propertyNames": [
               "address",
@@ -12596,8 +12674,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/TaxReportEntry",
             "schemaName": "TaxReportEntry",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "orderId",
               "listingId",
               "buyerAddress",
@@ -12605,8 +12682,10 @@
               "amount",
               "currency",
               "status",
-              "escrowObjectId",
               "createdAt"
+            ],
+            "optionalFields": [
+              "escrowObjectId"
             ],
             "propertyNames": [
               "orderId",
@@ -12692,20 +12771,21 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/UserComplianceProfile",
             "schemaName": "UserComplianceProfile",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "address",
               "tier",
               "acceptsClaw",
               "accountType",
+              "traderVerificationStatus",
+              "traderVerificationUpdatedAt",
+              "isBot"
+            ],
+            "optionalFields": [
               "useContext",
               "consumerAcknowledgement",
               "professionalAcknowledgement",
-              "traderVerificationStatus",
               "traderVerificationPayload",
-              "traderVerificationNote",
-              "traderVerificationUpdatedAt",
-              "isBot"
+              "traderVerificationNote"
             ],
             "propertyNames": [
               "address",
@@ -12785,8 +12865,7 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/SponsorCircuitStatusResponse",
             "schemaName": "SponsorCircuitStatusResponse",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "generatedAt",
               "sponsorProxyMode",
               "gasStationCircuit",
@@ -12796,6 +12875,7 @@
               "metrics",
               "activeAbuse"
             ],
+            "optionalFields": [],
             "propertyNames": [
               "generatedAt",
               "sponsorProxyMode",
@@ -13084,13 +13164,9 @@
             "reusableResponseRef": null,
             "schemaRef": "#/components/schemas/ReviewerSelectionReceipt",
             "schemaName": "ReviewerSelectionReceipt",
-            "requiredFields": [],
-            "optionalFields": [
+            "requiredFields": [
               "id",
               "scope",
-              "disputeCaseObjectId",
-              "orderId",
-              "milestoneId",
               "buyerAddress",
               "sellerAddress",
               "assignmentRound",
@@ -13098,9 +13174,6 @@
               "reviewerCountSelected",
               "selectionPolicyVersion",
               "checkpointDigest",
-              "checkpointSequenceNumber",
-              "checkpointTimestampMs",
-              "checkpointSource",
               "seedHash",
               "candidatePoolHash",
               "shortlistHash",
@@ -13111,10 +13184,18 @@
               "excludedReviewerAddresses",
               "candidatePool",
               "createdByActorAddress",
+              "createdAt"
+            ],
+            "optionalFields": [
+              "disputeCaseObjectId",
+              "orderId",
+              "milestoneId",
+              "checkpointSequenceNumber",
+              "checkpointTimestampMs",
+              "checkpointSource",
               "activatedAt",
               "activatedByActorAddress",
-              "activationTxDigest",
-              "createdAt"
+              "activationTxDigest"
             ],
             "propertyNames": [
               "id",
@@ -13210,8 +13291,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ComplianceFlags",
           "schemaName": "ComplianceFlags",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "enableConsumers",
             "enforceB2bOnly",
             "enableTraderVerification",
@@ -13219,6 +13299,7 @@
             "enableAnalytics",
             "enableEmail"
           ],
+          "optionalFields": [],
           "propertyNames": [
             "enableConsumers",
             "enforceB2bOnly",
@@ -13271,6 +13352,52 @@
         }
       }
     },
+    "probeIotaFreshWriteFreeze": {
+      "path": "/__iota_fresh_rollout_write_freeze_probe__",
+      "method": "post",
+      "tags": [
+        "Health"
+      ],
+      "parameters": {
+        "path": [],
+        "query": [],
+        "header": []
+      },
+      "requestBody": null,
+      "responses": {
+        "401": {
+          "status": "401",
+          "reusableResponseRef": "#/components/responses/Unauthorized",
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "409": {
+          "status": "409",
+          "reusableResponseRef": null,
+          "schemaRef": null,
+          "schemaName": null,
+          "requiredFields": [],
+          "optionalFields": [],
+          "propertyNames": []
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": null,
+          "schemaName": null,
+          "requiredFields": [],
+          "optionalFields": [],
+          "propertyNames": []
+        }
+      }
+    },
     "getCapabilities": {
       "path": "/capabilities",
       "method": "get",
@@ -13289,8 +13416,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/SponsorPolicySnapshot",
           "schemaName": "SponsorPolicySnapshot",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "version",
             "enabled",
             "emergencyMode",
@@ -13307,6 +13433,7 @@
             "execute",
             "recommendedGasBudgets"
           ],
+          "optionalFields": [],
           "propertyNames": [
             "version",
             "enabled",
@@ -13387,8 +13514,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/SponsorPolicySnapshot",
           "schemaName": "SponsorPolicySnapshot",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "version",
             "enabled",
             "emergencyMode",
@@ -13405,6 +13531,7 @@
             "execute",
             "recommendedGasBudgets"
           ],
+          "optionalFields": [],
           "propertyNames": [
             "version",
             "enabled",
@@ -13486,8 +13613,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/AssetPolicy",
           "schemaName": "AssetPolicy",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "version",
             "chainConfig",
             "controlPlane",
@@ -13497,6 +13623,7 @@
             "liveAssets",
             "experimentalAssets"
           ],
+          "optionalFields": [],
           "propertyNames": [
             "version",
             "chainConfig",
@@ -13528,8 +13655,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/FeePolicy",
           "schemaName": "FeePolicy",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "version",
             "chainConfig",
             "controlPlane",
@@ -13539,6 +13665,7 @@
             "reputationInitFee",
             "disputeEconomics"
           ],
+          "optionalFields": [],
           "propertyNames": [
             "version",
             "chainConfig",
@@ -13605,8 +13732,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/SponsorPolicySnapshot",
           "schemaName": "SponsorPolicySnapshot",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "version",
             "enabled",
             "emergencyMode",
@@ -13623,6 +13749,7 @@
             "execute",
             "recommendedGasBudgets"
           ],
+          "optionalFields": [],
           "propertyNames": [
             "version",
             "enabled",
@@ -14134,8 +14261,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/UserKeyAgreement",
           "schemaName": "UserKeyAgreement",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "address",
             "keyVersion",
             "publicKeyMultibase",
@@ -14147,6 +14273,7 @@
             "createdAt",
             "updatedAt"
           ],
+          "optionalFields": [],
           "propertyNames": [
             "address",
             "keyVersion",
@@ -14346,14 +14473,14 @@
         "required": true,
         "schemaRef": "#/components/schemas/KeyAgreementUpsertRequest",
         "schemaName": "KeyAgreementUpsertRequest",
-        "requiredFields": [],
-        "optionalFields": [
+        "requiredFields": [
           "publicKeyMultibase",
           "keyVersion",
           "expiresAtMs",
           "walletBindingMessage",
           "walletBindingSignature"
         ],
+        "optionalFields": [],
         "propertyNames": [
           "publicKeyMultibase",
           "keyVersion",
@@ -14368,8 +14495,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/UserKeyAgreement",
           "schemaName": "UserKeyAgreement",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "address",
             "keyVersion",
             "publicKeyMultibase",
@@ -14381,6 +14507,7 @@
             "createdAt",
             "updatedAt"
           ],
+          "optionalFields": [],
           "propertyNames": [
             "address",
             "keyVersion",
@@ -14782,8 +14909,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
           "schemaName": "BusinessWritePreconditionResponse",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "error",
             "detail",
             "redirectTo",
@@ -14792,7 +14918,9 @@
             "route",
             "preconditionStatus",
             "documentVersions",
-            "businessOnboarding",
+            "businessOnboarding"
+          ],
+          "optionalFields": [
             "currentTermsVersion",
             "currentRiskDisclosureVersion"
           ],
@@ -15312,8 +15440,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
           "schemaName": "BusinessWritePreconditionResponse",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "error",
             "detail",
             "redirectTo",
@@ -15322,7 +15449,9 @@
             "route",
             "preconditionStatus",
             "documentVersions",
-            "businessOnboarding",
+            "businessOnboarding"
+          ],
+          "optionalFields": [
             "currentTermsVersion",
             "currentRiskDisclosureVersion"
           ],
@@ -15479,8 +15608,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
           "schemaName": "BusinessWritePreconditionResponse",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "error",
             "detail",
             "redirectTo",
@@ -15489,7 +15617,9 @@
             "route",
             "preconditionStatus",
             "documentVersions",
-            "businessOnboarding",
+            "businessOnboarding"
+          ],
+          "optionalFields": [
             "currentTermsVersion",
             "currentRiskDisclosureVersion"
           ],
@@ -15755,8 +15885,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
           "schemaName": "BusinessWritePreconditionResponse",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "error",
             "detail",
             "redirectTo",
@@ -15765,7 +15894,9 @@
             "route",
             "preconditionStatus",
             "documentVersions",
-            "businessOnboarding",
+            "businessOnboarding"
+          ],
+          "optionalFields": [
             "currentTermsVersion",
             "currentRiskDisclosureVersion"
           ],
@@ -16457,25 +16588,26 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/Order",
           "schemaName": "Order",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "listingId",
             "buyerAddress",
             "sellerAddress",
             "amount",
             "currency",
+            "disputeBondPolicy",
+            "disputeBondState",
+            "status",
+            "createdAt",
+            "updatedAt"
+          ],
+          "optionalFields": [
             "communicationAgreement",
             "mailboxObjectId",
             "escrowObjectId",
             "disputeBondObjectId",
-            "disputeBondPolicy",
-            "disputeBondState",
             "disputeBondActivatedAt",
-            "deadlineMs",
-            "status",
-            "createdAt",
-            "updatedAt"
+            "deadlineMs"
           ],
           "propertyNames": [
             "id",
@@ -16620,11 +16752,10 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/SuiUsdcTxPlanOnlyResponse",
           "schemaName": "SuiUsdcTxPlanOnlyResponse",
-          "requiredFields": [],
-          "optionalFields": [
-            "chainIdentifier",
+          "requiredFields": [
             "chainFamily",
             "chainNetwork",
+            "chainIdentifier",
             "status",
             "asset",
             "executionAllowed",
@@ -16633,18 +16764,20 @@
             "publicLaunchReady",
             "apiSideExecution",
             "runtimeAccessScope",
-            "repositoryMutation",
-            "objectBindingCreated",
             "actorAllowlistEnforced",
             "transactionBytesBase64",
             "sourceGuard",
             "orderId",
             "target",
+            "txPlan"
+          ],
+          "optionalFields": [
+            "repositoryMutation",
+            "objectBindingCreated",
             "orderBinding",
             "packageIds",
             "paymentCoinReadback",
-            "objectReadback",
-            "txPlan"
+            "objectReadback"
           ],
           "propertyNames": [
             "chainIdentifier",
@@ -16793,11 +16926,10 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/SuiUsdcTxPlanOnlyResponse",
           "schemaName": "SuiUsdcTxPlanOnlyResponse",
-          "requiredFields": [],
-          "optionalFields": [
-            "chainIdentifier",
+          "requiredFields": [
             "chainFamily",
             "chainNetwork",
+            "chainIdentifier",
             "status",
             "asset",
             "executionAllowed",
@@ -16806,18 +16938,20 @@
             "publicLaunchReady",
             "apiSideExecution",
             "runtimeAccessScope",
-            "repositoryMutation",
-            "objectBindingCreated",
             "actorAllowlistEnforced",
             "transactionBytesBase64",
             "sourceGuard",
             "orderId",
             "target",
+            "txPlan"
+          ],
+          "optionalFields": [
+            "repositoryMutation",
+            "objectBindingCreated",
             "orderBinding",
             "packageIds",
             "paymentCoinReadback",
-            "objectReadback",
-            "txPlan"
+            "objectReadback"
           ],
           "propertyNames": [
             "chainIdentifier",
@@ -17448,25 +17582,26 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/Order",
           "schemaName": "Order",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "listingId",
             "buyerAddress",
             "sellerAddress",
             "amount",
             "currency",
+            "disputeBondPolicy",
+            "disputeBondState",
+            "status",
+            "createdAt",
+            "updatedAt"
+          ],
+          "optionalFields": [
             "communicationAgreement",
             "mailboxObjectId",
             "escrowObjectId",
             "disputeBondObjectId",
-            "disputeBondPolicy",
-            "disputeBondState",
             "disputeBondActivatedAt",
-            "deadlineMs",
-            "status",
-            "createdAt",
-            "updatedAt"
+            "deadlineMs"
           ],
           "propertyNames": [
             "id",
@@ -18142,8 +18277,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/OrderCommunicationAgreement",
           "schemaName": "OrderCommunicationAgreement",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "version",
             "status",
             "orderId",
@@ -18154,6 +18288,7 @@
             "negotiatedAt",
             "policySnapshot"
           ],
+          "optionalFields": [],
           "propertyNames": [
             "version",
             "status",
@@ -18231,25 +18366,26 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/Order",
           "schemaName": "Order",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "listingId",
             "buyerAddress",
             "sellerAddress",
             "amount",
             "currency",
+            "disputeBondPolicy",
+            "disputeBondState",
+            "status",
+            "createdAt",
+            "updatedAt"
+          ],
+          "optionalFields": [
             "communicationAgreement",
             "mailboxObjectId",
             "escrowObjectId",
             "disputeBondObjectId",
-            "disputeBondPolicy",
-            "disputeBondState",
             "disputeBondActivatedAt",
-            "deadlineMs",
-            "status",
-            "createdAt",
-            "updatedAt"
+            "deadlineMs"
           ],
           "propertyNames": [
             "id",
@@ -18357,25 +18493,26 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/Order",
           "schemaName": "Order",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "listingId",
             "buyerAddress",
             "sellerAddress",
             "amount",
             "currency",
+            "disputeBondPolicy",
+            "disputeBondState",
+            "status",
+            "createdAt",
+            "updatedAt"
+          ],
+          "optionalFields": [
             "communicationAgreement",
             "mailboxObjectId",
             "escrowObjectId",
             "disputeBondObjectId",
-            "disputeBondPolicy",
-            "disputeBondState",
             "disputeBondActivatedAt",
-            "deadlineMs",
-            "status",
-            "createdAt",
-            "updatedAt"
+            "deadlineMs"
           ],
           "propertyNames": [
             "id",
@@ -18639,8 +18776,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/MilestoneArtifactManifest",
           "schemaName": "MilestoneArtifactManifest",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "orderId",
             "milestoneId",
@@ -18653,6 +18789,7 @@
             "createdAt",
             "updatedAt"
           ],
+          "optionalFields": [],
           "propertyNames": [
             "id",
             "orderId",
@@ -18737,8 +18874,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/MilestoneArtifactManifest",
           "schemaName": "MilestoneArtifactManifest",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "orderId",
             "milestoneId",
@@ -18751,6 +18887,7 @@
             "createdAt",
             "updatedAt"
           ],
+          "optionalFields": [],
           "propertyNames": [
             "id",
             "orderId",
@@ -18844,21 +18981,22 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/MilestoneManifestAnchor",
           "schemaName": "MilestoneManifestAnchor",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "orderId",
             "milestoneId",
             "txDigest",
-            "eventSeq",
             "expectedManifestCid",
             "expectedManifestSha256",
             "status",
-            "mismatchReason",
-            "confirmedAt",
-            "lastCheckedAt",
             "createdAt",
             "updatedAt"
+          ],
+          "optionalFields": [
+            "eventSeq",
+            "mismatchReason",
+            "confirmedAt",
+            "lastCheckedAt"
           ],
           "propertyNames": [
             "id",
@@ -18960,21 +19098,22 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/MilestoneManifestAnchor",
           "schemaName": "MilestoneManifestAnchor",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "orderId",
             "milestoneId",
             "txDigest",
-            "eventSeq",
             "expectedManifestCid",
             "expectedManifestSha256",
             "status",
-            "mismatchReason",
-            "confirmedAt",
-            "lastCheckedAt",
             "createdAt",
             "updatedAt"
+          ],
+          "optionalFields": [
+            "eventSeq",
+            "mismatchReason",
+            "confirmedAt",
+            "lastCheckedAt"
           ],
           "propertyNames": [
             "id",
@@ -19088,25 +19227,26 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/Order",
           "schemaName": "Order",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "listingId",
             "buyerAddress",
             "sellerAddress",
             "amount",
             "currency",
+            "disputeBondPolicy",
+            "disputeBondState",
+            "status",
+            "createdAt",
+            "updatedAt"
+          ],
+          "optionalFields": [
             "communicationAgreement",
             "mailboxObjectId",
             "escrowObjectId",
             "disputeBondObjectId",
-            "disputeBondPolicy",
-            "disputeBondState",
             "disputeBondActivatedAt",
-            "deadlineMs",
-            "status",
-            "createdAt",
-            "updatedAt"
+            "deadlineMs"
           ],
           "propertyNames": [
             "id",
@@ -19352,25 +19492,26 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/Order",
           "schemaName": "Order",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "listingId",
             "buyerAddress",
             "sellerAddress",
             "amount",
             "currency",
+            "disputeBondPolicy",
+            "disputeBondState",
+            "status",
+            "createdAt",
+            "updatedAt"
+          ],
+          "optionalFields": [
             "communicationAgreement",
             "mailboxObjectId",
             "escrowObjectId",
             "disputeBondObjectId",
-            "disputeBondPolicy",
-            "disputeBondState",
             "disputeBondActivatedAt",
-            "deadlineMs",
-            "status",
-            "createdAt",
-            "updatedAt"
+            "deadlineMs"
           ],
           "propertyNames": [
             "id",
@@ -19723,13 +19864,13 @@
         "schemaRef": "#/components/schemas/ReviewPostRequest",
         "schemaName": "ReviewPostRequest",
         "requiredFields": [
-          "reviewRegistryObjectId",
           "escrowObjectId",
           "escrowType",
           "rating",
           "reviewHash"
         ],
         "optionalFields": [
+          "reviewRegistryObjectId",
           "escrowCoinType",
           "clockObjectId"
         ],
@@ -19859,12 +20000,12 @@
         "schemaRef": "#/components/schemas/DeadlineExtProposeRequest",
         "schemaName": "DeadlineExtProposeRequest",
         "requiredFields": [
-          "deadlineExtRegistryObjectId",
           "escrowId",
           "currentDeadlineMs",
           "proposedDeadlineMs"
         ],
         "optionalFields": [
+          "deadlineExtRegistryObjectId",
           "clockObjectId"
         ],
         "propertyNames": [
@@ -19990,10 +20131,9 @@
         "required": true,
         "schemaRef": "#/components/schemas/DeadlineExtActionRequest",
         "schemaName": "DeadlineExtActionRequest",
-        "requiredFields": [
-          "deadlineExtRegistryObjectId"
-        ],
+        "requiredFields": [],
         "optionalFields": [
+          "deadlineExtRegistryObjectId",
           "clockObjectId"
         ],
         "propertyNames": [
@@ -20051,10 +20191,9 @@
         "required": true,
         "schemaRef": "#/components/schemas/DeadlineExtActionRequest",
         "schemaName": "DeadlineExtActionRequest",
-        "requiredFields": [
-          "deadlineExtRegistryObjectId"
-        ],
+        "requiredFields": [],
         "optionalFields": [
+          "deadlineExtRegistryObjectId",
           "clockObjectId"
         ],
         "propertyNames": [
@@ -20180,25 +20319,26 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/Order",
           "schemaName": "Order",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "listingId",
             "buyerAddress",
             "sellerAddress",
             "amount",
             "currency",
+            "disputeBondPolicy",
+            "disputeBondState",
+            "status",
+            "createdAt",
+            "updatedAt"
+          ],
+          "optionalFields": [
             "communicationAgreement",
             "mailboxObjectId",
             "escrowObjectId",
             "disputeBondObjectId",
-            "disputeBondPolicy",
-            "disputeBondState",
             "disputeBondActivatedAt",
-            "deadlineMs",
-            "status",
-            "createdAt",
-            "updatedAt"
+            "deadlineMs"
           ],
           "propertyNames": [
             "id",
@@ -20276,16 +20416,17 @@
         "required": true,
         "schemaRef": "#/components/schemas/ReviewerRegisterRequest",
         "schemaName": "ReviewerRegisterRequest",
-        "requiredFields": [],
-        "optionalFields": [
-          "reviewerRegistryObjectId",
-          "disputeQuorumConfigObjectId",
+        "requiredFields": [
           "reputationProfileObjectId",
           "transportType",
           "transportPubkeyHex",
+          "stakeAmount"
+        ],
+        "optionalFields": [
+          "reviewerRegistryObjectId",
+          "disputeQuorumConfigObjectId",
           "minCaseRewardNative",
           "minCaseRewardIota",
-          "stakeAmount",
           "clockObjectId"
         ],
         "propertyNames": [
@@ -20613,8 +20754,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ReviewerInviteSummary",
           "schemaName": "ReviewerInviteSummary",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "disputeCaseObjectId",
             "reviewerAddress",
             "assignmentRound",
@@ -20622,7 +20762,9 @@
             "status",
             "actorCanAccept",
             "acceptReadiness",
-            "source",
+            "source"
+          ],
+          "optionalFields": [
             "disputeCase",
             "fetchError"
           ],
@@ -20777,13 +20919,9 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ReviewerSelectionReceipt",
           "schemaName": "ReviewerSelectionReceipt",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "scope",
-            "disputeCaseObjectId",
-            "orderId",
-            "milestoneId",
             "buyerAddress",
             "sellerAddress",
             "assignmentRound",
@@ -20791,9 +20929,6 @@
             "reviewerCountSelected",
             "selectionPolicyVersion",
             "checkpointDigest",
-            "checkpointSequenceNumber",
-            "checkpointTimestampMs",
-            "checkpointSource",
             "seedHash",
             "candidatePoolHash",
             "shortlistHash",
@@ -20804,10 +20939,18 @@
             "excludedReviewerAddresses",
             "candidatePool",
             "createdByActorAddress",
+            "createdAt"
+          ],
+          "optionalFields": [
+            "disputeCaseObjectId",
+            "orderId",
+            "milestoneId",
+            "checkpointSequenceNumber",
+            "checkpointTimestampMs",
+            "checkpointSource",
             "activatedAt",
             "activatedByActorAddress",
-            "activationTxDigest",
-            "createdAt"
+            "activationTxDigest"
           ],
           "propertyNames": [
             "id",
@@ -20923,15 +21066,16 @@
         "required": true,
         "schemaRef": "#/components/schemas/ReviewerUpdateRequest",
         "schemaName": "ReviewerUpdateRequest",
-        "requiredFields": [],
-        "optionalFields": [
-          "reviewerRegistryObjectId",
+        "requiredFields": [
           "reviewerEntryObjectId",
           "transportType",
           "transportPubkeyHex",
+          "active"
+        ],
+        "optionalFields": [
+          "reviewerRegistryObjectId",
           "minCaseRewardNative",
           "minCaseRewardIota",
-          "active",
           "clockObjectId"
         ],
         "propertyNames": [
@@ -21029,10 +21173,11 @@
         "schemaRef": "#/components/schemas/ReviewerDeregisterRequest",
         "schemaName": "ReviewerDeregisterRequest",
         "requiredFields": [
-          "reviewerRegistryObjectId",
           "reviewerEntryObjectId"
         ],
-        "optionalFields": [],
+        "optionalFields": [
+          "reviewerRegistryObjectId"
+        ],
         "propertyNames": [
           "reviewerRegistryObjectId",
           "reviewerEntryObjectId"
@@ -21226,11 +21371,11 @@
         "schemaName": "DisputeBondFundRequest",
         "requiredFields": [
           "bondObjectId",
-          "disputeQuorumConfigObjectId",
           "side",
           "amount"
         ],
         "optionalFields": [
+          "disputeQuorumConfigObjectId",
           "paymentCoinObjectId",
           "clockObjectId"
         ],
@@ -22395,11 +22540,11 @@
         "schemaRef": "#/components/schemas/DisputeReplaceReviewersRequest",
         "schemaName": "DisputeReplaceReviewersRequest",
         "requiredFields": [
-          "reviewerRegistryObjectId",
           "invitedReviewerAddresses",
           "reviewerSelectionReceiptId"
         ],
         "optionalFields": [
+          "reviewerRegistryObjectId",
           "clockObjectId"
         ],
         "propertyNames": [
@@ -22601,10 +22746,9 @@
         "required": true,
         "schemaRef": "#/components/schemas/DisputeFallbackResolveRequest",
         "schemaName": "DisputeFallbackResolveRequest",
-        "requiredFields": [
-          "arbCapObjectId"
-        ],
+        "requiredFields": [],
         "optionalFields": [
+          "arbCapObjectId",
           "bondObjectId",
           "reviewerRegistryObjectId",
           "disputeQuorumConfigObjectId",
@@ -22939,8 +23083,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/SponsorPreflightResponse",
           "schemaName": "SponsorPreflightResponse",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "actorAddress",
             "purpose",
             "paymentCoin",
@@ -22962,6 +23105,7 @@
             "sponsorWindow",
             "diagnostics"
           ],
+          "optionalFields": [],
           "propertyNames": [
             "actorAddress",
             "purpose",
@@ -23887,25 +24031,26 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ModerationNotice",
           "schemaName": "ModerationNotice",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
-            "reporterAddress",
-            "reporterContact",
             "targetType",
             "targetId",
-            "targetAddress",
             "reasonCode",
             "details",
             "evidenceUrls",
             "status",
+            "createdAt",
+            "updatedAt"
+          ],
+          "optionalFields": [
+            "reporterAddress",
+            "reporterContact",
+            "targetAddress",
             "moderatorAddress",
             "decisionAction",
             "decisionReason",
             "legalBasis",
-            "decidedAt",
-            "createdAt",
-            "updatedAt"
+            "decidedAt"
           ],
           "propertyNames": [
             "id",
@@ -23993,24 +24138,25 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ComplianceAppealCase",
           "schemaName": "ComplianceAppealCase",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "noticeId",
-            "appellantAddress",
-            "appellantContact",
             "reason",
             "details",
             "evidenceUrls",
             "status",
             "retentionClass",
+            "createdAt",
+            "updatedAt"
+          ],
+          "optionalFields": [
+            "appellantAddress",
+            "appellantContact",
             "reviewerAddress",
             "decisionOutcome",
             "decisionSummary",
             "legalBasis",
-            "decidedAt",
-            "createdAt",
-            "updatedAt"
+            "decidedAt"
           ],
           "propertyNames": [
             "id",
@@ -24109,24 +24255,25 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ComplianceAppealCase",
           "schemaName": "ComplianceAppealCase",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "noticeId",
-            "appellantAddress",
-            "appellantContact",
             "reason",
             "details",
             "evidenceUrls",
             "status",
             "retentionClass",
+            "createdAt",
+            "updatedAt"
+          ],
+          "optionalFields": [
+            "appellantAddress",
+            "appellantContact",
             "reviewerAddress",
             "decisionOutcome",
             "decisionSummary",
             "legalBasis",
-            "decidedAt",
-            "createdAt",
-            "updatedAt"
+            "decidedAt"
           ],
           "propertyNames": [
             "id",
@@ -24186,24 +24333,25 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ComplianceAppealCase",
           "schemaName": "ComplianceAppealCase",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "noticeId",
-            "appellantAddress",
-            "appellantContact",
             "reason",
             "details",
             "evidenceUrls",
             "status",
             "retentionClass",
+            "createdAt",
+            "updatedAt"
+          ],
+          "optionalFields": [
+            "appellantAddress",
+            "appellantContact",
             "reviewerAddress",
             "decisionOutcome",
             "decisionSummary",
             "legalBasis",
-            "decidedAt",
-            "createdAt",
-            "updatedAt"
+            "decidedAt"
           ],
           "propertyNames": [
             "id",
@@ -24609,8 +24757,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/BusinessWritePreconditionResponse",
           "schemaName": "BusinessWritePreconditionResponse",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "error",
             "detail",
             "redirectTo",
@@ -24619,7 +24766,9 @@
             "route",
             "preconditionStatus",
             "documentVersions",
-            "businessOnboarding",
+            "businessOnboarding"
+          ],
+          "optionalFields": [
             "currentTermsVersion",
             "currentRiskDisclosureVersion"
           ],
@@ -24669,25 +24818,26 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ModerationNotice",
           "schemaName": "ModerationNotice",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
-            "reporterAddress",
-            "reporterContact",
             "targetType",
             "targetId",
-            "targetAddress",
             "reasonCode",
             "details",
             "evidenceUrls",
             "status",
+            "createdAt",
+            "updatedAt"
+          ],
+          "optionalFields": [
+            "reporterAddress",
+            "reporterContact",
+            "targetAddress",
             "moderatorAddress",
             "decisionAction",
             "decisionReason",
             "legalBasis",
-            "decidedAt",
-            "createdAt",
-            "updatedAt"
+            "decidedAt"
           ],
           "propertyNames": [
             "id",
@@ -24782,25 +24932,26 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ModerationNotice",
           "schemaName": "ModerationNotice",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
-            "reporterAddress",
-            "reporterContact",
             "targetType",
             "targetId",
-            "targetAddress",
             "reasonCode",
             "details",
             "evidenceUrls",
             "status",
+            "createdAt",
+            "updatedAt"
+          ],
+          "optionalFields": [
+            "reporterAddress",
+            "reporterContact",
+            "targetAddress",
             "moderatorAddress",
             "decisionAction",
             "decisionReason",
             "legalBasis",
-            "decidedAt",
-            "createdAt",
-            "updatedAt"
+            "decidedAt"
           ],
           "propertyNames": [
             "id",
@@ -24906,24 +25057,25 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ComplianceAppealCase",
           "schemaName": "ComplianceAppealCase",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "noticeId",
-            "appellantAddress",
-            "appellantContact",
             "reason",
             "details",
             "evidenceUrls",
             "status",
             "retentionClass",
+            "createdAt",
+            "updatedAt"
+          ],
+          "optionalFields": [
+            "appellantAddress",
+            "appellantContact",
             "reviewerAddress",
             "decisionOutcome",
             "decisionSummary",
             "legalBasis",
-            "decidedAt",
-            "createdAt",
-            "updatedAt"
+            "decidedAt"
           ],
           "propertyNames": [
             "id",
@@ -25013,24 +25165,25 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ComplianceAppealCase",
           "schemaName": "ComplianceAppealCase",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "noticeId",
-            "appellantAddress",
-            "appellantContact",
             "reason",
             "details",
             "evidenceUrls",
             "status",
             "retentionClass",
+            "createdAt",
+            "updatedAt"
+          ],
+          "optionalFields": [
+            "appellantAddress",
+            "appellantContact",
             "reviewerAddress",
             "decisionOutcome",
             "decisionSummary",
             "legalBasis",
-            "decidedAt",
-            "createdAt",
-            "updatedAt"
+            "decidedAt"
           ],
           "propertyNames": [
             "id",
@@ -25153,18 +25306,19 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/StatementOfReason",
           "schemaName": "StatementOfReason",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "noticeId",
-            "subjectAddress",
             "targetType",
             "targetId",
             "action",
             "reason",
             "legalBasis",
             "createdAt",
-            "submittedToDsaDb",
+            "submittedToDsaDb"
+          ],
+          "optionalFields": [
+            "subjectAddress",
             "submittedAt"
           ],
           "propertyNames": [
@@ -25234,18 +25388,19 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/StatementOfReason",
           "schemaName": "StatementOfReason",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "noticeId",
-            "subjectAddress",
             "targetType",
             "targetId",
             "action",
             "reason",
             "legalBasis",
             "createdAt",
-            "submittedToDsaDb",
+            "submittedToDsaDb"
+          ],
+          "optionalFields": [
+            "subjectAddress",
             "submittedAt"
           ],
           "propertyNames": [
@@ -25342,20 +25497,21 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/UserComplianceProfile",
           "schemaName": "UserComplianceProfile",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "address",
             "tier",
             "acceptsClaw",
             "accountType",
+            "traderVerificationStatus",
+            "traderVerificationUpdatedAt",
+            "isBot"
+          ],
+          "optionalFields": [
             "useContext",
             "consumerAcknowledgement",
             "professionalAcknowledgement",
-            "traderVerificationStatus",
             "traderVerificationPayload",
-            "traderVerificationNote",
-            "traderVerificationUpdatedAt",
-            "isBot"
+            "traderVerificationNote"
           ],
           "propertyNames": [
             "address",
@@ -25453,8 +25609,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/TaxReportEntry",
           "schemaName": "TaxReportEntry",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "orderId",
             "listingId",
             "buyerAddress",
@@ -25462,8 +25617,10 @@
             "amount",
             "currency",
             "status",
-            "escrowObjectId",
             "createdAt"
+          ],
+          "optionalFields": [
+            "escrowObjectId"
           ],
           "propertyNames": [
             "orderId",
@@ -25546,20 +25703,21 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/UserComplianceProfile",
           "schemaName": "UserComplianceProfile",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "address",
             "tier",
             "acceptsClaw",
             "accountType",
+            "traderVerificationStatus",
+            "traderVerificationUpdatedAt",
+            "isBot"
+          ],
+          "optionalFields": [
             "useContext",
             "consumerAcknowledgement",
             "professionalAcknowledgement",
-            "traderVerificationStatus",
             "traderVerificationPayload",
-            "traderVerificationNote",
-            "traderVerificationUpdatedAt",
-            "isBot"
+            "traderVerificationNote"
           ],
           "propertyNames": [
             "address",
@@ -25636,8 +25794,7 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/SponsorCircuitStatusResponse",
           "schemaName": "SponsorCircuitStatusResponse",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "generatedAt",
             "sponsorProxyMode",
             "gasStationCircuit",
@@ -25647,6 +25804,7 @@
             "metrics",
             "activeAbuse"
           ],
+          "optionalFields": [],
           "propertyNames": [
             "generatedAt",
             "sponsorProxyMode",
@@ -25926,13 +26084,9 @@
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ReviewerSelectionReceipt",
           "schemaName": "ReviewerSelectionReceipt",
-          "requiredFields": [],
-          "optionalFields": [
+          "requiredFields": [
             "id",
             "scope",
-            "disputeCaseObjectId",
-            "orderId",
-            "milestoneId",
             "buyerAddress",
             "sellerAddress",
             "assignmentRound",
@@ -25940,9 +26094,6 @@
             "reviewerCountSelected",
             "selectionPolicyVersion",
             "checkpointDigest",
-            "checkpointSequenceNumber",
-            "checkpointTimestampMs",
-            "checkpointSource",
             "seedHash",
             "candidatePoolHash",
             "shortlistHash",
@@ -25953,10 +26104,18 @@
             "excludedReviewerAddresses",
             "candidatePool",
             "createdByActorAddress",
+            "createdAt"
+          ],
+          "optionalFields": [
+            "disputeCaseObjectId",
+            "orderId",
+            "milestoneId",
+            "checkpointSequenceNumber",
+            "checkpointTimestampMs",
+            "checkpointSource",
             "activatedAt",
             "activatedByActorAddress",
-            "activationTxDigest",
-            "createdAt"
+            "activationTxDigest"
           ],
           "propertyNames": [
             "id",
@@ -26065,15 +26224,15 @@
         "enableAnalytics",
         "enableEmail"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "enableConsumers",
         "enforceB2bOnly",
         "enableTraderVerification",
         "enableTaxCompliance",
         "enableAnalytics",
         "enableEmail"
-      ]
+      ],
+      "optionalFields": []
     },
     "ComplianceDocumentVersions": {
       "name": "ComplianceDocumentVersions",
@@ -26155,8 +26314,7 @@
         "contexts",
         "confirmations"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "state",
         "submissionRoute",
         "redirectTo",
@@ -26165,7 +26323,8 @@
         "requiredForRoutes",
         "contexts",
         "confirmations"
-      ]
+      ],
+      "optionalFields": []
     },
     "ComplianceOwnerSurface": {
       "name": "ComplianceOwnerSurface",
@@ -26224,8 +26383,7 @@
         "currentTermsVersion",
         "currentRiskDisclosureVersion"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "error",
         "detail",
         "redirectTo",
@@ -26234,7 +26392,9 @@
         "route",
         "preconditionStatus",
         "documentVersions",
-        "businessOnboarding",
+        "businessOnboarding"
+      ],
+      "optionalFields": [
         "currentTermsVersion",
         "currentRiskDisclosureVersion"
       ]
@@ -26405,14 +26565,14 @@
         "walletBindingMessage",
         "walletBindingSignature"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "publicKeyMultibase",
         "keyVersion",
         "expiresAtMs",
         "walletBindingMessage",
         "walletBindingSignature"
-      ]
+      ],
+      "optionalFields": []
     },
     "UserKeyAgreement": {
       "name": "UserKeyAgreement",
@@ -26428,8 +26588,7 @@
         "createdAt",
         "updatedAt"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "address",
         "keyVersion",
         "publicKeyMultibase",
@@ -26440,7 +26599,8 @@
         "isExpired",
         "createdAt",
         "updatedAt"
-      ]
+      ],
+      "optionalFields": []
     },
     "ReputationRoleMetrics": {
       "name": "ReputationRoleMetrics",
@@ -26457,8 +26617,7 @@
         "autoReleaseMisses",
         "sellerDeadlineMisses"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "totalOrders",
         "closedOrders",
         "completedOrders",
@@ -26470,7 +26629,8 @@
         "manualReviewActions",
         "autoReleaseMisses",
         "sellerDeadlineMisses"
-      ]
+      ],
+      "optionalFields": []
     },
     "RoleReputationSummary": {
       "name": "RoleReputationSummary",
@@ -26531,8 +26691,7 @@
         "disputeResolutionAttribution",
         "mutualCancelSemantics"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "model",
         "outcomeModel",
         "canonicalSummarySource",
@@ -26544,7 +26703,8 @@
         "milestoneSemantics",
         "disputeResolutionAttribution",
         "mutualCancelSemantics"
-      ]
+      ],
+      "optionalFields": []
     },
     "CreateListingRequest": {
       "name": "CreateListingRequest",
@@ -26702,8 +26862,7 @@
         "nonce",
         "signerPublicKey"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "address",
         "keyVersion",
         "publicKeyMultibase",
@@ -26713,7 +26872,8 @@
         "expiresAtMs",
         "nonce",
         "signerPublicKey"
-      ]
+      ],
+      "optionalFields": []
     },
     "OrderCommunicationAgreement": {
       "name": "OrderCommunicationAgreement",
@@ -26728,8 +26888,7 @@
         "negotiatedAt",
         "policySnapshot"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "version",
         "status",
         "orderId",
@@ -26739,7 +26898,8 @@
         "seller",
         "negotiatedAt",
         "policySnapshot"
-      ]
+      ],
+      "optionalFields": []
     },
     "CreateBidRequest": {
       "name": "CreateBidRequest",
@@ -26859,8 +27019,7 @@
         "execute",
         "recommendedGasBudgets"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "version",
         "enabled",
         "emergencyMode",
@@ -26876,7 +27035,8 @@
         "reserve",
         "execute",
         "recommendedGasBudgets"
-      ]
+      ],
+      "optionalFields": []
     },
     "SponsorReserveRequest": {
       "name": "SponsorReserveRequest",
@@ -27071,8 +27231,7 @@
         "sponsorWindow",
         "diagnostics"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "actorAddress",
         "purpose",
         "paymentCoin",
@@ -27093,7 +27252,8 @@
         "gasStationCircuit",
         "sponsorWindow",
         "diagnostics"
-      ]
+      ],
+      "optionalFields": []
     },
     "SponsorFailureDiagnostic": {
       "name": "SponsorFailureDiagnostic",
@@ -27117,22 +27277,23 @@
         "upstreamDetail",
         "hint"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "stage",
         "issue",
         "txFamily",
         "minimumGasBudget",
         "recommendedGasBudget",
         "maxGasBudget",
-        "providedGasBudget",
         "orderIdRequired",
         "strictMode",
         "intentRequired",
         "intentSignatureRequired",
         "executionSupported",
         "selfPayFallbackAvailable",
-        "reservationTtlSec",
+        "reservationTtlSec"
+      ],
+      "optionalFields": [
+        "providedGasBudget",
         "retryAfterSec",
         "upstreamStatus",
         "upstreamDetail",
@@ -27300,16 +27461,17 @@
         "stakeAmount",
         "clockObjectId"
       ],
-      "requiredFields": [],
-      "optionalFields": [
-        "reviewerRegistryObjectId",
-        "disputeQuorumConfigObjectId",
+      "requiredFields": [
         "reputationProfileObjectId",
         "transportType",
         "transportPubkeyHex",
+        "stakeAmount"
+      ],
+      "optionalFields": [
+        "reviewerRegistryObjectId",
+        "disputeQuorumConfigObjectId",
         "minCaseRewardNative",
         "minCaseRewardIota",
-        "stakeAmount",
         "clockObjectId"
       ]
     },
@@ -27325,15 +27487,16 @@
         "active",
         "clockObjectId"
       ],
-      "requiredFields": [],
-      "optionalFields": [
-        "reviewerRegistryObjectId",
+      "requiredFields": [
         "reviewerEntryObjectId",
         "transportType",
         "transportPubkeyHex",
+        "active"
+      ],
+      "optionalFields": [
+        "reviewerRegistryObjectId",
         "minCaseRewardNative",
         "minCaseRewardIota",
-        "active",
         "clockObjectId"
       ]
     },
@@ -27344,10 +27507,11 @@
         "reviewerEntryObjectId"
       ],
       "requiredFields": [
-        "reviewerRegistryObjectId",
         "reviewerEntryObjectId"
       ],
-      "optionalFields": []
+      "optionalFields": [
+        "reviewerRegistryObjectId"
+      ]
     },
     "ReviewerClaimMetricsRequest": {
       "name": "ReviewerClaimMetricsRequest",
@@ -27377,11 +27541,11 @@
       ],
       "requiredFields": [
         "bondObjectId",
-        "disputeQuorumConfigObjectId",
         "side",
         "amount"
       ],
       "optionalFields": [
+        "disputeQuorumConfigObjectId",
         "paymentCoinObjectId",
         "clockObjectId"
       ]
@@ -27461,8 +27625,7 @@
         "summary",
         "replyToEvidenceId"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "kind",
         "assignmentRound",
         "evidenceClass",
@@ -27471,7 +27634,9 @@
         "cipherSuite",
         "contentProtocol",
         "recipientGrants",
-        "summary",
+        "summary"
+      ],
+      "optionalFields": [
         "replyToEvidenceId"
       ]
     },
@@ -27526,14 +27691,15 @@
         "acceptReadiness",
         "reviewerReadGraceExpiresAtMs"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "viewerRole",
         "actorIsParticipant",
         "actorIsAssignedReviewer",
         "actorIsInvitedReviewer",
         "actorCanAcceptReviewerSlot",
-        "actorCanReadEvidenceSummaries",
+        "actorCanReadEvidenceSummaries"
+      ],
+      "optionalFields": [
         "inviteSourceMode",
         "acceptReadiness",
         "reviewerReadGraceExpiresAtMs"
@@ -27574,14 +27740,14 @@
         "mailboxAckCount",
         "checkpointRefCount"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "containsStatement",
         "attachmentCount",
         "mailboxSignalCount",
         "mailboxAckCount",
         "checkpointRefCount"
-      ]
+      ],
+      "optionalFields": []
     },
     "DisputeEvidenceRecipientGrant": {
       "name": "DisputeEvidenceRecipientGrant",
@@ -27644,8 +27810,7 @@
         "checkpointRefCount",
         "hasContent"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "orderId",
         "milestoneId",
         "manifestCid",
@@ -27653,13 +27818,15 @@
         "cipherSuite",
         "contentProtocol",
         "evidenceClass",
-        "replyToEvidenceId",
         "containsStatement",
         "attachmentCount",
         "mailboxSignalCount",
         "mailboxAckCount",
         "checkpointRefCount",
         "hasContent"
+      ],
+      "optionalFields": [
+        "replyToEvidenceId"
       ]
     },
     "DisputeEvidenceItem": {
@@ -27681,17 +27848,18 @@
         "summary",
         "actorCanReadContent"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "evidenceId",
         "kind",
         "declaredByActorAddress",
         "assignmentRound",
         "status",
         "createdAt",
-        "expiresAt",
         "summary",
         "actorCanReadContent"
+      ],
+      "optionalFields": [
+        "expiresAt"
       ]
     },
     "DisputeSupplementalBundleEvidenceItem": {
@@ -27707,17 +27875,18 @@
         "summary",
         "actorCanReadContent"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "evidenceId",
         "kind",
         "declaredByActorAddress",
         "assignmentRound",
         "status",
         "createdAt",
-        "expiresAt",
         "summary",
         "actorCanReadContent"
+      ],
+      "optionalFields": [
+        "expiresAt"
       ]
     },
     "DisputeEvidenceArtifactManifest": {
@@ -27732,8 +27901,7 @@
         "cipherSuite",
         "contentProtocol"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "orderId",
         "milestoneId",
         "manifestCid",
@@ -27742,7 +27910,8 @@
         "sellerKeyVersion",
         "cipherSuite",
         "contentProtocol"
-      ]
+      ],
+      "optionalFields": []
     },
     "DisputeEvidenceBundleManifest": {
       "name": "DisputeEvidenceBundleManifest",
@@ -27756,15 +27925,16 @@
         "evidenceClass",
         "replyToEvidenceId"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "orderId",
         "milestoneId",
         "manifestCid",
         "manifestSha256",
         "cipherSuite",
         "contentProtocol",
-        "evidenceClass",
+        "evidenceClass"
+      ],
+      "optionalFields": [
         "replyToEvidenceId"
       ]
     },
@@ -27882,11 +28052,11 @@
         "clockObjectId"
       ],
       "requiredFields": [
-        "reviewerRegistryObjectId",
         "invitedReviewerAddresses",
         "reviewerSelectionReceiptId"
       ],
       "optionalFields": [
+        "reviewerRegistryObjectId",
         "clockObjectId"
       ]
     },
@@ -27931,10 +28101,9 @@
         "disputeQuorumConfigObjectId",
         "clockObjectId"
       ],
-      "requiredFields": [
-        "arbCapObjectId"
-      ],
+      "requiredFields": [],
       "optionalFields": [
+        "arbCapObjectId",
         "bondObjectId",
         "reviewerRegistryObjectId",
         "disputeQuorumConfigObjectId",
@@ -28095,11 +28264,10 @@
         "objectReadback",
         "txPlan"
       ],
-      "requiredFields": [],
-      "optionalFields": [
-        "chainIdentifier",
+      "requiredFields": [
         "chainFamily",
         "chainNetwork",
+        "chainIdentifier",
         "status",
         "asset",
         "executionAllowed",
@@ -28108,18 +28276,20 @@
         "publicLaunchReady",
         "apiSideExecution",
         "runtimeAccessScope",
-        "repositoryMutation",
-        "objectBindingCreated",
         "actorAllowlistEnforced",
         "transactionBytesBase64",
         "sourceGuard",
         "orderId",
         "target",
+        "txPlan"
+      ],
+      "optionalFields": [
+        "repositoryMutation",
+        "objectBindingCreated",
         "orderBinding",
         "packageIds",
         "paymentCoinReadback",
-        "objectReadback",
-        "txPlan"
+        "objectReadback"
       ]
     },
     "ChainIdentifier": {
@@ -28226,15 +28396,16 @@
         "pendingSlashBpsTotal",
         "effectiveStakeLocked"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "pendingDecisionsTotal",
         "pendingDecisionsMajority",
         "pendingDecisionsOverturned",
         "pendingCommitRevealFailures",
         "pendingNoshowCount",
         "pendingSlashCount",
-        "pendingSlashBpsTotal",
+        "pendingSlashBpsTotal"
+      ],
+      "optionalFields": [
         "effectiveStakeLocked"
       ]
     },
@@ -28346,8 +28517,7 @@
         "disputeCase",
         "fetchError"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "disputeCaseObjectId",
         "reviewerAddress",
         "assignmentRound",
@@ -28355,7 +28525,9 @@
         "status",
         "actorCanAccept",
         "acceptReadiness",
-        "source",
+        "source"
+      ],
+      "optionalFields": [
         "disputeCase",
         "fetchError"
       ]
@@ -28522,14 +28694,14 @@
         "effectiveStakeLocked",
         "reviewerMinStakeIota"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "error",
         "reviewerAddress",
         "reviewerEntryObjectId",
         "effectiveStakeLocked",
         "reviewerMinStakeIota"
-      ]
+      ],
+      "optionalFields": []
     },
     "ReviewerSelectionShortlistRequest": {
       "name": "ReviewerSelectionShortlistRequest",
@@ -28606,11 +28778,17 @@
         "selectionSignals",
         "computedWeight"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "reviewerAddress",
         "reviewerObjectId",
         "active",
+        "exclusionReasons",
+        "eligible",
+        "selectionScore",
+        "selectionSignals",
+        "computedWeight"
+      ],
+      "optionalFields": [
         "performanceScore",
         "reputationScore",
         "reputationConfidence",
@@ -28628,12 +28806,7 @@
         "transportType",
         "transportPubkeyHex",
         "joinedAtMs",
-        "updatedAtMs",
-        "exclusionReasons",
-        "eligible",
-        "selectionScore",
-        "selectionSignals",
-        "computedWeight"
+        "updatedAtMs"
       ]
     },
     "ReviewerSelectionReceipt": {
@@ -28669,13 +28842,9 @@
         "activationTxDigest",
         "createdAt"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "id",
         "scope",
-        "disputeCaseObjectId",
-        "orderId",
-        "milestoneId",
         "buyerAddress",
         "sellerAddress",
         "assignmentRound",
@@ -28683,9 +28852,6 @@
         "reviewerCountSelected",
         "selectionPolicyVersion",
         "checkpointDigest",
-        "checkpointSequenceNumber",
-        "checkpointTimestampMs",
-        "checkpointSource",
         "seedHash",
         "candidatePoolHash",
         "shortlistHash",
@@ -28696,10 +28862,18 @@
         "excludedReviewerAddresses",
         "candidatePool",
         "createdByActorAddress",
+        "createdAt"
+      ],
+      "optionalFields": [
+        "disputeCaseObjectId",
+        "orderId",
+        "milestoneId",
+        "checkpointSequenceNumber",
+        "checkpointTimestampMs",
+        "checkpointSource",
         "activatedAt",
         "activatedByActorAddress",
-        "activationTxDigest",
-        "createdAt"
+        "activationTxDigest"
       ]
     },
     "ReviewerSelectionReceiptBindRequest": {
@@ -28822,16 +28996,17 @@
         "signingContext",
         "recipients"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "manifestVersion",
         "manifestCid",
         "manifestSha256",
         "sellerSignature",
         "sellerKeyVersion",
         "cipherSuite",
-        "signingContext",
         "recipients"
+      ],
+      "optionalFields": [
+        "signingContext"
       ]
     },
     "MilestoneManifestSigningContext": {
@@ -29042,13 +29217,13 @@
         "clockObjectId"
       ],
       "requiredFields": [
-        "reviewRegistryObjectId",
         "escrowObjectId",
         "escrowType",
         "rating",
         "reviewHash"
       ],
       "optionalFields": [
+        "reviewRegistryObjectId",
         "escrowCoinType",
         "clockObjectId"
       ]
@@ -29063,12 +29238,12 @@
         "clockObjectId"
       ],
       "requiredFields": [
-        "deadlineExtRegistryObjectId",
         "escrowId",
         "currentDeadlineMs",
         "proposedDeadlineMs"
       ],
       "optionalFields": [
+        "deadlineExtRegistryObjectId",
         "clockObjectId"
       ]
     },
@@ -29078,10 +29253,9 @@
         "deadlineExtRegistryObjectId",
         "clockObjectId"
       ],
-      "requiredFields": [
-        "deadlineExtRegistryObjectId"
-      ],
+      "requiredFields": [],
       "optionalFields": [
+        "deadlineExtRegistryObjectId",
         "clockObjectId"
       ]
     },
@@ -29268,8 +29442,7 @@
         "txDigest",
         "eventSeq"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "reviewId",
         "orderId",
         "escrowId",
@@ -29281,7 +29454,8 @@
         "createdAt",
         "txDigest",
         "eventSeq"
-      ]
+      ],
+      "optionalFields": []
     },
     "ReviewListResponse": {
       "name": "ReviewListResponse",
@@ -29328,8 +29502,7 @@
         "exactLaneBehavior",
         "assetProfiles"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "source",
         "updateMode",
         "envKeys",
@@ -29339,7 +29512,8 @@
         "reviewerVotesSource",
         "exactLaneBehavior",
         "assetProfiles"
-      ]
+      ],
+      "optionalFields": []
     },
     "ResolvedDisputeBondRecommendation": {
       "name": "ResolvedDisputeBondRecommendation",
@@ -29356,8 +29530,7 @@
         "exactLaneCollapsed",
         "reasonCodes"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "status",
         "source",
         "model",
@@ -29369,7 +29542,8 @@
         "warningBelowPerSideAmount",
         "exactLaneCollapsed",
         "reasonCodes"
-      ]
+      ],
+      "optionalFields": []
     },
     "DisputeBondGuidance": {
       "name": "DisputeBondGuidance",
@@ -29388,8 +29562,7 @@
         "selectedRequiredReviewerVotesFloor",
         "recommendation"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "policy",
         "selectionMode",
         "userAmountChoiceRequired",
@@ -29403,7 +29576,8 @@
         "selectedRequiredReviewerVotes",
         "selectedRequiredReviewerVotesFloor",
         "recommendation"
-      ]
+      ],
+      "optionalFields": []
     },
     "Order": {
       "name": "Order",
@@ -29426,25 +29600,26 @@
         "createdAt",
         "updatedAt"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "id",
         "listingId",
         "buyerAddress",
         "sellerAddress",
         "amount",
         "currency",
+        "disputeBondPolicy",
+        "disputeBondState",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ],
+      "optionalFields": [
         "communicationAgreement",
         "mailboxObjectId",
         "escrowObjectId",
         "disputeBondObjectId",
-        "disputeBondPolicy",
-        "disputeBondState",
         "disputeBondActivatedAt",
-        "deadlineMs",
-        "status",
-        "createdAt",
-        "updatedAt"
+        "deadlineMs"
       ]
     },
     "OrderListResponse": {
@@ -29629,8 +29804,7 @@
         "createdAt",
         "updatedAt"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "id",
         "subscriptionId",
         "eventId",
@@ -29639,12 +29813,14 @@
         "eventType",
         "attempts",
         "status",
+        "createdAt",
+        "updatedAt"
+      ],
+      "optionalFields": [
         "responseStatus",
         "responseBodyExcerpt",
         "lastError",
-        "deliveredAt",
-        "createdAt",
-        "updatedAt"
+        "deliveredAt"
       ]
     },
     "WebhookDeliveryListResponse": {
@@ -29679,8 +29855,7 @@
         "createdAt",
         "updatedAt"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "id",
         "orderId",
         "seq",
@@ -29688,17 +29863,19 @@
         "amount",
         "dueAtMs",
         "reviewWindowHours",
-        "acceptanceRulesHash",
         "status",
+        "createdAt",
+        "updatedAt"
+      ],
+      "optionalFields": [
+        "acceptanceRulesHash",
         "submittedAt",
         "submissionProofHash",
         "submissionRef",
         "reviewDueAtMs",
         "rejectionReasonHash",
         "resolvedAt",
-        "resolutionReason",
-        "createdAt",
-        "updatedAt"
+        "resolutionReason"
       ]
     },
     "MilestoneArtifactRecipient": {
@@ -29735,8 +29912,7 @@
         "createdAt",
         "updatedAt"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "id",
         "orderId",
         "milestoneId",
@@ -29748,7 +29924,8 @@
         "recipients",
         "createdAt",
         "updatedAt"
-      ]
+      ],
+      "optionalFields": []
     },
     "MilestoneManifestAnchor": {
       "name": "MilestoneManifestAnchor",
@@ -29767,21 +29944,22 @@
         "createdAt",
         "updatedAt"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "id",
         "orderId",
         "milestoneId",
         "txDigest",
-        "eventSeq",
         "expectedManifestCid",
         "expectedManifestSha256",
         "status",
-        "mismatchReason",
-        "confirmedAt",
-        "lastCheckedAt",
         "createdAt",
         "updatedAt"
+      ],
+      "optionalFields": [
+        "eventSeq",
+        "mismatchReason",
+        "confirmedAt",
+        "lastCheckedAt"
       ]
     },
     "SponsorUsage": {
@@ -29814,8 +29992,7 @@
         "metrics",
         "activeAbuse"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "generatedAt",
         "sponsorProxyMode",
         "gasStationCircuit",
@@ -29824,7 +30001,8 @@
         "capabilityPolicy",
         "metrics",
         "activeAbuse"
-      ]
+      ],
+      "optionalFields": []
     },
     "AuditEvent": {
       "name": "AuditEvent",
@@ -30052,20 +30230,21 @@
         "traderVerificationUpdatedAt",
         "isBot"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "address",
         "tier",
         "acceptsClaw",
         "accountType",
+        "traderVerificationStatus",
+        "traderVerificationUpdatedAt",
+        "isBot"
+      ],
+      "optionalFields": [
         "useContext",
         "consumerAcknowledgement",
         "professionalAcknowledgement",
-        "traderVerificationStatus",
         "traderVerificationPayload",
-        "traderVerificationNote",
-        "traderVerificationUpdatedAt",
-        "isBot"
+        "traderVerificationNote"
       ]
     },
     "ConsumerAcknowledgement": {
@@ -30147,8 +30326,7 @@
         "liveAssets",
         "experimentalAssets"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "version",
         "chainConfig",
         "controlPlane",
@@ -30157,7 +30335,8 @@
         "sameAssetPolicy",
         "liveAssets",
         "experimentalAssets"
-      ]
+      ],
+      "optionalFields": []
     },
     "AssetPolicyAssetEntry": {
       "name": "AssetPolicyAssetEntry",
@@ -30171,8 +30350,7 @@
         "lanes",
         "networks"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "symbol",
         "displayName",
         "decimals",
@@ -30181,7 +30359,8 @@
         "publicStatus",
         "lanes",
         "networks"
-      ]
+      ],
+      "optionalFields": []
     },
     "AssetPolicyNetworkFacts": {
       "name": "AssetPolicyNetworkFacts",
@@ -30210,8 +30389,7 @@
         "reputationInitFee",
         "disputeEconomics"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "version",
         "chainConfig",
         "controlPlane",
@@ -30220,7 +30398,8 @@
         "listingDeposit",
         "reputationInitFee",
         "disputeEconomics"
-      ]
+      ],
+      "optionalFields": []
     },
     "MarketControlPlanePolicy": {
       "name": "MarketControlPlanePolicy",
@@ -30285,8 +30464,7 @@
         "updatedAt",
         "source"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "preset",
         "publicWeb",
         "publicApiReads",
@@ -30298,7 +30476,8 @@
         "expiresAt",
         "updatedAt",
         "source"
-      ]
+      ],
+      "optionalFields": []
     },
     "BotDiscoverySnapshot": {
       "name": "BotDiscoverySnapshot",
@@ -30366,25 +30545,26 @@
         "createdAt",
         "updatedAt"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "id",
-        "reporterAddress",
-        "reporterContact",
         "targetType",
         "targetId",
-        "targetAddress",
         "reasonCode",
         "details",
         "evidenceUrls",
         "status",
+        "createdAt",
+        "updatedAt"
+      ],
+      "optionalFields": [
+        "reporterAddress",
+        "reporterContact",
+        "targetAddress",
         "moderatorAddress",
         "decisionAction",
         "decisionReason",
         "legalBasis",
-        "decidedAt",
-        "createdAt",
-        "updatedAt"
+        "decidedAt"
       ]
     },
     "StatementOfReason": {
@@ -30402,18 +30582,19 @@
         "submittedToDsaDb",
         "submittedAt"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "id",
         "noticeId",
-        "subjectAddress",
         "targetType",
         "targetId",
         "action",
         "reason",
         "legalBasis",
         "createdAt",
-        "submittedToDsaDb",
+        "submittedToDsaDb"
+      ],
+      "optionalFields": [
+        "subjectAddress",
         "submittedAt"
       ]
     },
@@ -30437,24 +30618,25 @@
         "createdAt",
         "updatedAt"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "id",
         "noticeId",
-        "appellantAddress",
-        "appellantContact",
         "reason",
         "details",
         "evidenceUrls",
         "status",
         "retentionClass",
+        "createdAt",
+        "updatedAt"
+      ],
+      "optionalFields": [
+        "appellantAddress",
+        "appellantContact",
         "reviewerAddress",
         "decisionOutcome",
         "decisionSummary",
         "legalBasis",
-        "decidedAt",
-        "createdAt",
-        "updatedAt"
+        "decidedAt"
       ]
     },
     "TaxReportEntry": {
@@ -30470,8 +30652,7 @@
         "escrowObjectId",
         "createdAt"
       ],
-      "requiredFields": [],
-      "optionalFields": [
+      "requiredFields": [
         "orderId",
         "listingId",
         "buyerAddress",
@@ -30479,8 +30660,10 @@
         "amount",
         "currency",
         "status",
-        "escrowObjectId",
         "createdAt"
+      ],
+      "optionalFields": [
+        "escrowObjectId"
       ]
     }
   }

@@ -281,6 +281,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    iotaFreshReadinessRefresh:
+      type: apiKey
+      in: header
+      name: x-clawdex-iota-fresh-readiness-refresh
   responses:
     Forbidden:
       description: Caller is not allowed to perform this action.
@@ -457,17 +461,24 @@ components:
       properties:
         reviewerRegistryObjectId:
           type: string
+          deprecated: true
+          description: >-
+            Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied
+            values.
         reviewerEntryObjectId:
           type: string
       type: object
       additionalProperties: false
       required:
-        - reviewerRegistryObjectId
         - reviewerEntryObjectId
     ReviewerUpdateRequest:
       properties:
         reviewerRegistryObjectId:
           type: string
+          deprecated: true
+          description: >-
+            Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied
+            values.
         reviewerEntryObjectId:
           type: string
         transportType:
@@ -492,7 +503,6 @@ components:
       type: object
       additionalProperties: false
       required:
-        - reviewerRegistryObjectId
         - reviewerEntryObjectId
         - transportType
         - transportPubkeyHex
@@ -984,8 +994,16 @@ components:
       properties:
         reviewerRegistryObjectId:
           type: string
+          deprecated: true
+          description: >-
+            Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied
+            values.
         disputeQuorumConfigObjectId:
           type: string
+          deprecated: true
+          description: >-
+            Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied
+            values.
         reputationProfileObjectId:
           type: string
         transportType:
@@ -1011,8 +1029,6 @@ components:
       type: object
       additionalProperties: false
       required:
-        - reviewerRegistryObjectId
-        - disputeQuorumConfigObjectId
         - reputationProfileObjectId
         - transportType
         - transportPubkeyHex

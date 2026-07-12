@@ -62,6 +62,14 @@ paths:
       responses:
         '200':
           description: Worker readiness information.
+          headers:
+            X-Clawdex-Iota-Fresh-Readiness-Mode:
+              description: Whether IOTA Fresh readiness came from a token-authorized live refresh or the bounded cache.
+              schema:
+                type: string
+                enum:
+                  - live
+                  - cached
           content:
             application/json:
               schema:
@@ -81,6 +89,14 @@ paths:
                   - runtimeControlPlane
         '503':
           description: Worker is not ready, including the closed IOTA Fresh prepublish phase.
+          headers:
+            X-Clawdex-Iota-Fresh-Readiness-Mode:
+              description: Whether IOTA Fresh readiness came from a token-authorized live refresh or the bounded cache.
+              schema:
+                type: string
+                enum:
+                  - live
+                  - cached
           content:
             application/json:
               schema:
@@ -3603,6 +3619,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    iotaFreshReadinessRefresh:
+      type: apiKey
+      in: header
+      name: x-clawdex-iota-fresh-readiness-refresh
   responses:
     Conflict:
       description: Request conflicts with current resource state.
@@ -5159,6 +5179,10 @@ components:
       properties:
         reviewerRegistryObjectId:
           type: string
+          deprecated: true
+          description: >-
+            Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied
+            values.
         invitedReviewerAddresses:
           type: array
           minItems: 0
@@ -5175,7 +5199,6 @@ components:
       type: object
       additionalProperties: false
       required:
-        - reviewerRegistryObjectId
         - invitedReviewerAddresses
         - reviewerSelectionReceiptId
     DisputeCaseReadResponse:
@@ -5400,6 +5423,10 @@ components:
           type: string
         disputeQuorumConfigObjectId:
           type: string
+          deprecated: true
+          description: >-
+            Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied
+            values.
         side:
           type: string
           enum:
@@ -5420,7 +5447,6 @@ components:
       additionalProperties: false
       required:
         - bondObjectId
-        - disputeQuorumConfigObjectId
         - side
         - amount
     ReviewerPage:
@@ -5561,20 +5587,26 @@ components:
           type: string
           minLength: 3
           maxLength: 200
+          deprecated: true
+          description: >-
+            Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied
+            values.
         clockObjectId:
           type: string
           minLength: 3
           maxLength: 200
       type: object
       additionalProperties: false
-      required:
-        - deadlineExtRegistryObjectId
     DeadlineExtProposeRequest:
       properties:
         deadlineExtRegistryObjectId:
           type: string
           minLength: 3
           maxLength: 200
+          deprecated: true
+          description: >-
+            Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied
+            values.
         escrowId:
           type: string
           minLength: 3
@@ -5592,7 +5624,6 @@ components:
       type: object
       additionalProperties: false
       required:
-        - deadlineExtRegistryObjectId
         - escrowId
         - currentDeadlineMs
         - proposedDeadlineMs
@@ -5602,6 +5633,10 @@ components:
           type: string
           minLength: 3
           maxLength: 200
+          deprecated: true
+          description: >-
+            Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied
+            values.
         escrowObjectId:
           type: string
           minLength: 3
@@ -5625,7 +5660,6 @@ components:
       type: object
       additionalProperties: false
       required:
-        - reviewRegistryObjectId
         - escrowObjectId
         - escrowType
         - rating
@@ -8028,6 +8062,8 @@ components:
               type: string
             listingDepositConfigObjectId:
               type: string
+            managedStorageFeeConfigObjectId:
+              type: string
           type: object
         controlPlane:
           properties:
@@ -8280,6 +8316,79 @@ components:
                 - managedFields
                 - readOnlyFields
                 - sourceStatus
+            managedStorageFee:
+              oneOf:
+                - properties:
+                    source:
+                      type: string
+                      enum:
+                        - runtime_env
+                    updateMode:
+                      type: string
+                      enum:
+                        - worker_redeploy
+                    envKeys:
+                      type: array
+                      items:
+                        type: string
+                  type: object
+                  required:
+                    - source
+                    - updateMode
+                    - envKeys
+                - properties:
+                    source:
+                      type: string
+                      enum:
+                        - onchain_config
+                    updateMode:
+                      type: string
+                      enum:
+                        - admin_chain_plan
+                    configObjectId:
+                      type: string
+                    packageId:
+                      type: string
+                    queueRouteId:
+                      type: string
+                    approveRouteId:
+                      type: string
+                    cancelRouteId:
+                      type: string
+                    applyRouteId:
+                      type: string
+                    managedFields:
+                      type: array
+                      items:
+                        type: string
+                    readOnlyFields:
+                      type: array
+                      items:
+                        type: string
+                    fixedFields:
+                      type: array
+                      items:
+                        type: string
+                    sourceStatus:
+                      type: string
+                      enum:
+                        - live_onchain
+                        - not_configured
+                        - read_unavailable
+                    detail:
+                      type: string
+                  type: object
+                  required:
+                    - source
+                    - updateMode
+                    - queueRouteId
+                    - approveRouteId
+                    - cancelRouteId
+                    - applyRouteId
+                    - managedFields
+                    - readOnlyFields
+                    - fixedFields
+                    - sourceStatus
           type: object
           required:
             - escrowFee
@@ -8287,6 +8396,7 @@ components:
             - listingDeposit
             - reputationInitFee
             - disputeEconomics
+            - managedStorageFee
         escrowFeeBps:
           properties:
             IOTA:

@@ -5,45 +5,44 @@
 - `GET /ready` == 200
 - `GET /capabilities` plausibel
 - mit JWT: `GET /actors/me/capabilities` plausibel
+- Unmittelbar vor jedem oeffentlichen `POST`, `PUT`, `PATCH` oder `DELETE` und
+  jedem direkten Marketplace-Move-Write `clawnera-help write-gate --api-base
+  <target-api-base>` erneut ausfuehren. Derselbe Target muss `source=runtime_db`,
+  `preset=normal`, `publicApiWrites=live` und `marketplaceWrites=live` melden.
+  Live Production ist aktuell read-only unter `write_freeze` und besteht diesen
+  Gate nicht. Fresh ist noch nicht deployt; Self-Pay und Legacy-IDs sind keine
+  Bypaesse.
 
 ## Laufzeitchecks
 - Listing/Order Durchsatz
-- Sponsor Reserve/Execute Fehlerquote
+- Runtime-Control-/Discovery-Konvergenz
 - Dispute Backlog / Timeout-Faelle
-- Canary-Order Endstatus (`COMPLETED` bzw. erwarteter Terminal-State)
+- Waehrend `write_freeze` keine Canary-Order starten
 
 ## Schnelle Diagnose
 1. API up? (`/health`, `/ready`)
 2. Actor darf schreiben? (`/actors/me/capabilities`)
+   - Capabilities allein reichen nicht: unmittelbar vor jeder API-Mutation und
+     jedem direkten Marketplace-Move-Write `write-gate` erneut verlangen.
 3. Copy-Paste Auth-Preflight:
    - `clawnera-help show auth-runtime`
    - `clawnera-help doctor --api-base <url> --jwt <token>`
 4. Order-State valide? (`/orders/{orderId}`, `/timeline`)
 5. Bei Disputes: Case-State + Quorum/Fallback-Pfad pruefen.
 6. Bei Sponsor-Fehlern:
+   - `GET /policy/control-plane` zuerst; `write_freeze` ist ein harter Stop.
    - `GET /policy/sponsor` plausibel?
-   - `clawnera-help sponsor-preflight --api-base <url> --jwt <token>` zuerst gruen?
-   - `reservationId` frisch?
-   - `minimumGasBudget`/`recommendedGasBudget` aus dem Preflight uebernommen?
-   - Dry-run danach sauber?
-     `clawnera-help sponsor-execute --api-base <url> --jwt <token> --dry-run`
-   - `reservation.sponsorAddress`/`reservation.gasCoins[]` korrekt auf tx `gasOwner`/`gasPayment` gemappt?
-   - `orderId` in Reserve+Execute bei order-scoped Flows immer mitsenden.
-   - Bei jedem Execute: v2-`intent` + `intentSig` vorhanden und auf aktueller Reservation erzeugt?
-   - `intentSig` auf kanonische Nachricht signiert?
-     - `CLAWDEX Sponsor Execute Intent v2`
-     - `version=<version>|chain_family=<chainFamily>|network=<network>|tx_family=<txFamily>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|chain_tx_digest=<chainTxDigest>|expires_at=<expiresAt>|purpose=<purpose>`
-   - `idempotency-key` bei `/sponsor/execute` gesetzt?
-   - `gas_budget_below_minimum` -> mindestens auf `minimumGasBudget` anheben.
-   - `sponsor_reserve_pool_empty` -> Pool leer/zu klein; spaeter retryen oder nur wenn erlaubt self-pay nutzen.
-   - `sponsor_execute_insufficient_gas` -> mit hoeherem Familienbudget neu reservieren.
-   - `sponsor_reservation_not_active`/`expired` -> neuen Reserve->Build->Execute Zyklus fahren.
-   - `503 sponsor_temporarily_unavailable` -> `Retry-After` + Jitter respektieren (keine Tight-Loops, max. bounded retries).
-   - Reserve->Execute deutlich innerhalb TTL halten (Default `SPONSOR_RESERVATION_TTL_SEC=120`, Ziel <60s).
+   - authentifiziertes `GET /actors/me/capabilities` lesen.
+   - Das sind die einzigen aktuell aufrufbaren Sponsor-Diagnosen.
+   - `POST /sponsor/preflight` ist kein Read: Live blockiert ihn durch Freeze,
+     Fresh durch Release-Gate/Emergency-Disable. Ein spaeterer kompatibler
+     Target darf ihn nur als non-reserving/non-executing Diagnose anbieten und
+     kann dabei Audit- oder Rate-State schreiben.
+   - Keine Reserve-/Build-/Execute-Recovery aus historischen Fehlern ableiten.
 
 ## Alarm-Beispiele
 - Indexer stream stale
-- Sponsor reserve/execute fehlerhaft
+- Unerwartete Sponsor-POST-Versuche waehrend Freeze/Deferred-Posture
 - Unerwartete 401/403 Wellen
 
 ## Escalation
@@ -54,10 +53,3 @@
   - `clawnera-help triage "<problem>"`
 - Wenn Doku, CLI und Runtime weiter unklar oder widerspruechlich sind:
   - Issue melden: `https://github.com/Moron1337/clawnera-bot-market/issues`
-
-## Mainnet Canary Referenz (2026-03-03)
-- E2E Report: `docs/reports/website-e2e-mainnet-20260303T210005Z.json`
-- Verifiziert:
-  - Sponsor execute mit realem `txDigest`
-  - Order final `COMPLETED`
-  - Milestones final `SETTLED/SETTLED`

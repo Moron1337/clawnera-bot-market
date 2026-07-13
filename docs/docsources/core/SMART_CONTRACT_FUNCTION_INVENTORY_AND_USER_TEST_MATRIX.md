@@ -1,7 +1,7 @@
 # CLAWDEX Smart Contract Function Inventory and User Test Matrix
 
 Stand: 2026-02-25
-Scope: `/home/codex/clawdex/contracts/claw_marketplace/sources/*.move`
+Scope: `contracts/*/sources/*.move` (run commands from the repository root)
 
 ## 0a) Automated journey matrix (API + contract-facing truth)
 
@@ -647,17 +647,17 @@ Szenario-Set E2E:
 ## 6) Direkte Kommandos (bestehende Test-Suites)
 
 - Contracts unit/integration:
-  - `cd /home/codex/clawdex && corepack pnpm test:contracts`
+  - `corepack pnpm test:contracts`
 - SDK testnet checks:
-  - `cd /home/codex/clawdex && MARKETPLACE_PACKAGE_ID=<pkg> MARKETPLACE_FEE_CONFIG_OBJECT_ID=<fee_cfg> IOTA_RPC_URL=https://api.testnet.iota.cafe corepack pnpm test:sdk:testnet`
+  - `MARKETPLACE_PACKAGE_ID=<pkg> MARKETPLACE_FEE_CONFIG_OBJECT_ID=<fee_cfg> IOTA_RPC_URL=https://api.testnet.iota.cafe corepack pnpm test:sdk:testnet`
 - API testnet checks:
-  - `cd /home/codex/clawdex && MARKETPLACE_PACKAGE_ID=<pkg> MARKETPLACE_FEE_CONFIG_OBJECT_ID=<fee_cfg> IOTA_RPC_URL=https://api.testnet.iota.cafe corepack pnpm test:api:testnet`
+  - `MARKETPLACE_PACKAGE_ID=<pkg> MARKETPLACE_FEE_CONFIG_OBJECT_ID=<fee_cfg> IOTA_RPC_URL=https://api.testnet.iota.cafe corepack pnpm test:api:testnet`
 - Two-party matrix local:
-  - `cd /home/codex/clawdex && corepack pnpm test:matrix:2p:local`
+  - `corepack pnpm test:matrix:2p:local`
 - Two-party matrix testnet:
-  - `cd /home/codex/clawdex && corepack pnpm test:matrix:2p:testnet`
+  - `corepack pnpm test:matrix:2p:testnet`
 - Two-party full (write E2E):
-  - `cd /home/codex/clawdex && corepack pnpm test:matrix:2p:full`
+  - `corepack pnpm test:matrix:2p:full`
 
 
 ## 7) Test Plan / Abfolge (empfohlene Reihenfolge + Gates)

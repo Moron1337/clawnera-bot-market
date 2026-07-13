@@ -714,6 +714,86 @@ paths:
                 type: object
                 required:
                   - policy
+  /policy/write-gate:
+    get:
+      tags:
+        - Policy
+      security: []
+      operationId: getMarketplaceWriteGateAttestation
+      description: Returns a nonce-bound, uncached runtime and chain attestation for immediate pre-mutation verification.
+      parameters:
+        - name: nonce
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: ^[0-9a-f]{32}$
+      responses:
+        '200':
+          description: Fresh runtime, chain, package, and object-pointer attestation.
+          headers:
+            Cache-Control:
+              description: Prevents storage or reuse of this short-lived attestation.
+              schema:
+                type: string
+            Pragma:
+              description: Legacy no-cache directive.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketplaceWriteGateAttestation'
+        '400':
+          description: The nonce is missing or malformed.
+          headers:
+            Cache-Control:
+              description: Prevents storage or reuse of the error response.
+              schema:
+                type: string
+            Pragma:
+              description: Legacy no-cache directive.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: The write-gate attestation rate limit was exceeded.
+          headers:
+            Cache-Control:
+              description: Prevents storage or reuse of the error response.
+              schema:
+                type: string
+            Pragma:
+              description: Legacy no-cache directive.
+              schema:
+                type: string
+            Retry-After:
+              description: Seconds until the client may retry.
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Runtime, chain, or package attestation unavailable; writes must fail closed.
+          headers:
+            Cache-Control:
+              description: Prevents storage or reuse of the error response.
+              schema:
+                type: string
+            Pragma:
+              description: Legacy no-cache directive.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /policy/sponsor:
     get:
       tags:
@@ -9693,6 +9773,164 @@ components:
         - creatorAcceptsClaw
         - score
         - scoreBreakdown
+    MarketplaceWriteGateAttestation:
+      properties:
+        version:
+          type: string
+          enum:
+            - marketplace_write_gate.v1
+        nonce:
+          type: string
+          pattern: ^[0-9a-f]{32}$
+        generatedAt:
+          type: string
+          format: date-time
+        generatedAtMs:
+          type: integer
+          minimum: 0
+        expiresAtMs:
+          type: integer
+          minimum: 0
+        apiOrigin:
+          type: string
+          format: uri
+        gate:
+          properties:
+            source:
+              type: string
+              enum:
+                - runtime_db
+                - stale_cache
+                - unavailable_default_normal
+                - write_gate_fail_closed
+            preset:
+              type: string
+              enum:
+                - normal
+                - write_freeze
+                - maintenance_public
+            publicApiWrites:
+              type: string
+              enum:
+                - live
+                - blocked
+            marketplaceWrites:
+              type: string
+              enum:
+                - live
+                - blocked
+            releaseProfile:
+              type: string
+              enum:
+                - 'off'
+                - controlled_v1
+            releasePhase:
+              type: string
+              enum:
+                - 'off'
+                - prepublish_closed
+                - pre_canary_closed
+                - canary_allowlisted
+            runtimeReady:
+              type: boolean
+            productiveWritesEnabled:
+              type: boolean
+          type: object
+          required:
+            - source
+            - preset
+            - publicApiWrites
+            - marketplaceWrites
+            - releaseProfile
+            - releasePhase
+            - runtimeReady
+            - productiveWritesEnabled
+        chain:
+          properties:
+            family:
+              type: string
+              enum:
+                - iota
+                - sui
+            network:
+              type: string
+              enum:
+                - mainnet
+                - testnet
+            chainIdentifier:
+              type: string
+              pattern: ^[0-9a-f]{8}$
+            packageIds:
+              properties:
+                foundation:
+                  type: string
+                  pattern: ^0x[0-9a-f]{64}$
+                settlement:
+                  type: string
+                  pattern: ^0x[0-9a-f]{64}$
+                fulfillment:
+                  type: string
+                  pattern: ^0x[0-9a-f]{64}$
+                ops:
+                  type: string
+                  pattern: ^0x[0-9a-f]{64}$
+              type: object
+              required:
+                - foundation
+                - settlement
+                - fulfillment
+                - ops
+            objectIds:
+              properties:
+                governanceConfigObjectId:
+                  type: string
+                  nullable: true
+                  pattern: ^0x[0-9a-f]{64}$
+                disputeQuorumConfigObjectId:
+                  type: string
+                  nullable: true
+                  pattern: ^0x[0-9a-f]{64}$
+                marketplaceFeeConfigObjectId:
+                  type: string
+                  nullable: true
+                  pattern: ^0x[0-9a-f]{64}$
+                reputationInitFeeConfigObjectId:
+                  type: string
+                  nullable: true
+                  pattern: ^0x[0-9a-f]{64}$
+                listingDepositConfigObjectId:
+                  type: string
+                  nullable: true
+                  pattern: ^0x[0-9a-f]{64}$
+                reviewerRegistryObjectId:
+                  type: string
+                  nullable: true
+                  pattern: ^0x[0-9a-f]{64}$
+              type: object
+              required:
+                - governanceConfigObjectId
+                - disputeQuorumConfigObjectId
+                - marketplaceFeeConfigObjectId
+                - reputationInitFeeConfigObjectId
+                - listingDepositConfigObjectId
+                - reviewerRegistryObjectId
+          type: object
+          required:
+            - family
+            - network
+            - chainIdentifier
+            - packageIds
+            - objectIds
+      type: object
+      required:
+        - version
+        - nonce
+        - generatedAt
+        - generatedAtMs
+        - expiresAtMs
+        - apiOrigin
+        - gate
+        - chain
     MarketControlPlanePolicy:
       properties:
         version:
@@ -10395,9 +10633,8 @@ components:
                   enum:
                     - IOTA
                 minAmount:
-                  type:
-                    - string
-                    - 'null'
+                  type: string
+                  nullable: true
                   pattern: ^[0-9]+$
               type: object
               required:
@@ -10410,14 +10647,12 @@ components:
                   enum:
                     - IOTA
                 minAmount:
-                  type:
-                    - string
-                    - 'null'
+                  type: string
+                  nullable: true
                   pattern: ^[0-9]+$
                 maxAmount:
-                  type:
-                    - string
-                    - 'null'
+                  type: string
+                  nullable: true
                   pattern: ^[0-9]+$
               type: object
               required:
@@ -10427,17 +10662,14 @@ components:
             quorumVotes:
               properties:
                 defaultRequiredVotes:
-                  type:
-                    - integer
-                    - 'null'
+                  type: integer
+                  nullable: true
                 minRequiredVotes:
-                  type:
-                    - integer
-                    - 'null'
+                  type: integer
+                  nullable: true
                 maxRequiredVotes:
-                  type:
-                    - integer
-                    - 'null'
+                  type: integer
+                  nullable: true
               type: object
               required:
                 - defaultRequiredVotes
@@ -10446,15 +10678,13 @@ components:
             payoutsBps:
               properties:
                 reviewer:
-                  type:
-                    - integer
-                    - 'null'
+                  type: integer
+                  nullable: true
                   minimum: 0
                   maximum: 10000
                 platformFallback:
-                  type:
-                    - integer
-                    - 'null'
+                  type: integer
+                  nullable: true
                   minimum: 0
                   maximum: 10000
               type: object
@@ -10464,21 +10694,18 @@ components:
             reviewerSlashBps:
               properties:
                 noshow:
-                  type:
-                    - integer
-                    - 'null'
+                  type: integer
+                  nullable: true
                   minimum: 0
                   maximum: 10000
                 invalidReveal:
-                  type:
-                    - integer
-                    - 'null'
+                  type: integer
+                  nullable: true
                   minimum: 0
                   maximum: 10000
                 overturn:
-                  type:
-                    - integer
-                    - 'null'
+                  type: integer
+                  nullable: true
                   minimum: 0
                   maximum: 10000
               type: object
@@ -10487,9 +10714,8 @@ components:
                 - invalidReveal
                 - overturn
             platformFallbackSink:
-              type:
-                - string
-                - 'null'
+              type: string
+              nullable: true
             recommendation:
               $ref: '#/components/schemas/DisputeBondRecommendationPolicy'
           type: object

@@ -4,12 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Resynced the consumer-safe OpenAPI, generated-contract, SDK, bot-protocol, and runtime-owned deployment-identity mirror to Clawdex commit `c6d538e04c7a46b88699b93082b05ab23a0eb55c`, including the server-verified recent-finalized reviewer checkpoint contract and fail-closed release guidance.
+- Added one exact-target Marketplace write gate for auth mutations, every API `POST`/`PUT`/`PATCH`/`DELETE`, tx-plan POSTs, generated next-command hints, and all seven direct Marketplace Move execution paths; unavailable, incomplete, frozen, or conflicting state exits `78` before auth, files, signing, or broadcast.
+- Made all direct Marketplace Move helpers dry-run by default with explicit, mutually exclusive `--execute`; a runtime-owned empty deployment registry now blocks every direct execution before external side effects, and a future activated path must fetch a distinct nonce-bound attestation and reverify chain, package DAG, object, reviewer-plan, package-BCS, API, and RPC continuity after signing immediately before broadcast. Runtime tests require zero broadcasts for every re-attestation drift or expiry case.
+- Kept the Telegram notifier read lane usable with valid auth while requiring the exact write gate before any token-refresh POST.
+- Quarantined `sponsor-execute` and its `sponsor-run` alias before auth, files, builders, reservations, execution, or network access; removed the legacy Sponsor dry-run example and unused Sponsor-intent implementation, and made the current write-freeze / Self-Pay-first posture explicit across public guidance. The retained future preflight example now gates the exact target before its authenticated capability read.
+- Hardened OPEN reviewer shortlist replay with a canonical API-bound state v2, exclusive initialization, SHA-guarded checkpoint updates, strict option validation, private collision-free output paths, authenticated-actor and receipt-filter binding, eligible unique reviewer enforcement, and exact RPC verification of initial, API-proposed, and receipt checkpoint sequence/digest/timestamp bindings before state advances or artifacts are written.
+- Removed session-status and operator-only CLAW runbooks from current sync, Git-tree, and npm package surfaces, while documenting that older public history may retain prior copies.
 - Synced the public OpenAPI/generated-contract/SDK mirror to Clawdex commit `ffa2e5f7df7f8dd35a9e2fcbae702792a4881ea0` and made IOTA Fresh plans without an exact `GovernanceConfig` binding fail closed instead of rebuilding a legacy ABI transaction.
 - Kept direct Fresh-only IOTA helper writes closed until the runtime advertises a released ABI boundary; npm `latest` and the live API remain unchanged.
 - Synced the wallet-side managed-storage payment builders to the fresh contract DAG: Ops policy/config, Fulfillment milestone escrow, governance-first ABI, and native IOTA/SUI payment entries.
 - Removed the obsolete managed-storage FeeConfig bind route from the helper surface and made partial package-DAG configuration fail closed instead of guessing Settlement aliases.
 
-## [0.1.104] - 2026-07-10
+## [0.1.104] - Unpublished candidate (2026-07-10)
 
 - Closed the reviewer-selection authorization gap in the public helper:
   - `reviewer-shortlist` validates the external-custody operator handoff against the receipt, exact ordered shortlist, target route, prepared request, and required missing inputs before writing a publish body

@@ -113,7 +113,13 @@ Auth note:
 - `dispute-checkpoint-evidence-export`
   - buyer/seller export a canonical checkpoint handover packet into one reviewer-readable dispute bundle
 - `operator-shortlist-open`
-  - build selector receipt and publish the exact shortlist
+  - undeployed candidate OPEN flow only; persist the exact request with
+    `--request-state-file <owner-only-json>` before the first POST
+  - state v2 atomically binds the canonical API target, request, checkpoint,
+    publish context, and receipt identity; keep state/receipt/publish outputs on
+    distinct paths under private owner-only parent directories
+  - use `operator-shortlist-replacement` for REPLACEMENT; it accepts neither
+    `--request-state-file` nor `--request-receipt-id`
 - `operator-shortlist-replacement`
   - always pass `--publish-auth-state-file <buyer-or-seller-auth-state-file>` so the helper can reuse party auth for live dispute preflight when operator auth is too narrow
   - if the helper prints `replacement_not_ready` or `dispute_replacement_round_not_ready`, stop and wait until the printed deadline before rerunning replacement publish

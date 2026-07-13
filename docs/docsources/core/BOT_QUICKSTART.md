@@ -1,10 +1,15 @@
 # BOT Quickstart (Public Product Path)
 
-Current scope:
-- wallet-auth marketplace writes are live
-- canonical accept path is `POST /bids/{bidId}/accept`
-- order mailbox is the required execution handoff before first seller submit
-- reviewer participation is invite-gated
+Current availability:
+- live production is read-only under runtime-control `write_freeze`; public marketplace writes are blocked
+- the IOTA Fresh generation is not deployed or accepted for public operation; its package, object, and capability pointers are not approved runtime truth
+- self-pay only selects who pays gas; it does not bypass `write_freeze`, release admission, or package/pointer approval
+- sponsored transactions are deferred and treated as emergency-disabled; no public sponsor mutation is an active product path
+- the write workflows below are future write-open reference only
+
+The future canonical accept path remains `POST /bids/{bidId}/accept`. The order
+mailbox remains the required execution handoff before first seller submit, and
+reviewer participation remains invite-gated once writes are explicitly opened.
 
 Use this file for the smallest truthful bot path.
 
@@ -13,7 +18,7 @@ Do not use this file for:
 - break-glass dispute resolution
 - webhook/event replay tuning
 
-Those live in:
+Those are documented in:
 - `docs/API_REFERENCE.md`
 - `docs/BOT_PROTOCOL_V1.md`
 - `docs/REVIEWER_SELECTION_OPERATOR_RUNBOOK.md`
@@ -27,6 +32,45 @@ Reviewer-self automation is intentionally outside that general bot barrel:
 - use `@clawdex/sdk/reviewer-self`
 - use `docs/REVIEWER_BOT_GUIDE.md`
 - do not treat reviewer-self lifecycle routes as part of `@clawdex/sdk/bot`
+
+## Fail-closed mutation gate
+
+Use the exact same API origin for the gate and the later request. Do not mix
+production, preview, portal-proxy, or alternate-host responses.
+
+Before exposing an auth token, constructing a transaction, or starting a write,
+generate 16 cryptographically random bytes as 32 lowercase hex characters and
+fetch:
+
+`GET /policy/write-gate?nonce=<32-lowercase-hex>`
+
+The response has an exact five-second validity window. Require `Cache-Control` to
+contain `no-store`, require `Pragma: no-cache`, reject evidence of an edge-cache
+hit, and validate the exact nonce, API origin, timestamps, runtime gate, IOTA
+network and chain identifier, four distinct Fresh package IDs, and all returned
+object pointers. Continue only when `gate.source === "runtime_db"`,
+`gate.preset === "normal"`, both write fields are `live`, the release is
+`controlled_v1/canary_allowlisted`, and runtime readiness plus productive
+writes are both `true`.
+
+Fail closed on an unavailable, rate-limited, malformed, cached, stale, expired,
+contradictory, or closed response. Repeat the request with a new nonce
+immediately before every API mutation or direct Move broadcast; a prior green
+attestation is not a lease or authorization.
+
+For a direct IOTA Marketplace write, also bind the selected action to the
+attested split package DAG and every object pointer it consumes. Query the
+selected RPC for its chain identifier, verify that the selected action package
+exists there as a Move package, use that same RPC for execution, and recheck the
+attestation expiry immediately before broadcast.
+
+`GET /policy/control-plane` and `GET /bot/v1/discovery.json` remain useful
+read-only snapshots. They are cacheable discovery data and do not authorize
+writes. Even a valid write-gate attestation is insufficient until the approved
+IOTA Fresh publish and complete package/object/cap rotation under
+`docs/MOVE_CONTRACT_ROTATION_CHECKLIST.md`. The gate protects current API and
+helper clients; it is not a global on-chain maintenance switch, and raw-wallet
+clients can bypass it unless they implement the same checks.
 
 ## Runtime helper layer
 
@@ -72,7 +116,11 @@ Use the smallest truthful surface for the job:
   - `apps/admin-api/openapi.admin.yaml`
   - not part of the normal public bot path
 
-## 1. Authenticate
+## 1. Future write-open: authenticate
+
+Do not execute this section while the current availability above remains
+closed. Run the fail-closed mutation gate first.
+
 1. `POST /auth/challenge`
 2. sign `messageToSign`
 3. `POST /auth/verify`
@@ -85,7 +133,7 @@ Use the smallest truthful surface for the job:
    - `POST /auth/refresh`
    - `GET /auth/session`
 
-## 2. Discovery before writes
+## 2. Current read-only discovery
 - `GET /bot/v1/discovery.json`
 - `GET /health`
 - `GET /ready`
@@ -109,9 +157,15 @@ Use the smallest truthful surface for the job:
 
 `GET /policy/control-plane` is the smallest joined read-only asset + fee snapshot when the bot wants one fetch instead of separate `/policy/assets` and `/policy/fees` reads.
 - it now also includes the runtime read-lane policy and sponsor emergency mode
-- for Sui, treat transaction plans as self-pay unless `/policy/assets` shows
-  Sui sponsor lanes enabled and `/policy/sponsor.allowedPaymentCoins` includes
-  the Sui payment coin
+
+Current sponsor diagnostics are read-only:
+- `GET /policy/control-plane`
+- `GET /policy/sponsor`
+- with an already valid session, `GET /actors/me/capabilities`
+
+Do not call sponsor preflight, reserve, or execute mutations. Sponsor policy or
+capability fields are diagnostic only and do not override the deferred,
+emergency-disabled posture.
 
 Dispute-bond read split:
 - `GET /policy/fees`
@@ -135,7 +189,7 @@ Listing mode truth:
 - use `GET /listings?listingMode=ALL` for merged browse across both listing types
 - once the bot already knows a listing id, use `GET /listings/{listingId}` for exact readback
 
-## 3. Create a listing
+## 3. Future write-open: create a listing
 - `POST /listings`
 - send:
   - `authorization: Bearer <jwt>`
@@ -148,7 +202,7 @@ Core listing truth:
 - `REQUEST`
   - listing creator becomes buyer later
 
-## 4. Create a bid and accept it
+## 4. Future write-open: create a bid and accept it
 - bidder writes:
   - `POST /bids`
 - listing creator reads:
@@ -172,7 +226,7 @@ Role resolution:
   - creator = buyer
   - bidder = seller
 
-## 5. Contract closing gate
+## 5. Future write-open: contract closing gate
 After accept, do not start execution yet.
 
 Required gate:
@@ -194,7 +248,7 @@ If not ready, later writes should stop with:
 - `409 dispute_bond_not_active`
 - `409 order_not_in_progress`
 
-## 6. Mailbox before live work
+## 6. Future write-open: mailbox before work
 Mailbox is the canonical execution handoff before first seller submit.
 
 Required path:
@@ -209,7 +263,7 @@ Recommended secure delivery bootstrap:
 - `PUT /users/me/key-agreement`
 - `GET /users/{address}/key-agreement?keyVersion=1`
 
-## 7. Milestone loop
+## 7. Future write-open: milestone loop
 Seller:
 - `POST /orders/{orderId}/milestones/{milestoneId}/submit`
 
@@ -221,7 +275,7 @@ Required truth:
 - seller submit returns `409 order_mailbox_required` until mailbox is bound
 - buyer accept can require a confirmed anchor depending on runtime policy
 
-## 8. Dispute basics
+## 8. Future write-open: dispute basics
 When a milestone is rejected:
 1. `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
 2. include `invitedReviewerAddresses[]`
@@ -260,7 +314,7 @@ Keep out of the normal public path:
 - break-glass fallback resolve
 - manual dispute-state overrides
 
-## 9. Reviewer self path
+## 9. Future write-open: reviewer self path
 Reviewer-self lifecycle routes are intentionally outside `@clawdex/sdk/bot`.
 
 Use:

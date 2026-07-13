@@ -2,7 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { once } from "node:events";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -17,7 +26,6 @@ import {
 } from "../lib/e2ee-local.mjs";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { buildAuthChallengeV2Message } from "../lib/runtime-auth.mjs";
-import { prepareSponsorExecutionIntentV2 } from "../lib/sponsor-intent.mjs";
 
 process.umask(0o077);
 
@@ -29,64 +37,132 @@ const TEST_LISTING_DUE_AT_1 = "2026-04-20T12:00:00Z";
 const TEST_LISTING_DUE_AT_2 = "2026-04-27T12:00:00Z";
 const TEST_LISTING_DUE_AT_MS_1 = Date.parse(TEST_LISTING_DUE_AT_1);
 const TEST_LISTING_DUE_AT_MS_2 = Date.parse(TEST_LISTING_DUE_AT_2);
+const REVIEWER_OPERATOR_ADDRESS = `0x${"f".repeat(64)}`;
+const WRITE_GATE_PACKAGE_IDS = Object.freeze({
+  foundation: `0x${"1".repeat(64)}`,
+  settlement: `0x${"2".repeat(64)}`,
+  fulfillment: `0x${"3".repeat(64)}`,
+  ops: `0x${"4".repeat(64)}`,
+});
+const WRITE_GATE_OBJECT_IDS = Object.freeze({
+  governanceConfigObjectId: `0x${"5".repeat(64)}`,
+  disputeQuorumConfigObjectId: `0x${"6".repeat(64)}`,
+  marketplaceFeeConfigObjectId: `0x${"7".repeat(64)}`,
+  reputationInitFeeConfigObjectId: `0x${"8".repeat(64)}`,
+  listingDepositConfigObjectId: `0x${"9".repeat(64)}`,
+  reviewerRegistryObjectId: `0x${"a".repeat(64)}`,
+});
+
+function buildMarketplaceWriteGateResponse(request, overrides = {}) {
+  const url = new URL(request.url || "/", `http://${request.headers.host}`);
+  const generatedAtMs = overrides.generatedAtMs ?? Date.now();
+  return {
+    status: overrides.status || 200,
+    headers: {
+      "cache-control": "private, no-store, max-age=0",
+      pragma: "no-cache",
+      ...(overrides.headers || {}),
+    },
+    body: overrides.body || {
+      version: "marketplace_write_gate.v1",
+      nonce: url.searchParams.get("nonce") || "",
+      generatedAt: new Date(generatedAtMs).toISOString(),
+      generatedAtMs,
+      expiresAtMs: overrides.expiresAtMs ?? generatedAtMs + 5_000,
+      apiOrigin: `http://${request.headers.host}`,
+      gate: {
+        source: "runtime_db",
+        preset: "normal",
+        publicApiWrites: "live",
+        marketplaceWrites: "live",
+        releaseProfile: "controlled_v1",
+        releasePhase: "canary_allowlisted",
+        runtimeReady: true,
+        productiveWritesEnabled: true,
+        ...(overrides.gate || {}),
+      },
+      chain: {
+        family: "iota",
+        network: "testnet",
+        chainIdentifier: "2304aa97",
+        packageIds: WRITE_GATE_PACKAGE_IDS,
+        objectIds: WRITE_GATE_OBJECT_IDS,
+        ...(overrides.chain || {}),
+      },
+    },
+  };
+}
+
+function buildFreshMarketplacePolicyResponse() {
+  return {
+    policy: {
+      chainConfig: {
+        foundationPackageId: WRITE_GATE_PACKAGE_IDS.foundation,
+        settlementPackageId: WRITE_GATE_PACKAGE_IDS.settlement,
+        fulfillmentPackageId: WRITE_GATE_PACKAGE_IDS.fulfillment,
+        opsPackageId: WRITE_GATE_PACKAGE_IDS.ops,
+        ...WRITE_GATE_OBJECT_IDS,
+      },
+      listingDeposit: {
+        enabled: true,
+        amount: "1000",
+        configObjectId: WRITE_GATE_OBJECT_IDS.listingDepositConfigObjectId,
+        packageId: WRITE_GATE_PACKAGE_IDS.ops,
+      },
+      reputationInitFee: {
+        amount: "1000",
+        configObjectId: WRITE_GATE_OBJECT_IDS.reputationInitFeeConfigObjectId,
+        packageId: WRITE_GATE_PACKAGE_IDS.settlement,
+      },
+    },
+  };
+}
+
+function directListingDepositArgs({ apiBase, rpcUrl, keystoreFile, actorAddress }) {
+  return [
+    "listing-deposit-create",
+    "--execute",
+    "--api-base",
+    apiBase,
+    "--jwt",
+    "test-jwt",
+    "--rpc-url",
+    rpcUrl,
+    "--alias",
+    "seller",
+    "--keystore-path",
+    keystoreFile,
+    "--creator-address",
+    actorAddress,
+    "--listing-mode",
+    "OFFER",
+    "--title",
+    "Direct gate regression",
+    "--description",
+    "Must remain bound to the attested runtime.",
+    "--category",
+    "security",
+    "--currency",
+    "IOTA",
+    "--milestones",
+    "first:1;second:1",
+    "--milestone-due-dates",
+    "2027-01-01T00:00:00.000Z;2027-01-02T00:00:00.000Z",
+    "--json",
+  ];
+}
 
 function defaultArtifactsDir(tempHome) {
   return path.join(tempHome, ".config", "clawnera", "artifacts");
 }
 
-function buildJwtWithExp(expSeconds) {
+function buildJwtWithExp(expSeconds, claims = {}) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
-  return `${encode({ alg: "none", typ: "JWT" })}.${encode({ exp: expSeconds })}.signature`;
+  return `${encode({ alg: "none", typ: "JWT" })}.${encode({ ...claims, exp: expSeconds })}.signature`;
 }
 
-function sponsorReservationBody({ reservationId, orderId, expiresAt, purpose = "marketplace_tx", txFamily = "marketplace_write" }) {
-  return {
-    reservation: {
-      reservationId,
-      sponsorAddress: "0xabc",
-      gasBudget: 1_000_000,
-      purpose,
-      gasCoins: ["0x1"],
-      orderId,
-      expiresAt,
-    },
-    planning: {
-      txFamily,
-      minimumGasBudget: 1_000_000,
-      recommendedGasBudget: 2_000_000,
-      maxGasBudget: 5_000_000,
-    },
-  };
-}
-
-function sponsorV2BuildCommand({
-  reservationId,
-  orderId,
-  expiresAt,
-  txBytesB64 = "dHhieXRlcw==",
-  purpose = "marketplace_tx",
-  txFamily = "marketplace_write",
-  chainFamily = "iota",
-  network = "testnet",
-  intentOverrides = {},
-}) {
-  const prepared = prepareSponsorExecutionIntentV2({
-    txBytesB64,
-    chainFamily,
-    network,
-    txFamily,
-    orderId,
-    reservationId,
-    expiresAt,
-    purpose,
-  });
-  const payload = Buffer.from(JSON.stringify({
-    txBytesB64,
-    userSig: "c2ln",
-    intent: { ...prepared.intent, ...intentOverrides },
-    intentSig: "c2ln",
-  })).toString("base64");
-  return `node -e "process.stdout.write(Buffer.from('${payload}','base64').toString('utf8'))"`;
+function buildReviewerOperatorJwt() {
+  return buildJwtWithExp(4102444800, { sub: REVIEWER_OPERATOR_ADDRESS });
 }
 
 function reviewerShortlistAuthorizationHandoff({
@@ -112,10 +188,16 @@ function reviewerShortlistAuthorizationHandoff({
           orderId,
           milestoneId,
           invitedReviewerAddresses: [...reviewers],
+          packageId: `0x${"5".repeat(64)}`,
+          disputeQuorumConfigObjectId: `0x${"6".repeat(64)}`,
+          governanceConfigObjectId: `0x${"7".repeat(64)}`,
         }
       : {
           disputeCaseObjectId,
           invitedReviewerAddresses: [...reviewers],
+          packageId: `0x${"5".repeat(64)}`,
+          disputeQuorumConfigObjectId: `0x${"6".repeat(64)}`,
+          governanceConfigObjectId: `0x${"7".repeat(64)}`,
         },
     missingOperatorInputs: open
       ? [
@@ -135,6 +217,145 @@ function reviewerShortlistAuthorizationHandoff({
           "intendedParty",
           "expiresAtMs",
         ],
+  };
+}
+
+function stableJsonValue(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => stableJsonValue(entry));
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, stableJsonValue(entry)]),
+  );
+}
+
+function hashStableJson(value) {
+  return createHash("sha256").update(JSON.stringify(stableJsonValue(value))).digest("hex");
+}
+
+function reviewerSelectionReceipt({
+  scope,
+  receiptId,
+  reviewers,
+  checkpointDigest,
+  checkpointSequenceNumber,
+  checkpointTimestampMs = 1700000000000,
+  orderId = "order-test",
+  milestoneId = "milestone-test",
+  disputeCaseObjectId,
+  buyerAddress = `0x${"1".repeat(64)}`,
+  sellerAddress = `0x${"2".repeat(64)}`,
+  reviewerCountRequested = reviewers.length,
+  directoryScanTruncated = false,
+  assignmentRound = scope === "OPEN" ? 0 : 1,
+  requestBody,
+  overrides = {},
+}) {
+  const createdByActorAddress = REVIEWER_OPERATOR_ADDRESS;
+  const normalizedRequestBody = requestBody || {
+    scope,
+    ...(scope === "OPEN" ? { receiptId, orderId, milestoneId, buyerAddress, sellerAddress } : {}),
+    ...(scope === "REPLACEMENT" ? { disputeCaseObjectId } : {}),
+    checkpointDigest,
+    reviewerCount: reviewerCountRequested,
+    directoryScanLimit: 1_000,
+    minPerformanceScore: 50,
+    minReputationScore: 50,
+    minReputationConfidence: 20,
+    allowNewReviewers: true,
+    minDecisionsTotal: 0,
+    maxNoshowCount: 3,
+    maxCommitRevealFailures: 3,
+    excludedReviewerAddresses: [],
+    blockedReviewerAddresses: [],
+  };
+  const normalizedExcludedReviewerAddresses = [
+    ...new Set(normalizedRequestBody.excludedReviewerAddresses || []),
+  ].sort();
+  const normalizedBlockedReviewerAddresses = [
+    ...new Set(normalizedRequestBody.blockedReviewerAddresses || []),
+  ].sort();
+  const requestHash = hashStableJson({
+    schemaVersion: "v1",
+    receiptId,
+    createdByActorAddress,
+    scope: normalizedRequestBody.scope,
+    reviewerCount: normalizedRequestBody.reviewerCount,
+    directoryScanLimit: normalizedRequestBody.directoryScanLimit,
+    checkpointDigest: normalizedRequestBody.checkpointDigest,
+    orderId: normalizedRequestBody.orderId ?? null,
+    milestoneId: normalizedRequestBody.milestoneId ?? null,
+    disputeCaseObjectId: normalizedRequestBody.disputeCaseObjectId ?? null,
+    buyerAddress: normalizedRequestBody.buyerAddress ?? null,
+    sellerAddress: normalizedRequestBody.sellerAddress ?? null,
+    excludedReviewerAddresses: normalizedExcludedReviewerAddresses,
+    blockedReviewerAddresses: normalizedBlockedReviewerAddresses,
+    minPerformanceScore: normalizedRequestBody.minPerformanceScore,
+    minReputationScore: normalizedRequestBody.minReputationScore,
+    minReputationConfidence: normalizedRequestBody.minReputationConfidence,
+    allowNewReviewers: normalizedRequestBody.allowNewReviewers,
+    minDecisionsTotal: normalizedRequestBody.minDecisionsTotal,
+    maxNoshowCount: normalizedRequestBody.maxNoshowCount,
+    maxCommitRevealFailures: normalizedRequestBody.maxCommitRevealFailures,
+  });
+  const candidatePool = reviewers.map((reviewerAddress) => ({ reviewerAddress, eligible: true }));
+  const receiptScope = overrides.scope ?? scope;
+  const receiptOrderId = overrides.orderId ?? orderId;
+  const receiptMilestoneId = overrides.milestoneId ?? milestoneId;
+  const receiptDisputeCaseObjectId = overrides.disputeCaseObjectId ?? disputeCaseObjectId;
+  const receiptAssignmentRound = overrides.assignmentRound ?? assignmentRound;
+  const receiptCheckpointDigest = overrides.checkpointDigest ?? checkpointDigest;
+  const seedHash = hashStableJson({
+    seedScopeKey:
+      receiptScope === "OPEN"
+        ? `${receiptOrderId}:${receiptMilestoneId}:open`
+        : `${receiptDisputeCaseObjectId || receiptOrderId}:replacement`,
+    assignmentRound: receiptAssignmentRound,
+    checkpointDigest: receiptCheckpointDigest,
+  });
+  const candidatePoolHash = hashStableJson(candidatePool);
+  const shortlistHash = hashStableJson(reviewers);
+  const receiptHash = hashStableJson({
+    seedHash,
+    candidatePoolHash,
+    shortlistHash,
+    shortlistedReviewerAddresses: reviewers,
+    selectionPolicyVersion: "reviewer_selector_v4",
+  });
+  return {
+    id: receiptId,
+    scope,
+    ...(scope === "REPLACEMENT" ? { disputeCaseObjectId } : {}),
+    orderId,
+    milestoneId,
+    buyerAddress,
+    sellerAddress,
+    assignmentRound,
+    reviewerCountRequested,
+    reviewerCountSelected: reviewers.length,
+    selectionPolicyVersion: "reviewer_selector_v4",
+    requestHash,
+    checkpointDigest,
+    checkpointSequenceNumber,
+    ...(checkpointTimestampMs === null ? {} : { checkpointTimestampMs }),
+    checkpointSource: "rpc_latest_finalized",
+    seedHash,
+    candidatePoolHash,
+    shortlistHash,
+    receiptHash,
+    directoryScanTruncated,
+    shortlistedReviewerAddresses: [...reviewers],
+    blockedReviewerAddresses: normalizedBlockedReviewerAddresses,
+    excludedReviewerAddresses: normalizedExcludedReviewerAddresses,
+    candidatePool,
+    createdByActorAddress,
+    createdAt: "2026-07-13T00:00:00.000Z",
+    ...overrides,
   };
 }
 
@@ -224,9 +445,20 @@ async function startMockServer(routes) {
     };
     requests.push(request);
 
-    const handler = routes[`${request.method} ${request.url}`] || routes[request.url || "/"] || routes.default;
+    const writeGateRoute =
+      request.method === "GET" && /^\/policy\/write-gate\?nonce=[0-9a-f]{32}$/.test(request.url)
+        ? routes["GET /policy/write-gate"]
+        : null;
+    const handler =
+      routes[`${request.method} ${request.url}`] || writeGateRoute || routes[request.url || "/"] || routes.default;
+    const builtInResponse =
+      request.method === "GET" && /^\/policy\/write-gate\?nonce=[0-9a-f]{32}$/.test(request.url)
+        ? buildMarketplaceWriteGateResponse(request)
+        : null;
     const response = handler
       ? await handler(request)
+      : builtInResponse
+        ? builtInResponse
       : request.method === "GET" && /^\/users\/[^/]+\/key-agreement\?keyVersion=\d+$/.test(request.url)
         ? {
             status: 404,
@@ -358,6 +590,99 @@ test("doctor refreshes saved auth state after invalid_token on actor probes", as
   }
 });
 
+test("doctor preserves exit 78 and does not refresh auth when the exact-target gate is frozen", async () => {
+  const token = buildJwtWithExp(4102444800);
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-doctor-frozen-refresh-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  let refreshCalls = 0;
+
+  const mock = await startMockServer({
+    "GET /health": () => ({ status: 200, body: { ok: true } }),
+    "GET /ready": () => ({ status: 200, body: { ok: true } }),
+    "GET /capabilities": () => ({ status: 200, body: { ok: true } }),
+    "GET /policy/fees": () => ({ status: 200, body: { ok: true } }),
+    "GET /actors/me/capabilities": () => ({ status: 401, body: { error: "invalid_token" } }),
+    "GET /policy/write-gate": (request) =>
+      buildMarketplaceWriteGateResponse(request, {
+        gate: {
+          preset: "write_freeze",
+          publicApiWrites: "frozen",
+          marketplaceWrites: "frozen",
+          runtimeReady: false,
+          productiveWritesEnabled: false,
+        },
+      }),
+    "POST /auth/refresh": () => {
+      refreshCalls += 1;
+      return { status: 500, body: { error: "refresh_must_not_run" } };
+    },
+  });
+
+  try {
+    writeFileSync(
+      authStateFile,
+      JSON.stringify(
+        {
+          apiBase: mock.baseUrl,
+          token,
+          refreshToken: "refresh-token-1",
+          address: "0x1111111111111111111111111111111111111111111111111111111111111111",
+          alias: "bot",
+        },
+        null,
+        2,
+      ),
+    );
+    const result = await runCli(["doctor", "--api-base", mock.baseUrl, "--auth-state-file", authStateFile, "--json"]);
+    assert.equal(result.status, 78);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error, "marketplace_mutation_gate_closed");
+    assert.equal(payload.exitCode, 78);
+    assert.equal(refreshCalls, 0);
+    assert.equal(
+      mock.requests.filter(
+        (request) => request.method === "GET" && /^\/policy\/write-gate\?nonce=[0-9a-f]{32}$/.test(request.url),
+      ).length,
+      1,
+    );
+  } finally {
+    await mock.close();
+  }
+});
+
+test("direct listing-deposit execution remains closed until the bundled deployment registry is activated", async () => {
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-deployment-registry-integration-"));
+  const keystoreFile = path.join(tempHome, "missing.keystore");
+  const actorAddress = `0x${"1".repeat(64)}`;
+  const mock = await startMockServer({
+    default: () => ({ status: 500, body: { error: "network_must_not_run" } }),
+  });
+
+  try {
+    const result = await runCli(
+      directListingDepositArgs({
+        apiBase: mock.baseUrl,
+        rpcUrl: `${mock.baseUrl}/rpc`,
+        keystoreFile,
+        actorAddress,
+      }),
+      { HOME: tempHome, CLAWNERA_IOTA_NETWORK: "testnet" },
+    );
+
+    assert.equal(result.status, 78, result.stdout || result.stderr);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error, "marketplace_deployment_identity_unavailable");
+    assert.equal(payload.exitCode, 78);
+    assert.equal(payload.mutationGate?.error, "marketplace_direct_write_gate_failed");
+    assert.equal(mock.requests.length, 0);
+    assert.equal(existsSync(keystoreFile), false);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("request rejects absolute URLs before sending auth headers", async () => {
   const tmpDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-cli-abs-url-"));
   const authStateFile = path.join(tmpDir, "auth-state.json");
@@ -379,6 +704,125 @@ test("request rejects absolute URLs before sending auth headers", async () => {
   assert.equal(result.status, 1);
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.error, "absolute_api_url_not_allowed");
+});
+
+test("request and tx-plan reject a leading backslash before resolving auth state", async () => {
+  const missingAuthStateFile = path.join(
+    mkdtempSync(path.join(os.tmpdir(), "clawnera-cli-backslash-url-")),
+    "missing-auth-state.json",
+  );
+  for (const args of [
+    ["request", "GET", "\\attacker.example/capture"],
+    ["tx-plan-dry-run", "POST", "\\attacker.example/plan"],
+  ]) {
+    const result = await runCli([...args, "--auth-state-file", missingAuthStateFile, "--json"], {});
+    assert.equal(result.status, 1, result.stderr);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "absolute_api_url_not_allowed");
+  }
+});
+
+test("request rejects conflicting env-file and auth-state API origins before exposing the token", async () => {
+  const targetA = await startMockServer({
+    "GET /health": () => ({ status: 200, body: { ok: true, target: "a" } }),
+  });
+  const targetB = await startMockServer({
+    "GET /health": () => ({ status: 200, body: { ok: true, target: "b" } }),
+  });
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-api-origin-mismatch-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  const envFile = path.join(tempDir, "target.env");
+  const token = buildJwtWithExp(4102444800);
+  writeFileSync(
+    authStateFile,
+    JSON.stringify(
+      {
+        apiBase: targetA.baseUrl,
+        token,
+        refreshToken: "refresh-token-a",
+        address: `0x${"1".repeat(64)}`,
+        alias: "bot-a",
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(envFile, `CLAWNERA_API_BASE_URL=${targetB.baseUrl}\n`);
+
+  try {
+    const result = await runCli(
+      [
+        "request",
+        "GET",
+        "/health",
+        "--auth-state-file",
+        authStateFile,
+        "--env-file",
+        envFile,
+        "--json",
+      ],
+      {
+        CLAWNERA_API_BASE_URL: "",
+        CLAWNERA_API_JWT: "",
+        CLAWNERA_AUTH_STATE_FILE: "",
+        CLAWNERA_ENV_FILE: "",
+      },
+    );
+    assert.equal(result.status, 1);
+    assert.equal(JSON.parse(result.stdout).error, "api_base_source_mismatch");
+    assert.equal(targetA.requests.length, 0);
+    assert.equal(targetB.requests.length, 0);
+    assert.ok(
+      [...targetA.requests, ...targetB.requests].every(
+        (request) => request.headers.authorization !== `Bearer ${token}`,
+      ),
+    );
+  } finally {
+    await targetA.close();
+    await targetB.close();
+  }
+});
+
+test("request recovery keeps a concrete API target when the auth-state file is missing", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-request-missing-auth-state-"));
+  const authStateFile = path.join(tempDir, "missing-auth-state.json");
+  const apiBase = "https://api.example.invalid";
+  const result = await runCli([
+    "request",
+    "GET",
+    "/actors/me/capabilities",
+    "--api-base",
+    apiBase,
+    "--auth-state-file",
+    authStateFile,
+    "--json",
+  ]);
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.error, "missing_auth_state_file");
+  assert.equal(
+    payload.hint,
+    `clawnera-help write-gate --api-base '${apiBase}' && clawnera-help ensure-auth --api-base '${apiBase}' --auth-state-file '${authStateFile}'`,
+  );
+});
+
+test("request recovery does not invent production when an auth-state target cannot be resolved", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-request-unknown-target-"));
+  const authStateFile = path.join(tempDir, "missing-auth-state.json");
+  const result = await runCli([
+    "request",
+    "GET",
+    "/actors/me/capabilities",
+    "--auth-state-file",
+    authStateFile,
+    "--json",
+  ]);
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.error, "missing_auth_state_file");
+  assert.match(payload.hint, /^stop: the API target could not be resolved/);
+  assert.doesNotMatch(payload.hint, /api\.clawnera\.com/);
+  assert.doesNotMatch(payload.hint, /clawnera-help write-gate/);
 });
 
 test("request accepts --auth-state as a shorthand alias for --auth-state-file", async () => {
@@ -428,16 +872,7 @@ test("chain-config output explains that the live minimum is a floor and amount c
   const mock = await startMockServer({
     "GET /policy/fees": () => ({
       status: 200,
-      body: {
-        policy: {
-          chainConfig: {
-            marketplacePackageId: "0x1111111111111111111111111111111111111111111111111111111111111111",
-            escrowFeeConfigObjectId: "0x9999999999999999999999999999999999999999999999999999999999999999",
-            governanceConfigObjectId: "0x8888888888888888888888888888888888888888888888888888888888888888",
-            disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
-          }
-        }
-      }
+      body: buildFreshMarketplacePolicyResponse(),
     }),
     "GET /reviewers/me/metrics": (request) => {
       assert.equal(request.headers.authorization, "Bearer test-jwt");
@@ -2293,6 +2728,7 @@ test("ensure-auth falls back to the sole keystore entry and saves auth state", a
 
   const issuedToken = buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600);
   const mock = await startMockServer({
+    "GET /policy/write-gate": (request) => buildMarketplaceWriteGateResponse(request),
     "POST /auth/challenge": (request) => {
       assert.equal(request.body?.address, createdAddress);
       assert.equal(request.body?.chainFamily, "iota");
@@ -2622,13 +3058,9 @@ test("managed-storage-fee-pay fails closed before reading wallet state or callin
   }
 });
 
-test("sponsor dry-run surfaces reserve auth failures", async () => {
+test("sponsor execute dry-run is quarantined before auth or network access", async () => {
   const mock = await startMockServer({
-    "POST /sponsor/reserve": (request) => {
-      assert.equal(request.headers.authorization, "Bearer test-jwt");
-      assert.equal(request.body?.purpose, "marketplace_tx");
-      return { status: 401, body: { error: "invalid_token" } };
-    }
+    "POST /sponsor/reserve": () => ({ status: 500, body: { error: "must_not_reserve" } }),
   });
 
   try {
@@ -2636,18 +3068,20 @@ test("sponsor dry-run surfaces reserve auth failures", async () => {
       "sponsor-execute",
       "--api-base",
       mock.baseUrl,
-      "--jwt",
-      "test-jwt",
+      "--auth-state-file",
+      "/missing/auth-state.json",
       "--order-id",
       "order-auth-failure",
       "--dry-run",
       "--json",
     ]);
-    assert.equal(result.status, 1);
+    assert.equal(result.status, 78);
     const payload = JSON.parse(result.stdout);
-    assert.equal(payload.error, "sponsor_reserve_failed");
-    assert.equal(payload.status, 401);
-    assert.equal(payload.response.error, "invalid_token");
+    assert.equal(payload.error, "sponsor_execute_quarantined");
+    assert.equal(payload.runtimePosture, "not_queried");
+    assert.equal(payload.releaseBaseMode, "self_pay");
+    assert.equal(payload.sponsorMode, "deferred");
+    assert.equal(mock.requests.length, 0);
   } finally {
     await mock.close();
   }
@@ -2949,8 +3383,7 @@ test("mailbox-events retries with a smaller limit after transient event-feed fai
 });
 
 test("mailbox-events falls back to direct chain reads when the event feed is empty", async () => {
-  const packageId = "0x1111111111111111111111111111111111111111111111111111111111111111";
-  const mailboxPackageId = "0x2222222222222222222222222222222222222222222222222222222222222222";
+  const mailboxPackageId = WRITE_GATE_PACKAGE_IDS.settlement;
   const mailboxObjectId = "0x9999999999999999999999999999999999999999999999999999999999999999";
   const mock = await startMockServer({
     "GET /orders/order-1/mailbox": () => ({
@@ -2973,13 +3406,7 @@ test("mailbox-events falls back to direct chain reads when the event feed is emp
     }),
     "GET /policy/fees": () => ({
       status: 200,
-      body: {
-        policy: {
-          chainConfig: {
-            marketplacePackageId: packageId,
-          },
-        },
-      },
+      body: buildFreshMarketplacePolicyResponse(),
     }),
     "POST /rpc": (request) => {
       const method = request.body?.method;
@@ -3104,7 +3531,83 @@ test("mailbox-events falls back to direct chain reads when the event feed is emp
   }
 });
 
+test("mailbox-events does not hide a frozen auth-refresh gate in the chain fallback", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-mailbox-frozen-refresh-"));
+  const authStateFile = path.join(tempDir, "auth-state.json");
+  let refreshCalls = 0;
+  const mock = await startMockServer({
+    "GET /orders/order-1/mailbox": () => ({
+      status: 200,
+      body: { mailboxObjectId: `0x${"9".repeat(64)}` },
+    }),
+    "GET /events?scope=all&type=mailbox.signal_posted&limit=20": () => ({
+      status: 200,
+      body: { items: [] },
+    }),
+    "GET /events?scope=all&type=mailbox.signal_acked&limit=20": () => ({
+      status: 200,
+      body: { items: [] },
+    }),
+    "GET /policy/fees": () => ({ status: 401, body: { error: "invalid_token" } }),
+    "GET /policy/write-gate": (request) =>
+      buildMarketplaceWriteGateResponse(request, {
+        gate: {
+          preset: "write_freeze",
+          publicApiWrites: "frozen",
+          marketplaceWrites: "frozen",
+          runtimeReady: false,
+          productiveWritesEnabled: false,
+        },
+      }),
+    "POST /auth/refresh": () => {
+      refreshCalls += 1;
+      return { status: 500, body: { error: "refresh_must_not_run" } };
+    },
+  });
+
+  try {
+    writeFileSync(
+      authStateFile,
+      JSON.stringify(
+        {
+          apiBase: mock.baseUrl,
+          token: buildJwtWithExp(4102444800),
+          refreshToken: "refresh-token-1",
+          address: `0x${"1".repeat(64)}`,
+          alias: "bot",
+        },
+        null,
+        2,
+      ),
+    );
+    const result = await runCli([
+      "mailbox-events",
+      "--auth-state-file",
+      authStateFile,
+      "--rpc-url",
+      `${mock.baseUrl}/rpc`,
+      "--order-id",
+      "order-1",
+      "--json",
+    ]);
+    assert.equal(result.status, 78);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "marketplace_mutation_gate_closed");
+    assert.equal(payload.exitCode, 78);
+    assert.equal(refreshCalls, 0);
+    assert.equal(
+      mock.requests.filter(
+        (request) => request.method === "GET" && /^\/policy\/write-gate\?nonce=[0-9a-f]{32}$/.test(request.url),
+      ).length,
+      1,
+    );
+  } finally {
+    await mock.close();
+  }
+});
+
 test("reviewer-shortlist builds a full dispute-open body and warns on stale context status", async () => {
+  const requestReceiptId = "00000000-0000-4000-8000-000000000001";
   const mock = await startMockServer({
     "POST /rpc": (request) => {
       const method = request.body?.method;
@@ -3139,27 +3642,40 @@ test("reviewer-shortlist builds a full dispute-open body and warns on stale cont
       };
     },
     "POST /admin/reviewer-selection/shortlist": (request) => {
-      assert.equal(request.headers.authorization, "Bearer test-jwt");
+      assert.equal(request.headers.authorization, `Bearer ${buildReviewerOperatorJwt()}`);
       assert.equal(request.body?.scope, "OPEN");
+      assert.equal(request.body?.receiptId, requestReceiptId);
       assert.equal(request.body?.orderId, "order-1");
       assert.equal(request.body?.milestoneId, "milestone-2");
       assert.equal(request.body?.buyerAddress, "0x1111111111111111111111111111111111111111111111111111111111111111");
       assert.equal(request.body?.sellerAddress, "0x2222222222222222222222222222222222222222222222222222222222222222");
       assert.equal(request.body?.checkpointDigest, "9T4R6r5u2mYk5iVX1q4x8o9cTq1rLp9Y6w9Z2SxQnPz");
+      assert.equal(request.body?.minPerformanceScore, 0);
+      assert.equal(request.body?.minReputationScore, 0);
       assert.equal(request.body?.minReputationConfidence, 0);
+      assert.equal(request.body?.minDecisionsTotal, 0);
+      assert.equal(request.body?.maxNoshowCount, 0);
+      assert.equal(request.body?.maxCommitRevealFailures, 0);
       return {
         status: 200,
         body: {
           selectionComplete: true,
           directoryScanTruncated: false,
-          receipt: {
-            id: "receipt-1",
-            shortlistedReviewerAddresses: [
+          receipt: reviewerSelectionReceipt({
+            scope: "OPEN",
+            receiptId: requestReceiptId,
+            requestBody: request.body,
+            reviewers: [
               "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
             ],
-          },
+            orderId: "order-1",
+            milestoneId: "milestone-2",
+            checkpointDigest: "9T4R6r5u2mYk5iVX1q4x8o9cTq1rLp9Y6w9Z2SxQnPz",
+            checkpointSequenceNumber: "12345",
+            checkpointTimestampMs: 1773916000000,
+          }),
           publishTarget: {
             route: "/orders/order-1/milestones/milestone-2/disputes/open",
             requestPatch: {
@@ -3168,12 +3684,12 @@ test("reviewer-shortlist builds a full dispute-open body and warns on stale cont
                 "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                 "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
               ],
-              reviewerSelectionReceiptId: "receipt-1",
+              reviewerSelectionReceiptId: requestReceiptId,
             },
           },
           operatorAuthorizationHandoff: reviewerShortlistAuthorizationHandoff({
             scope: "OPEN",
-            receiptId: "receipt-1",
+            receiptId: requestReceiptId,
             reviewers: [
               "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -3214,6 +3730,7 @@ test("reviewer-shortlist builds a full dispute-open body and warns on stale cont
   );
 
   try {
+    const repoModeBefore = statSync(repoRoot).mode & 0o777;
     const result = await runCli([
       "reviewer-shortlist",
       "--api-base",
@@ -3221,14 +3738,28 @@ test("reviewer-shortlist builds a full dispute-open body and warns on stale cont
       "--rpc-url",
       `${mock.baseUrl}/rpc`,
       "--jwt",
-      "test-jwt",
+      buildReviewerOperatorJwt(),
       "--order-id",
       "order-1",
       "--milestone-id",
       "milestone-2",
       "--order-context-file",
       contextFile,
+      "--request-receipt-id",
+      requestReceiptId,
+      "--request-state-file",
+      path.join(tempDir, "request-state.json"),
+      "--min-performance-score",
+      "0",
+      "--min-reputation-score",
+      "0",
       "--min-reputation-confidence",
+      "0",
+      "--min-decisions-total",
+      "0",
+      "--max-noshow-count",
+      "0",
+      "--max-commit-reveal-failures",
       "0",
       "--publish-auth-state-file",
       "/tmp/buyer-auth-state.json",
@@ -3237,7 +3768,8 @@ test("reviewer-shortlist builds a full dispute-open body and warns on stale cont
     assert.equal(result.status, 0);
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.ok, true);
-    assert.equal(payload.receiptId, "receipt-1");
+    assert.equal(payload.requestReceiptId, requestReceiptId);
+    assert.equal(payload.receiptId, requestReceiptId);
     assert.equal(payload.contextOrderStatus, "IN_PROGRESS");
     assert.equal(payload.contextMilestoneStatus, "SUBMITTED");
     assert.ok(Array.isArray(payload.warnings));
@@ -3247,6 +3779,9 @@ test("reviewer-shortlist builds a full dispute-open body and warns on stale cont
     assert.equal(payload.nextPublishHint, null);
     assert.match(payload.nextPostAuthorizationDryRunHint, /--auth-state-file '\/tmp\/buyer-auth-state\.json'/);
     assert.equal(payload.response.receipt?.shortlistedReviewerAddresses?.length, 3);
+    assert.equal(path.dirname(payload.receiptOut), path.join(os.tmpdir(), "clawnera-help"));
+    assert.equal(path.dirname(payload.publishBodyOut), path.join(os.tmpdir(), "clawnera-help"));
+    assert.equal(statSync(repoRoot).mode & 0o777, repoModeBefore);
     const publishBody = JSON.parse(readFileSync(payload.publishBodyOut, "utf8"));
     assert.deepEqual(publishBody, {
       escrowObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
@@ -3256,14 +3791,94 @@ test("reviewer-shortlist builds a full dispute-open body and warns on stale cont
         "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       ],
-      reviewerSelectionReceiptId: "receipt-1",
+      reviewerSelectionReceiptId: requestReceiptId,
     });
   } finally {
     await mock.close();
   }
 });
 
+test("reviewer-shortlist rejects an inconsistent latest checkpoint before persisting state or artifacts", async () => {
+  const requestReceiptId = "00000000-0000-4000-8000-000000000035";
+  let shortlistCalls = 0;
+  const mock = await startMockServer({
+    "POST /rpc": (request) => {
+      if (request.body?.method === "iota_getLatestCheckpointSequenceNumber") {
+        return {
+          status: 200,
+          body: { jsonrpc: "2.0", id: request.body?.id ?? 1, result: "42" },
+        };
+      }
+      assert.equal(request.body?.method, "iota_getCheckpoint");
+      assert.deepEqual(request.body?.params, ["42"]);
+      return {
+        status: 200,
+        body: {
+          jsonrpc: "2.0",
+          id: request.body?.id ?? 1,
+          result: {
+            digest: "checkpoint-43",
+            sequenceNumber: "43",
+            timestampMs: "1700000001000",
+          },
+        },
+      };
+    },
+    "POST /admin/reviewer-selection/shortlist": () => {
+      shortlistCalls += 1;
+      return { status: 500, body: { error: "shortlist_must_not_run" } };
+    },
+  });
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-latest-checkpoint-guard-"));
+  const requestStateFile = path.join(tempDir, "must-not-write-state.json");
+  const receiptOut = path.join(tempDir, "must-not-write-receipt.json");
+  const publishBodyOut = path.join(tempDir, "must-not-write-publish.json");
+
+  try {
+    const result = await runCli([
+      "reviewer-shortlist",
+      "--api-base",
+      mock.baseUrl,
+      "--rpc-url",
+      `${mock.baseUrl}/rpc`,
+      "--jwt",
+      buildReviewerOperatorJwt(),
+      "--order-id",
+      "order-latest-checkpoint-guard",
+      "--milestone-id",
+      "milestone-latest-checkpoint-guard",
+      "--buyer-address",
+      `0x${"1".repeat(64)}`,
+      "--seller-address",
+      `0x${"2".repeat(64)}`,
+      "--escrow-object-id",
+      `0x${"3".repeat(64)}`,
+      "--bond-object-id",
+      `0x${"4".repeat(64)}`,
+      "--request-receipt-id",
+      requestReceiptId,
+      "--request-state-file",
+      requestStateFile,
+      "--receipt-out",
+      receiptOut,
+      "--publish-body-out",
+      publishBodyOut,
+      "--json",
+    ]);
+
+    assert.equal(result.status, 1);
+    assert.equal(JSON.parse(result.stdout).error, "latest_checkpoint_sequence_mismatch");
+    assert.equal(shortlistCalls, 0);
+    assert.equal(existsSync(requestStateFile), false);
+    assert.equal(existsSync(receiptOut), false);
+    assert.equal(existsSync(publishBodyOut), false);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("reviewer-shortlist does not write a publish body for a mismatched operator handoff", async () => {
+  const requestReceiptId = "00000000-0000-4000-8000-000000000002";
   const reviewers = [
     "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -3283,10 +3898,11 @@ test("reviewer-shortlist does not write a publish body for a mismatched operator
             },
       },
     }),
-    "POST /admin/reviewer-selection/shortlist": () => {
+    "POST /admin/reviewer-selection/shortlist": (request) => {
+      assert.equal(request.body?.receiptId, requestReceiptId);
       const operatorAuthorizationHandoff = reviewerShortlistAuthorizationHandoff({
         scope: "OPEN",
-        receiptId: "receipt-invalid-handoff",
+        receiptId: requestReceiptId,
         reviewers,
         orderId: "order-guard",
         milestoneId: "milestone-guard",
@@ -3297,15 +3913,22 @@ test("reviewer-shortlist does not write a publish body for a mismatched operator
         body: {
           selectionComplete: true,
           directoryScanTruncated: false,
-          receipt: {
-            id: "receipt-invalid-handoff",
-            shortlistedReviewerAddresses: reviewers,
-          },
+          receipt: reviewerSelectionReceipt({
+            scope: "OPEN",
+            receiptId: requestReceiptId,
+            requestBody: request.body,
+            reviewers,
+            orderId: "order-guard",
+            milestoneId: "milestone-guard",
+            checkpointDigest: "checkpoint-7",
+            checkpointSequenceNumber: "7",
+            checkpointTimestampMs: 1773916000000,
+          }),
           publishTarget: {
             route: "/orders/order-guard/milestones/milestone-guard/disputes/open",
             requestPatch: {
               invitedReviewerAddresses: reviewers,
-              reviewerSelectionReceiptId: "receipt-invalid-handoff",
+              reviewerSelectionReceiptId: requestReceiptId,
             },
           },
           operatorAuthorizationHandoff,
@@ -3324,7 +3947,7 @@ test("reviewer-shortlist does not write a publish body for a mismatched operator
       "--rpc-url",
       `${mock.baseUrl}/rpc`,
       "--jwt",
-      "test-jwt",
+      buildReviewerOperatorJwt(),
       "--order-id",
       "order-guard",
       "--milestone-id",
@@ -3337,6 +3960,12 @@ test("reviewer-shortlist does not write a publish body for a mismatched operator
       `0x${"3".repeat(64)}`,
       "--bond-object-id",
       `0x${"4".repeat(64)}`,
+      "--request-receipt-id",
+      requestReceiptId,
+      "--request-state-file",
+      path.join(tempDir, "request-state.json"),
+      "--reviewer-count",
+      "2",
       "--publish-body-out",
       publishBodyOut,
       "--json",
@@ -3346,17 +3975,21 @@ test("reviewer-shortlist does not write a publish body for a mismatched operator
     assert.equal(payload.error, "reviewer_shortlist_reviewer_order_mismatch");
     assert.equal(payload.publishBodyOut, null);
     assert.equal(existsSync(publishBodyOut), false);
-    assert.equal(existsSync(payload.receiptOut), true);
+    assert.equal(payload.receiptOut, null);
   } finally {
     await mock.close();
   }
 });
 
 test("reviewer-shortlist retries once when the server reports checkpoint_digest_mismatch", async () => {
+  const requestReceiptId = "00000000-0000-4000-8000-000000000003";
+  const requestReceiptIds = [];
   let shortlistCalls = 0;
+  let newCheckpointReads = 0;
   const mock = await startMockServer({
     "POST /admin/reviewer-selection/shortlist": (request) => {
       shortlistCalls += 1;
+      requestReceiptIds.push(request.body?.receiptId);
       if (shortlistCalls === 1) {
         assert.equal(request.body?.checkpointDigest, "checkpoint-old");
         return {
@@ -3373,14 +4006,21 @@ test("reviewer-shortlist retries once when the server reports checkpoint_digest_
         status: 200,
         body: {
           selectionComplete: true,
-          receipt: {
-            id: "receipt-open-1",
-            shortlistedReviewerAddresses: [
+          receipt: reviewerSelectionReceipt({
+            scope: "OPEN",
+            receiptId: requestReceiptId,
+            requestBody: request.body,
+            reviewers: [
               "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-            ]
-          },
+            ],
+            orderId: "order-1",
+            milestoneId: "milestone-1",
+            checkpointDigest: "checkpoint-new",
+            checkpointSequenceNumber: "43",
+            checkpointTimestampMs: null,
+          }),
           publishTarget: {
             route: "/orders/order-1/milestones/milestone-1/disputes/open",
             requestPatch: {
@@ -3389,12 +4029,12 @@ test("reviewer-shortlist retries once when the server reports checkpoint_digest_
                 "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                 "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
               ],
-              reviewerSelectionReceiptId: "receipt-open-1"
+              reviewerSelectionReceiptId: requestReceiptId
             }
           },
           operatorAuthorizationHandoff: reviewerShortlistAuthorizationHandoff({
             scope: "OPEN",
-            receiptId: "receipt-open-1",
+            receiptId: requestReceiptId,
             reviewers: [
               "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -3419,7 +4059,23 @@ test("reviewer-shortlist retries once when the server reports checkpoint_digest_
         };
       }
       if (method === "iota_getCheckpoint") {
-        assert.equal(request.body?.params?.[0], "42");
+        const sequenceNumber = request.body?.params?.[0];
+        if (sequenceNumber === "43") {
+          newCheckpointReads += 1;
+          return {
+            status: 200,
+            body: {
+              jsonrpc: "2.0",
+              id: request.body?.id ?? 1,
+              result: {
+                digest: "checkpoint-new",
+                sequenceNumber: "43",
+                timestampMs: "1700000001000"
+              }
+            }
+          };
+        }
+        assert.equal(sequenceNumber, "42");
         return {
           status: 200,
           body: {
@@ -3441,6 +4097,7 @@ test("reviewer-shortlist retries once when the server reports checkpoint_digest_
   const contextFile = path.join(tempDir, "timeline.json");
   const receiptOut = path.join(tempDir, "receipt.json");
   const publishBodyOut = path.join(tempDir, "publish.json");
+  const requestStateFile = path.join(tempDir, "request-state.json");
   writeFileSync(
     contextFile,
     JSON.stringify(
@@ -3473,13 +4130,17 @@ test("reviewer-shortlist retries once when the server reports checkpoint_digest_
       "--rpc-url",
       `${mock.baseUrl}/rpc`,
       "--jwt",
-      buildJwtWithExp(4102444800),
+      buildReviewerOperatorJwt(),
       "--order-id",
       "order-1",
       "--milestone-id",
       "milestone-1",
       "--order-context-file",
       contextFile,
+      "--request-receipt-id",
+      requestReceiptId,
+      "--request-state-file",
+      requestStateFile,
       "--reviewer-count",
       "3",
       "--receipt-out",
@@ -3493,6 +4154,7 @@ test("reviewer-shortlist retries once when the server reports checkpoint_digest_
     assert.equal(payload.ok, true);
     assert.equal(payload.checkpointDigest, "checkpoint-new");
     assert.equal(payload.checkpointSequenceNumber, "43");
+    assert.equal(payload.checkpointTimestampMs, 1700000001000);
     assert.ok(Array.isArray(payload.warnings));
     assert.ok(
       payload.warnings.some((entry) =>
@@ -3500,21 +4162,260 @@ test("reviewer-shortlist retries once when the server reports checkpoint_digest_
       )
     );
     assert.equal(shortlistCalls, 2);
+    assert.equal(newCheckpointReads, 2);
+    assert.deepEqual(requestReceiptIds, [requestReceiptId, requestReceiptId]);
+    const requestState = JSON.parse(readFileSync(requestStateFile, "utf8"));
+    assert.equal(requestState.requestBody.checkpointDigest, "checkpoint-new");
+    assert.equal(requestState.checkpoint.sequenceNumber, "43");
+    assert.equal(requestState.checkpoint.timestampMs, 1700000001000);
     const publishBody = JSON.parse(readFileSync(publishBodyOut, "utf8"));
     assert.equal(
       publishBody.reviewerSelectionReceiptId,
-      "receipt-open-1"
+      requestReceiptId
     );
   } finally {
     await mock.close();
   }
 });
 
+test("reviewer-shortlist rejects an API-proposed checkpoint that the selected RPC does not confirm", async () => {
+  const requestReceiptId = "00000000-0000-4000-8000-000000000033";
+  let shortlistCalls = 0;
+  let proposedCheckpointReads = 0;
+  const mock = await startMockServer({
+    "POST /rpc": (request) => {
+      if (request.body?.method === "iota_getLatestCheckpointSequenceNumber") {
+        return {
+          status: 200,
+          body: { jsonrpc: "2.0", id: request.body?.id ?? 1, result: "42" },
+        };
+      }
+      assert.equal(request.body?.method, "iota_getCheckpoint");
+      const sequenceNumber = request.body?.params?.[0];
+      if (sequenceNumber === "43") {
+        proposedCheckpointReads += 1;
+        return {
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: request.body?.id ?? 1,
+            result: {
+              digest: "checkpoint-rpc-43",
+              sequenceNumber: "43",
+              timestampMs: "1700000001000",
+            },
+          },
+        };
+      }
+      assert.equal(sequenceNumber, "42");
+      return {
+        status: 200,
+        body: {
+          jsonrpc: "2.0",
+          id: request.body?.id ?? 1,
+          result: {
+            digest: "checkpoint-42",
+            sequenceNumber: "42",
+            timestampMs: "1700000000000",
+          },
+        },
+      };
+    },
+    "POST /admin/reviewer-selection/shortlist": () => {
+      shortlistCalls += 1;
+      return {
+        status: 409,
+        body: {
+          error: "checkpoint_digest_mismatch",
+          latestCheckpointDigest: "checkpoint-api-43",
+          latestCheckpointSequenceNumber: "43",
+        },
+      };
+    },
+  });
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-checkpoint-proposal-"));
+  const requestStateFile = path.join(tempDir, "request-state.json");
+  const receiptOut = path.join(tempDir, "must-not-write-receipt.json");
+  const publishBodyOut = path.join(tempDir, "must-not-write-publish.json");
+
+  try {
+    const result = await runCli([
+      "reviewer-shortlist",
+      "--api-base",
+      mock.baseUrl,
+      "--rpc-url",
+      `${mock.baseUrl}/rpc`,
+      "--jwt",
+      buildReviewerOperatorJwt(),
+      "--order-id",
+      "order-proposal",
+      "--milestone-id",
+      "milestone-proposal",
+      "--buyer-address",
+      `0x${"1".repeat(64)}`,
+      "--seller-address",
+      `0x${"2".repeat(64)}`,
+      "--escrow-object-id",
+      `0x${"3".repeat(64)}`,
+      "--bond-object-id",
+      `0x${"4".repeat(64)}`,
+      "--request-receipt-id",
+      requestReceiptId,
+      "--request-state-file",
+      requestStateFile,
+      "--receipt-out",
+      receiptOut,
+      "--publish-body-out",
+      publishBodyOut,
+      "--json",
+    ]);
+    assert.equal(result.status, 1);
+    assert.equal(
+      JSON.parse(result.stdout).error,
+      "reviewer_shortlist_checkpoint_mismatch_rpc_mismatch",
+    );
+    assert.equal(shortlistCalls, 1);
+    assert.equal(proposedCheckpointReads, 1);
+    const requestState = JSON.parse(readFileSync(requestStateFile, "utf8"));
+    assert.equal(requestState.checkpoint.digest, "checkpoint-42");
+    assert.equal(requestState.checkpoint.sequenceNumber, "42");
+    assert.equal(requestState.checkpoint.timestampMs, 1700000000000);
+    assert.equal(requestState.requestBody.checkpointDigest, "checkpoint-42");
+    assert.equal(existsSync(receiptOut), false);
+    assert.equal(existsSync(publishBodyOut), false);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("reviewer-shortlist revalidates a same-checkpoint receipt before writing artifacts", async () => {
+  const requestReceiptId = "00000000-0000-4000-8000-000000000034";
+  const reviewers = [
+    `0x${"a".repeat(64)}`,
+    `0x${"b".repeat(64)}`,
+    `0x${"c".repeat(64)}`,
+  ];
+  let checkpointReads = 0;
+  const mock = await startMockServer({
+    "POST /rpc": (request) => {
+      if (request.body?.method === "iota_getLatestCheckpointSequenceNumber") {
+        return {
+          status: 200,
+          body: { jsonrpc: "2.0", id: request.body?.id ?? 1, result: "52" },
+        };
+      }
+      assert.equal(request.body?.method, "iota_getCheckpoint");
+      assert.equal(request.body?.params?.[0], "52");
+      checkpointReads += 1;
+      if (checkpointReads > 1) {
+        return { status: 503, body: { error: "rpc_unavailable_after_shortlist" } };
+      }
+      return {
+        status: 200,
+        body: {
+          jsonrpc: "2.0",
+          id: request.body?.id ?? 1,
+          result: {
+            digest: "checkpoint-52",
+            sequenceNumber: "52",
+            timestampMs: "1700000000000",
+          },
+        },
+      };
+    },
+    "POST /admin/reviewer-selection/shortlist": (request) => ({
+      status: 200,
+      body: {
+        selectionComplete: true,
+        directoryScanTruncated: false,
+        receipt: reviewerSelectionReceipt({
+          scope: "OPEN",
+          receiptId: requestReceiptId,
+          requestBody: request.body,
+          reviewers,
+          orderId: "order-revalidate",
+          milestoneId: "milestone-revalidate",
+          checkpointDigest: "checkpoint-52",
+          checkpointSequenceNumber: "52",
+          checkpointTimestampMs: null,
+        }),
+        publishTarget: {
+          route: "/orders/order-revalidate/milestones/milestone-revalidate/disputes/open",
+          requestPatch: {
+            invitedReviewerAddresses: reviewers,
+            reviewerSelectionReceiptId: requestReceiptId,
+          },
+        },
+        operatorAuthorizationHandoff: reviewerShortlistAuthorizationHandoff({
+          scope: "OPEN",
+          receiptId: requestReceiptId,
+          reviewers,
+          orderId: "order-revalidate",
+          milestoneId: "milestone-revalidate",
+        }),
+      },
+    }),
+  });
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-receipt-revalidate-"));
+  const requestStateFile = path.join(tempDir, "request-state.json");
+  const receiptOut = path.join(tempDir, "must-not-write-receipt.json");
+  const publishBodyOut = path.join(tempDir, "must-not-write-publish.json");
+
+  try {
+    const result = await runCli([
+      "reviewer-shortlist",
+      "--api-base",
+      mock.baseUrl,
+      "--rpc-url",
+      `${mock.baseUrl}/rpc`,
+      "--jwt",
+      buildReviewerOperatorJwt(),
+      "--order-id",
+      "order-revalidate",
+      "--milestone-id",
+      "milestone-revalidate",
+      "--buyer-address",
+      `0x${"1".repeat(64)}`,
+      "--seller-address",
+      `0x${"2".repeat(64)}`,
+      "--escrow-object-id",
+      `0x${"3".repeat(64)}`,
+      "--bond-object-id",
+      `0x${"4".repeat(64)}`,
+      "--request-receipt-id",
+      requestReceiptId,
+      "--request-state-file",
+      requestStateFile,
+      "--receipt-out",
+      receiptOut,
+      "--publish-body-out",
+      publishBodyOut,
+      "--json",
+    ]);
+    assert.equal(result.status, 1);
+    assert.equal(
+      JSON.parse(result.stdout).error,
+      "reviewer_shortlist_receipt_checkpoint_rpc_unavailable",
+    );
+    assert.equal(checkpointReads, 2);
+    const requestState = JSON.parse(readFileSync(requestStateFile, "utf8"));
+    assert.equal(requestState.checkpoint.digest, "checkpoint-52");
+    assert.equal(requestState.requestBody.checkpointDigest, "checkpoint-52");
+    assert.equal(existsSync(receiptOut), false);
+    assert.equal(existsSync(publishBodyOut), false);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("reviewer-shortlist retries transient rpc_unreachable shortlist failures automatically", async () => {
+  const requestReceiptId = "00000000-0000-4000-8000-000000000004";
+  const requestReceiptIds = [];
   let shortlistCalls = 0;
   const mock = await startMockServer({
     "POST /admin/reviewer-selection/shortlist": (request) => {
       shortlistCalls += 1;
+      requestReceiptIds.push(request.body?.receiptId);
       if (shortlistCalls === 1) {
         return {
           status: 502,
@@ -3529,14 +4430,20 @@ test("reviewer-shortlist retries transient rpc_unreachable shortlist failures au
         status: 200,
         body: {
           selectionComplete: true,
-          receipt: {
-            id: "receipt-open-rpc-retry",
-            shortlistedReviewerAddresses: [
+          receipt: reviewerSelectionReceipt({
+            scope: "OPEN",
+            receiptId: requestReceiptId,
+            requestBody: request.body,
+            reviewers: [
               "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-            ]
-          },
+            ],
+            orderId: "order-1",
+            milestoneId: "milestone-1",
+            checkpointDigest: "checkpoint-live",
+            checkpointSequenceNumber: "42",
+          }),
           publishTarget: {
             route: "/orders/order-1/milestones/milestone-1/disputes/open",
             requestPatch: {
@@ -3545,12 +4452,12 @@ test("reviewer-shortlist retries transient rpc_unreachable shortlist failures au
                 "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                 "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
               ],
-              reviewerSelectionReceiptId: "receipt-open-rpc-retry"
+              reviewerSelectionReceiptId: requestReceiptId
             }
           },
           operatorAuthorizationHandoff: reviewerShortlistAuthorizationHandoff({
             scope: "OPEN",
-            receiptId: "receipt-open-rpc-retry",
+            receiptId: requestReceiptId,
             reviewers: [
               "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -3627,13 +4534,17 @@ test("reviewer-shortlist retries transient rpc_unreachable shortlist failures au
       "--rpc-url",
       `${mock.baseUrl}/rpc`,
       "--jwt",
-      buildJwtWithExp(4102444800),
+      buildReviewerOperatorJwt(),
       "--order-id",
       "order-1",
       "--milestone-id",
       "milestone-1",
       "--order-context-file",
       contextFile,
+      "--request-receipt-id",
+      requestReceiptId,
+      "--request-state-file",
+      path.join(tempDir, "request-state.json"),
       "--publish-body-out",
       publishBodyOut,
       "--json"
@@ -3642,6 +4553,7 @@ test("reviewer-shortlist retries transient rpc_unreachable shortlist failures au
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.ok, true);
     assert.equal(shortlistCalls, 2);
+    assert.deepEqual(requestReceiptIds, [requestReceiptId, requestReceiptId]);
     assert.ok(Array.isArray(payload.warnings));
     assert.ok(
       payload.warnings.some((entry) =>
@@ -3649,7 +4561,1232 @@ test("reviewer-shortlist retries transient rpc_unreachable shortlist failures au
       )
     );
     const publishBody = JSON.parse(readFileSync(publishBodyOut, "utf8"));
-    assert.equal(publishBody.reviewerSelectionReceiptId, "receipt-open-rpc-retry");
+    assert.equal(publishBody.reviewerSelectionReceiptId, requestReceiptId);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("reviewer-shortlist rejects invalid scope and OPEN-only request identity options before network access", async () => {
+  const mock = await startMockServer({
+    "POST /rpc": () => ({ status: 500, body: { error: "must_not_read_rpc" } }),
+  });
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-input-guards-"));
+
+  try {
+    const invalidScopeResult = await runCli([
+      "reviewer-shortlist",
+      "--scope",
+      "OPNE",
+      "--api-base",
+      mock.baseUrl,
+      "--rpc-url",
+      `${mock.baseUrl}/rpc`,
+      "--json",
+    ]);
+    assert.equal(invalidScopeResult.status, 1);
+    assert.equal(JSON.parse(invalidScopeResult.stdout).error, "invalid_reviewer_shortlist_scope");
+
+    const missingScopeValueResult = await runCli(["reviewer-shortlist", "--scope", "--json"]);
+    assert.equal(missingScopeValueResult.status, 1);
+    assert.equal(JSON.parse(missingScopeValueResult.stdout).error, "invalid_reviewer_shortlist_scope");
+
+    const missingStateResult = await runCli([
+      "reviewer-shortlist",
+      "--order-id",
+      "order-guard",
+      "--milestone-id",
+      "milestone-guard",
+      "--api-base",
+      mock.baseUrl,
+      "--json",
+    ]);
+    assert.equal(missingStateResult.status, 1);
+    assert.equal(JSON.parse(missingStateResult.stdout).error, "request_state_file_required_for_open");
+
+    for (const [option, value, expectedError] of [
+      ["--reviewer-count", "11", "invalid_reviewer_count"],
+      ["--directory-scan-limit", "5001", "invalid_directory_scan_limit"],
+      ["--min-performance-score", "10001", "invalid_min_performance_score"],
+      ["--min-reputation-score", "10001", "invalid_min_reputation_score"],
+      ["--min-reputation-confidence", "10001", "invalid_min_reputation_confidence"],
+      ["--min-decisions-total", "10001", "invalid_min_decisions_total"],
+      ["--max-noshow-count", "10001", "invalid_max_noshow_count"],
+      ["--max-commit-reveal-failures", "10001", "invalid_max_commit_reveal_failures"],
+    ]) {
+      const boundedResult = await runCli([
+        "reviewer-shortlist",
+        "--request-state-file",
+        path.join(tempDir, `bounds-${option.slice(2)}.json`),
+        option,
+        value,
+        "--api-base",
+        mock.baseUrl,
+        "--json",
+      ]);
+      assert.equal(boundedResult.status, 1);
+      assert.equal(JSON.parse(boundedResult.stdout).error, expectedError);
+    }
+
+    const openResult = await runCli([
+      "reviewer-shortlist",
+      "--api-base",
+      mock.baseUrl,
+      "--rpc-url",
+      `${mock.baseUrl}/rpc`,
+      "--order-id",
+      "order-guard",
+      "--milestone-id",
+      "milestone-guard",
+      "--request-receipt-id",
+      "00000000-0000-4000-8000-00000000000A",
+      "--request-state-file",
+      path.join(tempDir, "invalid-receipt-state.json"),
+      "--json",
+    ]);
+    assert.equal(openResult.status, 1);
+    assert.equal(JSON.parse(openResult.stdout).error, "invalid_request_receipt_id");
+
+    const replacementResult = await runCli([
+      "reviewer-shortlist",
+      "--scope",
+      "REPLACEMENT",
+      "--request-receipt-id",
+      "00000000-0000-4000-8000-000000000005",
+      "--json",
+    ]);
+    assert.equal(replacementResult.status, 1);
+    assert.equal(JSON.parse(replacementResult.stdout).error, "request_receipt_id_open_scope_only");
+
+    const replacementStateResult = await runCli([
+      "reviewer-shortlist",
+      "--scope",
+      "REPLACEMENT",
+      "--request-state-file",
+      "/must-not-read-request-state.json",
+      "--json",
+    ]);
+    assert.equal(replacementStateResult.status, 1);
+    assert.equal(JSON.parse(replacementStateResult.stdout).error, "request_state_file_open_scope_only");
+    assert.equal(mock.requests.length, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("reviewer-shortlist rejects unknown options and unsafe output paths before file or network access", async () => {
+  const mock = await startMockServer({
+    default: () => ({ status: 500, body: { error: "must_not_be_called" } }),
+  });
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-path-guards-"));
+  const collidedPath = path.join(tempDir, "collided.json");
+  const authStatePath = path.join(tempDir, "auth-state.json");
+  const envFilePath = path.join(tempDir, "runtime.env");
+  const contextFilePath = path.join(tempDir, "order-context.json");
+  const contextFileLink = path.join(tempDir, "order-context-link.json");
+  const broadDirectory = path.join(tempDir, "broad");
+  const realDirectory = path.join(tempDir, "real");
+  const linkedDirectory = path.join(tempDir, "linked");
+  mkdirSync(broadDirectory, { mode: 0o700 });
+  mkdirSync(realDirectory, { mode: 0o700 });
+  chmodSync(broadDirectory, 0o755);
+  writeFileSync(authStatePath, '{"sentinel":"auth"}\n', { mode: 0o600 });
+  writeFileSync(envFilePath, "SENTINEL=env\n", { mode: 0o600 });
+  writeFileSync(contextFilePath, '{"sentinel":"context"}\n', { mode: 0o600 });
+  symlinkSync(realDirectory, linkedDirectory, "dir");
+  symlinkSync(contextFilePath, contextFileLink, "file");
+
+  try {
+    const unexpected = await runCli([
+      "reviewer-shortlist",
+      "--request-recipt-id",
+      "00000000-0000-4000-8000-000000000005",
+      "--api-base",
+      mock.baseUrl,
+      "--json",
+    ]);
+    assert.equal(unexpected.status, 1);
+    const unexpectedPayload = JSON.parse(unexpected.stdout);
+    assert.equal(unexpectedPayload.error, "unexpected_options");
+    assert.deepEqual(unexpectedPayload.unexpectedOptions, ["request-recipt-id"]);
+
+    const collision = await runCli([
+      "reviewer-shortlist",
+      "--request-state-file",
+      collidedPath,
+      "--receipt-out",
+      collidedPath,
+      "--api-base",
+      mock.baseUrl,
+      "--json",
+    ]);
+    assert.equal(collision.status, 1);
+    const collisionPayload = JSON.parse(collision.stdout);
+    assert.equal(collisionPayload.error, "reviewer_shortlist_path_collision");
+    assert.deepEqual(collisionPayload.collisionFields, ["requestStateFile", "receiptOut"]);
+    assert.equal(collisionPayload.collisionPath, collidedPath);
+    assert.equal(existsSync(collidedPath), false);
+
+    const authEnvironmentCollision = await runCli(
+      [
+        "reviewer-shortlist",
+        "--request-state-file",
+        path.join(tempDir, "auth-environment-state.json"),
+        "--receipt-out",
+        authStatePath,
+        "--api-base",
+        mock.baseUrl,
+        "--json",
+      ],
+      { CLAWNERA_AUTH_STATE_FILE: authStatePath, CLAWNERA_ENV_FILE: "" },
+    );
+    assert.equal(authEnvironmentCollision.status, 1);
+    const authEnvironmentCollisionPayload = JSON.parse(authEnvironmentCollision.stdout);
+    assert.equal(authEnvironmentCollisionPayload.error, "reviewer_shortlist_path_collision");
+    assert.deepEqual(authEnvironmentCollisionPayload.collisionFields, ["receiptOut", "authStateFile"]);
+    assert.equal(readFileSync(authStatePath, "utf8"), '{"sentinel":"auth"}\n');
+
+    const envEnvironmentCollision = await runCli(
+      [
+        "reviewer-shortlist",
+        "--request-state-file",
+        path.join(tempDir, "env-environment-state.json"),
+        "--publish-body-out",
+        envFilePath,
+        "--api-base",
+        mock.baseUrl,
+        "--json",
+      ],
+      { CLAWNERA_AUTH_STATE_FILE: "", CLAWNERA_ENV_FILE: envFilePath },
+    );
+    assert.equal(envEnvironmentCollision.status, 1);
+    const envEnvironmentCollisionPayload = JSON.parse(envEnvironmentCollision.stdout);
+    assert.equal(envEnvironmentCollisionPayload.error, "reviewer_shortlist_path_collision");
+    assert.deepEqual(envEnvironmentCollisionPayload.collisionFields, ["publishBodyOut", "envFile"]);
+    assert.equal(readFileSync(envFilePath, "utf8"), "SENTINEL=env\n");
+
+    const symlinkAliasCollision = await runCli([
+      "reviewer-shortlist",
+      "--request-state-file",
+      path.join(linkedDirectory, "missing", "shared.json"),
+      "--receipt-out",
+      path.join(realDirectory, "missing", "shared.json"),
+      "--api-base",
+      mock.baseUrl,
+      "--json",
+    ]);
+    assert.equal(symlinkAliasCollision.status, 1);
+    const symlinkAliasCollisionPayload = JSON.parse(symlinkAliasCollision.stdout);
+    assert.equal(symlinkAliasCollisionPayload.error, "reviewer_shortlist_path_collision");
+    assert.deepEqual(symlinkAliasCollisionPayload.collisionFields, ["requestStateFile", "receiptOut"]);
+    assert.equal(existsSync(path.join(realDirectory, "missing")), false);
+
+    const fileSymlinkCollision = await runCli([
+      "reviewer-shortlist",
+      "--request-state-file",
+      path.join(tempDir, "file-symlink-state.json"),
+      "--order-context-file",
+      contextFileLink,
+      "--receipt-out",
+      contextFilePath,
+      "--api-base",
+      mock.baseUrl,
+      "--json",
+    ]);
+    assert.equal(fileSymlinkCollision.status, 1);
+    const fileSymlinkCollisionPayload = JSON.parse(fileSymlinkCollision.stdout);
+    assert.equal(fileSymlinkCollisionPayload.error, "reviewer_shortlist_path_collision");
+    assert.deepEqual(fileSymlinkCollisionPayload.collisionFields, ["receiptOut", "orderContextFile"]);
+    assert.equal(readFileSync(contextFilePath, "utf8"), '{"sentinel":"context"}\n');
+
+    const lockAliasTarget = path.join(tempDir, "lock-alias.json");
+    const lockAliasCollision = await runCli([
+      "reviewer-shortlist",
+      "--request-state-file",
+      `${lockAliasTarget}.lock`,
+      "--receipt-out",
+      lockAliasTarget,
+      "--api-base",
+      mock.baseUrl,
+      "--json",
+    ]);
+    assert.equal(lockAliasCollision.status, 1);
+    const lockAliasCollisionPayload = JSON.parse(lockAliasCollision.stdout);
+    assert.equal(lockAliasCollisionPayload.error, "reviewer_shortlist_path_collision");
+    assert.deepEqual(lockAliasCollisionPayload.collisionFields, ["requestStateFile", "receiptOut"]);
+    assert.equal(existsSync(lockAliasTarget), false);
+    assert.equal(existsSync(`${lockAliasTarget}.lock`), false);
+
+    const broadParent = await runCli([
+      "reviewer-shortlist",
+      "--request-state-file",
+      path.join(broadDirectory, "state.json"),
+      "--api-base",
+      mock.baseUrl,
+      "--json",
+    ]);
+    assert.equal(broadParent.status, 1);
+    assert.equal(
+      JSON.parse(broadParent.stdout).error,
+      "unsafe_reviewer_shortlist_output_directory_mode",
+    );
+    assert.equal(statSync(broadDirectory).mode & 0o777, 0o755);
+    assert.equal(mock.requests.length, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("reviewer-shortlist does not retry an OPEN receipt id conflict or write artifacts", async () => {
+  const requestReceiptId = "00000000-0000-4000-8000-000000000005";
+  let shortlistCalls = 0;
+  const mock = await startMockServer({
+    "POST /rpc": (request) => ({
+      status: 200,
+      body: {
+        jsonrpc: "2.0",
+        id: request.body?.id ?? 1,
+        result:
+          request.body?.method === "iota_getLatestCheckpointSequenceNumber"
+            ? "51"
+            : { digest: "checkpoint-51", sequenceNumber: "51", timestampMs: "1700000000000" },
+      },
+    }),
+    "POST /admin/reviewer-selection/shortlist": (request) => {
+      shortlistCalls += 1;
+      assert.equal(request.body?.receiptId, requestReceiptId);
+      return {
+        status: 409,
+        body: { error: "reviewer_selection_receipt_id_conflict" },
+      };
+    },
+  });
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-receipt-conflict-"));
+  const receiptOut = path.join(tempDir, "must-not-write-receipt.json");
+  const publishBodyOut = path.join(tempDir, "must-not-write-publish.json");
+
+  try {
+    const result = await runCli([
+      "reviewer-shortlist",
+      "--api-base",
+      mock.baseUrl,
+      "--rpc-url",
+      `${mock.baseUrl}/rpc`,
+      "--jwt",
+      buildReviewerOperatorJwt(),
+      "--order-id",
+      "order-conflict",
+      "--milestone-id",
+      "milestone-conflict",
+      "--buyer-address",
+      `0x${"1".repeat(64)}`,
+      "--seller-address",
+      `0x${"2".repeat(64)}`,
+      "--escrow-object-id",
+      `0x${"3".repeat(64)}`,
+      "--bond-object-id",
+      `0x${"4".repeat(64)}`,
+      "--request-receipt-id",
+      requestReceiptId,
+      "--request-state-file",
+      path.join(tempDir, "request-state.json"),
+      "--receipt-out",
+      receiptOut,
+      "--publish-body-out",
+      publishBodyOut,
+      "--json",
+    ]);
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "reviewer_selection_receipt_id_conflict");
+    assert.equal(payload.requestReceiptId, requestReceiptId);
+    assert.equal(shortlistCalls, 1);
+    assert.equal(existsSync(receiptOut), false);
+    assert.equal(existsSync(publishBodyOut), false);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("reviewer-shortlist generates one OPEN receipt id and fails closed on a mismatched response", async () => {
+  const responseReceiptId = "00000000-0000-4000-8000-000000000006";
+  let requestReceiptId = null;
+  const mock = await startMockServer({
+    "POST /rpc": (request) => ({
+      status: 200,
+      body: {
+        jsonrpc: "2.0",
+        id: request.body?.id ?? 1,
+        result:
+          request.body?.method === "iota_getLatestCheckpointSequenceNumber"
+            ? "52"
+            : { digest: "checkpoint-52", sequenceNumber: "52", timestampMs: "1700000000000" },
+      },
+    }),
+    "POST /admin/reviewer-selection/shortlist": (request) => {
+      requestReceiptId = request.body?.receiptId;
+      assert.match(requestReceiptId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+      return {
+        status: 200,
+        body: {
+          selectionComplete: true,
+          directoryScanTruncated: false,
+          receipt: { id: responseReceiptId, shortlistedReviewerAddresses: [] },
+        },
+      };
+    },
+  });
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-receipt-mismatch-"));
+  const receiptOut = path.join(tempDir, "must-not-write-receipt.json");
+  const publishBodyOut = path.join(tempDir, "must-not-write-publish.json");
+
+  try {
+    const result = await runCli([
+      "reviewer-shortlist",
+      "--api-base",
+      mock.baseUrl,
+      "--rpc-url",
+      `${mock.baseUrl}/rpc`,
+      "--jwt",
+      buildReviewerOperatorJwt(),
+      "--order-id",
+      "order-mismatch",
+      "--milestone-id",
+      "milestone-mismatch",
+      "--buyer-address",
+      `0x${"1".repeat(64)}`,
+      "--seller-address",
+      `0x${"2".repeat(64)}`,
+      "--escrow-object-id",
+      `0x${"3".repeat(64)}`,
+      "--bond-object-id",
+      `0x${"4".repeat(64)}`,
+      "--request-receipt-id",
+      "auto",
+      "--request-state-file",
+      path.join(tempDir, "request-state.json"),
+      "--receipt-out",
+      receiptOut,
+      "--publish-body-out",
+      publishBodyOut,
+      "--json",
+    ]);
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.error, "reviewer_shortlist_receipt_id_mismatch");
+    assert.equal(payload.requestReceiptId, requestReceiptId);
+    assert.equal(payload.receiptId, responseReceiptId);
+    assert.equal(payload.receiptOut, null);
+    assert.equal(payload.publishBodyOut, null);
+    assert.equal(existsSync(receiptOut), false);
+    assert.equal(existsSync(publishBodyOut), false);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("reviewer-shortlist binds the full OPEN receipt context before writing artifacts", async () => {
+  const reviewers = [
+    `0x${"a".repeat(64)}`,
+    `0x${"b".repeat(64)}`,
+    `0x${"c".repeat(64)}`,
+  ];
+  let receiptOverrides = {};
+  let advancedCheckpointReads = 0;
+  const mock = await startMockServer({
+    "POST /rpc": (request) => {
+      if (request.body?.method === "iota_getLatestCheckpointSequenceNumber") {
+        return {
+          status: 200,
+          body: { jsonrpc: "2.0", id: request.body?.id ?? 1, result: "52" },
+        };
+      }
+      if (request.body?.method === "iota_getCheckpoint") {
+        const sequenceNumber = request.body?.params?.[0];
+        if (sequenceNumber === "52") {
+          return {
+            status: 200,
+            body: {
+              jsonrpc: "2.0",
+              id: request.body?.id ?? 1,
+              result: { digest: "checkpoint-52", sequenceNumber: "52", timestampMs: "1700000000000" },
+            },
+          };
+        }
+        if (sequenceNumber === "53") {
+          advancedCheckpointReads += 1;
+          return {
+            status: 200,
+            body: {
+              jsonrpc: "2.0",
+              id: request.body?.id ?? 1,
+              result: { digest: "checkpoint-53", sequenceNumber: "53", timestampMs: "1700000001000" },
+            },
+          };
+        }
+      }
+      return { status: 404, body: { error: "unexpected_rpc_request" } };
+    },
+    "POST /admin/reviewer-selection/shortlist": (request) => {
+      const receiptId = request.body?.receiptId;
+      return {
+        status: 200,
+        body: {
+          selectionComplete: true,
+          directoryScanTruncated: false,
+          receipt: reviewerSelectionReceipt({
+            scope: "OPEN",
+            receiptId,
+            requestBody: request.body,
+            reviewers,
+            orderId: "order-bound",
+            milestoneId: "milestone-bound",
+            checkpointDigest: "checkpoint-52",
+            checkpointSequenceNumber: "52",
+            overrides: receiptOverrides,
+          }),
+          publishTarget: {
+            route: "/orders/order-bound/milestones/milestone-bound/disputes/open",
+            requestPatch: {
+              invitedReviewerAddresses: reviewers,
+              reviewerSelectionReceiptId: receiptId,
+            },
+          },
+          operatorAuthorizationHandoff: reviewerShortlistAuthorizationHandoff({
+            scope: "OPEN",
+            receiptId,
+            reviewers,
+            orderId: "order-bound",
+            milestoneId: "milestone-bound",
+          }),
+        },
+      };
+    },
+  });
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-receipt-binding-"));
+  const baseArgs = [
+    "reviewer-shortlist",
+    "--api-base",
+    mock.baseUrl,
+    "--rpc-url",
+    `${mock.baseUrl}/rpc`,
+    "--jwt",
+    buildReviewerOperatorJwt(),
+    "--order-id",
+    "order-bound",
+    "--milestone-id",
+    "milestone-bound",
+    "--buyer-address",
+    `0x${"1".repeat(64)}`,
+    "--seller-address",
+    `0x${"2".repeat(64)}`,
+    "--escrow-object-id",
+    `0x${"3".repeat(64)}`,
+    "--bond-object-id",
+    `0x${"4".repeat(64)}`,
+  ];
+  const invalidCases = [
+    {
+      name: "scope",
+      overrides: { scope: "REPLACEMENT" },
+      error: "reviewer_shortlist_receipt_context_mismatch",
+    },
+    {
+      name: "order",
+      overrides: { orderId: "order-forged" },
+      error: "reviewer_shortlist_receipt_context_mismatch",
+    },
+    {
+      name: "checkpoint",
+      overrides: { checkpointDigest: "checkpoint-forged" },
+      error: "reviewer_shortlist_receipt_checkpoint_mismatch",
+    },
+    {
+      name: "activated",
+      overrides: { activatedAt: "2026-07-13T01:00:00.000Z" },
+      error: "reviewer_shortlist_receipt_already_activated",
+    },
+    {
+      name: "request-hash",
+      overrides: { requestHash: "9".repeat(64) },
+      error: "reviewer_shortlist_receipt_request_hash_mismatch",
+    },
+    {
+      name: "seed-hash",
+      overrides: { seedHash: "9".repeat(64) },
+      error: "reviewer_shortlist_receipt_hash_mismatch",
+    },
+    {
+      name: "candidate-pool-hash",
+      overrides: { candidatePoolHash: "9".repeat(64) },
+      error: "reviewer_shortlist_receipt_hash_mismatch",
+    },
+    {
+      name: "shortlist-hash",
+      overrides: { shortlistHash: "9".repeat(64) },
+      error: "reviewer_shortlist_receipt_hash_mismatch",
+    },
+    {
+      name: "receipt-hash",
+      overrides: { receiptHash: "9".repeat(64) },
+      error: "reviewer_shortlist_receipt_hash_mismatch",
+    },
+    {
+      name: "authenticated-actor",
+      overrides: { createdByActorAddress: `0x${"e".repeat(64)}` },
+      error: "reviewer_shortlist_receipt_actor_mismatch",
+    },
+    {
+      name: "candidate-pool-duplicate",
+      overrides: {
+        candidatePool: [
+          { reviewerAddress: reviewers[0], eligible: true },
+          { reviewerAddress: reviewers[0], eligible: true },
+          { reviewerAddress: reviewers[2], eligible: true },
+        ],
+      },
+      error: "reviewer_shortlist_receipt_candidate_pool_invalid",
+    },
+    {
+      name: "candidate-pool-noncanonical",
+      overrides: {
+        candidatePool: [
+          { reviewerAddress: reviewers[0].toUpperCase().replace("0X", "0x"), eligible: true },
+          { reviewerAddress: reviewers[1], eligible: true },
+          { reviewerAddress: reviewers[2], eligible: true },
+        ],
+      },
+      error: "reviewer_shortlist_receipt_candidate_pool_invalid",
+    },
+    {
+      name: "requested-filters-missing",
+      args: [
+        "--blocked-reviewers",
+        `0x${"d".repeat(64)}`,
+        "--excluded-reviewers",
+        `0x${"e".repeat(64)}`,
+      ],
+      overrides: { blockedReviewerAddresses: [], excludedReviewerAddresses: [] },
+      error: "reviewer_shortlist_receipt_filter_mismatch",
+    },
+    {
+      name: "shortlist-party-conflict",
+      overrides: {
+        shortlistedReviewerAddresses: [`0x${"1".repeat(64)}`, reviewers[1], reviewers[2]],
+      },
+      error: "reviewer_shortlist_receipt_reviewer_conflict",
+    },
+    {
+      name: "shortlist-filter-conflict",
+      overrides: { blockedReviewerAddresses: [reviewers[0]] },
+      error: "reviewer_shortlist_receipt_reviewer_conflict",
+    },
+    {
+      name: "shortlist-duplicate",
+      overrides: { shortlistedReviewerAddresses: [reviewers[0], reviewers[0], reviewers[2]] },
+      error: "reviewer_shortlist_receipt_reviewer_addresses_invalid",
+    },
+    {
+      name: "advanced-checkpoint-digest",
+      overrides: {
+        checkpointDigest: "checkpoint-53-forged",
+        checkpointSequenceNumber: "53",
+        checkpointTimestampMs: 1700000001000,
+      },
+      error: "reviewer_shortlist_receipt_checkpoint_rpc_mismatch",
+    },
+    {
+      name: "advanced-checkpoint-timestamp",
+      overrides: {
+        checkpointDigest: "checkpoint-53",
+        checkpointSequenceNumber: "53",
+        checkpointTimestampMs: 1700000001999,
+      },
+      error: "reviewer_shortlist_receipt_checkpoint_rpc_mismatch",
+    },
+  ];
+
+  try {
+    for (const [index, testCase] of invalidCases.entries()) {
+      receiptOverrides = testCase.overrides;
+      const receiptOut = path.join(tempDir, `${testCase.name}-receipt.json`);
+      const publishBodyOut = path.join(tempDir, `${testCase.name}-publish.json`);
+      const result = await runCli([
+        ...baseArgs,
+        "--request-receipt-id",
+        `00000000-0000-4000-8000-${String(100 + index).padStart(12, "0")}`,
+        "--request-state-file",
+        path.join(tempDir, `${testCase.name}-state.json`),
+        "--receipt-out",
+        receiptOut,
+        "--publish-body-out",
+        publishBodyOut,
+        ...(testCase.args || []),
+        "--json",
+      ]);
+      assert.equal(result.status, 1);
+      assert.equal(JSON.parse(result.stdout).error, testCase.error);
+      assert.equal(existsSync(receiptOut), false);
+      assert.equal(existsSync(publishBodyOut), false);
+    }
+
+    receiptOverrides = {
+      blockedReviewerAddresses: [`0x${"d".repeat(64)}`, `0x${"e".repeat(64)}`],
+      excludedReviewerAddresses: [`0x${"6".repeat(64)}`, `0x${"7".repeat(64)}`],
+    };
+    const expandedFilters = await runCli([
+      ...baseArgs,
+      "--request-receipt-id",
+      "00000000-0000-4000-8000-000000000120",
+      "--request-state-file",
+      path.join(tempDir, "expanded-filters-state.json"),
+      "--receipt-out",
+      path.join(tempDir, "expanded-filters-receipt.json"),
+      "--publish-body-out",
+      path.join(tempDir, "expanded-filters-publish.json"),
+      "--blocked-reviewers",
+      `0x${"d".repeat(64)}`,
+      "--excluded-reviewers",
+      `0x${"6".repeat(64)}`,
+      "--json",
+    ]);
+    assert.equal(expandedFilters.status, 0, expandedFilters.stdout || expandedFilters.stderr);
+
+    receiptOverrides = {
+      checkpointDigest: "checkpoint-53",
+      checkpointSequenceNumber: "53",
+      checkpointTimestampMs: 1700000001000,
+    };
+    const advanced = await runCli([
+      ...baseArgs,
+      "--request-receipt-id",
+      "00000000-0000-4000-8000-000000000104",
+      "--request-state-file",
+      path.join(tempDir, "advanced-state.json"),
+      "--receipt-out",
+      path.join(tempDir, "advanced-receipt.json"),
+      "--publish-body-out",
+      path.join(tempDir, "advanced-publish.json"),
+      "--json",
+    ]);
+    assert.equal(advanced.status, 0);
+    const advancedPayload = JSON.parse(advanced.stdout);
+    assert.equal(advancedPayload.requestedCheckpointDigest, "checkpoint-52");
+    assert.equal(advancedPayload.requestedCheckpointSequenceNumber, "52");
+    assert.equal(advancedPayload.checkpointDigest, "checkpoint-53");
+    assert.equal(advancedPayload.checkpointSequenceNumber, "53");
+    assert.ok(advancedPayload.warnings.some((warning) => /receipt_checkpoint_advanced/.test(warning)));
+    assert.equal(advancedCheckpointReads, 3);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("reviewer-shortlist reuses the exact owner-only OPEN request state across process retries", async () => {
+  const reviewers = [
+    `0x${"a".repeat(64)}`,
+    `0x${"b".repeat(64)}`,
+    `0x${"c".repeat(64)}`,
+  ];
+  const shortlistBodies = [];
+  let latestSequenceReads = 0;
+  const mock = await startMockServer({
+    "POST /rpc": (request) => {
+      if (request.body?.method === "iota_getLatestCheckpointSequenceNumber") {
+        latestSequenceReads += 1;
+        return {
+          status: 200,
+          body: { jsonrpc: "2.0", id: request.body?.id ?? 1, result: latestSequenceReads === 1 ? "61" : "62" },
+        };
+      }
+      const sequenceNumber = request.body?.params?.[0];
+      return {
+        status: 200,
+        body: {
+          jsonrpc: "2.0",
+          id: request.body?.id ?? 1,
+          result: {
+            digest: `checkpoint-${sequenceNumber}`,
+            sequenceNumber,
+            timestampMs: "1700000000000",
+          },
+        },
+      };
+    },
+    "POST /admin/reviewer-selection/shortlist": (request) => {
+      shortlistBodies.push(request.body);
+      if (shortlistBodies.length === 1) {
+        return { status: 500, body: { error: "response_lost_after_commit" } };
+      }
+      const receiptId = request.body?.receiptId;
+      return {
+        status: 200,
+        body: {
+          selectionComplete: true,
+          directoryScanTruncated: false,
+          receipt: reviewerSelectionReceipt({
+            scope: "OPEN",
+            receiptId,
+            requestBody: request.body,
+            reviewers,
+            orderId: "order-replay",
+            milestoneId: "milestone-replay",
+            checkpointDigest: "checkpoint-61",
+            checkpointSequenceNumber: "61",
+          }),
+          publishTarget: {
+            route: "/orders/order-replay/milestones/milestone-replay/disputes/open",
+            requestPatch: {
+              invitedReviewerAddresses: reviewers,
+              reviewerSelectionReceiptId: receiptId,
+            },
+          },
+          operatorAuthorizationHandoff: reviewerShortlistAuthorizationHandoff({
+            scope: "OPEN",
+            receiptId,
+            reviewers,
+            orderId: "order-replay",
+            milestoneId: "milestone-replay",
+          }),
+        },
+      };
+    },
+  });
+  const targetDriftMock = await startMockServer({
+    default: () => ({ status: 500, body: { error: "must_not_contact_drift_target" } }),
+  });
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-process-replay-"));
+  const requestStateFile = path.join(tempDir, "open-request-state.json");
+  const receiptOut = path.join(tempDir, "receipt.json");
+  const publishBodyOut = path.join(tempDir, "publish.json");
+  const baseArgs = [
+    "reviewer-shortlist",
+    "--api-base",
+    mock.baseUrl,
+    "--rpc-url",
+    `${mock.baseUrl}/rpc`,
+    "--jwt",
+    buildReviewerOperatorJwt(),
+    "--order-id",
+    "order-replay",
+    "--milestone-id",
+    "milestone-replay",
+    "--buyer-address",
+    `0x${"1".repeat(64)}`,
+    "--seller-address",
+    `0x${"2".repeat(64)}`,
+    "--escrow-object-id",
+    `0x${"3".repeat(64)}`,
+    "--bond-object-id",
+    `0x${"4".repeat(64)}`,
+    "--request-state-file",
+    requestStateFile,
+    "--receipt-out",
+    receiptOut,
+    "--publish-body-out",
+    publishBodyOut,
+  ];
+
+  try {
+    const first = await runCli([...baseArgs, "--json"]);
+    assert.equal(first.status, 1);
+    const firstPayload = JSON.parse(first.stdout);
+    assert.equal(firstPayload.error, "response_lost_after_commit");
+    assert.equal(firstPayload.requestStateFile, requestStateFile);
+    assert.equal(existsSync(requestStateFile), true);
+    assert.equal(statSync(requestStateFile).mode & 0o777, 0o600);
+    const storedState = JSON.parse(readFileSync(requestStateFile, "utf8"));
+    assert.equal(storedState.format, "clawnera.reviewer-shortlist.open-request.v2");
+    assert.deepEqual(storedState.requestTarget, { apiBase: mock.baseUrl });
+    assert.equal(storedState.requestBody.checkpointDigest, "checkpoint-61");
+    assert.equal(storedState.requestBody.receiptId, firstPayload.requestReceiptId);
+    assert.equal(storedState.publishContext.escrowObjectId, `0x${"3".repeat(64)}`);
+    assert.equal(storedState.publishContext.bondObjectId, `0x${"4".repeat(64)}`);
+
+    const targetDrift = await runCli([
+      ...baseArgs,
+      "--api-base",
+      `${targetDriftMock.baseUrl}/`,
+      "--rpc-url",
+      `${targetDriftMock.baseUrl}/rpc`,
+      "--json",
+    ]);
+    assert.equal(targetDrift.status, 1);
+    const targetDriftPayload = JSON.parse(targetDrift.stdout);
+    assert.equal(targetDriftPayload.error, "reviewer_open_request_target_mismatch");
+    assert.deepEqual(targetDriftPayload.expectedRequestTarget, { apiBase: mock.baseUrl });
+    assert.deepEqual(targetDriftPayload.actualRequestTarget, { apiBase: targetDriftMock.baseUrl });
+    assert.equal(targetDriftMock.requests.length, 0);
+    assert.equal(shortlistBodies.length, 1);
+
+    const drifted = await runCli([...baseArgs, "--reviewer-count", "4", "--json"]);
+    assert.equal(drifted.status, 1);
+    assert.equal(JSON.parse(drifted.stdout).error, "reviewer_open_request_state_mismatch");
+    assert.equal(shortlistBodies.length, 1);
+
+    const receiptDrift = await runCli([
+      ...baseArgs,
+      "--request-receipt-id",
+      "00000000-0000-4000-8000-000000000099",
+      "--json",
+    ]);
+    assert.equal(receiptDrift.status, 1);
+    assert.equal(JSON.parse(receiptDrift.stdout).error, "request_receipt_id_state_mismatch");
+    assert.equal(shortlistBodies.length, 1);
+
+    const publishContextDrift = await runCli([
+      ...baseArgs,
+      "--escrow-object-id",
+      `0x${"5".repeat(64)}`,
+      "--json",
+    ]);
+    assert.equal(publishContextDrift.status, 1);
+    assert.equal(JSON.parse(publishContextDrift.stdout).error, "reviewer_open_request_state_mismatch");
+    assert.equal(shortlistBodies.length, 1);
+
+    const replay = await runCli([...baseArgs, "--json"]);
+    assert.equal(replay.status, 0);
+    const replayPayload = JSON.parse(replay.stdout);
+    assert.equal(replayPayload.requestReceiptId, firstPayload.requestReceiptId);
+    assert.equal(replayPayload.requestStateFile, requestStateFile);
+    assert.equal(replayPayload.checkpointDigest, "checkpoint-61");
+    assert.equal(latestSequenceReads, 1);
+    assert.equal(shortlistBodies.length, 2);
+    assert.deepEqual(shortlistBodies[1], shortlistBodies[0]);
+    assert.equal(existsSync(receiptOut), true);
+    assert.equal(existsSync(publishBodyOut), true);
+  } finally {
+    await mock.close();
+    await targetDriftMock.close();
+  }
+});
+
+test("reviewer-shortlist permits only one concurrent OPEN request-state initializer to POST", async () => {
+  const reviewers = [
+    `0x${"a".repeat(64)}`,
+    `0x${"b".repeat(64)}`,
+    `0x${"c".repeat(64)}`,
+  ];
+  const shortlistBodies = [];
+  let latestSequenceReads = 0;
+  let releaseLatestSequenceReads;
+  const latestSequenceBarrier = new Promise((resolve) => {
+    releaseLatestSequenceReads = resolve;
+  });
+  const mock = await startMockServer({
+    "POST /rpc": async (request) => {
+      if (request.body?.method === "iota_getLatestCheckpointSequenceNumber") {
+        latestSequenceReads += 1;
+        if (latestSequenceReads === 2) {
+          releaseLatestSequenceReads();
+        }
+        await latestSequenceBarrier;
+        return {
+          status: 200,
+          body: { jsonrpc: "2.0", id: request.body?.id ?? 1, result: "71" },
+        };
+      }
+      assert.equal(request.body?.method, "iota_getCheckpoint");
+      return {
+        status: 200,
+        body: {
+          jsonrpc: "2.0",
+          id: request.body?.id ?? 1,
+          result: { digest: "checkpoint-71", sequenceNumber: "71", timestampMs: "1700000000000" },
+        },
+      };
+    },
+    "POST /admin/reviewer-selection/shortlist": (request) => {
+      shortlistBodies.push(request.body);
+      const receiptId = request.body?.receiptId;
+      return {
+        status: 200,
+        body: {
+          selectionComplete: true,
+          directoryScanTruncated: false,
+          receipt: reviewerSelectionReceipt({
+            scope: "OPEN",
+            receiptId,
+            requestBody: request.body,
+            reviewers,
+            orderId: "order-concurrent",
+            milestoneId: "milestone-concurrent",
+            checkpointDigest: "checkpoint-71",
+            checkpointSequenceNumber: "71",
+          }),
+          publishTarget: {
+            route: "/orders/order-concurrent/milestones/milestone-concurrent/disputes/open",
+            requestPatch: {
+              invitedReviewerAddresses: reviewers,
+              reviewerSelectionReceiptId: receiptId,
+            },
+          },
+          operatorAuthorizationHandoff: reviewerShortlistAuthorizationHandoff({
+            scope: "OPEN",
+            receiptId,
+            reviewers,
+            orderId: "order-concurrent",
+            milestoneId: "milestone-concurrent",
+          }),
+        },
+      };
+    },
+  });
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-concurrent-init-"));
+  const requestStateFile = path.join(tempDir, "request-state.json");
+  const baseArgs = [
+    "reviewer-shortlist",
+    "--api-base",
+    mock.baseUrl,
+    "--rpc-url",
+    `${mock.baseUrl}/rpc`,
+    "--jwt",
+    buildReviewerOperatorJwt(),
+    "--order-id",
+    "order-concurrent",
+    "--milestone-id",
+    "milestone-concurrent",
+    "--buyer-address",
+    `0x${"1".repeat(64)}`,
+    "--seller-address",
+    `0x${"2".repeat(64)}`,
+    "--escrow-object-id",
+    `0x${"3".repeat(64)}`,
+    "--bond-object-id",
+    `0x${"4".repeat(64)}`,
+    "--request-state-file",
+    requestStateFile,
+  ];
+  const firstReceiptId = "00000000-0000-4000-8000-000000000071";
+  const secondReceiptId = "00000000-0000-4000-8000-000000000072";
+
+  try {
+    const results = await Promise.all([
+      runCli([
+        ...baseArgs,
+        "--request-receipt-id",
+        firstReceiptId,
+        "--receipt-out",
+        path.join(tempDir, "receipt-a.json"),
+        "--publish-body-out",
+        path.join(tempDir, "publish-a.json"),
+        "--json",
+      ]),
+      runCli([
+        ...baseArgs,
+        "--request-receipt-id",
+        secondReceiptId,
+        "--receipt-out",
+        path.join(tempDir, "receipt-b.json"),
+        "--publish-body-out",
+        path.join(tempDir, "publish-b.json"),
+        "--json",
+      ]),
+    ]);
+    assert.deepEqual(results.map((result) => result.status).sort(), [0, 1]);
+    const payloads = results.map((result) => JSON.parse(result.stdout));
+    const failed = payloads.find((payload) => !payload.ok);
+    const succeeded = payloads.find((payload) => payload.ok);
+    assert.equal(failed.error, "reviewer_open_request_state_initialized_concurrently");
+    assert.ok(succeeded);
+    assert.equal(latestSequenceReads, 2);
+    assert.equal(shortlistBodies.length, 1);
+    assert.equal(shortlistBodies[0].receiptId, succeeded.requestReceiptId);
+    const storedState = JSON.parse(readFileSync(requestStateFile, "utf8"));
+    assert.equal(storedState.requestBody.receiptId, succeeded.requestReceiptId);
+    assert.deepEqual(storedState.requestTarget, { apiBase: mock.baseUrl });
+  } finally {
+    await mock.close();
+  }
+});
+
+test("reviewer-shortlist never rolls back a concurrently advanced OPEN checkpoint state", async () => {
+  const requestReceiptId = "00000000-0000-4000-8000-000000000073";
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-checkpoint-cas-"));
+  const requestStateFile = path.join(tempDir, "request-state.json");
+  const receiptOut = path.join(tempDir, "must-not-write-receipt.json");
+  const publishBodyOut = path.join(tempDir, "must-not-write-publish.json");
+  let shortlistCalls = 0;
+  const mock = await startMockServer({
+    "POST /rpc": (request) => {
+      const sequenceNumber = request.body?.params?.[0];
+      return {
+        status: 200,
+        body: {
+          jsonrpc: "2.0",
+          id: request.body?.id ?? 1,
+          result:
+            request.body?.method === "iota_getLatestCheckpointSequenceNumber"
+              ? "71"
+              : sequenceNumber === "72"
+                ? { digest: "checkpoint-72", sequenceNumber: "72", timestampMs: "1700000001000" }
+                : { digest: "checkpoint-71", sequenceNumber: "71", timestampMs: "1700000000000" },
+        },
+      };
+    },
+    "POST /admin/reviewer-selection/shortlist": () => {
+      shortlistCalls += 1;
+      const advancedState = JSON.parse(readFileSync(requestStateFile, "utf8"));
+      advancedState.checkpoint = {
+        digest: "checkpoint-73",
+        sequenceNumber: "73",
+        timestampMs: null,
+      };
+      advancedState.requestBody.checkpointDigest = "checkpoint-73";
+      writeFileSync(requestStateFile, `${JSON.stringify(advancedState, null, 2)}\n`, { mode: 0o600 });
+      return {
+        status: 409,
+        body: {
+          error: "checkpoint_digest_mismatch",
+          latestCheckpointDigest: "checkpoint-72",
+          latestCheckpointSequenceNumber: "72",
+        },
+      };
+    },
+  });
+
+  try {
+    const result = await runCli([
+      "reviewer-shortlist",
+      "--api-base",
+      mock.baseUrl,
+      "--rpc-url",
+      `${mock.baseUrl}/rpc`,
+      "--jwt",
+      buildReviewerOperatorJwt(),
+      "--order-id",
+      "order-cas",
+      "--milestone-id",
+      "milestone-cas",
+      "--buyer-address",
+      `0x${"1".repeat(64)}`,
+      "--seller-address",
+      `0x${"2".repeat(64)}`,
+      "--escrow-object-id",
+      `0x${"3".repeat(64)}`,
+      "--bond-object-id",
+      `0x${"4".repeat(64)}`,
+      "--request-receipt-id",
+      requestReceiptId,
+      "--request-state-file",
+      requestStateFile,
+      "--receipt-out",
+      receiptOut,
+      "--publish-body-out",
+      publishBodyOut,
+      "--json",
+    ]);
+    assert.equal(result.status, 1);
+    assert.equal(JSON.parse(result.stdout).error, "reviewer_open_request_state_update_conflict");
+    assert.equal(shortlistCalls, 1);
+    const storedState = JSON.parse(readFileSync(requestStateFile, "utf8"));
+    assert.equal(storedState.checkpoint.digest, "checkpoint-73");
+    assert.equal(storedState.requestBody.checkpointDigest, "checkpoint-73");
+    assert.equal(existsSync(receiptOut), false);
+    assert.equal(existsSync(publishBodyOut), false);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("reviewer-shortlist rejects checkpoint digests containing whitespace or control characters", async () => {
+  let rejectInitialDigest = true;
+  let shortlistCalls = 0;
+  const mock = await startMockServer({
+    "POST /rpc": (request) => ({
+      status: 200,
+      body: {
+        jsonrpc: "2.0",
+        id: request.body?.id ?? 1,
+        result:
+          request.body?.method === "iota_getLatestCheckpointSequenceNumber"
+            ? "81"
+            : {
+                digest: rejectInitialDigest ? "checkpoint-81 " : "checkpoint-81",
+                sequenceNumber: "81",
+                timestampMs: "1700000000000",
+              },
+      },
+    }),
+    "POST /admin/reviewer-selection/shortlist": () => {
+      shortlistCalls += 1;
+      return {
+        status: 409,
+        body: {
+          error: "checkpoint_digest_mismatch",
+          latestCheckpointDigest: "checkpoint-82\u0001forged",
+          latestCheckpointSequenceNumber: "82",
+        },
+      };
+    },
+  });
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-reviewer-checkpoint-digest-"));
+  const initialStateFile = path.join(tempDir, "must-not-write-initial-state.json");
+  const mismatchStateFile = path.join(tempDir, "mismatch-state.json");
+  const receiptOut = path.join(tempDir, "must-not-write-receipt.json");
+  const publishBodyOut = path.join(tempDir, "must-not-write-publish.json");
+  const baseArgs = [
+    "reviewer-shortlist",
+    "--api-base",
+    mock.baseUrl,
+    "--rpc-url",
+    `${mock.baseUrl}/rpc`,
+    "--jwt",
+    buildReviewerOperatorJwt(),
+    "--order-id",
+    "order-invalid-checkpoint",
+    "--milestone-id",
+    "milestone-invalid-checkpoint",
+    "--buyer-address",
+    `0x${"1".repeat(64)}`,
+    "--seller-address",
+    `0x${"2".repeat(64)}`,
+    "--escrow-object-id",
+    `0x${"3".repeat(64)}`,
+    "--bond-object-id",
+    `0x${"4".repeat(64)}`,
+    "--receipt-out",
+    receiptOut,
+    "--publish-body-out",
+    publishBodyOut,
+  ];
+
+  try {
+    const invalidInitial = await runCli([
+      ...baseArgs,
+      "--request-receipt-id",
+      "00000000-0000-4000-8000-000000000081",
+      "--request-state-file",
+      initialStateFile,
+      "--json",
+    ]);
+    assert.equal(invalidInitial.status, 1);
+    assert.equal(JSON.parse(invalidInitial.stdout).error, "invalid_checkpoint_payload");
+    assert.equal(shortlistCalls, 0);
+    assert.equal(existsSync(initialStateFile), false);
+    assert.equal(existsSync(receiptOut), false);
+    assert.equal(existsSync(publishBodyOut), false);
+
+    rejectInitialDigest = false;
+    const invalidMismatch = await runCli([
+      ...baseArgs,
+      "--request-receipt-id",
+      "00000000-0000-4000-8000-000000000082",
+      "--request-state-file",
+      mismatchStateFile,
+      "--json",
+    ]);
+    assert.equal(invalidMismatch.status, 1);
+    assert.equal(
+      JSON.parse(invalidMismatch.stdout).error,
+      "invalid_reviewer_checkpoint_mismatch_payload",
+    );
+    assert.equal(shortlistCalls, 1);
+    const storedState = JSON.parse(readFileSync(mismatchStateFile, "utf8"));
+    assert.equal(storedState.checkpoint.digest, "checkpoint-81");
+    assert.equal(storedState.requestBody.checkpointDigest, "checkpoint-81");
+    assert.equal(existsSync(receiptOut), false);
+    assert.equal(existsSync(publishBodyOut), false);
   } finally {
     await mock.close();
   }
@@ -3660,16 +5797,7 @@ test("reviewer-shortlist replacement continues when dispute pre-read is forbidde
   const mock = await startMockServer({
     "GET /policy/fees": () => ({
       status: 200,
-      body: {
-        policy: {
-          chainConfig: {
-            marketplacePackageId: "0x1111111111111111111111111111111111111111111111111111111111111111",
-            escrowFeeConfigObjectId: "0x9999999999999999999999999999999999999999999999999999999999999999",
-            governanceConfigObjectId: "0x8888888888888888888888888888888888888888888888888888888888888888",
-            disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
-          }
-        }
-      }
+      body: buildFreshMarketplacePolicyResponse(),
     }),
     "GET /reviewers/me/metrics": () => ({
       status: 200,
@@ -3743,8 +5871,9 @@ test("reviewer-shortlist replacement continues when dispute pre-read is forbidde
       throw new Error(`unexpected_rpc_method:${String(method)}`);
     },
     "POST /admin/reviewer-selection/shortlist": (request) => {
-      assert.equal(request.headers.authorization, "Bearer test-jwt");
+      assert.equal(request.headers.authorization, `Bearer ${buildReviewerOperatorJwt()}`);
       assert.equal(request.body?.scope, "REPLACEMENT");
+      assert.equal(request.body?.receiptId, undefined);
       assert.equal(request.body?.disputeCaseObjectId, disputeCaseObjectId);
       assert.equal(request.body?.reviewerCount, 3);
       return {
@@ -3752,14 +5881,20 @@ test("reviewer-shortlist replacement continues when dispute pre-read is forbidde
         body: {
           selectionComplete: true,
           directoryScanTruncated: false,
-          receipt: {
-            id: "receipt-replacement-1",
-            shortlistedReviewerAddresses: [
+          receipt: reviewerSelectionReceipt({
+            scope: "REPLACEMENT",
+            receiptId: "00000000-0000-4000-8000-000000000091",
+            requestBody: request.body,
+            reviewers: [
               "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-            ]
-          },
+            ],
+            disputeCaseObjectId,
+            checkpointDigest: "checkpoint-replacement",
+            checkpointSequenceNumber: "51",
+            checkpointTimestampMs: 1773917000000,
+          }),
           publishTarget: {
             route: `/disputes/${disputeCaseObjectId}/reviewers/replace`,
             requestPatch: {
@@ -3768,12 +5903,12 @@ test("reviewer-shortlist replacement continues when dispute pre-read is forbidde
                 "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                 "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
               ],
-              reviewerSelectionReceiptId: "receipt-replacement-1"
+              reviewerSelectionReceiptId: "00000000-0000-4000-8000-000000000091"
             }
           },
           operatorAuthorizationHandoff: reviewerShortlistAuthorizationHandoff({
             scope: "REPLACEMENT",
-            receiptId: "receipt-replacement-1",
+            receiptId: "00000000-0000-4000-8000-000000000091",
             reviewers: [
               "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -3798,14 +5933,14 @@ test("reviewer-shortlist replacement continues when dispute pre-read is forbidde
       "--rpc-url",
       `${mock.baseUrl}/rpc`,
       "--jwt",
-      "test-jwt",
+      buildReviewerOperatorJwt(),
       "--json"
     ]);
     assert.equal(result.status, 0);
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.ok, true);
     assert.equal(payload.scope, "REPLACEMENT");
-    assert.equal(payload.receiptId, "receipt-replacement-1");
+    assert.equal(payload.receiptId, "00000000-0000-4000-8000-000000000091");
     assert.ok(Array.isArray(payload.warnings));
     assert.ok(
       payload.warnings.some((entry) =>
@@ -3823,7 +5958,7 @@ test("reviewer-shortlist replacement continues when dispute pre-read is forbidde
         "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
       ],
-      reviewerSelectionReceiptId: "receipt-replacement-1"
+      reviewerSelectionReceiptId: "00000000-0000-4000-8000-000000000091"
     });
   } finally {
     await mock.close();
@@ -3840,16 +5975,7 @@ test("reviewer-shortlist replacement retries dispute pre-read with publish auth 
   const mock = await startMockServer({
     "GET /policy/fees": () => ({
       status: 200,
-      body: {
-        policy: {
-          chainConfig: {
-            marketplacePackageId: "0x1111111111111111111111111111111111111111111111111111111111111111",
-            escrowFeeConfigObjectId: "0x9999999999999999999999999999999999999999999999999999999999999999",
-            governanceConfigObjectId: "0x8888888888888888888888888888888888888888888888888888888888888888",
-            disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
-          }
-        }
-      }
+      body: buildFreshMarketplacePolicyResponse(),
     }),
     "GET /reviewers/me/metrics": () => ({
       status: 200,
@@ -3863,7 +5989,7 @@ test("reviewer-shortlist replacement retries dispute pre-read with publish auth 
     }),
     [`GET /disputes/${disputeCaseObjectId}`]: (request) => {
       disputeReadCount += 1;
-      if (request.headers.authorization === "Bearer test-jwt") {
+      if (request.headers.authorization === `Bearer ${buildReviewerOperatorJwt()}`) {
         return {
           status: 403,
           body: {
@@ -3935,19 +6061,25 @@ test("reviewer-shortlist replacement retries dispute pre-read with publish auth 
       }
       throw new Error(`unexpected_rpc_method:${String(method)}`);
     },
-    "POST /admin/reviewer-selection/shortlist": () => ({
+    "POST /admin/reviewer-selection/shortlist": (request) => ({
       status: 200,
       body: {
         selectionComplete: true,
         directoryScanTruncated: false,
-        receipt: {
-          id: "receipt-replacement-3",
-          shortlistedReviewerAddresses: [
+        receipt: reviewerSelectionReceipt({
+          scope: "REPLACEMENT",
+          receiptId: "00000000-0000-4000-8000-000000000093",
+          requestBody: request.body,
+          reviewers: [
             "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-          ]
-        },
+          ],
+          disputeCaseObjectId,
+          checkpointDigest: "checkpoint-replacement",
+          checkpointSequenceNumber: "51",
+          checkpointTimestampMs: 1773917000000,
+        }),
         publishTarget: {
           route: `/disputes/${disputeCaseObjectId}/reviewers/replace`,
           requestPatch: {
@@ -3956,12 +6088,12 @@ test("reviewer-shortlist replacement retries dispute pre-read with publish auth 
               "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
             ],
-            reviewerSelectionReceiptId: "receipt-replacement-3"
+            reviewerSelectionReceiptId: "00000000-0000-4000-8000-000000000093"
           }
         },
         operatorAuthorizationHandoff: reviewerShortlistAuthorizationHandoff({
           scope: "REPLACEMENT",
-          receiptId: "receipt-replacement-3",
+          receiptId: "00000000-0000-4000-8000-000000000093",
           reviewers: [
             "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -3995,7 +6127,7 @@ test("reviewer-shortlist replacement retries dispute pre-read with publish auth 
       "--rpc-url",
       `${mock.baseUrl}/rpc`,
       "--jwt",
-      "test-jwt",
+      buildReviewerOperatorJwt(),
       "--publish-auth-state-file",
       publishAuthStateFile,
       "--json"
@@ -4019,16 +6151,7 @@ test("reviewer-shortlist replacement surfaces wait-until warning when the live r
   const mock = await startMockServer({
     "GET /policy/fees": () => ({
       status: 200,
-      body: {
-        policy: {
-          chainConfig: {
-            marketplacePackageId: "0x1111111111111111111111111111111111111111111111111111111111111111",
-            escrowFeeConfigObjectId: "0x9999999999999999999999999999999999999999999999999999999999999999",
-            governanceConfigObjectId: "0x8888888888888888888888888888888888888888888888888888888888888888",
-            disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333"
-          }
-        }
-      }
+      body: buildFreshMarketplacePolicyResponse(),
     }),
     "GET /reviewers/me/metrics": () => ({
       status: 200,
@@ -4102,19 +6225,25 @@ test("reviewer-shortlist replacement surfaces wait-until warning when the live r
       }
       throw new Error(`unexpected_rpc_method:${String(method)}`);
     },
-    "POST /admin/reviewer-selection/shortlist": () => ({
+    "POST /admin/reviewer-selection/shortlist": (request) => ({
       status: 200,
       body: {
         selectionComplete: true,
         directoryScanTruncated: false,
-        receipt: {
-          id: "receipt-replacement-2",
-          shortlistedReviewerAddresses: [
+        receipt: reviewerSelectionReceipt({
+          scope: "REPLACEMENT",
+          receiptId: "00000000-0000-4000-8000-000000000092",
+          requestBody: request.body,
+          reviewers: [
             "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-          ]
-        },
+          ],
+          disputeCaseObjectId,
+          checkpointDigest: "checkpoint-replacement",
+          checkpointSequenceNumber: "51",
+          checkpointTimestampMs: 1773917000000,
+        }),
         publishTarget: {
           route: `/disputes/${disputeCaseObjectId}/reviewers/replace`,
           requestPatch: {
@@ -4123,12 +6252,12 @@ test("reviewer-shortlist replacement surfaces wait-until warning when the live r
               "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
             ],
-            reviewerSelectionReceiptId: "receipt-replacement-2"
+            reviewerSelectionReceiptId: "00000000-0000-4000-8000-000000000092"
           }
         },
         operatorAuthorizationHandoff: reviewerShortlistAuthorizationHandoff({
           scope: "REPLACEMENT",
-          receiptId: "receipt-replacement-2",
+          receiptId: "00000000-0000-4000-8000-000000000092",
           reviewers: [
             "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -4152,7 +6281,7 @@ test("reviewer-shortlist replacement surfaces wait-until warning when the live r
       "--rpc-url",
       `${mock.baseUrl}/rpc`,
       "--jwt",
-      "test-jwt",
+      buildReviewerOperatorJwt(),
       "--json"
     ]);
     assert.equal(result.status, 0);
@@ -5059,8 +7188,8 @@ test("listing-cancel posts the canonical cancel route", async () => {
     assert.equal(payload.listingId, "listing-1");
     assert.equal(payload.listingStatus, "CANCELLED");
     assert.equal(payload.response.seen, null);
-    assert.equal(mock.requests[0]?.method, "POST");
-    assert.equal(mock.requests[0]?.url, "/listings/listing-1/cancel");
+    const mutation = mock.requests.find((request) => request.method === "POST");
+    assert.equal(mutation?.url, "/listings/listing-1/cancel");
   } finally {
     await mock.close();
   }
@@ -5163,8 +7292,8 @@ test("listing-renew accepts an ISO timestamp and posts expiresAtMs to the canoni
     assert.equal(payload.expiresAt, renewIso);
     assert.equal(payload.expiresAtMs, renewMs);
     assert.deepEqual(payload.response.seen, { expiresAtMs: renewMs });
-    assert.equal(mock.requests[0]?.method, "POST");
-    assert.equal(mock.requests[0]?.url, "/listings/listing-1/renew");
+    const mutation = mock.requests.find((request) => request.method === "POST");
+    assert.equal(mutation?.url, "/listings/listing-1/renew");
   } finally {
     await mock.close();
   }
@@ -5923,9 +8052,9 @@ test("milestone-submit-byo prints mailbox-handshake recovery for mailbox-gated s
     assert.match(result.stderr, /milestone_submit_byo_error: order_mailbox_required/);
     assert.match(result.stderr, /cause=order_mailbox_required/);
     assert.match(result.stderr, /next_hint=clawnera-help recipe mailbox-handshake/);
-    assert.match(result.stderr, /next_init=clawnera-help tx-plan-dry-run POST \/orders\/<orderId>\/mailbox\/init-plan/);
+    assert.match(result.stderr, /next_init=clawnera-help write-gate --auth-state-file <file> && clawnera-help tx-plan-dry-run POST \/orders\/<orderId>\/mailbox\/init-plan/);
     assert.match(result.stderr, /bind_source=execute the reviewed canonical plan in a chain-native client/);
-    assert.match(result.stderr, /next_bind=clawnera-help request POST \/orders\/<orderId>\/mailbox/);
+    assert.match(result.stderr, /next_bind=clawnera-help write-gate --auth-state-file <file> && clawnera-help request POST \/orders\/<orderId>\/mailbox/);
   } finally {
     await mock.close();
   }
@@ -6186,7 +8315,10 @@ test("bid-create prints re-ack guidance for business acknowledgement version mis
     assert.match(result.stderr, /bid_create_error: business_acknowledgement_version_mismatch/);
     assert.match(result.stderr, /cause=stored_professional_acknowledgement_is_outdated/);
     assert.match(result.stderr, /GET \/compliance\/me/);
-    assert.match(result.stderr, /retry POST \/compliance\/me\/use-context with current documentVersions from GET \/compliance\/me/);
+    assert.match(
+      result.stderr,
+      /clawnera-help write-gate --auth-state-file <request-seller-auth-state-file> && clawnera-help request POST \/compliance\/me\/use-context --auth-state-file <request-seller-auth-state-file>/,
+    );
   } finally {
     await mock.close();
   }
@@ -6385,7 +8517,8 @@ test("request can select a nested body payload from a body file", async () => {
     assert.deepEqual(payload.response.seen, {
       commitHashHex: "aa".repeat(32)
     });
-    assert.deepEqual(mock.requests[0].body, {
+    const mutation = mock.requests.find((request) => request.method === "POST");
+    assert.deepEqual(mutation?.body, {
       commitHashHex: "aa".repeat(32)
     });
   } finally {
@@ -6416,7 +8549,10 @@ test("bid-accept prints buyer-side guidance on buyer_mismatch", async () => {
     assert.equal(result.status, 1);
     assert.match(result.stderr, /bid_accept_error: buyer_mismatch/);
     assert.match(result.stderr, /cause=bid_accept_is_buyer_side/);
-    assert.match(result.stderr, /for OFFER listings, rerun bid-accept from the chosen buyer wallet/);
+    assert.match(
+      result.stderr,
+      /for OFFER listings, clawnera-help write-gate --auth-state-file <chosen-buyer-auth-state-file> && clawnera-help bid-accept --auth-state-file <chosen-buyer-auth-state-file>/,
+    );
   } finally {
     await mock.close();
   }
@@ -6715,7 +8851,9 @@ test("tx-plan-dry-run prints top-level finalize wait hints in non-json mode", as
     assert.match(result.stderr, /tx_plan_dry_run_error: dispute_challenge_window_open/);
     assert.match(result.stderr, new RegExp(`wait_until=${new Date(challengeDeadlineMs).toISOString().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
     assert.match(result.stderr, /retry_after_ms=30/);
-    assert.match(result.stderr, /next_command=clawnera-help tx-plan-dry-run POST '\/disputes\/.*\/finalize'/);
+    assert.match(result.stderr, /next_command=clawnera-help write-gate --api-base .* && clawnera-help tx-plan-dry-run POST '\/disputes\/.*\/finalize'/);
+    const nextCommand = result.stderr.match(/^next_command=(.+)$/m)?.[1] || "";
+    assert.equal(nextCommand.split(mock.baseUrl).length - 1, 2);
     assert.equal(finalizeCalls, 2);
   } finally {
     await mock.close();
@@ -7007,6 +9145,7 @@ test("tx-plan-dry-run stops when pendingMetricsClaimContext is unavailable", asy
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.error, "claim_metrics_context_unavailable");
     assert.match(payload.hint, /GET \/reviewers\/me\/metrics/);
+    assert.match(payload.hint, /clawnera-help write-gate --auth-state-file <reviewer-auth-state-file> && clawnera-help tx-plan-dry-run POST/);
     assert.equal(claimCalls, 0);
     assert.equal(inviteReads, 0);
   } finally {
@@ -7885,21 +10024,14 @@ test("reviewer-register stops before plan creation when the transport key readba
       body: {
         registered: false,
         runtime: {
-          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
-          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+          reviewerRegistryObjectId: WRITE_GATE_OBJECT_IDS.reviewerRegistryObjectId,
+          disputeQuorumConfigObjectId: WRITE_GATE_OBJECT_IDS.disputeQuorumConfigObjectId,
         },
       },
     }),
     "GET /policy/fees": () => ({
       status: 200,
-      body: {
-        policy: {
-          chainConfig: {
-            marketplacePackageId: "0x1111111111111111111111111111111111111111111111111111111111111111",
-            disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
-          },
-        },
-      },
+      body: buildFreshMarketplacePolicyResponse(),
     }),
     [`GET /users/${actorAddress}/key-agreement?keyVersion=1`]: () => ({
       status: 404,
@@ -7926,8 +10058,8 @@ test("reviewer-register stops before plan creation when the transport key readba
             id: request.body?.id ?? 1,
             result: {
               data: {
-                objectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
-                type: "0x1111111111111111111111111111111111111111111111111111111111111111::dispute_quorum::DisputeQuorumConfig",
+                objectId: WRITE_GATE_OBJECT_IDS.disputeQuorumConfigObjectId,
+                type: `${WRITE_GATE_PACKAGE_IDS.settlement}::dispute_quorum::DisputeQuorumConfig`,
                 previousTransaction: "init-reviewer-registry-1",
                 content: {
                   fields: {
@@ -8043,21 +10175,14 @@ test("reviewer-update stops before plan creation when the rotated transport key 
       body: {
         registered: true,
         runtime: {
-          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
-          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+          reviewerRegistryObjectId: WRITE_GATE_OBJECT_IDS.reviewerRegistryObjectId,
+          disputeQuorumConfigObjectId: WRITE_GATE_OBJECT_IDS.disputeQuorumConfigObjectId,
         },
       },
     }),
     "GET /policy/fees": () => ({
       status: 200,
-      body: {
-        policy: {
-          chainConfig: {
-            marketplacePackageId: "0x1111111111111111111111111111111111111111111111111111111111111111",
-            disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
-          },
-        },
-      },
+      body: buildFreshMarketplacePolicyResponse(),
     }),
     [`GET /users/${actorAddress}/key-agreement?keyVersion=2`]: () => ({
       status: 404,
@@ -8084,8 +10209,8 @@ test("reviewer-update stops before plan creation when the rotated transport key 
             id: request.body?.id ?? 1,
             result: {
               data: {
-                objectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
-                type: "0x1111111111111111111111111111111111111111111111111111111111111111::dispute_quorum::DisputeQuorumConfig",
+                objectId: WRITE_GATE_OBJECT_IDS.disputeQuorumConfigObjectId,
+                type: `${WRITE_GATE_PACKAGE_IDS.settlement}::dispute_quorum::DisputeQuorumConfig`,
                 previousTransaction: "init-reviewer-registry-1",
                 content: {
                   fields: {
@@ -8185,21 +10310,14 @@ test("reviewer-register auto-resolves the latest non-expired transport key when 
       body: {
         registered: false,
         runtime: {
-          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
-          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+          reviewerRegistryObjectId: WRITE_GATE_OBJECT_IDS.reviewerRegistryObjectId,
+          disputeQuorumConfigObjectId: WRITE_GATE_OBJECT_IDS.disputeQuorumConfigObjectId,
         },
       },
     }),
     "GET /policy/fees": () => ({
       status: 200,
-      body: {
-        policy: {
-          chainConfig: {
-            marketplacePackageId: "0x1111111111111111111111111111111111111111111111111111111111111111",
-            disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
-          },
-        },
-      },
+      body: buildFreshMarketplacePolicyResponse(),
     }),
     [`GET /users/${actorAddress}/key-agreement?keyVersion=1`]: () => {
       requestedKeyAgreementPaths.push(`/users/${actorAddress}/key-agreement?keyVersion=1`);
@@ -8264,8 +10382,8 @@ test("reviewer-register auto-resolves the latest non-expired transport key when 
             id: request.body?.id ?? 1,
             result: {
               data: {
-                objectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
-                type: "0x1111111111111111111111111111111111111111111111111111111111111111::dispute_quorum::DisputeQuorumConfig",
+                objectId: WRITE_GATE_OBJECT_IDS.disputeQuorumConfigObjectId,
+                type: `${WRITE_GATE_PACKAGE_IDS.settlement}::dispute_quorum::DisputeQuorumConfig`,
                 previousTransaction: "init-reviewer-registry-1",
                 content: {
                   fields: {
@@ -8392,21 +10510,14 @@ test("reviewer-update auto-resolves the latest non-expired transport key when tr
       body: {
         registered: true,
         runtime: {
-          reviewerRegistryObjectId: "0x2222222222222222222222222222222222222222222222222222222222222222",
-          disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
+          reviewerRegistryObjectId: WRITE_GATE_OBJECT_IDS.reviewerRegistryObjectId,
+          disputeQuorumConfigObjectId: WRITE_GATE_OBJECT_IDS.disputeQuorumConfigObjectId,
         },
       },
     }),
     "GET /policy/fees": () => ({
       status: 200,
-      body: {
-        policy: {
-          chainConfig: {
-            marketplacePackageId: "0x1111111111111111111111111111111111111111111111111111111111111111",
-            disputeQuorumConfigObjectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
-          },
-        },
-      },
+      body: buildFreshMarketplacePolicyResponse(),
     }),
     [`GET /users/${actorAddress}/key-agreement?keyVersion=1`]: () => {
       requestedKeyAgreementPaths.push(`/users/${actorAddress}/key-agreement?keyVersion=1`);
@@ -8471,8 +10582,8 @@ test("reviewer-update auto-resolves the latest non-expired transport key when tr
             id: request.body?.id ?? 1,
             result: {
               data: {
-                objectId: "0x3333333333333333333333333333333333333333333333333333333333333333",
-                type: "0x1111111111111111111111111111111111111111111111111111111111111111::dispute_quorum::DisputeQuorumConfig",
+                objectId: WRITE_GATE_OBJECT_IDS.disputeQuorumConfigObjectId,
+                type: `${WRITE_GATE_PACKAGE_IDS.settlement}::dispute_quorum::DisputeQuorumConfig`,
                 previousTransaction: "init-reviewer-registry-1",
                 content: {
                   fields: {
@@ -9413,239 +11524,46 @@ test("sponsor preflight accepts auth state and refreshes one invalid token respo
   }
 });
 
-test("sponsor execute surfaces execute-side failures after successful reserve", async () => {
-  const expiresAt = new Date(Date.now() + 60_000).toISOString();
+test("sponsor execute is quarantined before files, builders, reserve, or execute", async () => {
   const mock = await startMockServer({
-    "POST /sponsor/reserve": (request) => {
-      assert.equal(request.body?.gasBudget, 1000000);
-      assert.equal(request.body?.paymentCoin, "claw");
-      assert.equal(request.body?.orderId, "order-1");
-      return {
-        status: 200,
-        body: sponsorReservationBody({ reservationId: "resv-1", orderId: "order-1", expiresAt }),
-      };
-    },
-    "POST /sponsor/execute": (request) => {
-      assert.equal(request.headers["idempotency-key"]?.length > 0, true);
-      assert.equal(request.body?.reservationId, "resv-1");
-      assert.equal(request.body?.orderId, "order-1");
-      assert.equal(request.body?.intent?.version, "sponsor_execute_intent.v2");
-      assert.equal(request.body?.intent?.chainFamily, "iota");
-      assert.equal(request.body?.intent?.network, "testnet");
-      assert.equal(request.body?.intent?.txFamily, "marketplace_write");
-      assert.equal(request.body?.intent?.chainTxDigest?.length > 15, true);
-      assert.equal(request.body?.intentSig, "c2ln");
-      return {
-        status: 409,
-        body: {
-          error: "sponsor_reservation_not_active"
-        }
-      };
+    "POST /sponsor/reserve": () => ({ status: 500, body: { error: "must_not_reserve" } }),
+    "POST /sponsor/execute": () => ({ status: 500, body: { error: "must_not_execute" } }),
+  });
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-sponsor-quarantine-"));
+  const missingAuthState = path.join(tempDir, "missing-auth-state.json");
+  const reservationOut = path.join(tempDir, "must-not-write-reservation.json");
+  const builderMarker = path.join(tempDir, "must-not-run-builder");
+
+  try {
+    for (const command of ["sponsor-execute", "sponsor-run"]) {
+      const result = await runCli([
+        command,
+        "--api-base",
+        mock.baseUrl,
+        "--auth-state-file",
+        missingAuthState,
+        "--order-id",
+        "order-quarantined",
+        "--reservation-out",
+        reservationOut,
+        "--build-cmd",
+        `node -e "require('node:fs').writeFileSync('${builderMarker}', 'ran')"`,
+        "--json",
+      ]);
+
+      assert.equal(result.status, 78);
+      const payload = JSON.parse(result.stdout);
+      assert.equal(payload.ok, false);
+      assert.equal(payload.error, "sponsor_execute_quarantined");
+      assert.equal(payload.exitCode, 78);
+      assert.equal(payload.runtimePosture, "not_queried");
+      assert.equal(payload.releaseBaseMode, "self_pay");
+      assert.equal(payload.sponsorMode, "deferred");
     }
-  });
-
-  try {
-    const result = await runCli([
-      "sponsor-execute",
-      "--api-base",
-      mock.baseUrl,
-      "--jwt",
-      "test-jwt",
-      "--order-id",
-      "order-1",
-      "--chain-family",
-      "iota",
-      "--network",
-      "testnet",
-      "--build-cmd",
-      sponsorV2BuildCommand({ reservationId: "resv-1", orderId: "order-1", expiresAt }),
-      "--json"
-    ]);
-    assert.equal(result.status, 1);
-    const payload = JSON.parse(result.stdout);
-    assert.equal(payload.error, "sponsor_execute_failed");
-    assert.equal(payload.status, 409);
-    assert.equal(payload.reservationId, "resv-1");
-    assert.equal(payload.response.error, "sponsor_reservation_not_active");
-  } finally {
-    await mock.close();
-  }
-});
-
-test("sponsor execute rejects an incomplete builder result before calling execute", async () => {
-  const expiresAt = new Date(Date.now() + 60_000).toISOString();
-  let executeCalls = 0;
-  const mock = await startMockServer({
-    "POST /sponsor/reserve": () => ({
-      status: 200,
-      body: sponsorReservationBody({ reservationId: "resv-incomplete", orderId: "order-incomplete", expiresAt }),
-    }),
-    "POST /sponsor/execute": () => {
-      executeCalls += 1;
-      return { status: 500, body: { error: "must_not_execute" } };
-    },
-  });
-
-  try {
-    const result = await runCli([
-      "sponsor-execute",
-      "--api-base",
-      mock.baseUrl,
-      "--jwt",
-      "test-jwt",
-      "--order-id",
-      "order-incomplete",
-      "--chain-family",
-      "iota",
-      "--network",
-      "testnet",
-      "--build-cmd",
-      `node -e "console.log(JSON.stringify({txBytesB64:'dHhieXRlcw==',userSig:'c2ln'}))"`,
-      "--json",
-    ]);
-    assert.equal(result.status, 1);
-    assert.equal(JSON.parse(result.stdout).error, "builder_sponsor_intent_v2_required");
-    assert.equal(executeCalls, 0);
-  } finally {
-    await mock.close();
-  }
-});
-
-test("sponsor execute rejects a complete but drifted v2 intent before calling execute", async () => {
-  const expiresAt = new Date(Date.now() + 60_000).toISOString();
-  let executeCalls = 0;
-  const mock = await startMockServer({
-    "POST /sponsor/reserve": () => ({
-      status: 200,
-      body: sponsorReservationBody({ reservationId: "resv-drift", orderId: "order-drift", expiresAt }),
-    }),
-    "POST /sponsor/execute": () => {
-      executeCalls += 1;
-      return { status: 500, body: { error: "must_not_execute" } };
-    },
-  });
-
-  try {
-    const result = await runCli([
-      "sponsor-execute",
-      "--api-base",
-      mock.baseUrl,
-      "--jwt",
-      "test-jwt",
-      "--order-id",
-      "order-drift",
-      "--chain-family",
-      "iota",
-      "--network",
-      "testnet",
-      "--build-cmd",
-      sponsorV2BuildCommand({
-        reservationId: "resv-drift",
-        orderId: "order-drift",
-        expiresAt,
-        intentOverrides: { chainTxDigest: "1111111111111111" },
-      }),
-      "--json",
-    ]);
-    assert.equal(result.status, 1);
-    assert.equal(JSON.parse(result.stdout).error, "builder_sponsor_intent_mismatch:chainTxDigest");
-    assert.equal(executeCalls, 0);
-  } finally {
-    await mock.close();
-  }
-});
-
-test("sponsor execute accepts auth state, refreshes reserve auth, and forwards order id", async () => {
-  const staleToken = buildJwtWithExp(1);
-  const refreshedToken = buildJwtWithExp(4102444800);
-  const tempDir = mkdtempSync(path.join(os.tmpdir(), "clawnera-sponsor-execute-refresh-"));
-  const authStateFile = path.join(tempDir, "auth-state.json");
-  const expiresAt = new Date(Date.now() + 60_000).toISOString();
-
-  const mock = await startMockServer({
-    "POST /sponsor/reserve": (request) => {
-      if (request.headers.authorization === `Bearer ${staleToken}`) {
-        return { status: 401, body: { error: "invalid_token" } };
-      }
-      assert.equal(request.headers.authorization, `Bearer ${refreshedToken}`);
-      assert.equal(request.body?.gasBudget, 1000000);
-      assert.equal(request.body?.paymentCoin, "claw");
-      assert.equal(request.body?.orderId, "order-9");
-      return {
-        status: 200,
-        body: sponsorReservationBody({ reservationId: "resv-9", orderId: "order-9", expiresAt }),
-      };
-    },
-    "POST /sponsor/execute": (request) => {
-      assert.equal(request.headers.authorization, `Bearer ${refreshedToken}`);
-      assert.equal(request.body?.reservationId, "resv-9");
-      assert.equal(request.body?.orderId, "order-9");
-      assert.equal(request.body?.intent?.version, "sponsor_execute_intent.v2");
-      assert.equal(request.body?.intent?.chainFamily, "iota");
-      assert.equal(request.body?.intent?.network, "testnet");
-      assert.equal(request.body?.intentSig, "c2ln");
-      return {
-        status: 200,
-        body: {
-          execution: {
-            txDigest: "0xdeadbeef"
-          }
-        }
-      };
-    },
-    "POST /auth/refresh": (request) => {
-      assert.equal(request.body?.refreshToken, "refresh-token-1");
-      return {
-        status: 200,
-        body: {
-          token: refreshedToken,
-          refreshToken: "refresh-token-2",
-          expiresAtMs: 4102444800000
-        }
-      };
-    }
-  });
-
-  try {
-    writeFileSync(
-      authStateFile,
-      JSON.stringify(
-        {
-          apiBase: mock.baseUrl,
-          token: staleToken,
-          refreshToken: "refresh-token-1",
-          address: "0x1111111111111111111111111111111111111111111111111111111111111111",
-          alias: "bot",
-          authContext: {
-            chainFamily: "iota",
-            network: "testnet",
-          },
-        },
-        null,
-        2
-      )
-    );
-    const result = await runCli([
-      "sponsor-execute",
-      "--api-base",
-      mock.baseUrl,
-      "--auth-state-file",
-      authStateFile,
-      "--order-id",
-      "order-9",
-      "--build-cmd",
-      sponsorV2BuildCommand({ reservationId: "resv-9", orderId: "order-9", expiresAt }),
-      "--json"
-    ]);
-    assert.equal(result.status, 0);
-    const payload = JSON.parse(result.stdout);
-    assert.equal(payload.ok, true);
-    assert.equal(payload.orderId, "order-9");
-    assert.equal(payload.reservationId, "resv-9");
-    assert.equal(payload.txDigest, "0xdeadbeef");
-    const saved = JSON.parse(readFileSync(authStateFile, "utf8"));
-    assert.equal(saved.token, refreshedToken);
-    assert.equal(saved.refreshToken, "refresh-token-2");
+    assert.equal(mock.requests.length, 0);
+    assert.equal(existsSync(missingAuthState), false);
+    assert.equal(existsSync(reservationOut), false);
+    assert.equal(existsSync(builderMarker), false);
   } finally {
     await mock.close();
   }

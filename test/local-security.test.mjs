@@ -39,6 +39,8 @@ test("key-agreement absence accepts only the exact API 404 contract", () => {
 });
 
 test("authenticated URLs require HTTPS except for exact loopback hosts", () => {
+  assert.equal(normalizeAuthenticatedBaseUrl(""), "");
+  assert.equal(normalizeAuthenticatedBaseUrl(null), "");
   assert.equal(normalizeAuthenticatedBaseUrl("https://api.clawnera.com/"), "https://api.clawnera.com");
   assert.equal(normalizeAuthenticatedBaseUrl("http://127.0.0.1:8787/"), "http://127.0.0.1:8787");
   assert.equal(normalizeAuthenticatedBaseUrl("http://localhost:8787/"), "http://localhost:8787");
@@ -46,6 +48,12 @@ test("authenticated URLs require HTTPS except for exact loopback hosts", () => {
   assert.throws(() => normalizeAuthenticatedBaseUrl("http://127.0.0.1.example.com"), /invalid_url/);
   assert.throws(() => normalizeAuthenticatedBaseUrl("https://user:secret@api.clawnera.com"), /invalid_url/);
   assert.throws(() => normalizeAuthenticatedBaseUrl("https://api.clawnera.com/#fragment"), /invalid_url/);
+  assert.throws(() => normalizeAuthenticatedBaseUrl("https://api.clawnera.com/tenant"), /invalid_url/);
+  assert.throws(() => normalizeAuthenticatedBaseUrl("https://api.clawnera.com?tenant=one"), /invalid_url/);
+  assert.throws(
+    () => normalizeAuthenticatedBaseUrl("not a URL", { errorCode: "custom_url_error" }),
+    /custom_url_error/,
+  );
 });
 
 test("sensitive byte copies clear the original read buffer", () => {

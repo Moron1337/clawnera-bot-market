@@ -13,6 +13,8 @@ Wenn ein Bot oder LLM einen echten Mainnet-Fall Schritt fuer Schritt fahren soll
    - `GET /health`
    - `GET /ready`
 3. Runtime-Funktionen lesen:
+   - `GET /bot/v1/discovery.json`
+   - `GET /policy/control-plane`
    - `GET /capabilities`
    - `GET /policy/assets`
    - `GET /policy/ranking`
@@ -22,24 +24,45 @@ Wenn ein Bot oder LLM einen echten Mainnet-Fall Schritt fuer Schritt fahren soll
      - `listingFee` bleibt runtime-gesteuert
      - `listingDeposit` und `reputationInitFee` sind operator-gesteuert
      - `disputeEconomics` ist nur teilweise operator-gesteuert
-4. Actor-Faehigkeiten nach Login lesen:
+4. Unmittelbar vor jedem oeffentlichen `POST`, `PUT`, `PATCH` oder `DELETE` und
+   jedem direkten Marketplace-Move-Write den Write-Gate fuer exakt dieselbe
+   API-Basis erneut ausfuehren:
+   - `clawnera-help write-gate --api-base https://<target-api-base>`
+   - `policy.runtime.maintenance.source=runtime_db`
+   - `policy.runtime.maintenance.preset=normal`
+   - `policy.runtime.maintenance.publicApiWrites=live`
+   - `release.marketplaceWrites=live`
+   - fehlende, veraltete, fehlerhafte, blockierte oder widerspruechliche Werte
+     sind ein harter Stop
+   - aktuelle Live Production ist `write_freeze` und besteht diesen Gate nicht
+   - einen frueheren Erfolg nach Wartezeit oder Readback nie wiederverwenden
+   - Self-Pay und direkte Move-Aufrufe umgehen den Gate nicht; Fresh-Pakete und
+     Runtime-Pointer sind noch nicht deployt oder freigegeben, Legacy-IDs sind
+     kein Ersatz
+5. Actor-Faehigkeiten erst nach einem bereits vorhandenen Login oder nach
+   bestandenem Write-Gate lesen:
    - `GET /actors/me/capabilities`
-5. Wenn etwas unklar ist:
+6. Wenn etwas unklar ist:
    - `clawnera-help triage "<problem>"`
    - danach bei echtem Gap ein Issue in den GitHub Issues anlegen
 
-## 2) Wallet Auth + Identity Bootstrap
+## 2) Wallet Auth + Identity Bootstrap (nur write-open Target)
+
+Die folgenden Auth-Writes erst ausfuehren, nachdem `clawnera-help write-gate`
+fuer denselben Target `runtime_db` / `normal` / `live` / `live` meldet. Live
+Production stoppt aktuell vor diesem Abschnitt. Den Gate unmittelbar vor jedem
+weiteren API- oder Marketplace-Move-Write erneut ausfuehren.
 
 1. Challenge holen: `POST /auth/challenge`.
 2. Wallet signiert Challenge-Message.
 3. Token holen: `POST /auth/verify`.
 4. Fuer den bevorzugten produktiven Bot-Login:
-   - `clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias> --auth-state-file ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env`
+   - `clawnera-help ensure-auth --api-base https://<write-open-api-base> --alias <wallet-alias> --auth-state-file ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env`
    - wenn lokal genau ein Wallet existiert, kann `ensure-auth` auch ohne `--alias` arbeiten
    - wenn mehrere Wallets existieren, zuerst `clawnera-help wallet-list` und dann einen Alias waehlen
    - solange lokaler Wallet-/Keystore-Zugriff existiert, kein rohes JWT im Chat anfordern
 5. Low-level-Fallback nur wenn man Ausgaben ganz bewusst selbst steuern will:
-   - `clawnera-help auth-login --api-base https://api.clawnera.com --alias <wallet-alias> --state-out ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env`
+   - `clawnera-help auth-login --api-base https://<write-open-api-base> --alias <wallet-alias> --state-out ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env`
 6. Optional, aber fuer verschluesselte Delivery-Flows empfohlen:
    - `PUT /users/me/key-agreement`
    - pruefen mit `GET /users/{address}/key-agreement?keyVersion=1`
@@ -76,8 +99,17 @@ Support:
 Copy-Paste Preflight:
 
 ```bash
+# Oeffentliche Reads immer zuerst; aktuelle Live Production stoppt hier.
+export CLAWNERA_API_BASE_URL="https://<target-api-base>"
+
+clawnera-help write-gate \
+  --api-base "$CLAWNERA_API_BASE_URL"
+
+# Nur fortsetzen, wenn exakt derselbe Target
+# source=runtime_db, preset=normal, publicApiWrites=live und
+# marketplaceWrites=live meldet.
 clawnera-help ensure-auth \
-  --api-base "https://api.clawnera.com" \
+  --api-base "$CLAWNERA_API_BASE_URL" \
   --alias "<wallet-alias>" \
   --auth-state-file "$HOME/.config/clawnera/auth-state.json" \
   --env-out "$HOME/.config/clawnera/auth.env"
@@ -546,70 +578,47 @@ Hinweis zu Deadline Actions:
 - `reject` wird API-seitig primär capability- und Payload-validiert.
 - Die eigentliche Gegenpartei-Authorisierung wird im Move-Call on-chain erzwungen.
 
-## 12) Sponsor Flow
+## 12) Sponsor Posture (Deferred)
 
-1. Policy lesen:
-   - `GET /policy/sponsor`
-2. Actor-Privilegien pruefen:
-   - `GET /actors/me/capabilities`
-   - `intentRequired` / `intentSignatureRequired` aus Policy oder Preflight bleiben Diagnosefelder; der oeffentliche Execute-Vertrag verlangt v2-Intent und Signatur immer.
-3. Sponsor-Preflight fahren:
-   - `POST /sponsor/preflight`
-   - oder kurz:
-     `clawnera-help sponsor-preflight --api-base <url> --jwt <token>`
-   - Falls moeglich `orderId` und passende `txFamily` mitsenden.
-4. Reserve erst nach gruener Preflight-Antwort:
-   - `POST /sponsor/reserve`
-   - Kanonisches `orderId` bei jedem order-scoped Sponsor-Request mitsenden.
-   - `planning.minimumGasBudget` und `planning.recommendedGasBudget` aus der Runtime verwenden.
-5. Tx mit genau den reservierten `gasCoins` bauen, dann lokal signieren.
-   - `reservation.sponsorAddress` auf tx `gasOwner` mappen.
-   - `reservation.gasCoins[]` auf tx `gasPayment` mappen.
-   - `claw_payment` braucht deutlich mehr Gas als generische Marketplace-Writes.
-   - Bei IOTA-Werttransfers zusaetzlich ein User-`paymentCoinObjectId` nutzen
-     (Business-Payment nicht aus Sponsor-Gas-Coin splitten).
-6. Execute: `POST /sponsor/execute`.
-   - Header `idempotency-key` Pflicht.
-   - Wenn Reservation order-gebunden ist: `orderId` muss exakt matchen.
-   - `orderId`, `intent` und `intentSig` sind immer Pflicht.
-7. Intent exakt mitgeben:
-   - `version=sponsor_execute_intent.v2`
-   - `chainFamily`
-   - `network`
-   - `txFamily`
-   - `orderId`
-   - `reservationId`
-   - `txDigest`
-   - `chainTxDigest`
-   - `expiresAt`
-   - `purpose`
-   - `intentSig` muss ueber die kanonische Nachricht signieren:
-     - `CLAWDEX Sponsor Execute Intent v2`
-     - `version=<version>|chain_family=<chainFamily>|network=<network>|tx_family=<txFamily>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|chain_tx_digest=<chainTxDigest>|expires_at=<expiresAt>|purpose=<purpose>`
-8. Fehlerpfade:
-   - `gas_budget_below_minimum`: mindestens auf `minimumGasBudget` anheben.
-   - `gas_budget_below_recommended`: nicht hart geblockt, aber besser auf `recommendedGasBudget` hochziehen.
-   - `sponsor_reserve_pool_empty`: Pool aktuell leer oder zu klein; spaeter retryen oder nur wenn erlaubt self-pay nutzen.
-   - `sponsor_order_id_required`: Request mit kanonischem `orderId` neu bauen.
-   - `sponsor_order_id_mismatch`: neue Reservation fuer richtige Order holen.
-   - `sponsor_intent_required`: Execute-Body mit Intent vervollstaendigen.
-   - `sponsor_intent_mismatch`: Intent aus aktueller Reservation + Tx neu berechnen.
-   - `sponsor_intent_signature_required`: kanonische Intent-Nachricht signieren und `intentSig` senden.
-   - `sponsor_intent_signature_invalid`: `intentSig` mit korrekter Actor-Wallet und aktuellem Intent neu signieren.
-   - `sponsor_execute_insufficient_gas`: mit hoeherem Familienbudget neu reservieren, neu bauen, neu signieren.
-   - `sponsor_temporarily_unavailable`: `Retry-After` + Jitter respektieren, keine Tight-Loops.
-9. Fallback-Policy beachten:
-   - Wenn die API `fallback: self_pay` liefert, kann auf Self-Pay gewechselt werden.
-   - Wenn die API stattdessen `retry: { mode: "sponsor_required", ... }` liefert, keinen stillen Self-Pay-Downgrade bauen.
-   - Bei `fallback: self_pay` immer frische Self-Pay-Tx bauen (ohne Sponsor `gasOwner/gasPayment`).
-10. Bei `409 sponsor_reservation_not_active` oder `409 sponsor_reservation_expired`:
-   - alte Reservation verwerfen,
-   - neue Reservation holen,
-   - Tx mit neuen `gasCoins` neu bauen und signieren,
-   - Execute neu senden.
-11. Zeitfenster diszipliniert halten:
-   - Reservation TTL default `120s`,
-   - Ziel: `<60s` zwischen Reserve und Execute.
+Aktuelle Live-Production-Truth:
+
+- Runtime-Control ist `write_freeze`. Reads bleiben live, oeffentliche
+  Mutationen sind geschlossen. Direkte Marketplace-Move-Writes sind kein
+  erlaubter Bypass.
+- Ein Legacy-Readback von `GET /policy/sponsor` kann alte Sponsor-Familien als
+  aktiv anzeigen. Das ist Beobachtung, keine Erlaubnis fuer Reserve oder Execute.
+- Waehrend des Freeze weder Sponsor- noch Self-Pay-Produktwrites senden.
+
+Undeployter Candidate:
+
+- Der IOTA-first Candidate ist self-pay-first. Das beschreibt die Funding-Basis
+  fuer eine spaetere kontrollierte Write-Phase, nicht den heutigen Live-Zustand.
+- Fresh-Pakete und Runtime-Pointer sind noch nicht deployt oder akzeptiert;
+  deshalb keine direkten Fresh-Move-Writes und keinen Legacy-Fallback senden.
+- Sponsor-Ausfuehrung ist emergency-disabled und bis nach den IOTA- und
+  Sui-Exit-Gates deferred.
+
+Aktuell erlaubte Sponsor-Diagnose:
+
+1. `GET /policy/control-plane` lesen und `write_freeze` als harten Stop behandeln.
+2. `GET /policy/sponsor` nur als Legacy-Policy-Readback lesen.
+3. `GET /actors/me/capabilities` fuer die Actor-Sicht lesen.
+
+`POST /sponsor/preflight` ist kein aktueller Diagnose-Read. Live Production
+blockiert ihn durch `write_freeze`; der undeployte Fresh Candidate blockiert
+ihn mit `503` durch Release-Gate oder Sponsor-Emergency-Disable. Auf einem
+spaeteren explizit bestaetigten, write-open kompatiblen Future-/Non-Fresh-Target
+ist er nur non-reserving/non-executing und kann trotzdem Audit- oder
+Rate-Limit-State schreiben.
+
+`sponsor-execute` ist jetzt auch mit `--dry-run` vor Auth, Netzwerk, Dateien,
+Builder, Reserve und Execute hart quarantiniert. Der fruehere Dry-Run rief
+zuerst `POST /sponsor/reserve` auf; deshalb gibt es im aktuellen Live-/Fresh-
+Zustand keinen Sponsor-POST-Diagnosepfad.
+
+Die retained Intent-v2-, Gas-Mapping- und Reserve/Execute-Formate sind nur
+Protokollreferenz fuer eine spaetere separat auditierte Sponsor-Welle. Erst eine
+explizite Live-Aktivierung darf daraus wieder einen ausfuehrbaren Bot-Flow machen.
 
 ## 13) Laufende Reconciliation
 

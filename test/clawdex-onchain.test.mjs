@@ -21,6 +21,7 @@ import {
   extractMailboxSignalPosted,
   getExecutionFailure,
 } from "../lib/clawdex-onchain.mjs";
+import { assertMarketplaceWriteGateFresh } from "../lib/marketplace-write-gate.mjs";
 
 function addr(char) {
   return `0x${char.repeat(64)}`;
@@ -533,6 +534,129 @@ test("executeTransaction rejects mismatched pre-signed Sui bytes", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("executeTransaction blocks IOTA broadcast when the gate expires during build and signing", async () => {
+  const signerAddress = addr("a");
+  const startedAtMs = 1_900_000_000_000;
+  const attestation = {
+    generatedAtMs: startedAtMs,
+    expiresAtMs: startedAtMs + 5_000,
+  };
+  const events = [];
+  let nowMs = startedAtMs;
+  let broadcastCount = 0;
+
+  await assert.rejects(
+    () =>
+      executeTransaction(
+        {
+          async build() {
+            events.push("build");
+            nowMs += 2_500;
+            return new Uint8Array([1, 2, 3, 4]);
+          },
+        },
+        {
+          address: signerAddress,
+          network: "testnet",
+          rpcUrl: "https://iota-rpc.example.test",
+          beforeBroadcast: async () => {
+            events.push("beforeBroadcast");
+            assertMarketplaceWriteGateFresh(attestation, nowMs);
+          },
+        },
+        {
+          clientFactory: () => ({
+            async executeTransactionBlock() {
+              events.push("broadcast");
+              broadcastCount += 1;
+              return { digest: "must-not-broadcast" };
+            },
+          }),
+          loadKeystoreEntries: async () => [
+            { address: signerAddress, alias: "seller", secretKey: "iotaprivkey1fake" },
+          ],
+          signerFromSecretKey: async () => ({
+            async signTransaction() {
+              events.push("sign");
+              nowMs += 2_500;
+              return { signature: "SIGNED" };
+            },
+          }),
+          verifyTransactionSignature: async () => {
+            events.push("verify");
+            return { toIotaAddress: () => signerAddress };
+          },
+        },
+      ),
+    /marketplace_write_gate_expired/,
+  );
+
+  assert.equal(broadcastCount, 0);
+  assert.deepEqual(events, ["build", "sign", "verify", "beforeBroadcast"]);
+});
+
+test("executeTransaction broadcasts IOTA exactly once while the gate remains fresh", async () => {
+  const signerAddress = addr("a");
+  const startedAtMs = 1_900_000_000_000;
+  const attestation = {
+    generatedAtMs: startedAtMs,
+    expiresAtMs: startedAtMs + 5_000,
+  };
+  const events = [];
+  let nowMs = startedAtMs;
+  let broadcastCount = 0;
+
+  const result = await executeTransaction(
+    {
+      async build() {
+        events.push("build");
+        nowMs += 2_499;
+        return new Uint8Array([1, 2, 3, 4]);
+      },
+    },
+    {
+      address: signerAddress,
+      network: "testnet",
+      rpcUrl: "https://iota-rpc.example.test",
+      beforeBroadcast: async () => {
+        events.push("beforeBroadcast");
+        assertMarketplaceWriteGateFresh(attestation, nowMs);
+      },
+    },
+    {
+      clientFactory: () => ({
+        async executeTransactionBlock() {
+          events.push("broadcast");
+          broadcastCount += 1;
+          return {
+            digest: "0xfresh",
+            effects: { status: { status: "success" } },
+          };
+        },
+      }),
+      loadKeystoreEntries: async () => [
+        { address: signerAddress, alias: "seller", secretKey: "iotaprivkey1fake" },
+      ],
+      signerFromSecretKey: async () => ({
+        async signTransaction() {
+          events.push("sign");
+          nowMs += 2_500;
+          return { signature: "SIGNED" };
+        },
+      }),
+      verifyTransactionSignature: async () => {
+        events.push("verify");
+        return { toIotaAddress: () => signerAddress };
+      },
+    },
+  );
+
+  assert.equal(nowMs, attestation.expiresAtMs - 1);
+  assert.equal(broadcastCount, 1);
+  assert.equal(result.result.digest, "0xfresh");
+  assert.deepEqual(events, ["build", "sign", "verify", "beforeBroadcast", "broadcast"]);
 });
 
 test("buildClawdexTxFromPlan rejects removed quorum-ticket compatibility builders", () => {

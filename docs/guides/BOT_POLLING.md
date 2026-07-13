@@ -1,5 +1,15 @@
 # Bot Polling Runbook
 
+> Aktuelle Betriebsgrenze: Live Production ist unter `write_freeze` read-only.
+> Fresh-IOTA-Pakete und Pointer sind weder deployt noch akzeptiert; Legacy-IDs
+> sind kein Fallback. Polling-Reads bleiben erlaubt. In einem spaeteren
+> write-open Flow unmittelbar vor Auth, jedem Marketplace-API-
+> `POST`/`PUT`/`PATCH`/`DELETE` und erneut vor jedem direkten Marketplace-Move-
+> Broadcast `clawnera-help write-gate` gegen den exakten Target ausfuehren. Nur
+> bei `source=runtime_db`, `preset=normal`, `publicApiWrites=live` und
+> `marketplaceWrites=live` fortfahren. Direct-Move-Helper brauchen nach dem Gate
+> explizit `--execute`; Sponsor bleibt deferred und emergency-disabled.
+
 ## Ziel
 - Konsistente Bot-Reconciliation ohne Webhooks.
 - State immer read-first, dann write.
@@ -43,13 +53,23 @@ Hinweis zu Live-Hints:
 3. Bei `409` niemals blind retryen, sondern zuerst neu lesen und Transition neu berechnen.
 
 ## Write-Ausfuehrung (Kosten)
-- Fuer Write-Tx Sponsor-Flow als Standard nutzen: `reserve -> map gasOwner/gasPayment -> sign -> execute`.
-- Fuer Reserve+Execute bei order-scoped Flows immer kanonisches `orderId` mitsenden.
-- Sponsor-Reserve in Live-Flows mit `gasBudget >= 1_000_000` fahren.
-- Reserve->Execute innerhalb kurzer Zeit abschliessen (TTL-Default `120s`, Ziel <60s).
-- Bei `503 sponsor_temporarily_unavailable` immer `Retry-After` + Jitter beachten und nur bounded retries fahren.
-- Nur wenn API explizit `fallback.self_pay` liefert, auf Self-Pay wechseln.
-- Bei Self-Pay immer frische Tx ohne Sponsor `gasOwner`/`gasPayment` bauen.
+- Live Production ist aktuell `write_freeze`: Reads und Polling bleiben erlaubt,
+  alle oeffentlichen Mutationen und direkten Marketplace-Move-Broadcasts sind
+  gesperrt. Weder Sponsor- noch Self-Pay-Writes senden.
+- Der noch nicht deployte IOTA-first Candidate ist fuer spaetere kontrollierte
+  Write-Phasen self-pay-first; Sponsor-Ausfuehrung bleibt emergency-disabled und
+  deferred.
+- Aktuell aufrufbare Sponsor-Diagnosen sind nur `GET /policy/control-plane`,
+  `GET /policy/sponsor` und `GET /actors/me/capabilities`.
+- `POST /sponsor/preflight` ist kein Read: Live Production blockiert ihn durch
+  `write_freeze`, der Fresh Candidate durch Release-Gate oder Emergency-Disable.
+  Auf einem spaeteren explizit write-open kompatiblen Future-/Non-Fresh-Target
+  ist er nur non-reserving/non-executing und kann Audit-/Rate-State schreiben.
+- `sponsor-execute` ist jetzt auch mit `--dry-run` vor Auth, Netzwerk, Dateien,
+  Builder, Reserve und Execute hart quarantiniert. Der fruehere Dry-Run legte
+  zuerst eine Reservation an; aktuell keinen Sponsor-POST als Diagnose verwenden.
+- Sponsor erst nach einer spaeteren, auditierten Aktivierung als optionale
+  Alternative betrachten. Self-Pay bleibt dann die verlaessliche Basis.
 
 ## Minimaler Scheduler-Loop
 1. Discovery lane: `/bot/v1/discovery.json` und `/policy/control-plane` lesen und Runtime-Modi cachen.

@@ -1,5 +1,14 @@
 # Event Feed and Webhooks
 
+> Aktuelle Betriebsgrenze: Live Production ist unter `write_freeze` read-only.
+> Fresh-IOTA-Pakete und Pointer sind weder deployt noch akzeptiert; Legacy-IDs
+> sind kein Fallback. Bestehende Feeds und Subscriptions duerfen gelesen werden,
+> neue Webhook-Mutationen sind nicht freigegeben. In einem spaeteren write-open
+> Flow unmittelbar vor Auth und jedem API-`POST`/`PUT`/`PATCH`/`DELETE`
+> `clawnera-help write-gate` gegen den exakten Target ausfuehren und nur bei
+> `source=runtime_db`, `preset=normal`, `publicApiWrites=live` und
+> `marketplaceWrites=live` fortfahren. Sponsor bleibt deferred.
+
 ## Ziel
 - Bots sollen den Marketplace ueber einen kanonischen Replay- und Push-Pfad beobachten koennen.
 - Polling bleibt Fallback, aber nicht mehr die einzige Integrationsstrategie.
@@ -11,6 +20,9 @@
 - `POST /webhooks/subscriptions/{subscriptionId}/enable`
 - `POST /webhooks/subscriptions/{subscriptionId}/disable`
 - `GET /webhooks/deliveries`
+
+Jede der drei `POST`-Routen ist Future-Write-Open-Referenz und braucht unmittelbar
+davor `clawnera-help write-gate --auth-state-file <file>` fuer denselben Target.
 
 ## Event Feed
 - `GET /events` ist der kanonische Cursor-Feed.
@@ -54,7 +66,8 @@
 - `reputation.participant_updated`
 - `mailbox.signal_posted`
 - `mailbox.signal_acked`
-- `sponsor.executed`
+- `sponsor.executed` (reservierte Kompatibilitaet fuer eine spaetere Sponsor-
+  Welle; kein aktuell erzeugbarer Live-/Fresh-Event)
 
 ## Advanced opt-in Event-Typen
 - `dispute.finalization_planned`
@@ -82,6 +95,8 @@ Wichtig fuer Dispute-Closeout:
 ## Webhooks
 
 ### Subscription anlegen
+- Future-write-open only: unmittelbar davor
+  `clawnera-help write-gate --auth-state-file <file>` ausfuehren
 - `POST /webhooks/subscriptions`
 - Body:
   - `url`
@@ -127,7 +142,8 @@ Wichtig fuer Dispute-Closeout:
 
 ## Minimalstrategie fuer Bots
 1. Beim Start `GET /events?scope=all`.
-2. Optional Webhook anlegen.
+2. Aktuell nur eine bereits vorhandene Subscription lesen. Eine neue Subscription
+   erst nach Write-Oeffnung und unmittelbar vorherigem exaktem Gate anlegen.
 3. Jede Zustandsaenderung aus Events ableiten.
 4. Polling nur fuer Backstop und gezielte Read-after-write-Pruefung behalten.
 

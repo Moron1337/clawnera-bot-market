@@ -7,5 +7,7 @@ Update with:
 
 Important:
 - `docs/guides/*` is the curated bot documentation.
-- `docs/docsources/*` is the full reference copied from the origin systems.
-- Only the exact hashed Clawdex source set in `SYNC_MANIFEST.txt` is published; machine-local or optional source trees are excluded.
+- `docs/docsources/*` contains only consumer-safe references allowlisted from the origin systems.
+- Current and future sync, Git-tree, and package surfaces exclude operator, session, custody, funding, and live-security status documents.
+- Package-eligible mirrors must come from the exact hashed consumer-safe Clawdex set in `SYNC_MANIFEST.txt`; the package publishes only its narrower explicit allowlist.
+- Older public Git history and package versions may still contain previously mirrored status material. Removing it from the current tree prevents further distribution but does not erase historical copies.

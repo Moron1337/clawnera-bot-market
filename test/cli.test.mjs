@@ -17,6 +17,62 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
 const cliFile = path.join(repoRoot, "bin", "clawnera-help.mjs");
 const packageJson = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
+const WRITE_GATE_PACKAGE_IDS = Object.freeze({
+  foundation: `0x${"1".repeat(64)}`,
+  settlement: `0x${"2".repeat(64)}`,
+  fulfillment: `0x${"3".repeat(64)}`,
+  ops: `0x${"4".repeat(64)}`,
+});
+const WRITE_GATE_OBJECT_IDS = Object.freeze({
+  governanceConfigObjectId: `0x${"5".repeat(64)}`,
+  disputeQuorumConfigObjectId: `0x${"6".repeat(64)}`,
+  marketplaceFeeConfigObjectId: `0x${"7".repeat(64)}`,
+  reputationInitFeeConfigObjectId: `0x${"8".repeat(64)}`,
+  listingDepositConfigObjectId: `0x${"9".repeat(64)}`,
+  reviewerRegistryObjectId: `0x${"a".repeat(64)}`,
+});
+
+function buildMarketplaceWriteGateResponse(request, overrides = {}) {
+  const url = new URL(request.url || "/", `http://${request.headers.host}`);
+  const nonce = url.searchParams.get("nonce") || "";
+  const generatedAtMs = Date.now();
+  const gate = {
+    source: "runtime_db",
+    preset: "normal",
+    publicApiWrites: "live",
+    marketplaceWrites: "live",
+    releaseProfile: "controlled_v1",
+    releasePhase: "canary_allowlisted",
+    runtimeReady: true,
+    productiveWritesEnabled: true,
+    ...(overrides.gate || {}),
+  };
+  return {
+    status: overrides.status || 200,
+    headers: {
+      "cache-control": "private, no-store, max-age=0",
+      pragma: "no-cache",
+      ...(overrides.headers || {}),
+    },
+    body: overrides.body || {
+      version: "marketplace_write_gate.v1",
+      nonce,
+      generatedAt: new Date(generatedAtMs).toISOString(),
+      generatedAtMs,
+      expiresAtMs: generatedAtMs + 5_000,
+      apiOrigin: `http://${request.headers.host}`,
+      gate,
+      chain: {
+        family: "iota",
+        network: "testnet",
+        chainIdentifier: "2304aa97",
+        packageIds: WRITE_GATE_PACKAGE_IDS,
+        objectIds: WRITE_GATE_OBJECT_IDS,
+        ...(overrides.chain || {}),
+      },
+    },
+  };
+}
 
 function buildJwtWithExp(expSeconds) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -64,6 +120,46 @@ function runCliAsync(args = [], options = {}) {
   });
 }
 
+async function startMutationGateServer({
+  status = 200,
+  body,
+  gate,
+  chain,
+  headers,
+} = {}) {
+  const requests = [];
+  const server = http.createServer(async (req, res) => {
+    let raw = "";
+    for await (const chunk of req) {
+      raw += chunk;
+    }
+    requests.push({
+      method: req.method || "GET",
+      url: req.url || "/",
+      headers: req.headers,
+      raw,
+    });
+    if (req.method === "GET" && /^\/policy\/write-gate\?nonce=[0-9a-f]{32}$/.test(req.url || "")) {
+      const response = buildMarketplaceWriteGateResponse(req, { status, body, gate, chain, headers });
+      res.writeHead(response.status, { "content-type": "application/json", ...response.headers });
+      res.end(JSON.stringify(response.body));
+      return;
+    }
+    res.writeHead(500, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "unexpected_request" }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  return {
+    baseUrl: `http://127.0.0.1:${port}`,
+    requests,
+    async close() {
+      await new Promise((resolve) => server.close(resolve));
+    },
+  };
+}
+
 test("help command prints usage", () => {
   const result = runCli(["--help"]);
   assert.equal(result.status, 0);
@@ -74,6 +170,9 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /clawnera-help next <role>/);
   assert.match(result.stdout, /clawnera-help next setup-quick/);
   assert.match(result.stdout, /Weak-bot rules:/);
+  assert.match(result.stdout, /Live production: write_freeze\/read-only/);
+  assert.match(result.stdout, /Fresh IOTA: undeployed\/unaccepted; no legacy fallback/);
+  assert.match(result.stdout, /exact-target clawnera-help write-gate is mandatory/);
   assert.match(result.stdout, /Use ensure-auth; do not ask the human for a raw JWT if local wallet access exists/i);
   assert.match(result.stdout, /clawnera-help show onboarding/);
   assert.match(result.stdout, /clawnera-help show http-examples/);
@@ -108,6 +207,12 @@ test("help json output is minimal by default", () => {
   assert.equal(result.status, 0);
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.mode, "minimal");
+  assert.deepEqual(payload.currentState, {
+    liveProduction: "write_freeze_read_only",
+    freshIota: "undeployed_unaccepted_no_legacy_fallback",
+    sponsoredTransactions: "deferred",
+    mutationRule: "exact_target_write_gate_before_auth_api_mutation_and_direct_marketplace_move_execution",
+  });
   assert.deepEqual(payload.botFirst.orderedStart, [
     "clawnera-help journeys",
     "clawnera-help journey <role> --compact",
@@ -257,6 +362,192 @@ test("request help prints usage", () => {
   assert.match(result.stdout, /Use API paths like \/health or \/orders\/<order-id>/);
 });
 
+test("write-gate succeeds only on complete exact-target live state", async () => {
+  const mock = await startMutationGateServer();
+  try {
+    const result = await runCliAsync(["write-gate", "--api-base", mock.baseUrl, "--json"]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.apiBase, mock.baseUrl);
+    assert.equal(payload.gate.source, "runtime_db");
+    assert.equal(payload.gate.preset, "normal");
+    assert.equal(payload.gate.marketplaceWrites, "live");
+    assert.equal(mock.requests.length, 1);
+    assert.match(mock.requests[0].url, /^\/policy\/write-gate\?nonce=[0-9a-f]{32}$/);
+    assert.ok(mock.requests.every((request) => request.headers.authorization === undefined));
+  } finally {
+    await mock.close();
+  }
+});
+
+test("write-gate exits 78 when runtime state is frozen or incomplete", async (t) => {
+  const cases = [
+    {
+      name: "write freeze",
+      options: {
+        gate: {
+          preset: "write_freeze",
+          publicApiWrites: "frozen",
+          marketplaceWrites: "frozen",
+          runtimeReady: false,
+          productiveWritesEnabled: false,
+        },
+      },
+      error: "marketplace_mutation_gate_closed",
+    },
+    {
+      name: "missing release field",
+      options: { gate: { marketplaceWrites: undefined } },
+      error: "marketplace_mutation_gate_closed",
+    },
+    {
+      name: "write gate unavailable",
+      options: { status: 503, body: { error: "unavailable" } },
+      error: "marketplace_mutation_gate_unavailable",
+    },
+  ];
+  for (const testCase of cases) {
+    await t.test(testCase.name, async () => {
+      const mock = await startMutationGateServer(testCase.options);
+      try {
+        const result = await runCliAsync(["write-gate", "--api-base", mock.baseUrl, "--json"]);
+        assert.equal(result.status, 78);
+        const payload = JSON.parse(result.stdout);
+        assert.equal(payload.ok, false);
+        assert.equal(payload.error, testCase.error);
+        assert.equal(payload.exitCode, 78);
+        assert.equal(mock.requests.length, 1);
+      } finally {
+        await mock.close();
+      }
+    });
+  }
+});
+
+test("frozen gate blocks API mutations before side effects", async () => {
+  const frozen = {
+    gate: {
+      preset: "write_freeze",
+      publicApiWrites: "frozen",
+      marketplaceWrites: "frozen",
+      runtimeReady: false,
+      productiveWritesEnabled: false,
+    },
+  };
+
+  for (const args of [
+    ["request", "POST", "/listings", "--jwt", "test-jwt", "--body", "{}"],
+    ["listing-cancel", "--listing-id", "listing-frozen", "--jwt", "test-jwt"],
+    ["bid-accept", "--bid-id", "bid-frozen", "--jwt", "test-jwt"],
+    ["tx-plan-dry-run", "POST", "/orders/order-frozen/mailbox/init-plan", "--jwt", "test-jwt", "--body", "{}"],
+    ["milestone-reject", "--order-id", "order-frozen", "--milestone-id", "milestone-frozen", "--reason-text", "not accepted", "--jwt", "test-jwt"],
+    ["sponsor-preflight", "--jwt", "test-jwt"],
+  ]) {
+    const mock = await startMutationGateServer(frozen);
+    try {
+      const result = await runCliAsync([...args, "--api-base", mock.baseUrl, "--json"]);
+      assert.equal(result.status, 78);
+      const payload = JSON.parse(result.stdout);
+      assert.equal(payload.error, "marketplace_mutation_gate_closed");
+      assert.equal(payload.exitCode, 78);
+      assert.equal(mock.requests.length, 1);
+      assert.match(mock.requests[0].url, /^\/policy\/write-gate\?nonce=[0-9a-f]{32}$/);
+      assert.ok(mock.requests.every((request) => request.headers.authorization === undefined));
+    } finally {
+      await mock.close();
+    }
+  }
+});
+
+test("bundled empty deployment registry blocks every direct execute path before side effects", async () => {
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-deployment-registry-closed-"));
+  const commands = [
+    ["listing-deposit-create", "--execute"],
+    ["order-init-bond", "--order-id", "order-closed", "--execute"],
+    ["order-create-escrow", "--order-id", "order-closed", "--execute"],
+    ["reputation-init", "--execute"],
+    ["reviewer-register", "--execute"],
+    ["reviewer-update", "--execute"],
+    ["milestone-anchor", "--order-id", "order-closed", "--milestone-id", "milestone-closed", "--execute"],
+  ];
+
+  const mock = await startMutationGateServer();
+  try {
+    for (const command of commands) {
+      const result = await runCliAsync([...command, "--api-base", mock.baseUrl, "--json"], {
+        env: {
+          HOME: tempHome,
+          CLAWNERA_IOTA_NETWORK: "testnet",
+          CLAWNERA_IOTA_RPC_URL: `${mock.baseUrl}/rpc`,
+        },
+      });
+      assert.equal(result.status, 78, `${command[0]}: ${result.stdout || result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert.equal(payload.error, "marketplace_deployment_identity_unavailable");
+      assert.equal(payload.exitCode, 78);
+      assert.equal(payload.mutationGate?.error, "marketplace_direct_write_gate_failed");
+    }
+    assert.equal(mock.requests.length, 0);
+    assert.deepEqual(readdirSync(tempHome), []);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("conflicting Marketplace execution flags fail before network access", async () => {
+  const mock = await startMutationGateServer();
+  try {
+    const result = await runCliAsync([
+      "listing-deposit-create",
+      "--execute",
+      "--dry-run",
+      "--api-base",
+      mock.baseUrl,
+      "--json",
+    ]);
+    assert.equal(result.status, 1);
+    assert.equal(JSON.parse(result.stdout).error, "invalid_marketplace_execution_mode");
+    assert.equal(mock.requests.length, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("every direct Marketplace transaction path is dry-run by default and rechecks the gate before broadcast", () => {
+  const source = readFileSync(cliFile, "utf8");
+  const guardedModes = [...source.matchAll(/try \{\n\s+const executionMode = marketplaceExecutionMode\(options\);/g)];
+  assert.equal(guardedModes.length, 7);
+  assert.match(
+    source,
+    /function marketplaceExecutionMode\(options = \{\}\)[\s\S]*?if \(mode === "execute"\) \{\s+assertBundledMarketplaceDeploymentRegistryAvailable\(\);/,
+  );
+  const matches = [...source.matchAll(/await executeTransaction\(/g)];
+  assert.equal(matches.length, 7);
+  for (const match of matches) {
+    const functionStart = source.lastIndexOf("async function run", match.index);
+    assert.notEqual(functionStart, -1);
+    const functionSlice = source.slice(functionStart, match.index);
+    assert.match(functionSlice, /const executionMode = marketplaceExecutionMode\(options\)/);
+    const preModeSlice = functionSlice.slice(0, functionSlice.indexOf("const executionMode = marketplaceExecutionMode(options)"));
+    assert.doesNotMatch(
+      preModeSlice,
+      /\b(?:await|callApiRoute|resolveApiRuntimeContext|resolveRuntimeSignerEntry|resolveRuntimeIotaOptions|loadKeystoreEntries|getIotaGas|getIotaBalance|executeTransaction)\b/,
+    );
+    assert.match(functionSlice, /if \(executionMode === "dry_run"\)/);
+    const immediateGate = functionSlice
+      .slice(-320)
+      .match(/assertMarketplaceDirectGateStillFresh\(directGate, "(settlement|ops)"\);/);
+    assert.ok(immediateGate);
+    assert.match(source.slice(match.index, match.index + 500), /beforeBroadcast: directGate\.beforeBroadcast/);
+  }
+  assert.match(
+    source,
+    /beforeBroadcast: createMarketplaceDirectReattestation\(\{\s+initialGate: directGate,\s+input,\s+verifyGate: verifyMarketplaceDirectExecutionGate,\s+wrapError: marketplaceDirectGateError,\s+\}\)/,
+  );
+  assert.doesNotMatch(source, /parseBooleanOption\(options\["dry-run"\], false\)/);
+});
+
 test("chain-config help explains live floor semantics", () => {
   const result = runCli(["chain-config", "--help"]);
   assert.equal(result.status, 0);
@@ -326,6 +617,31 @@ test("thin write helpers print usage", () => {
   }
 });
 
+test("mutation help exposes the exact-target release gate", () => {
+  for (const command of [
+    "auth-login",
+    "ensure-auth",
+    "request",
+    "listing-create",
+    "listing-cancel",
+    "listing-renew",
+    "bid-create",
+    "bid-accept",
+    "tx-plan-dry-run",
+    "key-agreement-upsert",
+    "dispute-evidence-publish",
+    "managed-storage-presign",
+    "milestone-submit-byo",
+    "milestone-reject",
+  ]) {
+    const result = runCli([command, "--help"]);
+    assert.equal(result.status, 0, command);
+    assert.match(result.stdout, /Live production is write_freeze\/read-only/, command);
+    assert.match(result.stdout, /Before auth, any API POST\/PUT\/PATCH\/DELETE/, command);
+    assert.match(result.stdout, /clawnera-help write-gate/, command);
+  }
+});
+
 test("listing-create help explains display values and categories", () => {
   const result = runCli(["listing-create", "--help"]);
   assert.equal(result.status, 0);
@@ -383,10 +699,13 @@ test("natural lifecycle aliases resolve to the canonical listing helpers", () =>
   assert.match(reopenAlias.stdout, /Listing renew helper/);
 });
 
-test("compact cancel recipe prints the direct helper command", () => {
+test("compact cancel recipe gates the direct helper command", () => {
   const result = runCli(["next", "creator-cancel-listing"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /do:clawnera-help listing-cancel --auth-state-file ~\/\.config\/clawnera\/auth-state\.json --listing-id <listingId>/);
+  assert.match(
+    result.stdout,
+    /do:clawnera-help write-gate --auth-state-file ~\/\.config\/clawnera\/auth-state\.json && clawnera-help listing-cancel --auth-state-file ~\/\.config\/clawnera\/auth-state\.json --listing-id <listingId>/,
+  );
   assert.match(result.stdout, /write:POST \/listings\/\{listingId\}\/cancel/);
 });
 
@@ -410,6 +729,11 @@ test("reviewer shortlist help prints operator and publish role split", () => {
   assert.match(result.stdout, /Reviewer shortlist helper/);
   assert.match(result.stdout, /Replacement usage:/);
   assert.match(result.stdout, /writes the exact future publish body for dispute-open or reviewer-replace/);
+  assert.match(result.stdout, /--request-receipt-id <lowercase-uuid\|auto>/);
+  assert.match(result.stdout, /--request-state-file <owner-only-json>/);
+  assert.match(result.stdout, /atomically persists one canonical receipt UUID, the exact normalized request, and canonical API base/);
+  assert.match(result.stdout, /distinct paths under owner-only directories/);
+  assert.match(result.stdout, /server decides whether it is inside the accepted finalized window/);
   assert.match(result.stdout, /buyer\/seller GET \/orders\/\{orderId\}\/timeline readback/);
   assert.match(result.stdout, /only prepares the receipt, operatorAuthorizationHandoff, and exact future publish body/);
   assert.match(result.stdout, /publish_ready=false/);
@@ -886,7 +1210,7 @@ test("setup-quick compact output uses ensure-auth", () => {
   const result = runCli(["recipe", "setup-quick", "--compact"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^recipe:setup-quick/m);
-  assert.match(result.stdout, /do:clawnera-help wallet-list && clawnera-help ensure-auth --api-base https:\/\/api\.clawnera\.com --alias <wallet-alias>/);
+  assert.match(result.stdout, /do:clawnera-help wallet-list && clawnera-help write-gate --api-base https:\/\/api\.clawnera\.com && clawnera-help ensure-auth --api-base https:\/\/api\.clawnera\.com --alias <wallet-alias>/);
   assert.doesNotMatch(result.stdout, /^write:GET /m);
   assert.match(
     result.stdout,
@@ -898,13 +1222,13 @@ test("ensure-auth recipe compact output uses the self-auth helper", () => {
   const result = runCli(["recipe", "ensure-auth", "--compact"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^recipe:ensure-auth/m);
-  assert.match(result.stdout, /do:clawnera-help ensure-auth --api-base https:\/\/api\.clawnera\.com --alias <wallet-alias>/);
+  assert.match(result.stdout, /do:clawnera-help write-gate --api-base https:\/\/api\.clawnera\.com && clawnera-help ensure-auth --api-base https:\/\/api\.clawnera\.com --alias <wallet-alias>/);
 });
 
 test("key agreement compact output points only to real next recipes", () => {
   const result = runCli(["recipe", "key-agreement-upsert", "--compact"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /^do:clawnera-help key-agreement-upsert --auth-state-file ~\/\.config\/clawnera\/auth-state\.json/m);
+  assert.match(result.stdout, /^do:clawnera-help write-gate --auth-state-file ~\/\.config\/clawnera\/auth-state\.json && clawnera-help key-agreement-upsert --auth-state-file ~\/\.config\/clawnera\/auth-state\.json/m);
   assert.match(result.stdout, /^next:mailbox-handshake \| reputation-init \| reviewer-register/m);
   assert.doesNotMatch(result.stdout, /seller-deliverable-flow/);
   assert.doesNotMatch(result.stdout, /privateKeyMultibase|privateKeyEnvelope|master-secret|passphrase/i);
@@ -944,7 +1268,7 @@ test("dispute-open compact output highlights the canonical dispute-open route", 
   assert.equal(result.status, 0);
   assert.match(
     result.stdout,
-    /^do:clawnera-help tx-plan-dry-run POST \/orders\/<orderId>\/milestones\/<milestoneId>\/disputes\/open --auth-state-file ~\/\.config\/clawnera\/auth-state\.json --body-file \.\/clawnera-dispute-open-<orderId>-<milestoneId>\.json/m
+    /^do:clawnera-help write-gate --auth-state-file ~\/\.config\/clawnera\/auth-state\.json && clawnera-help tx-plan-dry-run POST \/orders\/<orderId>\/milestones\/<milestoneId>\/disputes\/open --auth-state-file ~\/\.config\/clawnera\/auth-state\.json --body-file \.\/clawnera-dispute-open-<orderId>-<milestoneId>\.json/m
   );
   assert.match(
     result.stdout,
@@ -967,7 +1291,7 @@ test("reviewer evidence compact output highlights dispute-scoped reads before vo
 test("dispute evidence publish compact output highlights the publish route", () => {
   const result = runCli(["recipe", "dispute-evidence-linked-deliverable", "--compact"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /^do:clawnera-help dispute-evidence-publish --case-id <disputeCaseId> --auth-state-file ~\/\.config\/clawnera\/auth-state\.json/m);
+  assert.match(result.stdout, /^do:clawnera-help write-gate --auth-state-file ~\/\.config\/clawnera\/auth-state\.json && clawnera-help dispute-evidence-publish --case-id <disputeCaseId> --auth-state-file ~\/\.config\/clawnera\/auth-state\.json/m);
   assert.match(result.stdout, /^write:POST \/disputes\/\{disputeCaseId\}\/evidence/m);
   assert.match(result.stdout, /^next:dispute-evidence-supplemental-bundle \| reviewer-inspect-evidence \| reviewer-vote/m);
 });
@@ -977,7 +1301,7 @@ test("replacement compact output highlights live case readback and replace publi
   assert.equal(result.status, 0);
   assert.match(
     result.stdout,
-    /^do:clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <disputeCaseId> --auth-state-file ~\/\.config\/clawnera\/auth-state\.json/m
+    /^do:clawnera-help write-gate --auth-state-file ~\/\.config\/clawnera\/auth-state\.json && clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <disputeCaseId> --auth-state-file ~\/\.config\/clawnera\/auth-state\.json/m
   );
   assert.match(
     result.stdout,
@@ -1060,8 +1384,12 @@ test("mailbox handshake recipe explains tx output seq fallback", () => {
 test("next mailbox-handshake includes the explicit bind handoff after init-plan", () => {
   const result = runCli(["next", "mailbox-handshake"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /^do:clawnera-help tx-plan-dry-run POST \/orders\/<orderId>\/mailbox\/init-plan/m);
-  assert.match(result.stdout, /execute the reviewed canonical plan in a chain-native client and bind its verified order_mailbox_object_id/);
+  assert.match(
+    result.stdout,
+    /^do:clawnera-help write-gate --auth-state-file ~\/\.config\/clawnera\/auth-state\.json && clawnera-help tx-plan-dry-run POST \/orders\/<orderId>\/mailbox\/init-plan/m,
+  );
+  assert.match(result.stdout, /rerun the gate before executing the reviewed canonical plan/);
+  assert.match(result.stdout, /binding its verified order_mailbox_object_id/);
 });
 
 test("replacement recipe explains full reassignment semantics", () => {
@@ -1104,6 +1432,12 @@ test("reviewer vote prepare json output matches contract semantics", () => {
 test("milestone reject computes canonical rejection reason hash", async () => {
   const expectedHash = createHash("sha256").update("bad jpeg", "utf8").digest("hex");
   const server = http.createServer(async (req, res) => {
+    if (req.method === "GET" && /^\/policy\/write-gate\?nonce=[0-9a-f]{32}$/.test(req.url || "")) {
+      const response = buildMarketplaceWriteGateResponse(req);
+      res.writeHead(response.status, { "content-type": "application/json", ...response.headers });
+      res.end(JSON.stringify(response.body));
+      return;
+    }
     let raw = "";
     for await (const chunk of req) {
       raw += chunk;
@@ -1144,7 +1478,10 @@ test("recipe aliases work", () => {
   const result = runCli(["next", "buyer-place-bid"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^recipe:buyer-place-bid/m);
-  assert.match(result.stdout, /^do:clawnera-help bid-create .* --display-values/m);
+  assert.match(
+    result.stdout,
+    /^do:clawnera-help write-gate --auth-state-file .* && clawnera-help bid-create .* --display-values/m,
+  );
   assert.match(result.stdout, /^write:POST \/bids/m);
   assert.match(result.stdout, /^next:buyer-accept-bid/m);
 });
@@ -1274,8 +1611,8 @@ test("show canonical-flow topic works", () => {
   const result = runCli(["show", "canonical-flow"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Canonical Live Run Checklist/);
-  assert.match(result.stdout, /One live write, one readback/);
-  assert.match(result.stdout, /choose exactly one wake-up path before writing anything live/);
+  assert.match(result.stdout, /One future write-open action, one readback/);
+  assert.match(result.stdout, /choose exactly one wake-up path before writing anything/);
 });
 
 test("show live-order-flow topic works", () => {
@@ -2514,6 +2851,10 @@ test("notifications init rejects auth state apiBase mismatch", () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /auth_state_api_base_mismatch/);
   assert.match(result.stderr, /staging\.clawnera\.example/);
+  assert.match(
+    result.stderr,
+    /clawnera-help write-gate --api-base 'https:\/\/api\.clawnera\.com' && clawnera-help ensure-auth --api-base 'https:\/\/api\.clawnera\.com' --auth-state-file/,
+  );
 });
 
 test("notifications init rejects invalid package roots before writing files", () => {
@@ -2861,6 +3202,7 @@ test("wallet-init creates a local keystore entry", () => {
     assert.equal(result.status, 0);
     assert.match(result.stdout, /wallet_init_ok/);
     assert.match(result.stdout, /wallet_alias=sdk-buyer/);
+    assert.match(result.stdout, /next_hint=clawnera-help write-gate --api-base 'https:\/\/api\.clawnera\.com' &&/);
     assert.match(result.stdout, /clawnera-help ensure-auth --api-base https:\/\/api\.clawnera\.com/);
     assert.equal(existsSync(keystoreFile), true);
 
@@ -2895,6 +3237,13 @@ test("auth-login falls back to the sole keystore entry when no IOTA CLI address 
     }
     const bodyText = Buffer.concat(chunks).toString("utf8");
     const body = bodyText ? JSON.parse(bodyText) : {};
+
+    if (req.method === "GET" && /^\/policy\/write-gate\?nonce=[0-9a-f]{32}$/.test(req.url || "")) {
+      const response = buildMarketplaceWriteGateResponse(req);
+      res.writeHead(response.status, { "content-type": "application/json", ...response.headers });
+      res.end(JSON.stringify(response.body));
+      return;
+    }
 
     if (req.url === "/auth/challenge" && req.method === "POST") {
       assert.equal(body.address, createdAddress);
@@ -2994,15 +3343,17 @@ test("ensure-auth alias help resolves to the canonical helper", () => {
 test("sponsor-execute help prints usage", () => {
   const result = runCli(["sponsor-execute", "--help"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /Sponsor execute helper/);
-  assert.match(result.stdout, /reserve -> run --build-cmd -> execute/);
+  assert.match(result.stdout, /Sponsor execution is quarantined/);
+  assert.match(result.stdout, /--dry-run is also disabled/);
+  assert.match(result.stdout, /non-reserving\/non-executing protocol diagnostic/);
 });
 
 test("sponsor-preflight help prints usage", () => {
   const result = runCli(["sponsor-preflight", "--help"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Sponsor preflight helper/);
-  assert.match(result.stdout, /strategy, diagnostics, tx family, and gas recommendations/);
+  assert.match(result.stdout, /without reserving gas or executing a transaction/);
+  assert.match(result.stdout, /Live write_freeze blocks this POST/);
 });
 
 test("telegram event notifier example prints help", () => {
@@ -3017,10 +3368,10 @@ test("telegram event notifier example prints help", () => {
   assert.match(result.stdout, /CLAWNERA_NOTIFY_PRESET/);
 });
 
-test("sponsor-execute fails without api base and jwt", () => {
+test("sponsor-execute is quarantined before runtime validation", () => {
   const result = runCli(["sponsor-execute", "--dry-run"]);
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /sponsor_execute_helper_error/);
+  assert.equal(result.status, 78);
+  assert.match(result.stderr, /sponsor_execute_helper_error: sponsor_execute_quarantined/);
 });
 
 test("sponsor-preflight fails without api base and jwt", () => {

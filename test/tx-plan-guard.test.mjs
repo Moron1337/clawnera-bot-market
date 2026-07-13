@@ -73,10 +73,16 @@ function reviewerShortlistPayload(reviewers = [B, C], { scope = "OPEN" } = {}) {
             orderId: "order-1",
             milestoneId: "milestone-1",
             invitedReviewerAddresses: [...reviewers],
+            packageId: A,
+            disputeQuorumConfigObjectId: B,
+            governanceConfigObjectId: C,
           }
         : {
             disputeCaseObjectId: A,
             invitedReviewerAddresses: [...reviewers],
+            packageId: A,
+            disputeQuorumConfigObjectId: B,
+            governanceConfigObjectId: C,
           },
       missingOperatorInputs: open
         ? [
@@ -337,6 +343,12 @@ test("reviewer shortlist guard rejects receipt, route, ordering, and operator-in
     [
       (payload) => {
         payload.operatorAuthorizationHandoff.missingOperatorInputs.pop();
+      },
+      /reviewer_shortlist_missing_operator_inputs_invalid/,
+    ],
+    [
+      (payload) => {
+        delete payload.operatorAuthorizationHandoff.preparedRequest.governanceConfigObjectId;
       },
       /reviewer_shortlist_missing_operator_inputs_invalid/,
     ],

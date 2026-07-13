@@ -473,6 +473,96 @@
         }
       }
     },
+    "/policy/write-gate": {
+      "get": {
+        "path": "/policy/write-gate",
+        "method": "get",
+        "operationId": "getMarketplaceWriteGateAttestation",
+        "tags": [
+          "Policy"
+        ],
+        "parameters": {
+          "path": [],
+          "query": [
+            {
+              "name": "nonce",
+              "in": "query",
+              "required": true
+            }
+          ],
+          "header": []
+        },
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "status": "200",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/MarketplaceWriteGateAttestation",
+            "schemaName": "MarketplaceWriteGateAttestation",
+            "requiredFields": [
+              "version",
+              "nonce",
+              "generatedAt",
+              "generatedAtMs",
+              "expiresAtMs",
+              "apiOrigin",
+              "gate",
+              "chain"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "version",
+              "nonce",
+              "generatedAt",
+              "generatedAtMs",
+              "expiresAtMs",
+              "apiOrigin",
+              "gate",
+              "chain"
+            ]
+          },
+          "400": {
+            "status": "400",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "429": {
+            "status": "429",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          },
+          "503": {
+            "status": "503",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
+          }
+        }
+      }
+    },
     "/policy/sponsor": {
       "get": {
         "path": "/policy/sponsor",
@@ -7898,6 +7988,7 @@
               "disputeCaseObjectId",
               "orderId",
               "milestoneId",
+              "requestHash",
               "checkpointSequenceNumber",
               "checkpointTimestampMs",
               "checkpointSource",
@@ -7917,6 +8008,7 @@
               "reviewerCountRequested",
               "reviewerCountSelected",
               "selectionPolicyVersion",
+              "requestHash",
               "checkpointDigest",
               "checkpointSequenceNumber",
               "checkpointTimestampMs",
@@ -13009,6 +13101,7 @@
             "checkpointDigest"
           ],
           "optionalFields": [
+            "receiptId",
             "reviewerCount",
             "directoryScanLimit",
             "orderId",
@@ -13028,6 +13121,7 @@
           ],
           "propertyNames": [
             "scope",
+            "receiptId",
             "reviewerCount",
             "directoryScanLimit",
             "checkpointDigest",
@@ -13190,6 +13284,7 @@
               "disputeCaseObjectId",
               "orderId",
               "milestoneId",
+              "requestHash",
               "checkpointSequenceNumber",
               "checkpointTimestampMs",
               "checkpointSource",
@@ -13209,6 +13304,7 @@
               "reviewerCountRequested",
               "reviewerCountSelected",
               "selectionPolicyVersion",
+              "requestHash",
               "checkpointDigest",
               "checkpointSequenceNumber",
               "checkpointTimestampMs",
@@ -13709,6 +13805,93 @@
             "assets",
             "fees",
             "runtime"
+          ]
+        }
+      }
+    },
+    "getMarketplaceWriteGateAttestation": {
+      "path": "/policy/write-gate",
+      "method": "get",
+      "tags": [
+        "Policy"
+      ],
+      "parameters": {
+        "path": [],
+        "query": [
+          {
+            "name": "nonce",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "header": []
+      },
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "status": "200",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/MarketplaceWriteGateAttestation",
+          "schemaName": "MarketplaceWriteGateAttestation",
+          "requiredFields": [
+            "version",
+            "nonce",
+            "generatedAt",
+            "generatedAtMs",
+            "expiresAtMs",
+            "apiOrigin",
+            "gate",
+            "chain"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "version",
+            "nonce",
+            "generatedAt",
+            "generatedAtMs",
+            "expiresAtMs",
+            "apiOrigin",
+            "gate",
+            "chain"
+          ]
+        },
+        "400": {
+          "status": "400",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "429": {
+          "status": "429",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "503": {
+          "status": "503",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
           ]
         }
       }
@@ -20945,6 +21128,7 @@
             "disputeCaseObjectId",
             "orderId",
             "milestoneId",
+            "requestHash",
             "checkpointSequenceNumber",
             "checkpointTimestampMs",
             "checkpointSource",
@@ -20964,6 +21148,7 @@
             "reviewerCountRequested",
             "reviewerCountSelected",
             "selectionPolicyVersion",
+            "requestHash",
             "checkpointDigest",
             "checkpointSequenceNumber",
             "checkpointTimestampMs",
@@ -25932,6 +26117,7 @@
           "checkpointDigest"
         ],
         "optionalFields": [
+          "receiptId",
           "reviewerCount",
           "directoryScanLimit",
           "orderId",
@@ -25951,6 +26137,7 @@
         ],
         "propertyNames": [
           "scope",
+          "receiptId",
           "reviewerCount",
           "directoryScanLimit",
           "checkpointDigest",
@@ -26110,6 +26297,7 @@
             "disputeCaseObjectId",
             "orderId",
             "milestoneId",
+            "requestHash",
             "checkpointSequenceNumber",
             "checkpointTimestampMs",
             "checkpointSource",
@@ -26129,6 +26317,7 @@
             "reviewerCountRequested",
             "reviewerCountSelected",
             "selectionPolicyVersion",
+            "requestHash",
             "checkpointDigest",
             "checkpointSequenceNumber",
             "checkpointTimestampMs",
@@ -28707,6 +28896,7 @@
       "name": "ReviewerSelectionShortlistRequest",
       "propertyNames": [
         "scope",
+        "receiptId",
         "reviewerCount",
         "directoryScanLimit",
         "checkpointDigest",
@@ -28730,6 +28920,7 @@
         "checkpointDigest"
       ],
       "optionalFields": [
+        "receiptId",
         "reviewerCount",
         "directoryScanLimit",
         "orderId",
@@ -28823,6 +29014,7 @@
         "reviewerCountRequested",
         "reviewerCountSelected",
         "selectionPolicyVersion",
+        "requestHash",
         "checkpointDigest",
         "checkpointSequenceNumber",
         "checkpointTimestampMs",
@@ -28868,6 +29060,7 @@
         "disputeCaseObjectId",
         "orderId",
         "milestoneId",
+        "requestHash",
         "checkpointSequenceNumber",
         "checkpointTimestampMs",
         "checkpointSource",
@@ -30414,6 +30607,30 @@
         "assets",
         "fees",
         "runtime"
+      ],
+      "optionalFields": []
+    },
+    "MarketplaceWriteGateAttestation": {
+      "name": "MarketplaceWriteGateAttestation",
+      "propertyNames": [
+        "version",
+        "nonce",
+        "generatedAt",
+        "generatedAtMs",
+        "expiresAtMs",
+        "apiOrigin",
+        "gate",
+        "chain"
+      ],
+      "requiredFields": [
+        "version",
+        "nonce",
+        "generatedAt",
+        "generatedAtMs",
+        "expiresAtMs",
+        "apiOrigin",
+        "gate",
+        "chain"
       ],
       "optionalFields": []
     },

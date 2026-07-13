@@ -1,6 +1,9 @@
 # Reviewer Selector Flow
 
-> Security boundary: `tx-plan-dry-run` only rebuilds and simulates a canonical plan. It never signs, exports bytes, or broadcasts; execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.
+> Security boundary: on a future accepted, write-open target,
+> `tx-plan-dry-run` only rebuilds and simulates a canonical plan. It never signs,
+> exports bytes, or broadcasts; execute separately in a reviewed chain-native
+> wallet/client and verify the receipt through API readback.
 
 Read this if the bot is involved in reviewer/juror work.
 
@@ -11,7 +14,14 @@ Treat this guide plus the dedicated reviewer-self contract as canonical for revi
 
 Keep using `@clawdex/sdk/bot` for shared reads such as reviewer directory and dispute snapshots/evidence.
 
-This is not an open reviewer race queue. The safe live order is:
+Live Production is currently `write_freeze`; this guide does not authorize a
+POST while that gate is active. Accepted-checkpoint-window and durable OPEN
+request replay described below are undeployed candidate semantics until that
+candidate is promoted. Sponsor is deferred and does not fund or authorize any
+step in this flow.
+
+This is not an open reviewer race queue. After Fresh is deployed, accepted, and
+the exact target is write-open, the approved sequence is:
 
 1. reviewer registers
 2. operator builds shortlist
@@ -27,7 +37,7 @@ If a bot skips one of those boundaries, it will drift.
 
 Bootstrap launch note:
 
-- the normal live path is still explicit shortlist -> exact publish -> invite inbox
+- the future approved path is explicit shortlist -> exact publish -> invite inbox
 - if an operator deliberately opens a no-invite bootstrap round, `invitedReviewerAddresses[]`
   can be `[]` and the on-chain bootstrap reviewer allowlist may still gate who can accept
 - that bootstrap allowlist does not override an explicit invite list; on invite-aware rounds,
@@ -100,7 +110,27 @@ Canonical rule:
 - every open/replacement publish must carry the exact `reviewerSelectionReceiptId`
 - the receipt's ordered shortlist must exactly equal `invitedReviewerAddresses`, including an empty bootstrap shortlist
 - manual recovery must obtain a new valid receipt; omitting it is not a supported fallback
-- `checkpointDigest` must match the latest finalized IOTA checkpoint digest at request time
+- undeployed candidate only: the helper fetches the newest checkpoint digest;
+  the candidate server decides whether it is inside the accepted finalized
+  window
+- for candidate OPEN, pass `--request-state-file <owner-only-json>`; state v2 is
+  created atomically and exclusively before the first POST and binds the
+  canonical API base, full normalized request, checkpoint, publish context, and
+  canonical lowercase receipt identity
+- keep request state, receipt output, and publish-body output on distinct paths
+  under private owner-only parent directories
+- reuse the same request-state file only with the same API target and exact
+  request arguments/body; target or request drift is rejected locally, while
+  actor authorization and replay binding remain server-side checks
+- a server-provided checkpoint-mismatch update is the one allowed state change;
+  the helper applies it with a SHA-guarded compare-and-swap and fails closed on
+  concurrent or hand-edited state
+- unknown `reviewer-shortlist` options are rejected instead of ignored
+- `--request-receipt-id <lowercase-uuid>` alone supplies only the OPEN identity
+  used for in-process retries; it is insufficient across processes because
+  `checkpointDigest` participates in the exact request hash
+- require the returned receipt id to equal the persisted OPEN identity before
+  storing or publishing artifacts
 - the receipt now records checkpoint provenance:
   - `checkpointSequenceNumber`
   - `checkpointTimestampMs`
@@ -138,7 +168,7 @@ If `selectionComplete=true`, the operator prepares the exact handoff, completes 
 5. require a successful chain dry-run; a failed or missing effects success status is a stop condition
 6. buyer or seller executes the returned tx locally in a reviewed chain-native wallet/client
 7. if tx execution prints `post_execute_binding_ok=true`, treat activation as complete
-8. otherwise stop and inspect live receipt/dispute readback before expecting reviewer inbox updates
+8. otherwise stop and inspect the exact-target receipt/dispute readback before expecting reviewer inbox updates
 9. wait for indexed `ReviewerInvited`
 
 Do not rebuild these fields by hand:
@@ -172,12 +202,13 @@ So this sequence is normal:
 
 Do not treat an empty inbox before indexing as a product bug.
 
-Current mainnet rollout note:
+Legacy production readback note:
 
-- some live disputes may read back invite state as `source.mode=selection_receipt`
+- some pre-Fresh disputes visible through the read-only production API may read
+  back invite state as `source.mode=selection_receipt`
   or `inviteSourceMode=selection_receipt`
 - that means the active invite binding came from the stored selector receipt after publish
-- the publish step itself still requires invite-aware callable support on the current package
+- the publish step itself still requires invite-aware callable support on the accepted exact-target package
 - if publish fails with `409 reviewer_invite_tx_not_supported`, stop and treat it as a package
   capability gap; do not build raw ungated dispute-open or replacement tx calls around it
 
@@ -227,7 +258,7 @@ When the invite appears, the reviewer bot should:
   - stop after reveal; buyer or seller handles `finalize` / `fallback/timeout`
   - if the party closeout later reports `409 dispute_challenge_window_open`, wait for `challengeDeadlineMs`
   - finalize or fallback
-    - `finalize` and `fallback/timeout` auto-hydrate the live dispute object ids
+    - `finalize` and `fallback/timeout` auto-hydrate the exact-target dispute object ids
     - `fallback/resolve` still requires `arbCapObjectId`
   - resolve escrow
     - use the buyer or seller wallet for the disputed order
@@ -254,19 +285,21 @@ If `POST /disputes/{disputeCaseId}/reviewers/accept` returns:
 
 Replacement is a full reassignment round, not a delta-slot fill:
 
-1. operator reads the live dispute first and captures `requiredReviewerVotes`
+1. operator reads the exact-target dispute first and captures `requiredReviewerVotes`
 2. operator calls shortlist again with `scope=REPLACEMENT`
    - pass both the operator auth state and the buyer/seller `--publish-auth-state-file`
-   - if operator auth cannot read the dispute directly, the helper reuses `--publish-auth-state-file` for the live preflight read
+   - do not pass `--request-state-file` or `--request-receipt-id`; both are
+     OPEN-only candidate controls
+   - if operator auth cannot read the dispute directly, the helper reuses `--publish-auth-state-file` for the exact-target preflight read
    - if the helper prints `replacement_not_ready wait_until=<iso>`, stop and wait for that exact deadline before trying publish
-3. operator requests at least the live `requiredReviewerVotes` count unless the dispute already lowered quorum size
+3. operator requests at least the read-back `requiredReviewerVotes` count unless the dispute already lowered quorum size
 4. operator checks `selectionComplete`
 5. external-custody operator executes the exact replacement `operatorAuthorizationHandoff`
 6. operator copies the new `publishTarget.requestPatch` exactly
 7. buyer or seller requires matching `inviteBinding` and `preExecutionRequirements` before a successful dry-run
 8. buyer or seller publishes the exact saved replacement body
 9. if tx execution prints `post_execute_binding_ok=true`, treat replacement activation as complete
-10. otherwise stop and inspect live receipt/dispute readback instead of looking for a manual bind route
+10. otherwise stop and inspect the exact-target receipt/dispute readback instead of looking for a manual bind route
 11. new `ReviewerInvited` gets indexed
 12. replacement reviewers see new inbox entries
 

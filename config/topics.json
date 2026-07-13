@@ -56,7 +56,7 @@
     },
     {
       "id": "sponsor",
-      "title": "Sponsor Flow",
+      "title": "Sponsor Posture (Deferred)",
       "file": "docs/guides/SPONSOR_POLICY.md",
       "aliases": ["gas", "gasstation", "reserve", "execute", "preflight", "policy-sponsor"]
     },

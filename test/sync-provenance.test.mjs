@@ -12,6 +12,15 @@ import {
   validateSyncProvenance,
 } from "../scripts/ci/check-sync-provenance.mjs";
 
+const INTERNAL_SESSION_STATUS_PATH = "docs/docsources/core/NEXT_SESSION_STATUS.md";
+const INTERNAL_CLAW_OPERATOR_PATHS = [
+  "docs/docsources/claw/CLAW_LOCAL_ORACLE_SYNC_RUNBOOK.md",
+  "docs/docsources/claw/CLAW_OPERATIONS_CURRENT.md",
+  "docs/docsources/claw/CLAW_SWAP_GATEWAY_CURRENT.md",
+];
+const MARKETPLACE_DEPLOYMENT_MAPPING =
+  "docs/security/evidence/iota-fresh-generation/public-helper-deployment.json|config/marketplace-deployments.json";
+
 function buildCurrentValidManifest(root) {
   const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   const lines = [
@@ -30,7 +39,7 @@ function buildCurrentValidManifest(root) {
   return `${lines.join("\n")}\n`;
 }
 
-test("sync script requires remote commit provenance, frozen install, and the exact mapping set", () => {
+test("sync script uses exact commit blobs and an isolated build snapshot for the exact mapping set", () => {
   const root = path.resolve(import.meta.dirname, "..");
   const source = fs.readFileSync(path.join(root, "scripts", "sync-local-sources.sh"), "utf8");
   for (const fragment of [
@@ -38,19 +47,89 @@ test("sync script requires remote commit provenance, frozen install, and the exa
     '[[ ! "$MARKETPLACE_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]',
     "fetch --prune --no-tags origin '+refs/heads/*:refs/remotes/origin/*'",
     'for-each-ref --format=\'%(refname)\' --contains "$SOURCE_COMMIT" refs/remotes/origin/',
-    'install --frozen-lockfile',
-    '[[ -L "$cursor" ]]',
-    'SDK_DEPENDENCY_ROOT="$MARKETPLACE_SOURCE_ROOT/packages/sdk/node_modules"',
+    'git -C "$MARKETPLACE_SOURCE_ROOT" cat-file blob "$blob_id"',
+    'git -C "$MARKETPLACE_SOURCE_ROOT" archive --format=tar "$SOURCE_COMMIT"',
+    'corepack pnpm --dir "$SOURCE_SNAPSHOT" install --frozen-lockfile',
+    'corepack pnpm --dir "$SOURCE_SNAPSHOT" --filter @clawdex/sdk build',
+    'SDK_DEPENDENCY_ROOT="$SOURCE_SNAPSHOT/packages/sdk/node_modules"',
+    "--format='%(objectmode)%x09%(objecttype)%x09%(objectname)%x09%(path)'",
+    '[[ "$entry_type" != "blob" ]]',
+    '[[ "$entry_mode" != "100644" ]]',
+    'SOURCE_SNAPSHOT_PARENT="$(mktemp -d "${TMPDIR:-/tmp}/clawnera-runtime-source.XXXXXX")"',
+    "trap cleanup EXIT",
+    'temporary="$(mktemp "$(dirname "$destination")/.${destination##*/}.XXXXXX")"',
+    'mv -fT -- "$temporary" "$destination"',
+    'blob_id="$(committed_blob_id "$source_relative")"',
+    'atomic_write_committed_blob "$blob_id" "$destination_relative"',
+    'atomic_write_generated_file "$source_relative" "$destination_relative"',
     'unexpected_package_manifest:',
   ]) {
     assert.ok(source.includes(fragment), `sync hardening fragment missing: ${fragment}`);
   }
+  assert.ok(!source.includes('corepack pnpm --dir "$MARKETPLACE_SOURCE_ROOT"'));
+  assert.ok(!source.includes('"$MARKETPLACE_SOURCE_ROOT/$source_relative"'));
+  assert.ok(!source.includes('install -m 0644 -- "$MARKETPLACE_SOURCE_ROOT/'));
+  assert.ok(!source.includes('cp -- "$MARKETPLACE_SOURCE_ROOT/'));
   assert.ok(!source.includes('$MARKETPLACE_SOURCE_ROOT/node_modules/@iota/iota-sdk/package.json'));
   assert.ok(!source.includes('$MARKETPLACE_SOURCE_ROOT/node_modules/@mysten/sui/package.json'));
-  const mappedDestinations = [...source.matchAll(/^\s+"[^"|]+\|([^"|]+)"$/gm)]
-    .map((match) => match[1])
+  const committedBlock = source.match(/COMMITTED_SOURCE_MAPPINGS=\(\n(?<body>[\s\S]*?)\n\)/)?.groups?.body;
+  const generatedBlock = source.match(/GENERATED_SOURCE_MAPPINGS=\(\n(?<body>[\s\S]*?)\n\)/)?.groups?.body;
+  assert.ok(committedBlock, "committed source mapping block missing");
+  assert.ok(generatedBlock, "generated source mapping block missing");
+  const parseMappings = (block) =>
+    [...block.matchAll(/^\s+"([^"|]+)\|([^"|]+)"$/gm)].map((match) => ({
+      source: match[1],
+      destination: match[2],
+    }));
+  const committedMappings = parseMappings(committedBlock);
+  const generatedMappings = parseMappings(generatedBlock);
+  assert.equal(committedMappings.length, 13);
+  assert.equal(generatedMappings.length, 11);
+  assert.ok(committedMappings.every(({ source: sourcePath }) => !sourcePath.startsWith("packages/sdk/dist/")));
+  assert.ok(generatedMappings.every(({ source: sourcePath }) => sourcePath.startsWith("packages/sdk/dist/")));
+  const mappings = [...source.matchAll(/^\s+"([^"|]+)\|([^"|]+)"$/gm)].map((match) => ({
+    source: match[1],
+    destination: match[2],
+  }));
+  const mappedDestinations = mappings
+    .map(({ destination }) => destination)
     .sort();
   assert.deepEqual(mappedDestinations, [...EXPECTED_SYNC_PATHS].sort());
+  assert.ok(
+    mappings.some(({ source: sourcePath, destination }) =>
+      `${sourcePath}|${destination}` === MARKETPLACE_DEPLOYMENT_MAPPING),
+    "runtime-owned deployment registry mapping missing",
+  );
+});
+
+test("operator status and CLAW operations material stay outside public tree, sync, and package surfaces", () => {
+  const root = path.resolve(import.meta.dirname, "..");
+  const syncSource = fs.readFileSync(path.join(root, "scripts", "sync-local-sources.sh"), "utf8");
+  const publishSurfaceSource = fs.readFileSync(
+    path.join(root, "scripts", "ci", "check-publish-surface.sh"),
+    "utf8",
+  );
+  const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+
+  assert.ok(!EXPECTED_SYNC_PATHS.includes(INTERNAL_SESSION_STATUS_PATH));
+  assert.ok(!EXPECTED_PUBLISHED_SYNC_PATHS.includes(INTERNAL_SESSION_STATUS_PATH));
+  assert.ok(!packageJson.files.includes(INTERNAL_SESSION_STATUS_PATH));
+  assert.doesNotMatch(syncSource, /docs\/NEXT_SESSION_STATUS\.md/);
+  assert.ok(publishSurfaceSource.includes(`"${INTERNAL_SESSION_STATUS_PATH}"`));
+  assert.equal(fs.existsSync(path.join(root, INTERNAL_SESSION_STATUS_PATH)), false);
+  for (const relativePath of INTERNAL_CLAW_OPERATOR_PATHS) {
+    assert.ok(!EXPECTED_SYNC_PATHS.includes(relativePath));
+    assert.ok(!EXPECTED_PUBLISHED_SYNC_PATHS.includes(relativePath));
+    assert.ok(!packageJson.files.includes(relativePath));
+    assert.ok(publishSurfaceSource.includes(`"${relativePath}"`));
+    assert.equal(fs.existsSync(path.join(root, relativePath)), false);
+  }
+  const internalClawDirectory = path.join(root, "docs", "docsources", "claw");
+  assert.deepEqual(
+    fs.existsSync(internalClawDirectory) ? fs.readdirSync(internalClawDirectory) : [],
+    [],
+    "docs/docsources/claw must remain empty so renamed operator material cannot enter the public Git tree",
+  );
 });
 
 test("checked-in sync provenance has the exact unique source set", () => {
@@ -60,7 +139,12 @@ test("checked-in sync provenance has the exact unique source set", () => {
   const parsed = parseSyncManifest(manifest);
   assert.deepEqual(parsed.hashes.map(({ relative }) => relative), EXPECTED_SYNC_PATHS);
   assert.deepEqual(
-    packageJson.files.filter((entry) => entry.startsWith("docs/docsources/")).sort(),
+    packageJson.files
+      .filter(
+        (entry) =>
+          entry === "config/marketplace-deployments.json" || entry.startsWith("docs/docsources/"),
+      )
+      .sort(),
     [...EXPECTED_PUBLISHED_SYNC_PATHS].sort(),
   );
   assert.ok(EXPECTED_PUBLISHED_SYNC_PATHS.every((entry) => EXPECTED_SYNC_PATHS.includes(entry)));

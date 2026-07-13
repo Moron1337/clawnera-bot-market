@@ -14,6 +14,10 @@ import {
   writePrivateJsonAtomic
 } from "../lib/local-security.mjs";
 import {
+  createMarketplaceWriteGateNonce,
+  validateMarketplaceWriteGateAttestation
+} from "../lib/marketplace-write-gate.mjs";
+import {
   CUSTOM_NOTIFICATION_PRESET,
   DEFAULT_NOTIFICATION_BATCH_LIMIT,
   DEFAULT_NOTIFICATION_PRESET,
@@ -70,6 +74,7 @@ Auth precedence:
 - Env auth wins when valid.
 - Invalid env auth fails startup by default.
 - Set CLAWNERA_NOTIFY_ALLOW_AUTH_STATE_FALLBACK=1 to let the notifier fall back to a valid auth state file.
+- Token refresh is an auth mutation and runs only after the exact API target passes the Marketplace write gate.
 `;
 const CURSOR_PERSIST_ATTEMPTS = 3;
 const CURSOR_PERSIST_RETRY_DELAY_MS = 150;
@@ -237,6 +242,54 @@ async function fetchEventPage({ apiBase, jwt, cursor, batchLimit, timeoutMs, eve
   };
 }
 
+async function assertNotifierAuthRefreshWriteGate({ apiBase, timeoutMs }) {
+  const nonce = createMarketplaceWriteGateNonce();
+  const gateUrl = new URL("/policy/write-gate", apiBase);
+  gateUrl.searchParams.set("nonce", nonce);
+  let response;
+  let body;
+  try {
+    response = await fetch(gateUrl, {
+      method: "GET",
+      cache: "no-store",
+      redirect: "error",
+      headers: {
+        accept: "application/json",
+        "cache-control": "no-cache, no-store",
+        pragma: "no-cache"
+      },
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+    if (!response.ok) {
+      throw new Error(`marketplace_write_gate_http_${response.status}`);
+    }
+    body = await response.json();
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "marketplace_write_gate_request_failed";
+    throw new Error(`auth_refresh_write_gate_unavailable:${reason}`);
+  }
+
+  try {
+    return validateMarketplaceWriteGateAttestation({
+      body,
+      headers: response.headers,
+      apiBase,
+      nonce
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "marketplace_write_gate_validation_failed";
+    if (reason === "marketplace_write_gate_closed") {
+      throw new Error("auth_refresh_write_gate_closed");
+    }
+    throw new Error(`auth_refresh_write_gate_unavailable:${reason}`);
+  }
+}
+
+async function refreshNotifierAuthState({ apiBase, authState, timeoutMs }) {
+  await assertNotifierAuthRefreshWriteGate({ apiBase, timeoutMs });
+  return refreshAuthState({ apiBase, authState, timeoutMs });
+}
+
 async function loadNotifierAuthState({ apiBase, authStateFile }) {
   const envToken = readOptionalEnv("CLAWNERA_API_JWT");
   const envRefreshToken = readOptionalEnv("CLAWNERA_API_REFRESH_TOKEN");
@@ -330,7 +383,7 @@ async function ensureFreshToken({ authState, authStateFile, timeoutMs, refreshSk
     if (!authState?.refreshToken) {
       throw new Error("missing_auth_token");
     }
-    const refreshed = await refreshAuthState({
+    const refreshed = await refreshNotifierAuthState({
       apiBase: authState.apiBase,
       authState,
       timeoutMs
@@ -349,7 +402,7 @@ async function ensureFreshToken({ authState, authStateFile, timeoutMs, refreshSk
     throw new Error("expired_auth_no_refresh");
   }
 
-  const refreshed = await refreshAuthState({
+  const refreshed = await refreshNotifierAuthState({
     apiBase: authState.apiBase,
     authState,
     timeoutMs
@@ -395,7 +448,7 @@ async function fetchEventPageWithRefresh({
       throw error;
     }
 
-    activeState = await refreshAuthState({
+    activeState = await refreshNotifierAuthState({
       apiBase: activeState.apiBase,
       authState: activeState,
       timeoutMs
@@ -465,6 +518,7 @@ function isFatalNotifierError(message) {
     message.startsWith("invalid_env_auth_source:") ||
     message.startsWith("auth_state_api_base_mismatch") ||
     message.startsWith("invalid_auth_state_file") ||
+    message.startsWith("auth_refresh_write_gate_") ||
     message.startsWith("auth_refresh_failed:400") ||
     message.startsWith("auth_refresh_failed:401") ||
     message.startsWith("auth_refresh_failed:403") ||

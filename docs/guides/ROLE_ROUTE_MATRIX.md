@@ -1,7 +1,18 @@
 # Role Route Matrix (Buyer, Seller, Quorum Evaluator)
 
+> Aktuelle Betriebsgrenze: Live Production ist unter `write_freeze` read-only.
+> Fresh-IOTA-Pakete und Pointer sind weder deployt noch akzeptiert; Legacy-IDs
+> sind kein Fallback. Tabellenzeilen mit `POST`, `PUT`, `PATCH` oder `DELETE`
+> beschreiben die Future-Write-Open-Contract-Surface, nicht aktuell ausfuehrbare
+> Produktion. Unmittelbar vor Auth, jeder API-Mutation und erneut vor jedem
+> direkten Marketplace-Move-Broadcast `clawnera-help write-gate` gegen den
+> exakten Target ausfuehren. Nur bei `source=runtime_db`, `preset=normal`,
+> `publicApiWrites=live` und `marketplaceWrites=live` fortfahren. Sponsor bleibt
+> deferred und emergency-disabled.
+
 ## Zweck
-- Vollstaendige Rollen-Sicht auf die aktuell produktive API-Surface.
+- Vollstaendige Rollen-Sicht auf die aktuelle Read-Surface und die vorgesehene
+  Future-Write-Open-Surface.
 - Fokus auf Guardrails: Capability, API-Rollencheck, State-Preconditions, on-chain Enforcement.
 
 ## Listing-Modes
@@ -19,7 +30,7 @@
 | --- | --- | --- | --- |
 | `GET /health`, `GET /ready` | none | Liveness/Readiness | Immer vor Write-Loops pollen. |
 | `GET /capabilities`, `GET /actors/me/capabilities` | none / bearer | Runtime + Actor Capabilities | Capability-Scope vor jeder Write-Aktion prufen. |
-| `POST /auth/challenge`, `POST /auth/verify`, `POST /auth/refresh`, `GET /auth/session`, `POST /auth/logout` | none / bearer | JWT Lifecycle | Access + rotating Refresh-Token cachen; `GET /auth/session` fuer Readback; bei Refresh-Fehler neu challengen/verifizieren. |
+| `POST /auth/challenge`, `POST /auth/verify`, `POST /auth/refresh`, `GET /auth/session`, `POST /auth/logout` | none / bearer | JWT Lifecycle | Nur `GET /auth/session` ist im Freeze nutzbar. Jeden Auth-POST auf einem spaeteren write-open Target unmittelbar mit `write-gate` absichern. |
 | `PUT /users/me/key-agreement`, `GET /users/{address}/key-agreement` | bearer / none | Secure Communication Bootstrap | Fuer Manifest/Encrypted Delivery praktisch Pflicht. |
 | `GET /policy/*`, `GET /rankings/listings` | none | Laufzeitregeln lesen | Fees/Ranking/Storage immer aus Runtime lesen. |
 | `GET /listings`, `GET /listings/categories`, `GET /listings/{listingId}` | none | Listing Discovery | Browse for discovery; use `GET /listings/{listingId}` for exact known-id readback. |
@@ -52,7 +63,7 @@
 | `POST /orders/{orderId}/milestones/{milestoneId}/reject` | `order.milestone.reject` | buyer only | Bei Erfolg typischerweise Order -> `DISPUTED`. |
 | `POST /orders/{orderId}/dispute-bond/fund` | `order.dispute_bond.fund` | buyer/seller only; `side` muss zur Actor-Rolle passen | Bestehendes `bondObjectId` Pflicht. |
 | `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` | `order.dispute.open` | buyer/seller only | Milestone muss `REJECTED` oder `DISPUTED` sein; escrow-id/order-bindung wird geprueft. |
-| `POST /disputes/{disputeCaseId}/evidence` | bearer | buyer/seller only | Buyer/Seller publishen dispute-scoped `linked_deliverable` oder `supplemental_bundle`; `supplemental_bundle` erzwingt den exakten Live-Empfaengersatz buyer + seller + assigned reviewers des aktiven Round. |
+| `POST /disputes/{disputeCaseId}/evidence` | bearer | buyer/seller only | Buyer/Seller publishen dispute-scoped `linked_deliverable` oder `supplemental_bundle`; `supplemental_bundle` erzwingt im akzeptierten Future-Flow den exakten Empfaengersatz buyer + seller + assigned reviewers des aktiven Round. |
 | `POST /disputes/{disputeCaseId}/reviewers/replace` | `dispute.reviewers.replace` | buyer/seller only | Nur sinnvoll bei Reviewer-Scarcity/No-Show. |
 | `POST /orders/{orderId}/deadline-ext/propose` | `order.deadline_ext.propose` | buyer/seller only | Escrow-Match zur Order wird geprueft. |
 | `POST /deadline-ext/{extensionObjectId}/reject` | `deadline_ext.reject` | capability-only | API ohne `orderId`-Check; Gegenpartei-Auth wird on-chain erzwungen. |
@@ -102,8 +113,8 @@
 | Route | Capability | API-Rollencheck | Hinweis |
 | --- | --- | --- | --- |
 | `POST /disputes/{id}/finalize` | `dispute.finalize` | capability, optional strict party guard | API kann buyer/seller/admin/arb hart begrenzen; on-chain payout ist deterministisch. |
-| `POST /disputes/{id}/fallback/timeout` | `dispute.fallback.timeout` | capability, optional strict party guard | Permissionless on-chain fallback bleibt deterministisch, HTTP kann aber buyer/seller/admin/arb begrenzen. |
-| `POST /disputes/{id}/resolve-escrow` | `dispute.resolve_escrow` | capability, optional strict party guard | API plant jetzt `resolve_dispute_with_binding`; keine caller-owned Ticket-Pflicht mehr. |
+| `POST /disputes/{id}/fallback/timeout` | `dispute.fallback.timeout` | capability, optional strict party guard | Der spaetere on-chain Fallback bleibt deterministisch; HTTP kann buyer/seller/admin/arb begrenzen. |
+| `POST /disputes/{id}/resolve-escrow` | `dispute.resolve_escrow` | capability, optional strict party guard | Die Future-Surface plant `resolve_dispute_with_binding`; keine caller-owned Ticket-Pflicht mehr. |
 ## 6) Wichtig: API-Guard vs. On-Chain-Guard
 
 - Einige Endpunkte pruefen Rollen strikt im API-Layer (z. B. Milestone submit/accept/reject, dispute open, reviewers replace).
@@ -115,6 +126,11 @@
 
 ## 7) Nicht als API-Route exponiert (derzeit nur SDK/Move direkt)
 
+Diese Targets sind keine Umgehung des Freeze. Erst nach akzeptiertem Fresh-
+Publish und Write-Oeffnung verwenden; unmittelbar vor jedem Broadcast das exakte
+`write-gate` erneut ausfuehren. Direct-Move-CLI-Helper brauchen zusaetzlich
+explizit `--execute`.
+
 - Reviewer-Lifecycle-Maintenance:
   - `dispute_quorum::force_deregister_reviewer`
   - `dispute_quorum::claim_force_deregistered_reviewer_stake`
@@ -123,7 +139,8 @@
 
 ## 8) Operator-only Ausnahmen
 
-Diese Routen sind real, aber nicht Teil des normalen Buyer-/Seller-/Reviewer-Pfads:
+Diese Routen sind Teil der Contract-Surface, aber aktuell nicht write-open und
+nicht Teil des normalen Buyer-/Seller-/Reviewer-Pfads:
 - `POST /admin/reviewer-selection/shortlist`
 - `GET /admin/reviewer-selection-receipts/{receiptId}`
 - `POST /disputes/{id}/fallback/resolve`

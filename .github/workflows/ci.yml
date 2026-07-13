@@ -54,7 +54,7 @@ jobs:
           node ./bin/clawnera-help.mjs report-issue --category integration-help --summary "ci smoke" --json >/dev/null
           node ./examples/doctor-authenticated.mjs --help >/dev/null
           node ./examples/actor-capabilities.mjs --help >/dev/null
-          node ./examples/sponsor-dry-run.mjs --help >/dev/null
+          node ./examples/sponsor-preflight.mjs --help >/dev/null
 
       - name: Package dry run
         run: npm run pack:dry-run

@@ -660,6 +660,85 @@ paths:
                 properties:
                   policy:
                     $ref: "#/components/schemas/MarketControlPlanePolicy"
+  /policy/write-gate:
+    get:
+      tags: [Policy]
+      security: []
+      operationId: getMarketplaceWriteGateAttestation
+      description: Returns a nonce-bound, uncached runtime and chain attestation for immediate pre-mutation verification.
+      parameters:
+        - name: nonce
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^[0-9a-f]{32}$"
+      responses:
+        "200":
+          description: Fresh runtime, chain, package, and object-pointer attestation.
+          headers:
+            Cache-Control:
+              description: Prevents storage or reuse of this short-lived attestation.
+              schema:
+                type: string
+            Pragma:
+              description: Legacy no-cache directive.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketplaceWriteGateAttestation"
+        "400":
+          description: The nonce is missing or malformed.
+          headers:
+            Cache-Control:
+              description: Prevents storage or reuse of the error response.
+              schema:
+                type: string
+            Pragma:
+              description: Legacy no-cache directive.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: The write-gate attestation rate limit was exceeded.
+          headers:
+            Cache-Control:
+              description: Prevents storage or reuse of the error response.
+              schema:
+                type: string
+            Pragma:
+              description: Legacy no-cache directive.
+              schema:
+                type: string
+            Retry-After:
+              description: Seconds until the client may retry.
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Runtime, chain, or package attestation unavailable; writes must fail closed.
+          headers:
+            Cache-Control:
+              description: Prevents storage or reuse of the error response.
+              schema:
+                type: string
+            Pragma:
+              description: Legacy no-cache directive.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /policy/sponsor:
     get:
       tags: [Policy, Sponsor]
@@ -4605,7 +4684,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "409":
-          description: Supplied checkpoint digest does not match the latest finalized checkpoint digest fetched server-side.
+          description: Supplied checkpoint is outside the accepted finalized window, or `receiptId` is already bound to another actor or normalized request.
           content:
             application/json:
               schema:
@@ -7932,6 +8011,11 @@ components:
         scope:
           type: string
           enum: [OPEN, REPLACEMENT]
+        receiptId:
+          type: string
+          format: uuid
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          description: "Optional client-persisted idempotency key. It must be a canonical lowercase UUID. An existing receipt is replayed before checkpoint freshness only for an exactly matching actor-bound OPEN request."
         reviewerCount:
           type: integer
           minimum: 1
@@ -7943,7 +8027,7 @@ components:
           description: "Maximum reviewer directory size scanned for this operator selection run. If more reviewer entries exist, the receipt marks `directoryScanTruncated=true`."
         checkpointDigest:
           type: string
-          description: "Must equal the latest finalized IOTA checkpoint digest fetched server-side at shortlist time. The route rejects stale or arbitrary digests with `409 checkpoint_digest_mismatch`."
+          description: "Must identify a finalized IOTA checkpoint inside the server-verified recent sequence-and-age window. The route fetches the latest checkpoint server-side and rejects future, stale, unknown, or arbitrary digests with `409 checkpoint_digest_mismatch`."
         orderId:
           type: string
         milestoneId:
@@ -8129,6 +8213,10 @@ components:
           type: integer
         selectionPolicyVersion:
           type: string
+        requestHash:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+          description: "SHA-256 fingerprint of the actor, effective receipt UUID, and normalized shortlist request. Historical receipts may omit it and are not eligible for early replay."
         checkpointDigest:
           type: string
         checkpointSequenceNumber:
@@ -8225,6 +8313,7 @@ components:
         operatorAuthorizationHandoff:
           type: object
           additionalProperties: false
+          description: "Non-executable custody handoff reconstructed from current runtime pointers. On replay, package and shared-object config IDs may differ from the original response and must be exact-bound and revalidated by the custody runner before publish."
           required:
             [
               state,
@@ -8264,6 +8353,7 @@ components:
               additionalProperties: true
             missingOperatorInputs:
               type: array
+              description: "All values still required before custody execution, including unavailable current runtime pointers such as `packageId` or `disputeQuorumConfigObjectId`."
               items:
                 type: string
     DisputeCaseSnapshot:
@@ -10932,7 +11022,8 @@ components:
                   type: string
                   enum: [IOTA]
                 minAmount:
-                  type: [string, "null"]
+                  type: string
+                  nullable: true
                   pattern: "^[0-9]+$"
             disputeBondPerSide:
               type: object
@@ -10942,31 +11033,38 @@ components:
                   type: string
                   enum: [IOTA]
                 minAmount:
-                  type: [string, "null"]
+                  type: string
+                  nullable: true
                   pattern: "^[0-9]+$"
                 maxAmount:
-                  type: [string, "null"]
+                  type: string
+                  nullable: true
                   pattern: "^[0-9]+$"
             quorumVotes:
               type: object
               required: [defaultRequiredVotes, minRequiredVotes, maxRequiredVotes]
               properties:
                 defaultRequiredVotes:
-                  type: [integer, "null"]
+                  type: integer
+                  nullable: true
                 minRequiredVotes:
-                  type: [integer, "null"]
+                  type: integer
+                  nullable: true
                 maxRequiredVotes:
-                  type: [integer, "null"]
+                  type: integer
+                  nullable: true
             payoutsBps:
               type: object
               required: [reviewer, platformFallback]
               properties:
                 reviewer:
-                  type: [integer, "null"]
+                  type: integer
+                  nullable: true
                   minimum: 0
                   maximum: 10000
                 platformFallback:
-                  type: [integer, "null"]
+                  type: integer
+                  nullable: true
                   minimum: 0
                   maximum: 10000
             reviewerSlashBps:
@@ -10974,19 +11072,23 @@ components:
               required: [noshow, invalidReveal, overturn]
               properties:
                 noshow:
-                  type: [integer, "null"]
+                  type: integer
+                  nullable: true
                   minimum: 0
                   maximum: 10000
                 invalidReveal:
-                  type: [integer, "null"]
+                  type: integer
+                  nullable: true
                   minimum: 0
                   maximum: 10000
                 overturn:
-                  type: [integer, "null"]
+                  type: integer
+                  nullable: true
                   minimum: 0
                   maximum: 10000
             platformFallbackSink:
-              type: [string, "null"]
+              type: string
+              nullable: true
             recommendation:
               $ref: "#/components/schemas/DisputeBondRecommendationPolicy"
     MarketControlPlanePolicy:
@@ -11001,6 +11103,129 @@ components:
           $ref: "#/components/schemas/FeePolicy"
         runtime:
           $ref: "#/components/schemas/RuntimeReadLanePolicy"
+    MarketplaceWriteGateAttestation:
+      type: object
+      required: [version, nonce, generatedAt, generatedAtMs, expiresAtMs, apiOrigin, gate, chain]
+      properties:
+        version:
+          type: string
+          enum: [marketplace_write_gate.v1]
+        nonce:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+        generatedAt:
+          type: string
+          format: date-time
+        generatedAtMs:
+          type: integer
+          minimum: 0
+        expiresAtMs:
+          type: integer
+          minimum: 0
+        apiOrigin:
+          type: string
+          format: uri
+        gate:
+          type: object
+          required:
+            [
+              source,
+              preset,
+              publicApiWrites,
+              marketplaceWrites,
+              releaseProfile,
+              releasePhase,
+              runtimeReady,
+              productiveWritesEnabled
+            ]
+          properties:
+            source:
+              type: string
+              enum: [runtime_db, stale_cache, unavailable_default_normal, write_gate_fail_closed]
+            preset:
+              type: string
+              enum: [normal, write_freeze, maintenance_public]
+            publicApiWrites:
+              type: string
+              enum: [live, blocked]
+            marketplaceWrites:
+              type: string
+              enum: [live, blocked]
+            releaseProfile:
+              type: string
+              enum: [off, controlled_v1]
+            releasePhase:
+              type: string
+              enum: [off, prepublish_closed, pre_canary_closed, canary_allowlisted]
+            runtimeReady:
+              type: boolean
+            productiveWritesEnabled:
+              type: boolean
+        chain:
+          type: object
+          required: [family, network, chainIdentifier, packageIds, objectIds]
+          properties:
+            family:
+              type: string
+              enum: [iota, sui]
+            network:
+              type: string
+              enum: [mainnet, testnet]
+            chainIdentifier:
+              type: string
+              pattern: "^[0-9a-f]{8}$"
+            packageIds:
+              type: object
+              required: [foundation, settlement, fulfillment, ops]
+              properties:
+                foundation:
+                  type: string
+                  pattern: "^0x[0-9a-f]{64}$"
+                settlement:
+                  type: string
+                  pattern: "^0x[0-9a-f]{64}$"
+                fulfillment:
+                  type: string
+                  pattern: "^0x[0-9a-f]{64}$"
+                ops:
+                  type: string
+                  pattern: "^0x[0-9a-f]{64}$"
+            objectIds:
+              type: object
+              required:
+                [
+                  governanceConfigObjectId,
+                  disputeQuorumConfigObjectId,
+                  marketplaceFeeConfigObjectId,
+                  reputationInitFeeConfigObjectId,
+                  listingDepositConfigObjectId,
+                  reviewerRegistryObjectId
+                ]
+              properties:
+                governanceConfigObjectId:
+                  type: string
+                  nullable: true
+                  pattern: "^0x[0-9a-f]{64}$"
+                disputeQuorumConfigObjectId:
+                  type: string
+                  nullable: true
+                  pattern: "^0x[0-9a-f]{64}$"
+                marketplaceFeeConfigObjectId:
+                  type: string
+                  nullable: true
+                  pattern: "^0x[0-9a-f]{64}$"
+                reputationInitFeeConfigObjectId:
+                  type: string
+                  nullable: true
+                  pattern: "^0x[0-9a-f]{64}$"
+                listingDepositConfigObjectId:
+                  type: string
+                  nullable: true
+                  pattern: "^0x[0-9a-f]{64}$"
+                reviewerRegistryObjectId:
+                  type: string
+                  nullable: true
+                  pattern: "^0x[0-9a-f]{64}$"
     RuntimeReadLanePolicy:
       type: object
       required:

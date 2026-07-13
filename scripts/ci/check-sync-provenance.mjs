@@ -5,9 +5,9 @@ import { fileURLToPath } from "node:url";
 
 export const EXPECTED_SYNC_REMOTE = "github.com/Moron1337/Clawdex";
 export const EXPECTED_SYNC_PATHS = Object.freeze([
+  "config/marketplace-deployments.json",
   "docs/docsources/core/BOT_PROTOCOL_V1.md",
   "docs/docsources/core/BOT_QUICKSTART.md",
-  "docs/docsources/core/NEXT_SESSION_STATUS.md",
   "docs/docsources/core/SMART_CONTRACT_ARCHITECTURE_MAP.md",
   "docs/docsources/core/SMART_CONTRACT_ERKLAERUNG_2026-02-25.md",
   "docs/docsources/core/SMART_CONTRACT_FUNCTION_INVENTORY_AND_USER_TEST_MATRIX.md",
@@ -32,9 +32,9 @@ export const EXPECTED_SYNC_PATHS = Object.freeze([
 ]);
 
 export const EXPECTED_PUBLISHED_SYNC_PATHS = Object.freeze([
+  "config/marketplace-deployments.json",
   "docs/docsources/core/BOT_PROTOCOL_V1.md",
   "docs/docsources/core/BOT_QUICKSTART.md",
-  "docs/docsources/core/NEXT_SESSION_STATUS.md",
   "docs/docsources/core/SMART_CONTRACT_ARCHITECTURE_MAP.md",
   "docs/docsources/core/SMART_CONTRACT_ERKLAERUNG_2026-02-25.md",
   "docs/docsources/core/SMART_CONTRACT_FUNCTION_INVENTORY_AND_USER_TEST_MATRIX.md",
@@ -166,8 +166,11 @@ export function validateSyncProvenance({ rootDir, manifestText }) {
     }
   }
 
-  const publishedSourceFiles = (packageJson.files || [])
-    .filter((entry) => typeof entry === "string" && entry.startsWith("docs/docsources/"));
+  const publishedSourceFiles = (packageJson.files || []).filter(
+    (entry) =>
+      typeof entry === "string" &&
+      (entry === "config/marketplace-deployments.json" || entry.startsWith("docs/docsources/")),
+  );
   if (!sameOrderedValues([...publishedSourceFiles].sort(), [...EXPECTED_PUBLISHED_SYNC_PATHS].sort())) {
     throw new Error("published_docsources_path_set_mismatch");
   }

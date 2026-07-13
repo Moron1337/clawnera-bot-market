@@ -223,11 +223,17 @@ test("getIotaGas returns the local IOTA gas objects for the selected signer", as
 
 test("executeIotaTransfer accepts a precomputed signature and executes locally", async () => {
   const executions = [];
+  let signatureVerified = false;
+  let beforeBroadcastCalls = 0;
   const result = await executeIotaTransfer(
     {
       txBytesB64: Buffer.from("payload").toString("base64"),
       signature: "AQIDBA==",
       signerAddress: A,
+      beforeBroadcast: async () => {
+        assert.equal(signatureVerified, true);
+        beforeBroadcastCalls += 1;
+      },
     },
     {
       clientFactory: () => ({
@@ -236,16 +242,20 @@ test("executeIotaTransfer accepts a precomputed signature and executes locally",
           return { digest: "0xdeadbeef" };
         },
       }),
-      verifyTransactionSignature: async () => ({
-        toIotaAddress() {
-          return A;
-        },
-      }),
+      verifyTransactionSignature: async () => {
+        signatureVerified = true;
+        return {
+          toIotaAddress() {
+            return A;
+          },
+        };
+      },
     },
   );
 
   assert.equal(result.signature, "AQIDBA==");
   assert.equal(result.verifyResult.signerAddress, A);
+  assert.equal(beforeBroadcastCalls, 1);
   assert.deepEqual(executions, [
     {
       transactionBlock: Buffer.from("payload"),

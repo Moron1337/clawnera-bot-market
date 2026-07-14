@@ -357,13 +357,15 @@ const TRIAGE_RULES = Object.freeze([
   },
   {
     id: "dispute",
-    keywords: ["dispute", "quorum", "reviewer", "bond", "fallback", "vote", "resolve-escrow"],
+    keywords: ["dispute", "quorum", "reviewer", "bond", "fallback", "finalize", "timeout", "platform", "vote", "resolve-escrow"],
     topics: ["order-states", "role-routes", "reviewer-selector", "contracts", "playbooks"],
     commands: [
       "clawnera-help show reviewer-selector",
       "clawnera-help show order-states",
       "clawnera-help show role-routes",
       "clawnera-help show contracts",
+      "clawnera-help recipe dispute-finalize",
+      "clawnera-help recipe dispute-timeout-fallback",
       "clawnera-help doctor --api-base <url> --jwt <token>"
     ],
     issueCategory: "bug"
@@ -800,8 +802,14 @@ function compactRecipeCommand(recipe) {
       return gated(`clawnera-help tx-plan-dry-run POST /reviewers/me/claim-metrics ${auth} --body-file claim-metrics.json`);
     case "operator-shortlist-replacement":
       return gated(`clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <disputeCaseId> ${auth}`);
+    case "dispute-finalize":
+      return gated(`clawnera-help tx-plan-dry-run POST /disputes/<disputeCaseId>/finalize ${auth} --body '{}'`);
+    case "dispute-timeout-fallback":
+      return gated(`clawnera-help tx-plan-dry-run POST /disputes/<disputeCaseId>/fallback/timeout ${auth} --body '{}'`);
+    case "dispute-platform-fallback":
+      return "STOP: admin-only external-custody path; the public helper does not execute or dry-run platform fallback";
     case "resolve-dispute":
-      return gated(`clawnera-help tx-plan-dry-run POST /disputes/<disputeCaseId>/resolve-escrow ${auth}`);
+      return `RECOVERY ONLY: ${gated(`clawnera-help tx-plan-dry-run POST /disputes/<disputeCaseId>/resolve-escrow ${auth} --body '{}'`)}`;
     case "local-iota-transfer":
       return "clawnera-help iota-prepare-transfer --to <address> --amount <amount>";
     default:
@@ -852,6 +860,14 @@ function compactRecipeWriteText(recipe) {
       return "POST /disputes/{disputeCaseId}/votes/commit | POST /disputes/{disputeCaseId}/votes/reveal";
     case "operator-shortlist-replacement":
       return "operator prep: POST /admin/reviewer-selection/shortlist | buyer/seller publish: POST /disputes/{disputeCaseId}/reviewers/replace";
+    case "dispute-finalize":
+      return "atomic buyer/seller close: POST /disputes/{disputeCaseId}/finalize";
+    case "dispute-timeout-fallback":
+      return "atomic buyer/seller close: POST /disputes/{disputeCaseId}/fallback/timeout";
+    case "dispute-platform-fallback":
+      return "admin-only, not publicly executable: POST /disputes/{disputeCaseId}/fallback/resolve";
+    case "resolve-dispute":
+      return "legacy/recovery only: POST /disputes/{disputeCaseId}/resolve-escrow";
     default: {
       const routes = Array.isArray(recipe.routes) ? recipe.routes : [];
       return selectPrimaryWriteRoute(routes);
@@ -872,6 +888,9 @@ function compactRecipeNextText(recipe) {
       return "reviewer-claim-metrics[after_buyer_or_seller_closeout]";
     case "operator-shortlist-replacement":
       return "reviewer-handle-invite[after_buyer_or_seller_publish] | reviewer-vote";
+    case "dispute-finalize":
+    case "dispute-timeout-fallback":
+      return "reviewer-claim-metrics[reviewer_handoff_after_atomic_close]";
     default:
       return nextRecipes.join(" | ");
   }
@@ -6095,10 +6114,15 @@ function buildTxPlanNextCommandHint(method, rawPath, { body, bodyFile, bodySelec
 
 function resolveApiPathname(rawPath, apiBase = "") {
   try {
-    const url = normalizeApiBase(rawPath)
-      ? rawPath
-      : `${apiBase}${String(rawPath || "").startsWith("/") ? rawPath : `/${rawPath}`}`;
-    return new URL(url).pathname;
+    const normalizedPath = String(rawPath || "").trim();
+    if (!normalizedPath) {
+      return "";
+    }
+    if (normalizeApiBase(normalizedPath)) {
+      return new URL(normalizedPath).pathname;
+    }
+    const baseUrl = normalizeApiBase(apiBase) || "https://clawnera.invalid";
+    return new URL(normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`, baseUrl).pathname;
   } catch {
     return "";
   }
@@ -6142,7 +6166,7 @@ function classifyReviewerSelfTxPlanRoute(method, rawPath, apiBase = "") {
   return null;
 }
 
-function classifyRetiredTxPlanRoute(method, rawPath, apiBase = "") {
+function classifyDisabledTxPlanRoute(method, rawPath, apiBase = "") {
   if (String(method || "").toUpperCase() !== "POST") {
     return null;
   }
@@ -6154,6 +6178,12 @@ function classifyRetiredTxPlanRoute(method, rawPath, apiBase = "") {
     return {
       error: "reviewer_claim_metrics_path_retired",
       hint: "Use POST /reviewers/me/claim-metrics with the reviewer auth state.",
+    };
+  }
+  if (/^\/disputes\/0x[a-f0-9]+\/fallback\/resolve$/i.test(pathname)) {
+    return {
+      error: "dispute_platform_fallback_admin_only",
+      hint: "The public helper cannot build or dry-run the ArbCap platform fallback. Use atomic dispute-finalize or dispute-timeout-fallback for public closeout, or hand an authorized incident to the external admin custody workflow.",
     };
   }
   return null;
@@ -8228,7 +8258,7 @@ function classifyTxPlanRouteFailure({
         parsePositiveDeadlineMs(body.challengeDeadlineMs) ||
         (Number.isSafeInteger(retryAfterMs) && retryAfterMs >= 0 ? Date.now() + retryAfterMs : null);
       hint =
-        "Settlement is not ready yet. Wait for the printed settlement-ready or challenge deadline hint, then rerun the same resolve-escrow command from the same buyer or seller wallet used for finalize whenever the runtime still requires same-wallet closeout.";
+        "The legacy/recovery escrow resolution is not ready. If the dispute is still open, use the atomic dispute-finalize or dispute-timeout-fallback recipe instead. Rerun resolve-escrow only after exact readback proves the case is closed and the bound escrow remains DISPUTED.";
       break;
     case "reviewer_vote_commit_window_closed":
       waitUntilMs =
@@ -9692,12 +9722,12 @@ async function runTxPlanCommand(commandArgs, mode) {
     };
   }
 
-  const retiredRoute = classifyRetiredTxPlanRoute(method, rawPath, options["api-base"]);
-  if (retiredRoute) {
+  const disabledRoute = classifyDisabledTxPlanRoute(method, rawPath, options["api-base"]);
+  if (disabledRoute) {
     return {
       ok: false,
-      error: retiredRoute.error,
-      hint: retiredRoute.hint,
+      error: disabledRoute.error,
+      hint: disabledRoute.hint,
     };
   }
 

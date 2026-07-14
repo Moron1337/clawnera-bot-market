@@ -3777,7 +3777,7 @@ paths:
               $ref: "#/components/schemas/DisputeFinalizeRequest"
       responses:
         "200":
-          description: Transaction plan for quorum finalization.
+          description: Atomic transaction plan for quorum finalization followed by bound escrow resolution.
           content:
             application/json:
               schema:
@@ -3807,7 +3807,7 @@ paths:
               $ref: "#/components/schemas/DisputeFallbackResolveRequest"
       responses:
         "200":
-          description: Transaction plan for ArbCap fallback resolution (configured arb operator path).
+          description: Atomic transaction plan for ArbCap fallback resolution followed by bound escrow resolution (configured arb operator path).
           content:
             application/json:
               schema:
@@ -3837,7 +3837,7 @@ paths:
               $ref: "#/components/schemas/DisputeTimeoutFallbackRequest"
       responses:
         "200":
-          description: Transaction plan for permissionless timeout fallback resolution.
+          description: Atomic transaction plan for permissionless timeout fallback resolution followed by bound escrow resolution.
           content:
             application/json:
               schema:
@@ -3867,7 +3867,7 @@ paths:
               $ref: "#/components/schemas/DisputeResolveEscrowRequest"
       responses:
         "200":
-          description: Transaction plan for `order_escrow::resolve_dispute_with_binding`.
+          description: Recovery/reconciliation transaction plan for `order_escrow::resolve_dispute_with_binding`; normal finalize and fallback plans already include this call atomically.
           content:
             application/json:
               schema:

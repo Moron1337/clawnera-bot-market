@@ -37,7 +37,7 @@ Quellen:
 | `resolve_dispute_to_buyer` | Arb-Cap Resolution buyer | arb/admin path | ArbCap, disputed state |
 | `resolve_dispute_after_timeout_split` | Timeout Fallback Split | permissionless timeout path | timeout reached, kein dispute-quorum binding fuer dieses escrow |
 | `resolve_dispute_after_timeout_to_seller` | Timeout Fallback seller | permissionless timeout path | timeout reached |
-| `resolve_dispute_with_binding` | Binding-based Quorum Settlement | buyer/seller via API plan | finalized dispute-quorum binding fuer dieses escrow vorhanden |
+| `resolve_dispute_with_binding` | Binding-based Quorum Settlement | zweiter Call der atomaren Closeout-PTB; separat nur Recovery | finalized dispute-quorum binding fuer dieses escrow vorhanden |
 
 ### `milestone_escrow`
 
@@ -78,7 +78,7 @@ Quellen:
 | `reveal_vote` | Reveal Phase | reviewer | reveal window offen + commit vorhanden |
 | `start_replacement_round` | Reviewer Replacement | buyer/seller path | replacement criteria erfuellt |
 | `finalize_case_with_quorum` | Finalisierung mit Quorum | finalize path | quorum/fensterbedingungen erfuellt |
-| `resolve_case_with_platform_fallback` | ArbCap fallback decision | admin/arb | fallback state + ArbCap |
+| `resolve_case_with_platform_fallback` | ArbCap fallback decision | operator/admin-only, ausserhalb Public Helper | fallback state + ArbCap |
 | `resolve_case_with_timeout_fallback` | timeout fallback | permissionless timeout path | timeout reached |
 | `claim_decision_metrics` | Reviewer-Metriken claimen | reviewer | Case finalisiert/fallback-resolved, nur 1x pro Case |
 | `force_deregister_reviewer` | Inaktive Reviewer admin-seitig deregistrieren | admin | inactivity timeout + keine aktiven Cases |
@@ -128,15 +128,21 @@ Quellen:
 | `POST /disputes/{id}/votes/commit` | `disputeQuorum.commitVote` | `dispute_quorum::commit_vote` |
 | `POST /disputes/{id}/votes/reveal` | `disputeQuorum.revealVote` | `dispute_quorum::reveal_vote` |
 | `POST /disputes/{id}/reviewers/replace` | `disputeQuorum.startReplacementRound` | `dispute_quorum::start_replacement_round` |
-| `POST /disputes/{id}/finalize` | `disputeQuorum.finalizeCase` | `dispute_quorum::finalize_case_with_quorum` |
-| `POST /disputes/{id}/fallback/resolve` | `disputeQuorum.resolveFallback` | `dispute_quorum::resolve_case_with_platform_fallback` |
-| `POST /disputes/{id}/fallback/timeout` | `disputeQuorum.resolveTimeoutFallback` | `dispute_quorum::resolve_case_with_timeout_fallback` |
-| `POST /disputes/{id}/resolve-escrow` | `orderEscrow.resolveDisputeWithBinding` | `order_escrow::resolve_dispute_with_binding` |
+| `POST /disputes/{id}/finalize` | `disputeQuorum.finalizeCase` | `dispute_quorum::finalize_case_with_quorum` -> `order_escrow::resolve_dispute_with_binding` in derselben PTB |
+| `POST /disputes/{id}/fallback/resolve` (Operator/Admin-only) | Admin-SDK `resolveFallback` | `dispute_quorum::resolve_case_with_platform_fallback` -> `order_escrow::resolve_dispute_with_binding` in derselben PTB |
+| `POST /disputes/{id}/fallback/timeout` | `disputeQuorum.resolveTimeoutFallback` | `dispute_quorum::resolve_case_with_timeout_fallback` -> `order_escrow::resolve_dispute_with_binding` in derselben PTB |
+| `POST /disputes/{id}/resolve-escrow` (Legacy/Recovery) | `orderEscrow.resolveDisputeWithBinding` | separater `order_escrow::resolve_dispute_with_binding` nur fuer Recovery/Reconciliation |
 | `N/A (direct SDK/PTB only)` | `buildApproveMutualCancelOrderEscrowTx` / `buildMutualCancelOrderEscrowTx` | `order_escrow::approve_mutual_cancel` / `order_escrow::mutual_cancel` |
 | `N/A (direct SDK/PTB only)` | `buildPayManagedStorageFeeIotaTx` / `buildSuiPayManagedStorageFeeSuiTx` | `manifest_anchor::pay_managed_storage_fee_iota_v2` / `manifest_anchor::pay_managed_storage_fee_sui_v2` |
 | `POST /orders/{orderId}/reviews` | `review.postWithEscrow/postWithMilestoneEscrow` | `review::post_review_with_escrow` / `review::post_review_with_milestone_escrow` |
 | `POST /orders/{orderId}/deadline-ext/propose` | `deadlineExt.propose` | `deadline_ext::propose_extension` |
 | `POST /deadline-ext/{id}/reject` | `deadlineExt.reject` | `deadline_ext::reject_extension` |
+
+Finalize, permissionless Timeout-Fallback und der Operator/Admin-only ArbCap
+Platform-Fallback bestehen jeweils aus genau zwei geordneten Move Calls in einer
+atomaren PTB. Beide Calls verwenden dasselbe Config-Transaktionsargument. Der
+Public Helper exponiert den Platform-Fallback nicht. `/resolve-escrow` ist kein
+normaler zweiter Schritt, sondern bleibt Legacy-/Recovery-/Reconciliation-Surface.
 
 ## 4) Was fuer Bots typischerweise NICHT direkt relevant ist
 

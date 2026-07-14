@@ -472,6 +472,17 @@ test("write guides fail closed and candidate reviewer replay stays OPEN-only", (
       (recipe.routes || []).some((route) => directMarketplaceRoute.test(route)) ||
       entries.some((entry) => directMarketplaceHelper.test(entry));
     if (!mutates) continue;
+    if (recipe.id === "dispute-platform-fallback") {
+      assert.equal(recipe.role, "admin_only");
+      assert.match(recipe.steps.join("\n"), /public helper/i);
+      assert.match(recipe.steps.join("\n"), /admin\/operator custody workflow/i);
+      assert.doesNotMatch(
+        [...recipe.steps, ...recipe.examples].join("\n"),
+        /clawnera-help (?:request|tx-plan-dry-run) POST/,
+        "admin-only recipe must not expose a public mutation command"
+      );
+      continue;
+    }
     assert.match(
       recipe.steps.join("\n"),
       /write-gate --api-base <target-api-base>/,
@@ -603,7 +614,7 @@ test("every mutating recipe example gates the exact target immediately before th
     }
   }
 
-  assert.equal(mutationCount, 51, "the complete current mutating Examples surface must be checked");
+  assert.equal(mutationCount, 53, "the complete current mutating Examples surface must be checked");
   assert.deepEqual([...directHelpersCovered].sort(), [
     "listing-deposit-create",
     "milestone-anchor",
@@ -662,18 +673,71 @@ test("reviewer docs require dispute-scoped evidence before voting", () => {
   assert.match(routeMatrix, /linked_deliverable` oder `supplemental_bundle/);
 });
 
-test("active dispute guides avoid ticket-owner handoff language for escrow settlement", () => {
+test("active dispute guides require atomic closeout and recovery-only escrow resolution", () => {
+  const readme = readRepoFile("README.md");
+  const apiReference = readRepoFile("docs/guides/API_REFERENCE.md");
+  const onboarding = readRepoFile("docs/guides/BOT_ONBOARDING.md");
+  const playbooks = readRepoFile("docs/guides/BOT_PLAYBOOKS.md");
   const manualFlow = readRepoFile("docs/guides/LIVE_MANUAL_ORDER_FLOW.md");
   const checklist = readRepoFile("docs/guides/CANONICAL_LIVE_RUN_CHECKLIST.md");
   const reviewerFlow = readRepoFile("docs/guides/REVIEWER_SELECTOR_FLOW.md");
+  const routeMatrix = readRepoFile("docs/guides/ROLE_ROUTE_MATRIX.md");
+  const sdkUsage = readRepoFile("docs/guides/SDK_USAGE.md");
+  const contractReference = readRepoFile("docs/guides/SMART_CONTRACT_REFERENCE.md");
   const tasks = readRepoFile("docs/guides/TASK_RECIPES.md");
+  const orderStates = readRepoFile("docs/guides/ORDER_STATES.md");
+  const functionMap = readRepoFile("docs/guides/BOT_FUNCTION_MAP.md");
 
-  for (const text of [manualFlow, checklist, reviewerFlow]) {
+  const closeoutDocs = [
+    readme,
+    apiReference,
+    onboarding,
+    playbooks,
+    checklist,
+    manualFlow,
+    reviewerFlow,
+    routeMatrix,
+    sdkUsage,
+    contractReference,
+    tasks,
+    orderStates,
+    functionMap,
+  ];
+  for (const text of closeoutDocs) {
+    assert.match(text, /atomic|atomar/i);
+    assert.match(text, /two[- ]call|two ordered|zwei[- ]call|zwei geordnet/i);
+    assert.match(text, /resolve-escrow/);
+    assert.match(text, /legacy/i);
+    assert.match(text, /recovery/i);
     assert.equal(text.includes("same wallet that received the `QuorumResolutionTicket`"), false);
     assert.equal(text.includes("quorum_resolution_ticket_owner_mismatch"), false);
+    assert.doesNotMatch(text, /and then runs `\/resolve-escrow`|then resolves escrow/i);
   }
-  assert.match(manualFlow, /same buyer or seller wallet/i);
-  assert.match(checklist, /same buyer or seller wallet/i);
+
+  for (const text of [
+    readme,
+    apiReference,
+    onboarding,
+    playbooks,
+    checklist,
+    manualFlow,
+    reviewerFlow,
+    routeMatrix,
+    sdkUsage,
+    contractReference,
+    tasks,
+    orderStates,
+    functionMap,
+  ]) {
+    assert.match(text, /ArbCap/is);
+    assert.match(text, /operator.*admin|admin.*operator/is);
+    assert.match(text, /Public Helper/is);
+  }
+  assert.match(sdkUsage, /@clawdex\/sdk\/admin/);
+  assert.match(contractReference, /resolve_dispute_with_binding/);
+  assert.match(apiReference, /resolve_dispute_with_binding/);
+  assert.match(tasks, /`resolve-dispute`[\s\S]*legacy\/recovery\/reconciliation only/i);
+  assert.match(functionMap, /Historical two-step recovery evidence only/);
   assert.match(tasks, /refresh the original buyer\/seller key-agreement records first/i);
   assert.equal(tasks.includes("each assigned reviewer must rerun `key-agreement-upsert` and then `reviewer-update` before the buyer/seller retries publish"), false);
 });

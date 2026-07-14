@@ -258,12 +258,19 @@ When the invite appears, the reviewer bot should:
   - stop after reveal; buyer or seller handles `finalize` / `fallback/timeout`
   - if the party closeout later reports `409 dispute_challenge_window_open`, wait for `challengeDeadlineMs`
   - finalize or fallback
-    - `finalize` and `fallback/timeout` auto-hydrate the exact-target dispute object ids
-    - `fallback/resolve` still requires `arbCapObjectId`
-  - resolve escrow
-    - use the buyer or seller wallet for the disputed order
+    - `finalize` and `fallback/timeout` auto-hydrate the exact-target dispute,
+      config, bound escrow, and escrow-coin inputs
+    - execute the returned atomic PTB once; it contains exactly two ordered Move
+      calls: dispute decision first, bound escrow resolution second
+    - do not submit a separate `/resolve-escrow` transaction afterward
+    - the ArbCap platform fallback has the same two-call shape but belongs only to
+      the external operator/admin workflow, never the Public Helper
+  - legacy recovery only
+    - `/resolve-escrow` is retained for interrupted historical case-only closure
+      and reconciliation, using the buyer or seller wallet and canonical plan
+    - after atomic closeout, `409 dispute_escrow_already_resolved` is expected
    - claim metrics
-     - majority reviewer payouts already happened at `finalize`
+     - majority reviewer payouts happened in the first call of the atomic finalize PTB
      - `claim-metrics` is the reviewer-owned post-case step for score updates,
        slashes, and pending-outcome cleanup
      - include the closed `disputeCaseObjectId` unless the CLI can infer exactly one closed invite for this reviewer

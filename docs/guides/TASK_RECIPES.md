@@ -132,15 +132,23 @@ Auth note:
 - `reviewer-inspect-evidence`
   - list dispute-scoped evidence, fetch one readable item, then decrypt locally with `dispute-evidence-decrypt` before voting
 - `reviewer-vote`
-  - commit -> wait -> reveal -> finalize/fallback
+  - commit -> wait -> reveal; reviewer duty stops there
+  - buyer or seller executes the single atomic `finalize` / `fallback/timeout`
+    two-call PTB; do not append a separate normal escrow resolution
   - if commit returns `reviewer_vote_commit_window_closed`, stop and wait until the printed `revealDeadlineMs`; do not keep retrying commit
 - `reviewer-claim-metrics`
   - if the CLI prints `claim_metrics_dispute_case_ambiguous`, use one of the returned `disputeCaseObjectIds`, confirm it via `GET /reviewers/me/invites`, and rerun with `--body '{"disputeCaseObjectId":"..."}'`
   - clear the reviewer-owned post-case pending outcome without wasting a no-op tx
 - `resolve-dispute`
-  - resolve from the finalized dispute binding with the buyer or seller wallet
-  - this is the actual money step: seller-settlement pays the seller, buyer-settlement refunds the buyer
-  - common aliases: `dispute-resolve`, `finalize-dispute-resolution`
+  - legacy/recovery/reconciliation only for an interrupted historical case-only close
+  - recovery route: `POST /disputes/{disputeCaseId}/resolve-escrow`
+  - use the buyer or seller wallet and the canonical recovery plan
+  - never run it as a normal second phase after a successful atomic finalize/timeout PTB;
+    `409 dispute_escrow_already_resolved` is then expected
+  - common aliases: `dispute-resolve`, `resolve-dispute-escrow`, `legacy-resolve-dispute`
+
+The ArbCap platform fallback follows the same atomic two-call contract but is
+operator/admin-only and intentionally unavailable through the Public Helper.
 - `local-iota-transfer`
   - local user-side IOTA transfer
 

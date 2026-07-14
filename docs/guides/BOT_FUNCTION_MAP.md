@@ -74,20 +74,22 @@ Use it for two things:
 | Vote prepare | `clawnera-help reviewer-vote-prepare` | `live-green` | Covered for reviewer1/reviewer2/reviewer4. |
 | Vote commit | `tx-plan-dry-run POST /disputes/{caseId}/votes/commit` | `live-green` | Covered live. |
 | Vote reveal | `tx-plan-dry-run POST /disputes/{caseId}/votes/reveal` | `live-green` | Covered live on the reviewer1/reviewer2/reviewer4 quorum case after the real commit window opened. |
-| Finalize | `tx-plan-dry-run POST /disputes/{caseId}/finalize` | `live-green` | Covered live with helper-managed wait through the challenge window. |
-| Fallback timeout | `tx-plan-dry-run POST /disputes/{caseId}/fallback/timeout` | `pending` | Separate fallback lane; not yet covered in the current run. |
-| Resolve escrow | `tx-plan-dry-run POST /disputes/{caseId}/resolve-escrow` | `live-green` | Covered live on the same buyer wallet immediately after finalize; resulting order state reached `COMPLETED`. |
+| Finalize | `tx-plan-dry-run POST /disputes/{caseId}/finalize` | `live-green` | Historical live run covered the route and wait window. The Fresh candidate now returns one atomic two-call PTB that closes Case/Bond and bound Escrow together; that exact shape still needs fresh live proof. |
+| Fallback timeout | `tx-plan-dry-run POST /disputes/{caseId}/fallback/timeout` | `pending` | Fresh candidate returns the same atomic two-call shape with timeout decision first; no eligible live run exists yet. |
+| Resolve escrow (legacy/recovery) | `tx-plan-dry-run POST /disputes/{caseId}/resolve-escrow` | `live-green` | Historical two-step recovery evidence only. This is not the normal second phase after a Fresh atomic finalize/timeout PTB. |
 | Reviewer claim metrics | `tx-plan-dry-run POST /reviewers/me/claim-metrics` | `live-green` | Covered live for reviewer1/reviewer2/reviewer4 on the freshly closed case. Majority payouts still happen at finalize. |
 
 ## Current Live Blockers
 
-- No main-path blocker remains on the current quorum closeout lane; the end-to-end disputed order path is now live-green.
+- The historical two-step quorum closeout is live-green, but it is not acceptance evidence for the Fresh atomic two-call candidate.
 - Reviewer stake is a real live precondition. A reviewer below the current minimum will fail on `reviewers/accept` even if the invite exists.
 - `POST /orders/{orderId}/dispute-bond/fund` is not a thin `amount`-only helper body on the live tx-plan route. It needs the full four-field body listed above.
-- The remaining uncovered closeout lane is `fallback/timeout`, which still needs a genuinely eligible timeout case instead of a forced synthetic shortcut.
+- Fresh atomic finalize and `fallback/timeout` both still need exact-shape live proof; timeout needs a genuinely eligible case instead of a forced synthetic shortcut.
+- The ArbCap platform fallback is operator/admin-only and intentionally absent from the Public Helper function map.
 
 ## Recommended Completion Order
 
-1. exercise one explicit fallback lane (`fallback/timeout`)
-2. then move to local-LLM bot traffic
-3. only after that widen to external-user bot traffic
+1. exercise Fresh atomic finalize with exact two-call readback
+2. exercise one eligible atomic fallback lane (`fallback/timeout`)
+3. then move to local-LLM bot traffic
+4. only after that widen to external-user bot traffic

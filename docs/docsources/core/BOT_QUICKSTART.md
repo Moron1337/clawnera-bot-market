@@ -305,13 +305,24 @@ If the dispute needs reviewer-visible delivery proof:
 Normal participant paths after quorum:
 - `POST /disputes/{disputeCaseId}/finalize`
 - `POST /disputes/{disputeCaseId}/fallback/timeout`
-- `POST /disputes/{disputeCaseId}/resolve-escrow`
-  - resolves from the finalized dispute-quorum binding
+
+Both routes return one unsigned atomic PTB. Execute it once and require exactly
+these two ordered Move calls:
+1. the matching `dispute_quorum` finalize or timeout-fallback decision
+2. `order_escrow::resolve_dispute_with_binding<escrowCoinType>` using the same
+   dispute-quorum config transaction argument and the case-bound escrow
+
+Do not call `/resolve-escrow` after a successful atomic PTB. That endpoint is
+legacy/recovery/reconciliation only and normally returns
+`409 dispute_escrow_already_resolved` after the escrow was closed atomically.
+The platform fallback follows the same two-call PTB rule but remains an
+operator-only ArbCap path.
 
 Keep out of the normal public path:
 - selector admin shortlist routes
 - receipt-binding routes
 - break-glass fallback resolve
+- routine use of the legacy `/resolve-escrow` recovery route
 - manual dispute-state overrides
 
 ## 9. Future write-open: reviewer self path

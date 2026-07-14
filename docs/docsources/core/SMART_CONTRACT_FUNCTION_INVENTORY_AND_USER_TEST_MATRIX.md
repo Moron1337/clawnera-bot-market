@@ -13,7 +13,8 @@ contract, API, or bot-facing lifecycle semantics change:
 - `apps/api/test/journeys/requestFlow.test.ts`
   - explicit `REQUEST` listing -> seller bids -> inverted buyer/seller truth after accept
 - `apps/api/test/journeys/disputeReviewerFlow.test.ts`
-  - invited reviewer accept / commit / reveal gating / replacement plus finalize / fallback / resolve-escrow planning
+  - invited reviewer accept / commit / reveal gating / replacement plus atomic
+    finalize/fallback planning; resolve-escrow is recovery-only
 - `apps/api/test/journeys/managedStorageEvidenceFlow.test.ts`
   - strict managed-storage manifest flow plus dispute-scoped linked deliverable / supplemental evidence reads
 
@@ -462,6 +463,14 @@ Historisch auf der fresh lineage entfernt.
   - `milestone_escrow_tests`
   - `dispute_quorum_tests`
 - `escrow.move` ist auf Fee-Config-/Governance-Host reduziert.
+- `ESC-09a` Majority-, Timeout-Fallback- und Platform-Fallback-Builder erzeugen
+  jeweils genau eine PTB mit dem passenden `dispute_quorum`-Call zuerst und
+  `order_escrow::resolve_dispute_with_binding<T>` danach.
+- `ESC-09b` Beide Calls verwenden dasselbe Config-TransactionArgument und den
+  fallgebundenen Escrow; fehlende, vertauschte, duplizierte oder umverdrahtete
+  Calls schlagen im Regressionstest fehl.
+- `ESC-09c` Abort in einem der beiden Calls hinterlaesst weder eine nur
+  geschlossene Case/Bond-Seite noch einen separat aufgeloesten Escrow.
 - `ESC-10` Release by non-buyer => abort `E_NOT_AUTHORIZED`.
 - `ESC-11` Release in non-`CREATED` => abort `E_INVALID_STATE`.
 - `ESC-12` Seller claim before deadline => abort `E_DEADLINE_NOT_REACHED`.
@@ -626,9 +635,13 @@ Wallet-Rollen (mindestens):
 
 Szenario-Set E2E:
 - `E2E-01` Happy path A: Buyer A creates escrow (IOTA), Seller A delivers, Buyer A releases.
-- `E2E-02` Dispute A: Buyer A opens dispute, Arb resolves to seller.
-- `E2E-03` Dispute B: Seller B opens dispute, Arb resolves to buyer.
-- `E2E-04` Timeout fallback: dispute unresolved, W8 resolves after timeout split.
+- `E2E-02` Dispute A: Majority resolves to seller; Case, Bond und Escrow werden
+  in derselben atomaren Zwei-Call-PTB terminal.
+- `E2E-03` Dispute B: Majority resolves to buyer; dieselbe atomare Bindung gilt.
+- `E2E-04` Timeout fallback: dispute unresolved, W8 resolves after timeout split
+  und schliesst den gebundenen Escrow im zweiten Call derselben PTB.
+- `E2E-04b` Platform fallback: ArbCap-Entscheidung plus gebundene
+  Escrow-Aufloesung laufen als dieselbe atomare Zwei-Call-PTB.
 - `E2E-05` Listing deposit policy path: create deposit, forfeit by policy, create second deposit after policy update.
 - `E2E-06` Governance path: queue+approve+apply fee update, verify new escrow fee.
 

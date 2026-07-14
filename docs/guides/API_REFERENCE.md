@@ -407,27 +407,34 @@ Important current boundary:
   - replacement rounds reset reviewer assignment for the next round; do not treat them as one-slot delta fills
 - `POST /disputes/{disputeCaseId}/finalize`
   - body may be omitted; the API auto-hydrates `bondObjectId`, `reviewerRegistryObjectId`,
-    and `disputeQuorumConfigObjectId` from live dispute/config truth
+    `disputeQuorumConfigObjectId`, `escrowObjectId`, and `escrowCoinType` from live
+    dispute/order/escrow truth
+  - returns one unsigned PTB with exactly two ordered Move calls: quorum finalize,
+    then `order_escrow::resolve_dispute_with_binding<escrowCoinType>` using the same
+    dispute-quorum config transaction argument
   - returns `409 dispute_challenge_window_open` with `challengeDeadlineMs` and
-    `retryAfterMs` when quorum exists but the post-reveal challenge window is still open
+    `retryAfterMs` when quorum exists but the post-reveal finalization delay is
+    still open; the error and field names are legacy compatibility and do not
+    expose a challenge or appeal operation
 - `POST /disputes/{disputeCaseId}/fallback/timeout`
   - body may be omitted; the API auto-hydrates `bondObjectId`, `reviewerRegistryObjectId`,
-    and `disputeQuorumConfigObjectId` from live dispute/config truth
+    `disputeQuorumConfigObjectId`, `escrowObjectId`, and `escrowCoinType` from live
+    dispute/order/escrow truth
+  - returns the same atomic two-call PTB shape, with timeout fallback as the first call
 - `POST /disputes/{disputeCaseId}/resolve-escrow`
-  - canonical settlement now resolves from the finalized dispute-quorum binding, not from
-    a caller-owned `QuorumResolutionTicket`
-  - if the runtime prints a same-wallet hint, keep `finalize` and `resolve-escrow` on the same buyer or seller wallet
-  - seller-settlement means the seller receives the escrowed work payment
-  - buyer-settlement means the buyer receives the escrow refund
-  - majority reviewer payouts happen earlier at `finalize`; `resolve-escrow` is the
-    buyer/seller economic closeout step
-  - request body may be omitted or contain only `escrowObjectId`
+  - legacy/recovery/reconciliation only; normal finalize/fallback clients must not
+    call this after their atomic PTB succeeds
+  - recovery settlement resolves from the finalized dispute-quorum binding
+  - request body may be omitted or contain only `escrowObjectId`; the API auto-hydrates
+    the dispute quorum config object id
   - the returned tx-plan request is builder-ready and includes
     `disputeQuorumConfigObjectId`
   - before quorum/fallback closure lands on-chain, the route returns
     `409 dispute_settlement_not_ready`
   - once the shared escrow is already resolved, the route returns
     `409 dispute_escrow_already_resolved`
+    - this is the normal response after a successful atomic finalize/fallback PTB,
+      not evidence that the preceding settlement failed
   - after escrow resolution, the order should read back terminal `COMPLETED`; milestone
     submit/accept/reject should read back `409 order_not_in_progress` with the
     terminal status
@@ -461,6 +468,11 @@ Operator-only routes intentionally left out of the normal bot path:
 - `POST /admin/reviewer-selection/shortlist`
 - `GET /admin/reviewer-selection-receipts/{receiptId}`
 - `POST /disputes/{disputeCaseId}/fallback/resolve`
+  - operator/admin-only ArbCap platform fallback; it is not exported through the
+    Public Helper or the public SDK root
+  - returns one atomic two-call PTB with platform fallback first and
+    `order_escrow::resolve_dispute_with_binding<escrowCoinType>` second, reusing the
+    same dispute-quorum config transaction argument
 - `POST /orders/{orderId}/mark-disputed`
 
 ### Sponsor (current boundary)

@@ -125,14 +125,50 @@ import {
   buildOpenMilestoneDisputeCaseTx,
   buildCommitDisputeVoteTx,
   buildRevealDisputeVoteTx,
-  buildFinalizeDisputeCaseTx
+  buildFinalizeDisputeCaseTx,
+  buildResolveDisputeTimeoutFallbackTx
 } from "@clawdex/sdk";
+
+const finalizeTx = buildFinalizeDisputeCaseTx({
+  packageId,
+  sender,
+  disputeCaseObjectId,
+  bondObjectId,
+  reviewerRegistryObjectId,
+  disputeQuorumConfigObjectId,
+  escrowObjectId,
+  escrowCoinType
+});
 ```
+
+`buildFinalizeDisputeCaseTx` and `buildResolveDisputeTimeoutFallbackTx` require
+the bound `escrowObjectId` and canonical `escrowCoinType`. Add `bondCoinType`
+only for a typed dispute bond; it is independent of the escrow asset type.
+
+Each public builder emits one atomic PTB with exactly two Move calls:
+
+1. the matching `dispute_quorum` finalize or timeout-fallback call
+2. `order_escrow::resolve_dispute_with_binding<escrowCoinType>` with the same
+   `disputeQuorumConfigObjectId` transaction argument and bound escrow
+
+Do not split, reorder, or append a separate normal settlement transaction. If
+either call aborts, the whole PTB aborts.
+
+The operator/admin-only ArbCap platform-fallback builder is available only from
+the separately controlled `@clawdex/sdk/admin` surface. It is not exported from
+the public SDK root and must not be imported into Public Helper or normal bot code.
 
 Recommended sequence:
 1. `buildInitOrderDisputeBondTx`.
 2. Fund both sides (`buyer` and `seller`) with same `bondObjectId`.
-3. Open case, commit/reveal votes, finalize/fallback.
+3. Open case, accept reviewers, commit votes.
+4. Wait for `commitDeadlineMs`, then reveal votes.
+5. Finalize or use the permissionless timeout fallback by executing the returned
+   two-call PTB once.
+   - `/resolve-escrow` is retained only for legacy recovery and reconciliation
+   - after a successful atomic PTB, `/resolve-escrow` normally returns
+     `409 dispute_escrow_already_resolved`
+6. Treat the resolved milestone dispute as order-terminal `COMPLETED`.
 
 This is ordering guidance for a future accepted package. Every API mutation and
 each resulting direct Move broadcast still requires its own immediately

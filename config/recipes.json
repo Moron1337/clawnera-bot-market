@@ -1017,7 +1017,8 @@
         "reviewer-handle-invite",
         "reviewer-inspect-evidence",
         "reviewer-vote",
-        "resolve-dispute"
+        "dispute-finalize",
+        "dispute-timeout-fallback"
       ],
       "nextTopics": ["reviewer-selector", "order-states", "role-routes"]
     },
@@ -1442,14 +1443,14 @@
         "Wait until commitDeadlineMs.",
         "Run clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/votes/reveal --body-file reviewer-vote.json --body-select revealRequestBody.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Remember: vote=1 resolves to seller settlement, vote=0 resolves to buyer settlement.",
-        "After reveal, stop. Buyer or seller closes the dispute with finalize/fallback and later resolves escrow.",
+        "After reveal, stop. Buyer or seller closes the dispute with one atomic finalize or permissionless timeout-fallback plan; normal closeout does not add a separate resolve-escrow transaction.",
         "Return only after the case is closed to run reviewer-claim-metrics from the same reviewer wallet."
       ],
       "examples": [
         "Prepare the canonical commit/reveal bodies first:\\nclawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote seller --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json",
         "Future write-open commit of the prepared hash; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Future write-open reveal with the exact prepared vote + nonce:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
-        "Then stop and let buyer or seller close the case with finalize/fallback + resolve-escrow from the same party wallet."
+        "Then stop and let buyer or seller choose dispute-finalize when quorum exists or dispute-timeout-fallback after the permissionless timeout; each returned plan closes the case and resolves the bound escrow atomically."
       ],
       "stopConditions": [
         "Stop on dispute_commit_window_open and wait.",
@@ -1469,9 +1470,9 @@
       "aliases": ["reviewer-claim"],
       "summary": "After a dispute closes, clear the reviewer-owned pending outcome for that exact case without burning extra gas.",
       "role": "reviewer",
-      "when": "Use this immediately after finalize or fallback closed the dispute case.",
+      "when": "Use this immediately after an atomic finalize or timeout-fallback plan closed the dispute case.",
       "needs": [
-        "The dispute case is already closed by finalize or fallback.",
+        "The dispute case is already closed by atomic finalize or timeout fallback.",
         "The reviewer wallet is the same wallet that served on the case."
       ],
       "store": [
@@ -1501,7 +1502,7 @@
       "stopConditions": [
         "Stop on 409 reviewer_metrics_claim_not_required. That reviewer already cleared all pending case outcomes; do not burn another tx.",
         "Stop if the CLI cannot safely infer disputeCaseObjectId and you do not have the exact closed case id.",
-        "Do not treat claim-metrics as the main payout step; majority payouts already happen at finalize."
+        "Do not treat claim-metrics as the payout step; escrow settlement already happens inside the atomic finalize or timeout-fallback transaction."
       ],
       "nextRecipes": [],
       "nextTopics": ["reviewer-selector", "api", "order-states"]
@@ -1558,19 +1559,145 @@
       "nextTopics": ["reviewer-selector", "api", "order-states"]
     },
     {
-      "id": "resolve-dispute",
-      "title": "Resolve Dispute Escrow",
-      "aliases": ["dispute-resolve", "finalize-dispute-resolution"],
-      "summary": "Resolve the shared escrow from the finalized dispute binding after exact dispute/order readbacks confirm quorum or fallback closure; this is the payout/refund step for buyer or seller.",
+      "id": "dispute-finalize",
+      "title": "Atomic Quorum Dispute Close",
+      "aliases": ["finalize-dispute", "close-dispute", "finalize-dispute-resolution"],
+      "summary": "Close a quorum-decided dispute and resolve its bound escrow in one atomic buyer-or-seller transaction plan.",
       "role": "buyer_or_seller",
-      "when": "Use this after the dispute is finalized or fallback-resolved.",
+      "when": "Use this normal closeout path after a reviewer majority exists and the reveal and challenge windows are closed.",
       "needs": [
-        "The dispute has already finalized or fallback-resolved on-chain.",
+        "The exact dispute and order readbacks agree on buyer, seller, order, bond, and escrow bindings.",
+        "The dispute readback has a finalizable reviewer majority and no open reveal or challenge window.",
+        "The caller wallet is the buyer or seller and the bound escrow is still DISPUTED."
+      ],
+      "store": [
+        "atomic finalize transaction digest",
+        "finalized dispute readback",
+        "terminal order readback"
+      ],
+      "routes": [
+        "POST /disputes/{disputeCaseId}/finalize",
+        "GET /disputes/{disputeCaseId}",
+        "GET /orders/{orderId}"
+      ],
+      "steps": [
+        "Read the exact dispute and order snapshots before planning; do not infer majority, deadlines, or escrow state from stale events.",
+        "Use this route only for quorum finalization. If quorum never formed and the permissionless timeout is available, use dispute-timeout-fallback instead.",
+        "Immediately before the public POST, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
+        "Run clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/finalize --auth-state-file <buyer-or-seller-auth-state-file> --body '{}'. Require the returned request to bind the canonical bond and escrow and require explicit dry-run success effects.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "Execute the reviewed plan once in the same buyer or seller chain-native wallet. The plan finalizes the case and resolves the bound escrow atomically.",
+        "Read back the exact dispute and order. Require a closed dispute and terminal settlement before treating the closeout as complete.",
+        "Do not run resolve-dispute after a successful atomic close."
+      ],
+      "examples": [
+        "Future write-open atomic quorum close; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help request GET /disputes/<dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/finalize --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute the one reviewed atomic plan separately and verify both dispute and order readbacks."
+      ],
+      "stopConditions": [
+        "Stop on dispute_not_finalizable, dispute_reveal_window_open, or dispute_challenge_window_open; do not bypass quorum or deadline checks.",
+        "Stop on any bond, escrow, order, package, or coin-type binding mismatch.",
+        "After a successful atomic close, do not submit resolve-escrow as a second normal transaction."
+      ],
+      "nextRecipes": [
+        "reviewer-claim-metrics"
+      ],
+      "nextTopics": ["reviewer-selector", "order-states"]
+    },
+    {
+      "id": "dispute-timeout-fallback",
+      "title": "Atomic Timeout Dispute Close",
+      "aliases": ["timeout-fallback-dispute", "timeout-close-dispute"],
+      "summary": "Close a timed-out dispute permissionlessly and resolve its bound escrow in one atomic buyer-or-seller transaction plan.",
+      "role": "buyer_or_seller",
+      "when": "Use this normal fallback path only after the on-chain timeout eligibility for the unresolved case has been reached.",
+      "needs": [
+        "The exact dispute and order readbacks agree on buyer, seller, order, bond, and escrow bindings.",
+        "The dispute did not close through quorum and its on-chain timeout or fallback eligibility deadline has passed.",
+        "The caller wallet is the buyer or seller and the bound escrow is still DISPUTED."
+      ],
+      "store": [
+        "atomic timeout-fallback transaction digest",
+        "fallback-resolved dispute readback",
+        "terminal order readback"
+      ],
+      "routes": [
+        "POST /disputes/{disputeCaseId}/fallback/timeout",
+        "GET /disputes/{disputeCaseId}",
+        "GET /orders/{orderId}"
+      ],
+      "steps": [
+        "Read the exact dispute and order snapshots before planning and confirm the printed hard-timeout or fallback-eligible deadline has passed.",
+        "Do not use the admin platform-fallback route. The public normal fallback is POST /disputes/{disputeCaseId}/fallback/timeout.",
+        "Immediately before the public POST, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
+        "Run clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/fallback/timeout --auth-state-file <buyer-or-seller-auth-state-file> --body '{}'. Require the returned request to bind the canonical bond and escrow and require explicit dry-run success effects.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "Execute the reviewed plan once in the same buyer or seller chain-native wallet. The plan resolves the timeout path and the bound escrow atomically.",
+        "Read back the exact dispute and order. Require a fallback-resolved dispute and terminal settlement before treating the closeout as complete.",
+        "Do not run resolve-dispute after a successful atomic close."
+      ],
+      "examples": [
+        "Future write-open atomic timeout close; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help request GET /disputes/<dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/fallback/timeout --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute the one reviewed atomic plan separately and verify both dispute and order readbacks."
+      ],
+      "stopConditions": [
+        "Stop if the on-chain timeout or fallback-eligible deadline has not passed; wait for exact readback instead of guessing locally.",
+        "Stop on any bond, escrow, order, package, or coin-type binding mismatch.",
+        "After a successful atomic close, do not submit resolve-escrow as a second normal transaction."
+      ],
+      "nextRecipes": [
+        "reviewer-claim-metrics"
+      ],
+      "nextTopics": ["reviewer-selector", "order-states"]
+    },
+    {
+      "id": "dispute-platform-fallback",
+      "title": "Admin Platform Dispute Fallback",
+      "aliases": ["platform-fallback-dispute"],
+      "summary": "Identify the configured ArbCap platform fallback as an admin-only custody path that public bots cannot execute through this helper.",
+      "role": "admin_only",
+      "when": "Use this only to recognize and hand off an explicitly authorized platform fallback incident to the configured admin/operator custody workflow.",
+      "needs": [
+        "An explicitly authorized platform fallback incident exists.",
+        "The configured arb admin identity and ArbCap remain inside the external custody workflow."
+      ],
+      "store": [
+        "operator incident reference",
+        "externally verified admin transaction receipt"
+      ],
+      "routes": [
+        "POST /disputes/{disputeCaseId}/fallback/resolve",
+        "GET /disputes/{disputeCaseId}",
+        "GET /orders/{orderId}"
+      ],
+      "steps": [
+        "Public buyer, seller, and reviewer bots stop here. This route is operator-internal and requires the configured arb admin plus externally custodied ArbCap authority.",
+        "Do not place ArbCap data, admin credentials, or an executable platform-fallback body into the public helper.",
+        "Use dispute-finalize for normal quorum closeout or dispute-timeout-fallback for the permissionless timeout path.",
+        "Only the dedicated admin/operator custody workflow may build, authorize, execute, and audit this fallback."
+      ],
+      "examples": [
+        "No public execution command is provided. Record the dispute case id and hand the incident to the configured admin/operator custody workflow."
+      ],
+      "stopConditions": [
+        "Stop if the caller is a normal public user or only has buyer, seller, reviewer, or generic operator auth.",
+        "Never attempt this route with tx-plan-dry-run from the public helper and never request or store ArbCap custody material here."
+      ],
+      "nextRecipes": [],
+      "nextTopics": ["reviewer-selector", "order-states"]
+    },
+    {
+      "id": "resolve-dispute",
+      "title": "Legacy Recovery Resolve Dispute Escrow",
+      "aliases": ["dispute-resolve", "resolve-dispute-escrow", "legacy-resolve-dispute"],
+      "summary": "Recover or reconcile an already closed legacy or partially completed dispute whose bound escrow is still DISPUTED; this is not a normal closeout step.",
+      "role": "buyer_or_seller",
+      "when": "Use this only when exact readback or an operator recovery procedure proves that the case is already closed but atomic escrow settlement did not complete.",
+      "needs": [
+        "The dispute is already finalized or fallback-resolved on-chain.",
+        "The bound escrow still reads DISPUTED after a legacy, migration, or interrupted pre-atomic closeout.",
         "The wallet is the buyer or seller for the disputed order."
       ],
       "store": [
-        "terminal dispute status",
-        "terminal order status"
+        "recovery reason",
+        "recovery transaction digest",
+        "terminal dispute and order readbacks"
       ],
       "routes": [
         "POST /disputes/{disputeCaseId}/resolve-escrow",
@@ -1578,22 +1705,20 @@
         "GET /orders/{orderId}"
       ],
       "steps": [
-        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
-        "Stay on the buyer or seller wallet for the disputed order.",
-        "Read the exact dispute and order snapshots first; do not infer terminal readiness from stale event fragments.",
-        "POST /disputes/{disputeCaseId}/resolve-escrow.",
-        "Treat this as the actual money move: seller-settlement pays the seller, buyer-settlement refunds the buyer.",
-        "Execute the returned tx locally.",
-        "Read back the dispute and order state."
+        "Do not use this recipe for an open case. Use dispute-finalize for quorum closeout or dispute-timeout-fallback after timeout eligibility.",
+        "Read the exact dispute and order snapshots and confirm the case is closed while the bound escrow is still DISPUTED.",
+        "Record why the normal atomic close did not settle the escrow; do not infer a recovery need from stale events.",
+        "Immediately before the recovery POST, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
+        "Run clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/resolve-escrow --auth-state-file <buyer-or-seller-auth-state-file> --body '{}'. Require exact binding and explicit dry-run success effects.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "Execute the reviewed recovery plan once, then read back the dispute and order state."
       ],
       "examples": [
-        "Future write-open resolve from the finalized dispute binding; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/resolve-escrow --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
-        "Read back the closed dispute and terminal order immediately after resolution:\\nclawnera-help request GET /disputes/<dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request GET /orders/<order-id> --auth-state-file ~/.config/clawnera/auth-state.json"
+        "Recovery only after exact readback proves a closed case with an unsettled escrow; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help request GET /disputes/<dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request GET /orders/<order-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/resolve-escrow --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical recovery plan; it never signs, exports bytes, or broadcasts. Execute only as an audited recovery transaction, never after a successful atomic finalize or timeout fallback."
       ],
       "stopConditions": [
-        "Stop if dispute_settlement_not_ready is returned; wait for finalized or fallback-resolved dispute state first.",
-        "Stop if dispute_escrow_already_resolved is returned.",
-        "After resolution, stop all later milestone writes; the order is terminal."
+        "Stop if the dispute case is still open; return to dispute-finalize or dispute-timeout-fallback.",
+        "Stop if dispute_settlement_not_ready is returned; recovery cannot close the dispute case.",
+        "Stop if dispute_escrow_already_resolved is returned; the atomic or prior recovery settlement already completed."
       ],
       "nextRecipes": [],
       "nextTopics": ["reviewer-selector", "order-states"]

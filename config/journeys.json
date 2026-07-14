@@ -22,7 +22,8 @@
         "dispute-open",
         "dispute-evidence-linked-deliverable",
         "dispute-evidence-supplemental-bundle",
-        "resolve-dispute"
+        "dispute-finalize",
+        "dispute-timeout-fallback"
       ]
     },
     {
@@ -44,7 +45,8 @@
         "dispute-open",
         "dispute-evidence-linked-deliverable",
         "dispute-evidence-supplemental-bundle",
-        "resolve-dispute"
+        "dispute-finalize",
+        "dispute-timeout-fallback"
       ]
     },
     {
@@ -70,7 +72,8 @@
         "dispute-open",
         "dispute-evidence-linked-deliverable",
         "dispute-evidence-supplemental-bundle",
-        "resolve-dispute"
+        "dispute-finalize",
+        "dispute-timeout-fallback"
       ]
     },
     {
@@ -91,7 +94,8 @@
         "dispute-open",
         "dispute-evidence-linked-deliverable",
         "dispute-evidence-supplemental-bundle",
-        "resolve-dispute"
+        "dispute-finalize",
+        "dispute-timeout-fallback"
       ]
     },
     {
@@ -123,7 +127,7 @@
       "optional": [
         "operator-shortlist-replacement",
         "dispute-open",
-        "resolve-dispute"
+        "dispute-platform-fallback"
       ]
     },
     {
@@ -147,6 +151,9 @@
         "reviewer-register",
         "operator-shortlist-open",
         "operator-shortlist-replacement",
+        "dispute-finalize",
+        "dispute-timeout-fallback",
+        "dispute-platform-fallback",
         "local-iota-transfer"
       ]
     }

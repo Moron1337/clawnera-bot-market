@@ -145,20 +145,24 @@ Keep using `@clawdex/sdk/bot` for shared reads such as reviewer directory and di
      noch `409 dispute_challenge_window_open` liefern; dann bis `challengeDeadlineMs`
      warten und neu planen.
    - Der Helper druckt dabei top-level `wait_until` und `retry_after_ms` und auto-retried einen kurzen Grenzfall einmal.
-   - `finalize` und `fallback/timeout` auto-hydraten die aktuellen Dispute-Object-Ids;
-     diese IDs nicht von Hand zusammensetzen.
-   - `fallback/resolve` braucht weiter `arbCapObjectId`.
-   - `/resolve-escrow` loest jetzt aus der finalisierten Dispute-Binding, nicht aus einem
-     caller-owned Ticket.
-   - `/resolve-escrow` mit Buyer- oder Seller-Wallet ausfuehren.
+   - `finalize` und `fallback/timeout` auto-hydraten Dispute-, Config-, gebundene
+     Escrow- und Escrow-Coin-Inputs; diese Werte nicht von Hand zusammensetzen.
+   - Beide liefern genau eine atomare PTB mit zwei geordneten Move Calls: zuerst
+     die Dispute-Entscheidung, danach `order_escrow::resolve_dispute_with_binding`
+     fuer das gebundene Escrow mit demselben Config-Argument.
+   - Diese PTB genau einmal ausfuehren und keine separate normale Escrow-Resolution
+     anhaengen. Wenn ein Call abbricht, bricht die gesamte PTB ab.
+   - Der ArbCap Platform-Fallback folgt derselben Zwei-Call-Regel, ist aber
+     Operator/Admin-only und liegt ausserhalb des Public Helpers.
+   - `/resolve-escrow` nur fuer Legacy-/Recovery-/Reconciliation verwenden, niemals
+     als normalen zweiten Schritt nach erfolgreichem `finalize` oder `fallback/timeout`.
    - seller-settlement bedeutet Escrow-Auszahlung an den Seller; buyer-settlement
      bedeutet Escrow-Refund an den Buyer.
-   - Im spaeter akzeptierten Fresh-Flow `finalize` und `/resolve-escrow` mit derselben Buyer-/Seller-Wallet ausfuehren; keine Legacy-Pakete als Fallback verwenden.
-   - Den `/resolve-escrow`-Plan als kanonisch behandeln, inklusive
+   - Nur in einem expliziten Recovery-Flow den `/resolve-escrow`-Plan als kanonisch behandeln, inklusive
      `disputeQuorumConfigObjectId`.
    - Vor finalisiertem Streitfall kommt korrekt `409 dispute_settlement_not_ready`.
-   - Bei erneutem `/resolve-escrow` nach bereits aufgeloester Shared Escrow kommt korrekt
-     `409 dispute_escrow_already_resolved`.
+   - Nach einer erfolgreichen atomaren Closeout-PTB kommt bei `/resolve-escrow`
+     korrekt `409 dispute_escrow_already_resolved`; das ist kein fehlgeschlagenes Settlement.
    - Kein automatischer Mailbox-Ausgang wird beim Closeout gepostet; fuer Bots ist
      `order.status_changed` das verlaessliche actor-visible Abschluss-Signal, ausser
      eine Partei postet bewusst `DISPUTE_NOTICE`.

@@ -40,6 +40,19 @@ function extractLastMoveCallFunction(tx) {
   return extractLastMoveCall(tx).function;
 }
 
+function extractMoveCalls(tx) {
+  const data = tx.getData();
+  return {
+    data,
+    calls: data.commands.map((command) => {
+      if (!command || !("MoveCall" in command) || !command.MoveCall) {
+        throw new Error("missing_move_call");
+      }
+      return command.MoveCall;
+    }),
+  };
+}
+
 const SUI_NATIVE_COIN_TYPE = `0x${"0".repeat(63)}2::sui::SUI`;
 const SUI_USDC_TESTNET_COIN_TYPE = "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
 
@@ -131,6 +144,92 @@ test("buildClawdexTxFromPlan dispatches canonical binding-based order-escrow set
 
   assert.equal(extractLastMoveCallFunction(tx), "resolve_dispute_with_binding");
 });
+
+const DISPUTE_CLOSEOUT_REQUEST = Object.freeze({
+  packageId: addr("1"),
+  sender: addr("a"),
+  escrowObjectId: addr("8"),
+  escrowCoinType: `${addr("9")}::asset::ASSET`,
+  disputeCaseObjectId: addr("3"),
+  bondObjectId: addr("4"),
+  reviewerRegistryObjectId: addr("5"),
+  disputeQuorumConfigObjectId: addr("6"),
+  clockObjectId: addr("c"),
+});
+const DISPUTE_BOND_COIN_TYPE = `${addr("2")}::claw_coin::CLAW_COIN`;
+
+for (const chainFamily of ["iota", "sui"]) {
+  for (const closeout of [
+    {
+      txBuilder: "disputeQuorum.finalizeCase",
+      nativeFunction: "finalize_case_with_quorum",
+      typedFunction: "finalize_case_with_typed_quorum",
+    },
+    {
+      txBuilder: "disputeQuorum.resolveTimeoutFallback",
+      nativeFunction: "resolve_case_with_timeout_fallback",
+      typedFunction: "resolve_case_with_typed_timeout_fallback",
+    },
+  ]) {
+    for (const typed of [false, true]) {
+      test(`buildClawdexTxFromPlan builds atomic ${chainFamily} ${closeout.txBuilder} ${typed ? "typed" : "native"} closeout`, () => {
+        const tx = buildClawdexTxFromPlan({
+          txBuilder: closeout.txBuilder,
+          request: {
+            ...DISPUTE_CLOSEOUT_REQUEST,
+            chainFamily,
+            ...(typed ? { bondCoinType: DISPUTE_BOND_COIN_TYPE } : {}),
+          },
+        });
+        const { calls } = extractMoveCalls(tx);
+
+        assert.equal(calls.length, 2);
+        assert.equal(calls[0].module, "dispute_quorum");
+        assert.equal(calls[0].function, typed ? closeout.typedFunction : closeout.nativeFunction);
+        assert.deepEqual(calls[0].typeArguments, typed ? [DISPUTE_BOND_COIN_TYPE] : []);
+        assert.equal(calls[1].module, "order_escrow");
+        assert.equal(calls[1].function, "resolve_dispute_with_binding");
+        assert.deepEqual(calls[1].typeArguments, [DISPUTE_CLOSEOUT_REQUEST.escrowCoinType]);
+        assert.deepEqual(calls[1].arguments[0], calls[0].arguments[3]);
+      });
+    }
+
+    test(`buildClawdexTxFromPlan requires the escrow binding for ${chainFamily} ${closeout.txBuilder}`, () => {
+      for (const [field, expectedError] of [
+        ["escrowObjectId", /invalid_escrow_object_id/],
+        ["escrowCoinType", /invalid_escrow_coin_type/],
+      ]) {
+        assert.throws(
+          () =>
+            buildClawdexTxFromPlan({
+              txBuilder: closeout.txBuilder,
+              request: {
+                ...DISPUTE_CLOSEOUT_REQUEST,
+                chainFamily,
+                [field]: undefined,
+              },
+            }),
+          expectedError,
+        );
+      }
+    });
+  }
+
+  test(`buildClawdexTxFromPlan rejects the ${chainFamily} platform fallback as admin-only`, () => {
+    assert.throws(
+      () =>
+        buildClawdexTxFromPlan({
+          txBuilder: "disputeQuorum.resolveFallback",
+          request: {
+            ...DISPUTE_CLOSEOUT_REQUEST,
+            chainFamily,
+            arbCapObjectId: addr("7"),
+          },
+        }),
+      /admin_only_tx_builder:disputeQuorum\.resolveFallback/,
+    );
+  });
+}
 
 test("buildCreateOrderEscrowTx uses guarded IOTA order-escrow entrypoints", () => {
   const tx = buildCreateOrderEscrowTx({

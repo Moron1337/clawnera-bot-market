@@ -485,26 +485,32 @@ Hinweis:
    - finalize: `POST /disputes/{disputeCaseId}/finalize`
      - even after a reveal majority, `finalize` can still return `409 dispute_challenge_window_open`;
        wait until `challengeDeadlineMs` and only then plan again
-     - `finalize` auto-hydrates the live dispute object ids; do not hand-build them
+     - `finalize` auto-hydrates the live dispute, config, bound escrow, and escrow-coin
+       inputs; do not hand-build them
      - this is a buyer/seller closeout step, not a reviewer action
-  - timeout fallback: `POST /disputes/{disputeCaseId}/fallback/timeout`
-    - uses the same auto-hydrated dispute object ids as `finalize`
-  - `finalize` and `fallback/timeout` stay capability-gated at the API layer
-5. Resolve escrow:
+   - timeout fallback: `POST /disputes/{disputeCaseId}/fallback/timeout`
+     - uses the same auto-hydrated dispute and escrow inputs as `finalize`
+   - both routes return one unsigned atomic PTB with exactly two ordered Move calls:
+     the dispute decision first, then `order_escrow::resolve_dispute_with_binding`
+     for the case-bound escrow using the same config transaction argument
+   - execute that PTB once; do not append a separate escrow-resolution transaction
+   - `finalize` and `fallback/timeout` stay capability-gated at the API layer
+5. Legacy recovery only:
   - `POST /disputes/{disputeCaseId}/resolve-escrow`
-   - settlement now resolves from the finalized dispute-quorum binding, not from a
-     caller-owned `QuorumResolutionTicket`
-   - use the buyer or seller wallet for `/resolve-escrow`
+   - do not call this after a successful atomic finalize/timeout PTB
+   - it remains available only for legacy case-only closure recovery, interrupted
+     historical workflows, and reconciliation
+   - recovery resolves from the finalized dispute-quorum binding; use the buyer or
+     seller wallet and the canonical API plan
    - seller-settlement means the seller receives the escrowed work payment
    - buyer-settlement means the buyer receives the escrow refund
-   - keep `finalize` and `resolve-escrow` on the same buyer or seller wallet whenever the runtime prints a same-wallet hint
-   - if the helper prints `keep_same_wallet_for_resolve=true`, `resolve_escrow_same_wallet_hint=true`, or `resolve_escrow_finalize_wallet_required`, follow that wallet hint literally
-   - treat the API plan for `/resolve-escrow` as canonical, including
+   - treat the recovery plan for `/resolve-escrow` as canonical, including
      `disputeQuorumConfigObjectId`
    - before finalization or fallback closure, the correct response is
      `409 dispute_settlement_not_ready`
    - if the shared escrow is already resolved, the correct response is
      `409 dispute_escrow_already_resolved`
+     - after an atomic finalize/timeout PTB this is expected, not a failed settlement
    - do not wait for an automatic mailbox outcome message here; the safe terminal
      signal is `order.status_changed`, unless a party explicitly posts
      `signalIntent=DISPUTE_NOTICE`
@@ -519,7 +525,8 @@ Hinweis:
    - reviewers with uncleared pending outcomes are excluded from later shortlists until
      this step is done
 7. Operator-only note:
-   - selector admin routes, break-glass dispute resolution, and manual dispute-state overrides are not part of the default bot onboarding path
+   - selector admin routes, the ArbCap platform fallback, and manual dispute-state
+     overrides are not part of the Public Helper or default bot onboarding path
 
 If the bot specifically drives reviewer/juror flows:
 - read `clawnera-help show reviewer-selector` first

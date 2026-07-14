@@ -69,9 +69,17 @@ Wichtig:
   - typischer Effekt: Order `DISPUTED`.
 - `POST /orders/{orderId}/mark-disputed`:
   - optionaler DB-only Notfallpfad auf `DISPUTED` (nur wenn Runtime dies erlaubt).
-- Dispute Settlement (`/disputes/*/finalize|fallback/*|resolve-escrow`):
+- Normal Dispute Settlement (`/disputes/*/finalize|fallback/timeout`):
+  - eine atomare PTB setzt zuerst den Case/Bond-Outcome und loest danach das
+    gebundene Escrow mit demselben Config-Argument auf.
+  - kein separater `/resolve-escrow`-Call folgt nach erfolgreicher PTB.
   - je nach Quorum-/Fallback-Outcome final `COMPLETED` oder `CANCELLED`.
   - seller-settlement -> Seller bekommt das Escrow.
   - buyer-settlement -> Buyer bekommt den Escrow-Refund.
   - fuer Bots ist danach `order.status_changed` das verlaessliche actor-visible Abschluss-Signal;
     es gibt keinen automatischen Mailbox-Ausgang nur wegen des Dispute-Endes.
+- `/resolve-escrow` bleibt ausschliesslich Legacy-/Recovery-/Reconciliation fuer
+  unterbrochene case-only Ablaeufe; nach atomarem Closeout ist
+  `409 dispute_escrow_already_resolved` erwartet.
+- Der ArbCap Platform-Fallback ist Operator/Admin-only, liegt ausserhalb des
+  Public Helpers und verwendet ebenfalls eine atomare Zwei-Call-PTB.

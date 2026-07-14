@@ -590,17 +590,17 @@ Hard rules from the verified manual mainnet run:
   If you call `POST /disputes/{caseId}/votes/reveal` too early, the API now returns `409 dispute_commit_window_open` with `retryAfterMs`.
   The helper now promotes those timing hints to top-level `wait_until` / `retry_after_ms` output and auto-retries one short boundary case.
 - Even after a 2:1 or 3:0 reveal majority exists, `POST /disputes/{caseId}/finalize` can still return `409 dispute_challenge_window_open` until `challengeDeadlineMs` has elapsed.
-- Reviewer scope stops after reveal; buyer or seller closes with `finalize` / `fallback/timeout` and then runs `/resolve-escrow`.
-- `POST /disputes/{caseId}/finalize` and `POST /disputes/{caseId}/fallback/timeout` no longer need manually supplied `bondObjectId`, `reviewerRegistryObjectId`, or `disputeQuorumConfigObjectId`; the API auto-hydrates those from live dispute/config truth.
-- `/resolve-escrow` now resolves from the finalized dispute-quorum binding, not from a caller-owned `QuorumResolutionTicket`.
-- Use the buyer or seller wallet for `/resolve-escrow`; reviewer wallets are not the normal settlement actor.
-- Current mainnet may still require the same buyer or seller wallet across `finalize` and `resolve-escrow` on some package lines; keep those steps on the same party wallet until the runtime stops printing that hint.
-- Keep the same authorized wallet for resolve when the canonical plan or live dispute readback requires it; never infer wallet authority from a dry-run alone.
-- If the dispute is not finalized or fallback-resolved on-chain yet, expect `409 dispute_settlement_not_ready`.
+- Reviewer scope stops after reveal; the buyer or seller executes the unsigned PTB returned by `finalize` or `fallback/timeout` exactly once.
+- `POST /disputes/{caseId}/finalize` and `POST /disputes/{caseId}/fallback/timeout` auto-hydrate `bondObjectId`, `reviewerRegistryObjectId`, `disputeQuorumConfigObjectId`, `escrowObjectId`, and `escrowCoinType` from live dispute/order/escrow truth.
+- Each returned PTB contains exactly two ordered Move calls: the matching `dispute_quorum` decision first, then `order_escrow::resolve_dispute_with_binding<escrowCoinType>` with the same config transaction argument and the case-bound escrow.
+- Execute that PTB once. Do not append a separate normal escrow-resolution transaction; either both calls succeed or the whole PTB aborts.
+- The ArbCap platform fallback follows the same atomic two-call rule but is operator/admin-only and intentionally outside the Public Helper.
+- `/resolve-escrow` is retained only for legacy case-only closure recovery, interrupted historical workflows, and reconciliation. Normal finalize/timeout clients must not call it after their atomic PTB succeeds.
+- In an explicitly authorized recovery flow, use the buyer or seller wallet and the canonical API plan. Before a recoverable dispute binding is finalized, expect `409 dispute_settlement_not_ready`.
 - Economic outcome truth:
   - seller-settlement means the seller receives the escrowed work payment
   - buyer-settlement means the buyer receives the escrow refund back
-  - majority reviewer payouts happen earlier at `finalize`; `resolve-escrow` is the buyer/seller closeout step
+  - majority reviewer payouts happen in the first call of the finalize PTB; bound escrow closeout happens atomically in its second call
 - Do not assume dispute closeout auto-posts a mailbox message:
   - the safe actor-visible terminal signal today is `order.status_changed`
   - if a human-readable mailbox notice is required, a buyer or seller must post `signalIntent=DISPUTE_NOTICE` explicitly
@@ -621,8 +621,8 @@ Hard rules from the verified manual mainnet run:
 - Reviewer onboarding order is: `key-agreement-upsert -> reputation-init -> reviewer-register`.
 - If a reviewer rotates or refreshes their key-agreement key later, rerun `key-agreement-upsert` and then `reviewer-update` before expecting fresh dispute-evidence grants to work.
 - Replacement rounds are full reassignment rounds. Read the live `requiredReviewerVotes` first and shortlist at least that many reviewers unless the dispute already lowered quorum size.
-- Treat the `/resolve-escrow` tx-plan request as canonical, including `disputeQuorumConfigObjectId`. Do not silently rebuild it.
-- If the shared escrow is already resolved, `/resolve-escrow` now correctly returns `409 dispute_escrow_already_resolved`.
+- Only for explicit legacy/recovery/reconciliation, treat the `/resolve-escrow` tx-plan request as canonical, including `disputeQuorumConfigObjectId`; never rebuild it silently.
+- After a successful atomic finalize/timeout PTB, `/resolve-escrow` correctly returns `409 dispute_escrow_already_resolved`. That response is not evidence that settlement failed.
 - Once a milestone dispute resolves the escrow, the order should read back terminal `COMPLETED`. Do not continue later milestones; a correct post-resolution write now comes back as `409 order_not_in_progress`.
 - For mailbox acknowledgements, send `ackedSeq` exactly as the API expects it: a decimal string, not a JSON number.
 - Treat live dispute-bond principal and escrow principal as user-funded unless the runtime explicitly advertises a sponsor lane for that flow.

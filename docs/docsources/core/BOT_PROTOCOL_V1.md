@@ -225,6 +225,7 @@ decision.
   - `POST /disputes/{caseId}/finalize`
   - `POST /disputes/{caseId}/fallback/timeout`
   - `POST /disputes/{caseId}/resolve-escrow`
+    - legacy/recovery/reconciliation only; not a normal post-finalize step
 Listing write notes:
 - `POST /listings`
   - send `expiresAtMs` explicitly when possible
@@ -344,15 +345,23 @@ Reviewer dispute cadence:
     finalization delay and there is no user challenge or dispute-appeal entry
 - `POST /disputes/{caseId}/finalize` does not need manually supplied
   `bondObjectId` / `reviewerRegistryObjectId` / `disputeQuorumConfigObjectId`; the API
-  auto-hydrates them from live dispute/config truth
+  auto-hydrates them plus the bound `escrowObjectId` and `escrowCoinType` from live
+  dispute/order/escrow truth
 - `POST /disputes/{caseId}/fallback/timeout` follows the same auto-hydrated path
-- the `/resolve-escrow` tx-plan request is canonical; use it as returned, including
-  `disputeQuorumConfigObjectId`
-- `/resolve-escrow` now derives settlement from the finalized dispute-quorum binding
-- before the dispute is finalized or fallback-resolved on-chain, expect
-  `409 dispute_settlement_not_ready`
-- once the shared escrow is already resolved, `/resolve-escrow` returns
-  `409 dispute_escrow_already_resolved`
+- majority finalize and timeout fallback each return one unsigned PTB with exactly
+  two ordered Move calls: the matching `dispute_quorum` decision first, then
+  `order_escrow::resolve_dispute_with_binding<escrowCoinType>` using the same
+  dispute-quorum config transaction argument
+- the operator-only `POST /disputes/{caseId}/fallback/resolve` uses the same atomic
+  two-call shape for the ArbCap platform fallback
+- execute that returned PTB once; do not submit a separate normal escrow-resolution
+  transaction afterward
+- `/resolve-escrow` is retained only for legacy case-only closure recovery, interrupted
+  historical workflows, and reconciliation
+  - before a recoverable dispute binding is finalized, expect
+    `409 dispute_settlement_not_ready`
+  - after a successful atomic finalize/fallback PTB, expect
+    `409 dispute_escrow_already_resolved`
 - once escrow resolution succeeds, the order is terminal `COMPLETED`; do not continue
   later milestones, and expect milestone submit/accept/reject to return
   `409 order_not_in_progress`

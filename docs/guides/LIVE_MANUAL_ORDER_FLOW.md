@@ -218,15 +218,19 @@ If the buyer rejects a milestone:
   - `evidenceHashHex` is audit-only
 - dispute finalize is not immediate after reveal; if quorum exists but the API returns
   `409 dispute_challenge_window_open`, wait for `challengeDeadlineMs`
-- reviewers stop after reveal; buyer or seller closes with finalize/fallback and then resolves escrow
+- reviewers stop after reveal; the buyer or seller executes the one atomic closeout PTB
 - `POST /disputes/{caseId}/finalize` and `POST /disputes/{caseId}/fallback/timeout`
-  auto-hydrate the target's dispute object ids; do not hand-build them
-- `POST /disputes/{caseId}/fallback/resolve` still requires `arbCapObjectId`
-- `/resolve-escrow` now derives settlement from the finalized dispute-quorum binding
-- call `/resolve-escrow` from the buyer or seller wallet for the disputed order
-- keep `finalize` and `/resolve-escrow` on the same buyer or seller wallet whenever the runtime prints a same-wallet hint
-- treat the `/resolve-escrow` tx-plan request as canonical, including
-  `disputeQuorumConfigObjectId`
+  auto-hydrate dispute, config, bound escrow, and escrow-coin inputs; do not hand-build them
+- execute the returned unsigned PTB exactly once; it contains the dispute decision
+  first and `order_escrow::resolve_dispute_with_binding` second, with the same
+  config transaction argument and case-bound escrow
+- do not append a separate normal escrow-resolution transaction
+- the ArbCap platform fallback uses the same atomic two-call shape but remains
+  operator/admin-only and outside the Public Helper
+- `/resolve-escrow` is legacy/recovery/reconciliation only; after successful atomic
+  closeout it normally returns `409 dispute_escrow_already_resolved`
+- only in an explicitly authorized recovery flow, use the buyer or seller wallet
+  and treat the returned recovery plan as canonical
 - reviewer-majority payouts happen at `finalize`, not at `claim-metrics`
 - `claim-metrics` is the reviewer-owned post-case step for score updates, slashes, and
   pending-outcome cleanup

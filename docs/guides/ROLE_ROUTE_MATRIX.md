@@ -112,9 +112,9 @@
 
 | Route | Capability | API-Rollencheck | Hinweis |
 | --- | --- | --- | --- |
-| `POST /disputes/{id}/finalize` | `dispute.finalize` | capability, optional strict party guard | API kann buyer/seller/admin/arb hart begrenzen; on-chain payout ist deterministisch. |
-| `POST /disputes/{id}/fallback/timeout` | `dispute.fallback.timeout` | capability, optional strict party guard | Der spaetere on-chain Fallback bleibt deterministisch; HTTP kann buyer/seller/admin/arb begrenzen. |
-| `POST /disputes/{id}/resolve-escrow` | `dispute.resolve_escrow` | capability, optional strict party guard | Die Future-Surface plant `resolve_dispute_with_binding`; keine caller-owned Ticket-Pflicht mehr. |
+| `POST /disputes/{id}/finalize` | `dispute.finalize` | capability, optional strict party guard | Liefert eine atomare Zwei-Call-PTB: Quorum-Finalisierung zuerst, `resolve_dispute_with_binding` fuer das gebundene Escrow danach. Einmal ausfuehren, keinen separaten Resolve anhaengen. |
+| `POST /disputes/{id}/fallback/timeout` | `dispute.fallback.timeout` | capability, optional strict party guard | Permissionless Timeout-Entscheidung und gebundene Escrow-Aufloesung laufen in derselben atomaren Zwei-Call-PTB. |
+| `POST /disputes/{id}/resolve-escrow` | `dispute.resolve_escrow` | capability, optional strict party guard | Nur Legacy-/Recovery-/Reconciliation fuer unterbrochene case-only Ablaeufe; kein normaler zweiter Schritt nach atomarem Finalize/Fallback. |
 ## 6) Wichtig: API-Guard vs. On-Chain-Guard
 
 - Einige Endpunkte pruefen Rollen strikt im API-Layer (z. B. Milestone submit/accept/reject, dispute open, reviewers replace).
@@ -144,4 +144,7 @@ nicht Teil des normalen Buyer-/Seller-/Reviewer-Pfads:
 - `POST /admin/reviewer-selection/shortlist`
 - `GET /admin/reviewer-selection-receipts/{receiptId}`
 - `POST /disputes/{id}/fallback/resolve`
+  - Operator/Admin-only ArbCap Platform-Fallback; ausserhalb des Public Helpers
+  - liefert dieselbe atomare Zwei-Call-Form: Platform-Entscheidung zuerst,
+    gebundene Escrow-Aufloesung danach
 - `POST /orders/{orderId}/mark-disputed`

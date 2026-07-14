@@ -989,7 +989,7 @@ test("journey compact output keeps only ids, handoffs, and next hints", () => {
   assert.match(result.stdout, /steps:setup-quick > reputation-init > seller-create-listing > seller-review-bids > buyer-accept-bid\[handoff,wait_for_buyer_accept]/);
   assert.match(
     result.stdout,
-    /later:creator-cancel-listing \| creator-renew-listing \| order-mutual-cancel \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
+    /later:creator-cancel-listing \| creator-renew-listing \| order-mutual-cancel \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| dispute-finalize \| dispute-timeout-fallback/
   );
   assert.match(result.stdout, /next_if_not_setup:setup-quick/);
   assert.match(result.stdout, /next_if_setup:reputation-init/);
@@ -1014,7 +1014,7 @@ test("request journeys separate buyer-created requests from offer flow", () => {
   );
   assert.match(
     buyerResult.stdout,
-    /later:creator-cancel-listing \| creator-renew-listing \| order-mutual-cancel \| buyer-reject-delivery \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
+    /later:creator-cancel-listing \| creator-renew-listing \| order-mutual-cancel \| buyer-reject-delivery \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| dispute-finalize \| dispute-timeout-fallback/
   );
   assert.match(
     buyerResult.stdout,
@@ -1030,7 +1030,7 @@ test("request journeys separate buyer-created requests from offer flow", () => {
   );
   assert.match(
     sellerResult.stdout,
-    /later:order-mutual-cancel \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
+    /later:order-mutual-cancel \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| dispute-finalize \| dispute-timeout-fallback/
   );
 });
 
@@ -1041,7 +1041,7 @@ test("buyer compact journey does not suggest listing-creator maintenance actions
   assert.doesNotMatch(result.stdout, /creator-renew-listing/);
   assert.match(
     result.stdout,
-    /later:order-mutual-cancel \| buyer-reject-delivery \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
+    /later:order-mutual-cancel \| buyer-reject-delivery \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| dispute-finalize \| dispute-timeout-fallback/
   );
 });
 
@@ -1138,6 +1138,10 @@ test("recipes command lists minimal task recipes", () => {
   assert.match(result.stdout, /reviewer-vote: Reviewer Commit And Reveal Vote.*reviewer-vote-reveal/);
   assert.match(result.stdout, /reviewer-claim-metrics: Reviewer Claim Metrics/);
   assert.match(result.stdout, /operator-shortlist-replacement: Operator Shortlist Replacement/);
+  assert.match(result.stdout, /dispute-finalize: Atomic Quorum Dispute Close/);
+  assert.match(result.stdout, /dispute-timeout-fallback: Atomic Timeout Dispute Close/);
+  assert.match(result.stdout, /dispute-platform-fallback: Admin Platform Dispute Fallback \[role: admin_only]/);
+  assert.match(result.stdout, /resolve-dispute: Legacy Recovery Resolve Dispute Escrow/);
 });
 
 test("recipes compact output is token-light", () => {
@@ -1310,6 +1314,80 @@ test("replacement compact output highlights live case readback and replace publi
   assert.match(result.stdout, /^read:GET \/disputes\/\{disputeCaseId\}/m);
 });
 
+test("normal dispute close recipes use atomic finalize and timeout-fallback plans", () => {
+  const finalize = runCli(["recipe", "dispute-finalize", "--compact"]);
+  assert.equal(finalize.status, 0);
+  assert.match(
+    finalize.stdout,
+    /^do:clawnera-help write-gate .* && clawnera-help tx-plan-dry-run POST \/disputes\/<disputeCaseId>\/finalize .* --body '\{\}'/m
+  );
+  assert.match(
+    finalize.stdout,
+    /^write:atomic buyer\/seller close: POST \/disputes\/\{disputeCaseId\}\/finalize/m
+  );
+  assert.doesNotMatch(finalize.stdout, /resolve-escrow/);
+
+  const timeout = runCli(["recipe", "dispute-timeout-fallback", "--compact"]);
+  assert.equal(timeout.status, 0);
+  assert.match(
+    timeout.stdout,
+    /^do:clawnera-help write-gate .* && clawnera-help tx-plan-dry-run POST \/disputes\/<disputeCaseId>\/fallback\/timeout .* --body '\{\}'/m
+  );
+  assert.match(
+    timeout.stdout,
+    /^write:atomic buyer\/seller close: POST \/disputes\/\{disputeCaseId\}\/fallback\/timeout/m
+  );
+  assert.doesNotMatch(timeout.stdout, /resolve-escrow/);
+});
+
+test("platform fallback is admin-only and has no public executable helper command", () => {
+  const result = runCli(["recipe", "dispute-platform-fallback", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^role:admin_only/m);
+  assert.match(
+    result.stdout,
+    /^do:STOP: admin-only external-custody path; the public helper does not execute or dry-run platform fallback/m
+  );
+  assert.match(
+    result.stdout,
+    /^write:admin-only, not publicly executable: POST \/disputes\/\{disputeCaseId\}\/fallback\/resolve/m
+  );
+  assert.doesNotMatch(result.stdout, /tx-plan-dry-run POST \/disputes\/<disputeCaseId>\/fallback\/resolve/);
+});
+
+test("public tx-plan dry-run rejects the admin platform fallback locally", () => {
+  const disputeCaseId = `0x${"a".repeat(64)}`;
+  const path = `/disputes/${disputeCaseId}/fallback/resolve`;
+  const result = runCli(["tx-plan-dry-run", "POST", path, "--body", "{}", "--json"]);
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, "dispute_platform_fallback_admin_only");
+  assert.match(payload.hint, /public helper cannot build or dry-run the ArbCap platform fallback/i);
+  assert.match(payload.hint, /external admin custody workflow/i);
+
+  const absolute = runCli([
+    "tx-plan-dry-run",
+    "POST",
+    `https://api.example.test${path}`,
+    "--body",
+    "{}",
+    "--json",
+  ]);
+  assert.equal(absolute.status, 1);
+  assert.equal(JSON.parse(absolute.stdout).error, "absolute_api_url_not_allowed");
+});
+
+test("operator journey exposes platform fallback only as an admin handoff", () => {
+  const result = runCli(["journey", "operator", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.match(
+    result.stdout,
+    /^later:operator-shortlist-replacement \| dispute-open \| dispute-platform-fallback\[handoff]/m
+  );
+  assert.doesNotMatch(result.stdout, /resolve-dispute/);
+});
+
 test("recipe json output is parseable", () => {
   const result = runCli(["recipe", "reviewer-vote", "--json"]);
   assert.equal(result.status, 0);
@@ -1324,6 +1402,9 @@ test("recipe json output is parseable", () => {
   assert.ok(payload.recipe.steps.some((step) => /reviewer-vote-prepare/.test(step)));
   assert.ok(payload.recipe.steps.some((step) => /sequentially, not in parallel/.test(step)));
   assert.ok(payload.recipe.steps.some((step) => /buyer or seller closes the dispute/i.test(step)));
+  assert.ok(payload.recipe.steps.some((step) => /one atomic finalize or permissionless timeout-fallback plan/i.test(step)));
+  assert.ok(payload.recipe.examples.some((example) => /resolves the bound escrow atomically/i.test(example)));
+  assert.ok(payload.recipe.steps.every((step) => !/later resolves escrow/i.test(step)));
   assert.ok(payload.recipe.stopConditions.some((step) => /reviewers do not run finalize/i.test(step)));
   assert.ok(payload.recipe.stopConditions.some((step) => /reviewer_vote_already_committed/.test(step)));
   assert.ok(payload.recipe.stopConditions.some((step) => /reviewer_vote_commit_window_closed/.test(step)));
@@ -1504,14 +1585,25 @@ test("mailbox signal alias resolves to the mailbox handshake recipe", () => {
   assert.ok(payload.recipe.routes.some((route) => /mailbox\/post-signal-plan/.test(route)));
 });
 
-test("resolve dispute alias resolves to the canonical resolve recipe", () => {
+test("resolve dispute alias resolves to the legacy recovery recipe", () => {
   const result = runCli(["recipe", "dispute-resolve", "--json"]);
   assert.equal(result.status, 0);
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, true);
   assert.equal(payload.recipe.id, "resolve-dispute");
+  assert.match(payload.recipe.summary, /not a normal closeout step/i);
   assert.ok(payload.recipe.examples.some((example) => /resolve-escrow/.test(example)));
   assert.ok(payload.recipe.examples.every((example) => !/quorumResolutionTicketObjectId/.test(example)));
+});
+
+test("finalize dispute resolution alias resolves to atomic quorum close", () => {
+  const result = runCli(["recipe", "finalize-dispute-resolution", "--json"]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.recipe.id, "dispute-finalize");
+  assert.equal(payload.recipe.routes[0], "POST /disputes/{disputeCaseId}/finalize");
+  assert.match(payload.recipe.summary, /one atomic buyer-or-seller transaction plan/i);
 });
 
 test("seller review recipe warns that seller cannot accept the bid", () => {
@@ -1579,10 +1671,13 @@ test("reviewer claim recipe explains explicit case-id versus safe inference", ()
   assert.match(result.stdout, /reviewer_metrics_claim_not_required/);
 });
 
-test("resolve dispute recipe shows the binding-based resolve flow", () => {
+test("resolve dispute recipe is limited to legacy and recovery flow", () => {
   const result = runCli(["recipe", "resolve-dispute"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /finalized dispute binding/);
+  assert.match(result.stdout, /# Legacy Recovery Resolve Dispute Escrow/);
+  assert.match(result.stdout, /not a normal closeout step/i);
+  assert.match(result.stdout, /case is already closed but atomic escrow settlement did not complete/i);
+  assert.match(result.stdout, /Use dispute-finalize for quorum closeout or dispute-timeout-fallback/i);
   assert.match(result.stdout, /dispute_settlement_not_ready/);
   assert.doesNotMatch(result.stdout, /quorumResolutionTicketObjectId/);
   assert.doesNotMatch(result.stdout, /quorum_resolution_ticket_object_id/);

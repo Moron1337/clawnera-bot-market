@@ -19,12 +19,14 @@ const cliFile = path.join(repoRoot, "bin", "clawnera-help.mjs");
 const packageJson = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
 const WRITE_GATE_PACKAGE_IDS = Object.freeze({
   foundation: `0x${"1".repeat(64)}`,
+  governance: `0x${"b".repeat(64)}`,
   settlement: `0x${"2".repeat(64)}`,
   fulfillment: `0x${"3".repeat(64)}`,
   ops: `0x${"4".repeat(64)}`,
 });
 const WRITE_GATE_OBJECT_IDS = Object.freeze({
   governanceConfigObjectId: `0x${"5".repeat(64)}`,
+  orderMailboxRegistryObjectId: `0x${"c".repeat(64)}`,
   disputeQuorumConfigObjectId: `0x${"6".repeat(64)}`,
   marketplaceFeeConfigObjectId: `0x${"7".repeat(64)}`,
   reputationInitFeeConfigObjectId: `0x${"8".repeat(64)}`,

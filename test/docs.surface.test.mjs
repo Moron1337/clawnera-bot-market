@@ -148,12 +148,14 @@ async function startSponsorPreflightGateServer(state) {
           chainIdentifier: "2304aa97",
           packageIds: {
             foundation: `0x${"1".repeat(64)}`,
+            governance: `0x${"b".repeat(64)}`,
             settlement: `0x${"2".repeat(64)}`,
             fulfillment: `0x${"3".repeat(64)}`,
             ops: `0x${"4".repeat(64)}`
           },
           objectIds: {
             governanceConfigObjectId: null,
+            orderMailboxRegistryObjectId: `0x${"c".repeat(64)}`,
             disputeQuorumConfigObjectId: null,
             marketplaceFeeConfigObjectId: null,
             reputationInitFeeConfigObjectId: null,

@@ -35,12 +35,14 @@ function attestation(overrides = {}) {
       chainIdentifier: "2304aa97",
       packageIds: {
         foundation: id("1"),
+        governance: id("b"),
         settlement: id("2"),
         fulfillment: id("3"),
         ops: id("4"),
       },
       objectIds: {
         governanceConfigObjectId: id("5"),
+        orderMailboxRegistryObjectId: id("c"),
         disputeQuorumConfigObjectId: id("6"),
         marketplaceFeeConfigObjectId: id("7"),
         reputationInitFeeConfigObjectId: id("8"),
@@ -68,7 +70,9 @@ test("validates a fresh nonce-bound split-package testnet attestation", () => {
   });
 
   assert.equal(value.chain.packageIds.settlement, id("2"));
+  assert.equal(value.chain.packageIds.governance, id("b"));
   assert.equal(value.chain.objectIds.governanceConfigObjectId, id("5"));
+  assert.equal(value.chain.objectIds.orderMailboxRegistryObjectId, id("c"));
 });
 
 test("rejects cached, incoherent, closed, and non-split attestations", () => {
@@ -97,6 +101,14 @@ test("rejects cached, incoherent, closed, and non-split attestations", () => {
   const duplicate = attestation();
   duplicate.chain.packageIds.ops = duplicate.chain.packageIds.settlement;
   assert.throws(() => validate(duplicate), /package_dag_not_split/);
+
+  const missingGovernance = attestation();
+  delete missingGovernance.chain.packageIds.governance;
+  assert.throws(() => validate(missingGovernance), /governance_package_id_invalid/);
+
+  const missingMailboxRegistry = attestation();
+  missingMailboxRegistry.chain.objectIds.orderMailboxRegistryObjectId = null;
+  assert.throws(() => validate(missingMailboxRegistry), /order_mailbox_registry_missing/);
 });
 
 test("pins mainnet attestations to the canonical CLAWNERA API origin", () => {
@@ -186,6 +198,7 @@ test("binds the full policy DAG, action package, and used config pointers", () =
     packageIds,
     objectIds: {
       governanceConfigObjectId: id("5"),
+      orderMailboxRegistryObjectId: id("c"),
       listingDepositConfigObjectId: id("9"),
     },
   }));
@@ -195,14 +208,28 @@ test("binds the full policy DAG, action package, and used config pointers", () =
     packageAlias: "ops",
     packageId: packageIds.ops,
     packageIds: { ...packageIds, fulfillment: id("f") },
-    objectIds: { governanceConfigObjectId: id("5") },
+    objectIds: {
+      governanceConfigObjectId: id("5"),
+      orderMailboxRegistryObjectId: id("c"),
+    },
   }), /package_dag_mismatch/);
   assert.throws(() => assertMarketplaceDirectIntentBinding({
     attestation: value,
     packageAlias: "ops",
     packageId: packageIds.ops,
     packageIds,
-    objectIds: { governanceConfigObjectId: id("f") },
+    objectIds: {
+      governanceConfigObjectId: id("f"),
+      orderMailboxRegistryObjectId: id("c"),
+    },
+  }), /object_mismatch/);
+
+  assert.throws(() => assertMarketplaceDirectIntentBinding({
+    attestation: value,
+    packageAlias: "ops",
+    packageId: packageIds.ops,
+    packageIds,
+    objectIds: { orderMailboxRegistryObjectId: id("f") },
   }), /object_mismatch/);
 });
 

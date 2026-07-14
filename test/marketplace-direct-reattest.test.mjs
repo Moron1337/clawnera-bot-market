@@ -17,12 +17,14 @@ function marketplaceChain() {
     chainIdentifier: "2304aa97",
     packageIds: {
       foundation: id("1"),
+      governance: id("b"),
       settlement: id("2"),
       fulfillment: id("3"),
       ops: id("4"),
     },
     objectIds: {
       governanceConfigObjectId: id("5"),
+      orderMailboxRegistryObjectId: id("c"),
       disputeQuorumConfigObjectId: id("6"),
       marketplaceFeeConfigObjectId: id("7"),
       reputationInitFeeConfigObjectId: id("8"),
@@ -80,6 +82,7 @@ function marketplaceInput() {
     packageIds: chain.packageIds,
     objectIds: {
       governanceConfigObjectId: chain.objectIds.governanceConfigObjectId,
+      orderMailboxRegistryObjectId: chain.objectIds.orderMailboxRegistryObjectId,
       disputeQuorumConfigObjectId: chain.objectIds.disputeQuorumConfigObjectId,
     },
     reviewerPlan: null,

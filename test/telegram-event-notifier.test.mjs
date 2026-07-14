@@ -64,12 +64,14 @@ function buildWriteGateAttestation(nonce) {
       chainIdentifier: "6364aad5",
       packageIds: {
         foundation: objectId("1"),
+        governance: objectId("b"),
         settlement: objectId("2"),
         fulfillment: objectId("3"),
         ops: objectId("4")
       },
       objectIds: {
         governanceConfigObjectId: null,
+        orderMailboxRegistryObjectId: objectId("c"),
         disputeQuorumConfigObjectId: null,
         marketplaceFeeConfigObjectId: null,
         reputationInitFeeConfigObjectId: null,

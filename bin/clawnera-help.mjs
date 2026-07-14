@@ -106,6 +106,7 @@ import {
   validateMarketplaceWriteGateAttestation,
 } from "../lib/marketplace-write-gate.mjs";
 import { createMarketplaceDirectReattestation } from "../lib/marketplace-direct-reattest.mjs";
+import { extractMarketplacePolicyPackageContext } from "../lib/marketplace-runtime-topology.mjs";
 import { assertMarketplaceDeploymentRegistryAvailable } from "../lib/marketplace-deployment-identity.mjs";
 import {
   DEFAULT_TRANSFER_DRAFT_TTL_SEC,
@@ -6698,54 +6699,7 @@ async function fetchLatestCheckpointRefForCli(options = {}) {
 }
 
 function extractPackageIdFromPolicyResponse(responseBody, packageAlias = "settlement") {
-  const policy = responseBody?.policy;
-  if (!policy || typeof policy !== "object" || Array.isArray(policy)) {
-    throw new Error("policy_fees_payload_invalid");
-  }
-  if (!new Set(["foundation", "settlement", "fulfillment", "ops"]).has(packageAlias)) {
-    throw new Error("marketplace_package_alias_invalid");
-  }
-  const chainConfig = asRecord(policy.chainConfig);
-  const packageIds = Object.fromEntries(
-    ["foundation", "settlement", "fulfillment", "ops"].map((alias) => [
-      alias,
-      normalizeIotaAddress(chainConfig?.[`${alias}PackageId`] || ""),
-    ]),
-  );
-  if (Object.values(packageIds).some((packageId) => !packageId)) {
-    throw new Error("marketplace_package_dag_incomplete");
-  }
-  if (new Set(Object.values(packageIds)).size !== 4) {
-    throw new Error("marketplace_package_dag_not_split");
-  }
-  const packageId = packageIds[packageAlias];
-  const listingDepositPackageId = normalizeIotaAddress(policy?.listingDeposit?.packageId || "");
-  const reputationPackageId = normalizeIotaAddress(policy?.reputationInitFee?.packageId || "");
-  if (!listingDepositPackageId || listingDepositPackageId !== packageIds.ops) {
-    throw new Error("listing_deposit_package_binding_mismatch");
-  }
-  if (!reputationPackageId || reputationPackageId !== packageIds.settlement) {
-    throw new Error("reputation_package_binding_mismatch");
-  }
-  return packageId;
-}
-
-function extractChainConfigHintsFromPolicyResponse(responseBody) {
-  const policy = asRecord(responseBody?.policy);
-  const chainConfig = asRecord(policy?.chainConfig || policy?.chain);
-  return {
-    foundationPackageId: normalizeIotaAddress(chainConfig?.foundationPackageId || ""),
-    settlementPackageId: normalizeIotaAddress(chainConfig?.settlementPackageId || ""),
-    fulfillmentPackageId: normalizeIotaAddress(chainConfig?.fulfillmentPackageId || ""),
-    opsPackageId: normalizeIotaAddress(chainConfig?.opsPackageId || ""),
-    marketplaceFeeConfigObjectId: normalizeIotaAddress(
-      chainConfig?.marketplaceFeeConfigObjectId || chainConfig?.escrowFeeConfigObjectId || "",
-    ),
-    governanceConfigObjectId: normalizeIotaAddress(chainConfig?.governanceConfigObjectId || ""),
-    disputeQuorumConfigObjectId: normalizeIotaAddress(chainConfig?.disputeQuorumConfigObjectId || ""),
-    reputationInitFeeConfigObjectId: normalizeIotaAddress(chainConfig?.reputationInitFeeConfigObjectId || ""),
-    listingDepositConfigObjectId: normalizeIotaAddress(chainConfig?.listingDepositConfigObjectId || ""),
-  };
+  return extractMarketplacePolicyPackageContext(responseBody, packageAlias).packageId;
 }
 
 function extractReputationInitFeePolicy(responseBody) {
@@ -7468,6 +7422,7 @@ async function runListingDepositCreate(commandArgs) {
       packageIds,
       objectIds: {
         governanceConfigObjectId: chainConfig.governanceConfigObjectId,
+        orderMailboxRegistryObjectId: chainConfig.orderMailboxRegistryObjectId,
         listingDepositConfigObjectId: listingDepositPolicy.configObjectId,
       },
     });
@@ -9362,8 +9317,8 @@ async function fetchPolicyAndChainConfig(contextOptions = {}, runtimeOptions = {
     throw new Error(summarizeApiFailure(feesCall.result));
   }
   const packageAlias = normalizeString(runtimeOptions.packageAlias) || "settlement";
-  const packageId = extractPackageIdFromPolicyResponse(feesCall.result.body, packageAlias);
-  const policyChainConfig = extractChainConfigHintsFromPolicyResponse(feesCall.result.body);
+  const policyContext = extractMarketplacePolicyPackageContext(feesCall.result.body, packageAlias);
+  const { packageId, packageIds, chainConfigHints: policyChainConfig } = policyContext;
   const timeoutMs = parsePositiveIntOption(contextOptions["timeout-ms"], "timeout_ms", 20_000);
   let reviewerRuntime = null;
   const reviewerRuntimeResult = await fetchReviewerRuntimeHints(contextOptions, timeoutMs);
@@ -9377,7 +9332,7 @@ async function fetchPolicyAndChainConfig(contextOptions = {}, runtimeOptions = {
     },
     feesCall.context,
   );
-  const chainConfig = await resolveClawdexChainConfig({
+  const resolvedChainConfig = await resolveClawdexChainConfig({
     packageId: policyChainConfig.settlementPackageId,
     disputeQuorumConfigObjectId:
       normalizeIotaAddress(reviewerRuntime?.disputeQuorumConfigObjectId || "") ||
@@ -9391,18 +9346,21 @@ async function fetchPolicyAndChainConfig(contextOptions = {}, runtimeOptions = {
     network: iotaRuntime.network,
     rpcUrl: iotaRuntime.rpcUrl,
   });
+  const chainConfig = mergeChainConfigWithReviewerRuntime(
+    {
+      ...resolvedChainConfig,
+      governancePackageId: policyChainConfig.governancePackageId,
+      orderMailboxRegistryObjectId: policyChainConfig.orderMailboxRegistryObjectId,
+    },
+    reviewerRuntime,
+  );
   return {
     feesCall,
-    chainConfig: mergeChainConfigWithReviewerRuntime(chainConfig, reviewerRuntime),
+    chainConfig,
     iotaRuntime,
     packageId,
     packageAlias,
-    packageIds: {
-      foundation: policyChainConfig.foundationPackageId,
-      settlement: policyChainConfig.settlementPackageId,
-      fulfillment: policyChainConfig.fulfillmentPackageId,
-      ops: policyChainConfig.opsPackageId,
-    },
+    packageIds,
     reviewerRuntime,
   };
 }
@@ -10069,6 +10027,7 @@ async function runOrderInitBond(commandArgs) {
       packageIds,
       objectIds: {
         governanceConfigObjectId: chainConfig.governanceConfigObjectId,
+        orderMailboxRegistryObjectId: chainConfig.orderMailboxRegistryObjectId,
         disputeQuorumConfigObjectId: chainConfig.disputeQuorumConfigObjectId,
       },
     });
@@ -10253,6 +10212,7 @@ async function runOrderCreateEscrow(commandArgs) {
       packageIds,
       objectIds: {
         governanceConfigObjectId: chainConfig.governanceConfigObjectId,
+        orderMailboxRegistryObjectId: chainConfig.orderMailboxRegistryObjectId,
         marketplaceFeeConfigObjectId: chainConfig.escrowFeeConfigObjectId,
       },
     });
@@ -10781,6 +10741,7 @@ async function runReputationInit(commandArgs) {
       packageIds,
       objectIds: {
         governanceConfigObjectId: chainConfig.governanceConfigObjectId,
+        orderMailboxRegistryObjectId: chainConfig.orderMailboxRegistryObjectId,
         reputationInitFeeConfigObjectId: feePolicy.configObjectId,
       },
     });
@@ -11004,6 +10965,9 @@ async function runReviewerRegister(commandArgs) {
           packageAlias: "settlement",
           packageId,
           packageIds,
+          objectIds: {
+            orderMailboxRegistryObjectId: chainConfig.orderMailboxRegistryObjectId,
+          },
           reviewerPlan: {
             txPlan,
             actorAddress,
@@ -11244,6 +11208,9 @@ async function runReviewerUpdate(commandArgs) {
           packageAlias: "settlement",
           packageId,
           packageIds,
+          objectIds: {
+            orderMailboxRegistryObjectId: chainConfig.orderMailboxRegistryObjectId,
+          },
           reviewerPlan: {
             txPlan,
             actorAddress,
@@ -13474,6 +13441,7 @@ async function runMilestoneAnchor(commandArgs) {
       packageIds,
       objectIds: {
         governanceConfigObjectId: chainConfig.governanceConfigObjectId,
+        orderMailboxRegistryObjectId: chainConfig.orderMailboxRegistryObjectId,
       },
     });
     assertMarketplaceDirectGateStillFresh(directGate, "ops");

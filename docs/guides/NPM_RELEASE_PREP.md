@@ -31,6 +31,7 @@ Bevor irgendein Version Bump oder Publish-Versuch passiert:
 3. Doku/Topics sync:
    - `MARKETPLACE_SOURCE_ROOT=/path/to/clawdex MARKETPLACE_SOURCE_COMMIT=<reviewed-full-40-char-sha> npm run sync:local` (falls Core/SDK geaendert wurde)
    - `npm run validate -- --strict`
+   - Der IOTA-Fresh-Sync fuer die neue Fuenf-Paket-Topologie ist in diesem Helper-Commit bewusst noch nicht ausgefuehrt. Er darf erst gegen den final gepushten und reviewten Clawdex-Commit laufen; siehe den Abschnitt "Ausstehender IOTA-Fresh-Source-Sync".
 4. Evidence-Datei anlegen:
    - z. B. `docs/reports/bot-market-release-hardening-YYYYMMDD.md`
    - festhalten:
@@ -114,6 +115,26 @@ Wichtig:
 **Live-Blocker (Read-only-Stand 2026-07-10):** `main` liefert fuer Branch Protection `404`, und die Environment-Liste enthaelt kein `npm-publish`. Der Workflow-Code ist repo-seitig vorbereitet, aber ein Publish ist absichtlich durch `check:release-live-prerequisites` blockiert. Der Environment-Name im YAML ist fuer sich allein kein Schutz und darf nicht als konfigurierte Freigabe gewertet werden.
 
 **IOTA-Fresh-Blocker (Repo-Stand 2026-07-11):** Die eingecheckte Version `0.1.104` ist ein ungepublizierter Kandidat fuer die Governance-gebundene Fresh-ABI. Sie darf nicht publiziert werden, solange Clawdex den Fresh-Runtime- und ABI-Release nicht explizit freigegeben und per Readback belegt hat. npm `latest` bleibt bis dahin `0.1.103`; ein Legacy-ABI-Fallback wird nicht eingebaut.
+
+### Ausstehender IOTA-Fresh-Source-Sync
+
+Dieser Helper-Stand enthaelt die lokale fail-closed Bindung an Foundation -> Governance -> Settlement -> Fulfillment -> Ops und `orderMailboxRegistryObjectId`, aber noch nicht den automatisch erzeugten Clawdex-Mirror. Nach dem finalen Clawdex-Push:
+
+1. Einen sauberen Clawdex-Checkout exakt auf dem finalen, gepushten, vollstaendigen 40-Zeichen-SHA verwenden. Der Commit muss auf `origin` liegen und auf `origin/main` basieren.
+2. Im Helper-Repo genau einmal ausfuehren:
+   - `MARKETPLACE_SOURCE_ROOT=/path/to/clean/clawdex MARKETPLACE_SOURCE_COMMIT=<final-pushed-full-40-char-sha> bash ./scripts/sync-local-sources.sh`
+3. Den gesamten 24-Dateien-Mirror und `docs/docsources/SYNC_MANIFEST.txt` als eine atomare Rotation reviewen. Fuer diese Aenderung insbesondere pruefen:
+   - `docs/docsources/core/openapi.yaml`
+   - `docs/docsources/core/openapi.public.yaml`
+   - `docs/docsources/core/openapi.advanced.yaml`
+   - `docs/docsources/core/apiContract.json`
+   - `lib/vendor/clawdex-sdk/tx/orderMailbox.js`
+   - `config/marketplace-deployments.json`
+4. Im vendorten Mailbox-Builder nachweisen, dass Fresh `settlementAbi` auswertet, `orderMailboxRegistryObjectId` zwingend verlangt und an `orderMailbox.init` weitergibt. In den API-Schemata muessen `governancePackageId` und `orderMailboxRegistryObjectId` enthalten sein.
+5. Keine Admin-/Operator-Kommandos fuer Fee-Queue, -Approve oder -Apply in CLI, Recipes, Topics oder Examples uebernehmen.
+6. Danach `npm run check:sync-provenance`, die fokussierten Topologie-/Write-Gate-Tests, `npm run validate -- --strict` und `npm run release:check` ausfuehren.
+
+Bis dieser Sync samt Review und Tests abgeschlossen ist, bleibt der Fresh-Release-Kandidat blockiert.
 
 Vor dem ersten Publish muessen extern und anschliessend read-only verifiziert werden:
 

@@ -1,7 +1,12 @@
 # Smart Contract Reference (bot-relevante Funktionen)
 
 Quellen:
-- `docs/docsources/core/callable_surface.snapshot`
+- Fresh IOTA Callable-Snapshots ab Source-Sync v4:
+  - `docs/docsources/core/callable-surfaces/iota/foundation.snapshot`
+  - `docs/docsources/core/callable-surfaces/iota/governance.snapshot`
+  - `docs/docsources/core/callable-surfaces/iota/settlement.snapshot`
+  - `docs/docsources/core/callable-surfaces/iota/fulfillment.snapshot`
+  - `docs/docsources/core/callable-surfaces/iota/ops.snapshot`
 - `docs/docsources/core/SMART_CONTRACT_FUNCTION_INVENTORY_AND_USER_TEST_MATRIX.md`
 - SDK Builder Mapping (Core-Repo): `packages/sdk/src/tx/*.ts`
 
@@ -14,9 +19,9 @@ Quellen:
   - Typed-Coin Escrow ueber `create_escrow_coin_entry` fuer genau die Lane, die dein Zielsystem aktiviert.
 - Viele API Write Calls bauen nur PTB-Plans; Bots muessen selbst signieren/ausfuehren.
 - State-Machine Regeln strikt beachten (single settlement, time gates, role checks).
-- Paket-IDs sind Teil des Runtime-Profils. Auf bestehenden Mainnet-Linien koennen `settlement`, `fulfillment` und `ops` dieselbe Paket-ID haben; ein Fresh-DAG darf nur mit drei vollstaendig publizierten Alias-IDs verwendet werden.
-- Im Fresh-DAG gilt `settlement_v2 -> fulfillment -> ops`: Settlement enthaelt Kern-Governance/Escrow, Fulfillment enthaelt `milestone_escrow`/`review`, Ops enthaelt `listing_deposit`/`manifest_anchor`. Niemals eine fehlende Fulfillment- oder Ops-ID durch die Settlement-ID erraten.
-- Der mitgelieferte Callable-Snapshot bleibt die bestehende Mainnet-ABI. Fresh-DAG-Builder duerfen erst genutzt werden, wenn der Ziel-Runtime genau diese Paket- und Objektzeiger ausweist.
+- Paket-IDs sind Teil des Runtime-Profils. Ein Fresh-DAG ist nur gueltig, wenn Foundation, Governance, Settlement, Fulfillment und Ops als fuenf vollstaendig publizierte, paarweise verschiedene Package-IDs vorliegen.
+- Im Fresh-DAG gilt `foundation -> governance -> settlement_v2 -> fulfillment -> ops`: Foundation enthaelt gemeinsame Fehler- und Asset-Lanes, Governance die Admin-/Governance-Surface, Settlement die Kern-Escrow-/Dispute-/Mailbox-Surface, Fulfillment `milestone_escrow`/`review` und Ops `listing_deposit`/`manifest_anchor`. Niemals eine fehlende Root-ID durch eine andere Package-ID erraten.
+- Der aktuell eingecheckte einzelne v3-Callable-Snapshot beschreibt die Legacy-Linie und ist keine Fresh-ABI-Autoritaet. Fresh-Builder duerfen erst genutzt werden, wenn Sync v4 alle fuenf Root-Snapshots und der Ziel-Runtime genau diese Paket- und Objektzeiger ausweist.
 
 ## 2) Bot-kritische Entry-Funktionen nach Modulen
 
@@ -157,7 +162,11 @@ Diese Funktionen bleiben fuer Operator-/Admin-Bots relevant, sind aber nicht Tei
 
 - Vollstaendige Funktionsmatrix inkl. Tests:
   - `docs/docsources/core/SMART_CONTRACT_FUNCTION_INVENTORY_AND_USER_TEST_MATRIX.md`
-- Callable Snapshot (Regression Guard):
-  - `docs/docsources/core/callable_surface.snapshot`
+- Callable Snapshots (Root-spezifische Regression Guards, ab Sync v4):
+  - `docs/docsources/core/callable-surfaces/iota/foundation.snapshot`
+  - `docs/docsources/core/callable-surfaces/iota/governance.snapshot`
+  - `docs/docsources/core/callable-surfaces/iota/settlement.snapshot`
+  - `docs/docsources/core/callable-surfaces/iota/fulfillment.snapshot`
+  - `docs/docsources/core/callable-surfaces/iota/ops.snapshot`
 - Architekturkarte:
   - `docs/docsources/core/SMART_CONTRACT_ARCHITECTURE_MAP.md`

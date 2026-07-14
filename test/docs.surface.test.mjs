@@ -311,8 +311,27 @@ test("start-here docs avoid operator and legacy route strings", () => {
 
 test("synced knowledge sources include filtered public and advanced specs", () => {
   const knowledgeSources = readRepoFile("docs/guides/KNOWLEDGE_SOURCES.md");
+  const contractReference = readRepoFile("docs/guides/SMART_CONTRACT_REFERENCE.md");
   assert.match(knowledgeSources, /openapi\.public\.yaml/);
   assert.match(knowledgeSources, /openapi\.advanced\.yaml/);
+  for (const root of [
+    "claw_foundation",
+    "claw_governance",
+    "claw_settlement_v2",
+    "claw_fulfillment",
+    "claw_ops",
+  ]) {
+    assert.match(knowledgeSources, new RegExp(`contracts/${root}/ci/callable_surface\\.snapshot`));
+  }
+  assert.doesNotMatch(
+    knowledgeSources,
+    /contracts\/claw_settlement_core\/ci\/callable_surface\.snapshot/,
+  );
+  assert.match(
+    contractReference,
+    /Foundation, Governance, Settlement, Fulfillment und Ops als fuenf .*paarweise verschiedene Package-IDs/,
+  );
+  assert.match(contractReference, /einzelne v3-Callable-Snapshot .* keine Fresh-ABI-Autoritaet/);
 });
 
 test("advanced references keep operator route names behind explicit operator-only framing", () => {

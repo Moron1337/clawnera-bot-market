@@ -91,7 +91,11 @@ COMMITTED_SOURCE_MAPPINGS=(
   "apps/api/openapi.advanced.yaml|docs/docsources/core/openapi.advanced.yaml"
   "apps/api/openapi.reviewer-self.yaml|docs/docsources/core/openapi.reviewer-self.yaml"
   "packages/sdk/src/generated/apiContract.json|docs/docsources/core/apiContract.json"
-  "contracts/claw_settlement_core/ci/callable_surface.snapshot|docs/docsources/core/callable_surface.snapshot"
+  "contracts/claw_foundation/ci/callable_surface.snapshot|docs/docsources/core/callable-surfaces/iota/foundation.snapshot"
+  "contracts/claw_governance/ci/callable_surface.snapshot|docs/docsources/core/callable-surfaces/iota/governance.snapshot"
+  "contracts/claw_settlement_v2/ci/callable_surface.snapshot|docs/docsources/core/callable-surfaces/iota/settlement.snapshot"
+  "contracts/claw_fulfillment/ci/callable_surface.snapshot|docs/docsources/core/callable-surfaces/iota/fulfillment.snapshot"
+  "contracts/claw_ops/ci/callable_surface.snapshot|docs/docsources/core/callable-surfaces/iota/ops.snapshot"
 )
 
 GENERATED_SOURCE_MAPPINGS=(
@@ -109,9 +113,12 @@ GENERATED_SOURCE_MAPPINGS=(
 )
 
 SOURCE_MAPPINGS=("${COMMITTED_SOURCE_MAPPINGS[@]}" "${GENERATED_SOURCE_MAPPINGS[@]}")
-if [[ "${#COMMITTED_SOURCE_MAPPINGS[@]}" -ne 13 ]] \
+RETIRED_SYNC_DESTINATIONS=(
+  "docs/docsources/core/callable_surface.snapshot"
+)
+if [[ "${#COMMITTED_SOURCE_MAPPINGS[@]}" -ne 17 ]] \
   || [[ "${#GENERATED_SOURCE_MAPPINGS[@]}" -ne 11 ]] \
-  || [[ "${#SOURCE_MAPPINGS[@]}" -ne 24 ]]; then
+  || [[ "${#SOURCE_MAPPINGS[@]}" -ne 28 ]]; then
   echo "invalid_sync_mapping_count: committed=${#COMMITTED_SOURCE_MAPPINGS[@]} generated=${#GENERATED_SOURCE_MAPPINGS[@]} total=${#SOURCE_MAPPINGS[@]}"
   exit 1
 fi
@@ -305,6 +312,16 @@ for mapping in "${GENERATED_SOURCE_MAPPINGS[@]}"; do
   atomic_write_generated_file "$source_relative" "$destination_relative"
 done
 
+for retired_relative in "${RETIRED_SYNC_DESTINATIONS[@]}"; do
+  retired_destination="$ROOT_DIR/$retired_relative"
+  if [[ -L "$retired_destination" ]] \
+    || { [[ -e "$retired_destination" ]] && [[ ! -f "$retired_destination" ]]; }; then
+    echo "unsafe_retired_sync_destination: $retired_relative"
+    exit 1
+  fi
+  rm -f -- "$retired_destination"
+done
+
 read_package_version() {
   node - "$1" "$2" <<'NODE'
 const fs = require("node:fs");
@@ -333,7 +350,7 @@ fi
 MANIFEST_TEMP="$(mktemp "$OUT_DIR/.SYNC_MANIFEST.txt.XXXXXX")"
 TEMP_OUTPUTS+=("$MANIFEST_TEMP")
 {
-  echo "format=clawnera.sync.v3"
+  echo "format=clawnera.sync.v4"
   echo "marketplace_source_remote=$EXPECTED_REMOTE_ID"
   echo "marketplace_source_commit=$SOURCE_COMMIT"
   echo "marketplace_origin_main_commit=$ORIGIN_MAIN_COMMIT"

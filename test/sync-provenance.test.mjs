@@ -6,8 +6,10 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
+  CURRENT_SYNC_FORMAT,
   EXPECTED_PUBLISHED_SYNC_PATHS,
   EXPECTED_SYNC_PATHS,
+  LEGACY_SYNC_PATHS_V3,
   parseSyncManifest,
   validateSyncProvenance,
 } from "../scripts/ci/check-sync-provenance.mjs";
@@ -21,10 +23,13 @@ const INTERNAL_CLAW_OPERATOR_PATHS = [
 const MARKETPLACE_DEPLOYMENT_MAPPING =
   "docs/security/evidence/iota-fresh-generation/public-helper-deployment.json|config/marketplace-deployments.json";
 
-function buildCurrentValidManifest(root) {
+function buildValidManifest(root, {
+  format = "clawnera.sync.v3",
+  paths = LEGACY_SYNC_PATHS_V3,
+} = {}) {
   const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   const lines = [
-    "format=clawnera.sync.v3",
+    `format=${format}`,
     "marketplace_source_remote=github.com/Moron1337/Clawdex",
     `marketplace_source_commit=${"a".repeat(40)}`,
     `marketplace_origin_main_commit=${"b".repeat(40)}`,
@@ -32,7 +37,7 @@ function buildCurrentValidManifest(root) {
     `sdk_iota_version=${packageJson.dependencies["@iota/iota-sdk"]}`,
     `sdk_sui_version=${packageJson.dependencies["@mysten/sui"]}`,
   ];
-  for (const relative of EXPECTED_SYNC_PATHS) {
+  for (const relative of paths) {
     const digest = createHash("sha256").update(fs.readFileSync(path.join(root, relative))).digest("hex");
     lines.push(`sha256=${digest}  ${relative}`);
   }
@@ -62,6 +67,8 @@ test("sync script uses exact commit blobs and an isolated build snapshot for the
     'blob_id="$(committed_blob_id "$source_relative")"',
     'atomic_write_committed_blob "$blob_id" "$destination_relative"',
     'atomic_write_generated_file "$source_relative" "$destination_relative"',
+    'echo "format=clawnera.sync.v4"',
+    'rm -f -- "$retired_destination"',
     'unexpected_package_manifest:',
   ]) {
     assert.ok(source.includes(fragment), `sync hardening fragment missing: ${fragment}`);
@@ -83,7 +90,7 @@ test("sync script uses exact commit blobs and an isolated build snapshot for the
     }));
   const committedMappings = parseMappings(committedBlock);
   const generatedMappings = parseMappings(generatedBlock);
-  assert.equal(committedMappings.length, 13);
+  assert.equal(committedMappings.length, 17);
   assert.equal(generatedMappings.length, 11);
   assert.ok(committedMappings.every(({ source: sourcePath }) => !sourcePath.startsWith("packages/sdk/dist/")));
   assert.ok(generatedMappings.every(({ source: sourcePath }) => sourcePath.startsWith("packages/sdk/dist/")));
@@ -100,6 +107,19 @@ test("sync script uses exact commit blobs and an isolated build snapshot for the
       `${sourcePath}|${destination}` === MARKETPLACE_DEPLOYMENT_MAPPING),
     "runtime-owned deployment registry mapping missing",
   );
+  for (const mapping of [
+    "contracts/claw_foundation/ci/callable_surface.snapshot|docs/docsources/core/callable-surfaces/iota/foundation.snapshot",
+    "contracts/claw_governance/ci/callable_surface.snapshot|docs/docsources/core/callable-surfaces/iota/governance.snapshot",
+    "contracts/claw_settlement_v2/ci/callable_surface.snapshot|docs/docsources/core/callable-surfaces/iota/settlement.snapshot",
+    "contracts/claw_fulfillment/ci/callable_surface.snapshot|docs/docsources/core/callable-surfaces/iota/fulfillment.snapshot",
+    "contracts/claw_ops/ci/callable_surface.snapshot|docs/docsources/core/callable-surfaces/iota/ops.snapshot",
+  ]) {
+    assert.ok(
+      mappings.some(({ source: sourcePath, destination }) => `${sourcePath}|${destination}` === mapping),
+      `Fresh callable-surface mapping missing: ${mapping}`,
+    );
+  }
+  assert.doesNotMatch(source, /contracts\/claw_settlement_core\/ci\/callable_surface\.snapshot/);
 });
 
 test("operator status and CLAW operations material stay outside public tree, sync, and package surfaces", () => {
@@ -137,7 +157,7 @@ test("checked-in sync provenance has the exact unique source set", () => {
   const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   const manifest = fs.readFileSync(path.join(root, "docs/docsources/SYNC_MANIFEST.txt"), "utf8");
   const parsed = parseSyncManifest(manifest);
-  assert.deepEqual(parsed.hashes.map(({ relative }) => relative), EXPECTED_SYNC_PATHS);
+  assert.deepEqual(parsed.hashes.map(({ relative }) => relative), LEGACY_SYNC_PATHS_V3);
   assert.deepEqual(
     packageJson.files
       .filter(
@@ -147,14 +167,60 @@ test("checked-in sync provenance has the exact unique source set", () => {
       .sort(),
     [...EXPECTED_PUBLISHED_SYNC_PATHS].sort(),
   );
+  assert.ok(EXPECTED_PUBLISHED_SYNC_PATHS.every((entry) => LEGACY_SYNC_PATHS_V3.includes(entry)));
   assert.ok(EXPECTED_PUBLISHED_SYNC_PATHS.every((entry) => EXPECTED_SYNC_PATHS.includes(entry)));
   const result = validateSyncProvenance({ rootDir: root, manifestText: manifest });
   assert.equal(result.fileCount, 24);
+  assert.equal(result.format, "clawnera.sync.v3");
+});
+
+test("v4 sync provenance requires all five Fresh IOTA callable-surface roots", async () => {
+  const root = path.resolve(import.meta.dirname, "..");
+  const temporaryRoot = await fsPromises.mkdtemp(path.join(os.tmpdir(), "clawnera-sync-v4-"));
+  try {
+    await fsPromises.copyFile(path.join(root, "package.json"), path.join(temporaryRoot, "package.json"));
+    for (const relative of EXPECTED_SYNC_PATHS) {
+      const source = path.join(root, relative);
+      const target = path.join(temporaryRoot, relative);
+      await fsPromises.mkdir(path.dirname(target), { recursive: true });
+      if (fs.existsSync(source)) {
+        await fsPromises.copyFile(source, target);
+      } else {
+        await fsPromises.writeFile(target, `fixture=${relative}\n`, { mode: 0o600 });
+      }
+    }
+    const manifest = buildValidManifest(temporaryRoot, {
+      format: CURRENT_SYNC_FORMAT,
+      paths: EXPECTED_SYNC_PATHS,
+    });
+    const result = validateSyncProvenance({ rootDir: temporaryRoot, manifestText: manifest });
+    assert.equal(result.fileCount, 28);
+    assert.equal(result.format, CURRENT_SYNC_FORMAT);
+    const withoutGovernanceRoot = manifest.replace(
+      /^sha256=.*  docs\/docsources\/core\/callable-surfaces\/iota\/governance\.snapshot\n/m,
+      "",
+    );
+    assert.throws(
+      () => validateSyncProvenance({ rootDir: temporaryRoot, manifestText: withoutGovernanceRoot }),
+      /invalid_sync_manifest_path_set/,
+    );
+
+    await fsPromises.writeFile(
+      path.join(temporaryRoot, "docs/docsources/core/callable_surface.snapshot"),
+      "legacy\n",
+    );
+    assert.throws(
+      () => validateSyncProvenance({ rootDir: temporaryRoot, manifestText: manifest }),
+      /retired_sync_path_present/,
+    );
+  } finally {
+    await fsPromises.rm(temporaryRoot, { recursive: true, force: true });
+  }
 });
 
 test("sync manifest rejects duplicate fields, duplicate hashes, and path-set drift", () => {
   const root = path.resolve(import.meta.dirname, "..");
-  const manifest = buildCurrentValidManifest(root);
+  const manifest = buildValidManifest(root);
   assert.throws(
     () => parseSyncManifest(manifest.replace("format=clawnera.sync.v3\n", "format=clawnera.sync.v3\nformat=clawnera.sync.v3\n")),
     /duplicate_sync_manifest_field/,
@@ -170,16 +236,16 @@ test("sync manifest rejects duplicate fields, duplicate hashes, and path-set dri
 
 test("sync provenance rejects a symlink even when its content hash matches", async () => {
   const root = path.resolve(import.meta.dirname, "..");
-  const manifest = buildCurrentValidManifest(root);
+  const manifest = buildValidManifest(root);
   const temporaryRoot = await fsPromises.mkdtemp(path.join(os.tmpdir(), "clawnera-sync-symlink-"));
   try {
     await fsPromises.copyFile(path.join(root, "package.json"), path.join(temporaryRoot, "package.json"));
-    for (const sourcePath of EXPECTED_SYNC_PATHS) {
+    for (const sourcePath of LEGACY_SYNC_PATHS_V3) {
       const targetPath = path.join(temporaryRoot, sourcePath);
       await fsPromises.mkdir(path.dirname(targetPath), { recursive: true });
       await fsPromises.copyFile(path.join(root, sourcePath), targetPath);
     }
-    const relative = EXPECTED_SYNC_PATHS[0];
+    const relative = LEGACY_SYNC_PATHS_V3[0];
     const target = path.join(temporaryRoot, relative);
     const backup = `${target}.backup`;
     await fsPromises.rename(target, backup);

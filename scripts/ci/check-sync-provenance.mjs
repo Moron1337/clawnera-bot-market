@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const EXPECTED_SYNC_REMOTE = "github.com/Moron1337/Clawdex";
-export const EXPECTED_SYNC_PATHS = Object.freeze([
+export const LEGACY_SYNC_PATHS_V3 = Object.freeze([
   "config/marketplace-deployments.json",
   "docs/docsources/core/BOT_PROTOCOL_V1.md",
   "docs/docsources/core/BOT_QUICKSTART.md",
@@ -31,12 +31,50 @@ export const EXPECTED_SYNC_PATHS = Object.freeze([
   "lib/vendor/clawdex-sdk/validation.js",
 ]);
 
-export const EXPECTED_PUBLISHED_SYNC_PATHS = Object.freeze([
+export const EXPECTED_SYNC_PATHS = Object.freeze([
   "config/marketplace-deployments.json",
   "docs/docsources/core/BOT_PROTOCOL_V1.md",
   "docs/docsources/core/BOT_QUICKSTART.md",
   "docs/docsources/core/SMART_CONTRACT_ARCHITECTURE_MAP.md",
   "docs/docsources/core/SMART_CONTRACT_ERKLAERUNG_2026-02-25.md",
+  "docs/docsources/core/SMART_CONTRACT_FUNCTION_INVENTORY_AND_USER_TEST_MATRIX.md",
+  "docs/docsources/core/TWO_PARTY_TEST_MATRIX.md",
+  "docs/docsources/core/apiContract.json",
+  "docs/docsources/core/callable-surfaces/iota/foundation.snapshot",
+  "docs/docsources/core/callable-surfaces/iota/fulfillment.snapshot",
+  "docs/docsources/core/callable-surfaces/iota/governance.snapshot",
+  "docs/docsources/core/callable-surfaces/iota/ops.snapshot",
+  "docs/docsources/core/callable-surfaces/iota/settlement.snapshot",
+  "docs/docsources/core/openapi.advanced.yaml",
+  "docs/docsources/core/openapi.public.yaml",
+  "docs/docsources/core/openapi.reviewer-self.yaml",
+  "docs/docsources/core/openapi.yaml",
+  "lib/vendor/clawdex-sdk/assetControlPlane.js",
+  "lib/vendor/clawdex-sdk/suiMilestoneManifestTx.js",
+  "lib/vendor/clawdex-sdk/tx/assetCoin.js",
+  "lib/vendor/clawdex-sdk/tx/clawCoin.js",
+  "lib/vendor/clawdex-sdk/tx/disputeQuorum.js",
+  "lib/vendor/clawdex-sdk/tx/listingDeposit.js",
+  "lib/vendor/clawdex-sdk/tx/manifestAnchor.js",
+  "lib/vendor/clawdex-sdk/tx/orderEscrow.js",
+  "lib/vendor/clawdex-sdk/tx/orderMailbox.js",
+  "lib/vendor/clawdex-sdk/tx/reputation.js",
+  "lib/vendor/clawdex-sdk/validation.js",
+]);
+
+export const CURRENT_SYNC_FORMAT = "clawnera.sync.v4";
+const SYNC_PATHS_BY_FORMAT = Object.freeze({
+  "clawnera.sync.v3": LEGACY_SYNC_PATHS_V3,
+  [CURRENT_SYNC_FORMAT]: EXPECTED_SYNC_PATHS,
+});
+const RETIRED_SYNC_PATHS_V4 = Object.freeze([
+  "docs/docsources/core/callable_surface.snapshot",
+]);
+
+export const EXPECTED_PUBLISHED_SYNC_PATHS = Object.freeze([
+  "config/marketplace-deployments.json",
+  "docs/docsources/core/BOT_PROTOCOL_V1.md",
+  "docs/docsources/core/BOT_QUICKSTART.md",
   "docs/docsources/core/SMART_CONTRACT_FUNCTION_INVENTORY_AND_USER_TEST_MATRIX.md",
   "docs/docsources/core/TWO_PARTY_TEST_MATRIX.md",
 ]);
@@ -132,7 +170,9 @@ export function validateSyncProvenance({ rootDir, manifestText }) {
   if (!sameOrderedValues(fieldNames, [...EXPECTED_FIELDS].sort())) {
     throw new Error("invalid_sync_manifest_field_set");
   }
-  if (fields.get("format") !== "clawnera.sync.v3") {
+  const format = fields.get("format");
+  const expectedSyncPaths = SYNC_PATHS_BY_FORMAT[format];
+  if (!expectedSyncPaths) {
     throw new Error("invalid_sync_manifest_format");
   }
   if (fields.get("marketplace_source_remote") !== EXPECTED_SYNC_REMOTE) {
@@ -145,7 +185,7 @@ export function validateSyncProvenance({ rootDir, manifestText }) {
   }
 
   const relativePaths = hashes.map(({ relative }) => relative);
-  if (!sameOrderedValues(relativePaths, EXPECTED_SYNC_PATHS)) {
+  if (!sameOrderedValues(relativePaths, expectedSyncPaths)) {
     throw new Error("invalid_sync_manifest_path_set");
   }
   for (const { expected, relative } of hashes) {
@@ -153,6 +193,23 @@ export function validateSyncProvenance({ rootDir, manifestText }) {
     const actual = createHash("sha256").update(fs.readFileSync(absolute)).digest("hex");
     if (actual !== expected) {
       throw new Error(`sync_file_hash_mismatch:${relative}`);
+    }
+  }
+
+  if (format === CURRENT_SYNC_FORMAT) {
+    for (const relative of RETIRED_SYNC_PATHS_V4) {
+      let retiredPathExists = true;
+      try {
+        fs.lstatSync(path.join(root, relative));
+      } catch (error) {
+        if (error?.code !== "ENOENT") {
+          throw error;
+        }
+        retiredPathExists = false;
+      }
+      if (retiredPathExists) {
+        throw new Error(`retired_sync_path_present:${relative}`);
+      }
     }
   }
 
@@ -176,12 +233,13 @@ export function validateSyncProvenance({ rootDir, manifestText }) {
   }
 
   const actualVendorFiles = listJavaScriptFiles(path.join(root, "lib/vendor/clawdex-sdk"), root).sort();
-  const expectedVendorFiles = EXPECTED_SYNC_PATHS.filter((entry) => entry.startsWith("lib/vendor/")).sort();
+  const expectedVendorFiles = expectedSyncPaths.filter((entry) => entry.startsWith("lib/vendor/")).sort();
   if (!sameOrderedValues(actualVendorFiles, expectedVendorFiles)) {
     throw new Error("vendor_source_path_set_mismatch");
   }
 
   return {
+    format,
     sourceCommit: fields.get("marketplace_source_commit"),
     fileCount: hashes.length,
   };

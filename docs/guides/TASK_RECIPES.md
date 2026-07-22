@@ -113,7 +113,13 @@ Auth note:
 - `dispute-checkpoint-evidence-export`
   - buyer/seller export a canonical checkpoint handover packet into one reviewer-readable dispute bundle
 - `operator-shortlist-open`
-  - build selector receipt and publish the exact shortlist
+  - undeployed candidate OPEN flow only; persist the exact request with
+    `--request-state-file <owner-only-json>` before the first POST
+  - state v2 atomically binds the canonical API target, request, checkpoint,
+    publish context, and receipt identity; keep state/receipt/publish outputs on
+    distinct paths under private owner-only parent directories
+  - use `operator-shortlist-replacement` for REPLACEMENT; it accepts neither
+    `--request-state-file` nor `--request-receipt-id`
 - `operator-shortlist-replacement`
   - always pass `--publish-auth-state-file <buyer-or-seller-auth-state-file>` so the helper can reuse party auth for live dispute preflight when operator auth is too narrow
   - if the helper prints `replacement_not_ready` or `dispute_replacement_round_not_ready`, stop and wait until the printed deadline before rerunning replacement publish
@@ -126,15 +132,23 @@ Auth note:
 - `reviewer-inspect-evidence`
   - list dispute-scoped evidence, fetch one readable item, then decrypt locally with `dispute-evidence-decrypt` before voting
 - `reviewer-vote`
-  - commit -> wait -> reveal -> finalize/fallback
+  - commit -> wait -> reveal; reviewer duty stops there
+  - buyer or seller executes the single atomic `finalize` / `fallback/timeout`
+    PTB; on Fresh IOTA it contains exactly one `order_escrow` wrapper call
   - if commit returns `reviewer_vote_commit_window_closed`, stop and wait until the printed `revealDeadlineMs`; do not keep retrying commit
 - `reviewer-claim-metrics`
   - if the CLI prints `claim_metrics_dispute_case_ambiguous`, use one of the returned `disputeCaseObjectIds`, confirm it via `GET /reviewers/me/invites`, and rerun with `--body '{"disputeCaseObjectId":"..."}'`
   - clear the reviewer-owned post-case pending outcome without wasting a no-op tx
 - `resolve-dispute`
-  - resolve from the finalized dispute binding with the buyer or seller wallet
-  - this is the actual money step: seller-settlement pays the seller, buyer-settlement refunds the buyer
-  - common aliases: `dispute-resolve`, `finalize-dispute-resolution`
+  - Sui legacy/recovery/reconciliation only for an interrupted historical case-only close
+  - recovery route: `POST /disputes/{disputeCaseId}/resolve-escrow`
+  - IOTA returns `410 iota_dispute_resolve_escrow_route_retired`; do not attempt a
+    direct detached recovery transaction
+  - on Sui, use the buyer or seller wallet and the canonical recovery plan
+  - common aliases: `dispute-resolve`, `resolve-dispute-escrow`, `legacy-resolve-dispute`
+
+The ArbCap platform fallback uses its own atomic Fresh IOTA wrapper call but is
+operator/admin-only and intentionally unavailable through the Public Helper.
 - `local-iota-transfer`
   - local user-side IOTA transfer
 

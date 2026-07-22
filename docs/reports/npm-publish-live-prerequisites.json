@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "clawnera.npm-publish-live-prerequisites.v1",
+  "repository": "Moron1337/clawnera-bot-market",
+  "status": "blocked",
+  "observedAt": "2026-07-10T12:22:23Z",
+  "readOnlyObservation": true,
+  "live": {
+    "mainBranchProtected": false,
+    "mainBranchProtectionReadback": "absent_404",
+    "npmPublishEnvironmentExists": false,
+    "requiredReviewerCount": 0,
+    "deploymentPolicy": "absent",
+    "npmTrustedPublisherConfigured": false
+  },
+  "evidenceRefs": [
+    "GitHub REST read-only branch protection response: 404",
+    "GitHub REST read-only environments response: npm-publish absent"
+  ],
+  "requiredBeforeReady": [
+    "Protect main and require the intended status checks/reviews",
+    "Create npm-publish with required reviewers and no uncontrolled admin bypass",
+    "Restrict npm-publish deployment to the intended protected release tag policy",
+    "Configure npm Trusted Publisher for Moron1337/clawnera-bot-market, publish.yml, environment npm-publish",
+    "Repeat read-only verification and update this evidence no more than seven days before publishing"
+  ]
+}

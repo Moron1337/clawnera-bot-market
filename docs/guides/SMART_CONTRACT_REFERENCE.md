@@ -1,7 +1,12 @@
 # Smart Contract Reference (bot-relevante Funktionen)
 
 Quellen:
-- `docs/docsources/core/callable_surface.snapshot`
+- Fresh IOTA Callable-Snapshots ab Source-Sync v4:
+  - `docs/docsources/core/callable-surfaces/iota/foundation.snapshot`
+  - `docs/docsources/core/callable-surfaces/iota/governance.snapshot`
+  - `docs/docsources/core/callable-surfaces/iota/settlement.snapshot`
+  - `docs/docsources/core/callable-surfaces/iota/fulfillment.snapshot`
+  - `docs/docsources/core/callable-surfaces/iota/ops.snapshot`
 - `docs/docsources/core/SMART_CONTRACT_FUNCTION_INVENTORY_AND_USER_TEST_MATRIX.md`
 - SDK Builder Mapping (Core-Repo): `packages/sdk/src/tx/*.ts`
 
@@ -14,6 +19,9 @@ Quellen:
   - Typed-Coin Escrow ueber `create_escrow_coin_entry` fuer genau die Lane, die dein Zielsystem aktiviert.
 - Viele API Write Calls bauen nur PTB-Plans; Bots muessen selbst signieren/ausfuehren.
 - State-Machine Regeln strikt beachten (single settlement, time gates, role checks).
+- Paket-IDs sind Teil des Runtime-Profils. Ein Fresh-DAG ist nur gueltig, wenn Foundation, Governance, Settlement, Fulfillment und Ops als fuenf vollstaendig publizierte, paarweise verschiedene Package-IDs vorliegen.
+- Im Fresh-DAG gilt `foundation -> governance -> settlement_v2 -> fulfillment -> ops`: Foundation enthaelt gemeinsame Fehler- und Asset-Lanes, Governance die Admin-/Governance-Surface, Settlement die Kern-Escrow-/Dispute-/Mailbox-Surface, Fulfillment `milestone_escrow`/`review` und Ops `listing_deposit`/`manifest_anchor`. Niemals eine fehlende Root-ID durch eine andere Package-ID erraten.
+- Der aktuell eingecheckte einzelne v3-Callable-Snapshot beschreibt die Legacy-Linie und ist keine Fresh-ABI-Autoritaet. Fresh-Builder duerfen erst genutzt werden, wenn Sync v4 alle fuenf Root-Snapshots und der Ziel-Runtime genau diese Paket- und Objektzeiger ausweist.
 
 ## 2) Bot-kritische Entry-Funktionen nach Modulen
 
@@ -34,7 +42,7 @@ Quellen:
 | `resolve_dispute_to_buyer` | Arb-Cap Resolution buyer | arb/admin path | ArbCap, disputed state |
 | `resolve_dispute_after_timeout_split` | Timeout Fallback Split | permissionless timeout path | timeout reached, kein dispute-quorum binding fuer dieses escrow |
 | `resolve_dispute_after_timeout_to_seller` | Timeout Fallback seller | permissionless timeout path | timeout reached |
-| `resolve_dispute_with_binding` | Binding-based Quorum Settlement | buyer/seller via API plan | finalized dispute-quorum binding fuer dieses escrow vorhanden |
+| `resolve_dispute_with_binding` | Sui Legacy Binding Settlement | nur separater Sui Legacy-/Recovery-Call; Fresh IOTA nutzt die `*_and_resolve_escrow` Wrapper | finalized dispute-quorum binding fuer dieses escrow vorhanden |
 
 ### `milestone_escrow`
 
@@ -69,13 +77,13 @@ Quellen:
 | `cancel_pending_order_dispute_bond` | Ungenutzten Bond abbrechen + Refund | buyer/seller | bond `PENDING`, kein aktiver Case |
 | `fund_bond_as_buyer` | Buyer Bond Funding | buyer | side/caller match |
 | `fund_bond_as_seller` | Seller Bond Funding | seller | side/caller match |
-| `open_milestone_dispute_case_entry` | Dispute Case eroefnen | buyer/seller | escrow + bond Bezug konsistent |
+| `open_milestone_dispute_case_entry_v2` | Dispute Case ohne Invite-Liste eroefnen | buyer/seller | autorisierter No-Invite-Receipt, Escrow und Bond konsistent |
 | `accept_dispute_case_with_reputation_cfg` | Reviewer nimmt Case an | reviewer | configured-runtime canonical path; `ReputationProfile` als activation/proof anchor, Thresholds aus shared participant state |
 | `commit_vote` | Commit Phase | reviewer | commit window offen |
 | `reveal_vote` | Reveal Phase | reviewer | reveal window offen + commit vorhanden |
 | `start_replacement_round` | Reviewer Replacement | buyer/seller path | replacement criteria erfuellt |
 | `finalize_case_with_quorum` | Finalisierung mit Quorum | finalize path | quorum/fensterbedingungen erfuellt |
-| `resolve_case_with_platform_fallback` | ArbCap fallback decision | admin/arb | fallback state + ArbCap |
+| `resolve_case_with_platform_fallback` | ArbCap fallback decision | operator/admin-only, ausserhalb Public Helper | fallback state + ArbCap |
 | `resolve_case_with_timeout_fallback` | timeout fallback | permissionless timeout path | timeout reached |
 | `claim_decision_metrics` | Reviewer-Metriken claimen | reviewer | Case finalisiert/fallback-resolved, nur 1x pro Case |
 | `force_deregister_reviewer` | Inaktive Reviewer admin-seitig deregistrieren | admin | inactivity timeout + keine aktiven Cases |
@@ -108,6 +116,7 @@ Quellen:
 | `close_order_mailbox` | mailbox-schliessen approven | buyer/seller | mailbox offen; final geschlossen erst nach buyer+seller approval |
 | `delete_closed_mailbox_guarded` | bevorzugtes mailbox cleanup / storage reclaim | buyer/seller | mailbox `closed=true` + korrektes `GovernanceConfig`-Hostobjekt fuer die aktuelle Binding |
 | `anchor_milestone_manifest` | Manifest kryptographisch verankern | seller | cid/hash/signature refs gueltig |
+| `pay_managed_storage_fee_iota_v2` / `pay_managed_storage_fee_sui_v2` | Native Managed-Storage-Gebuehr zahlen | buyer/seller | Settlement-`GovernanceConfig` + Ops-Singleton `ManagedStorageFeeConfig` + derselbe Fulfillment-`MilestoneEscrow`; 32-Byte Nonce; exakter Recipient |
 | `create_reputation_profile_iota_entry` | Reputation profil erzeugen | actor | fee config + init fee coin |
 | `create_reputation_profile_sui_entry` | Sui Reputation profil erzeugen | actor | Sui reputation fee config + native SUI init fee coin |
 
@@ -119,23 +128,31 @@ Quellen:
 | `N/A (pre-listing Sui on-chain step)` | `buildSuiCreateListingDepositTx` / `buildSuiCreateListingDepositSharedTx` | `listing_deposit::create_listing_deposit_sui_entry` / `listing_deposit::create_listing_deposit_sui_shared_entry` |
 | `POST /reviewers/register` | `disputeQuorum.registerReviewer` | `dispute_quorum::register_reviewer_entry_with_reputation_cfg` |
 | `POST /orders/{orderId}/dispute-bond/fund` | `disputeQuorum.fundBondAsBuyer/Seller` | `dispute_quorum::fund_bond_as_buyer/seller` |
-| `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` | `disputeQuorum.openMilestoneDisputeCase` | `dispute_quorum::open_milestone_dispute_case_entry` |
+| `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open` | `disputeQuorum.openMilestoneDisputeCase` | `dispute_quorum::open_milestone_dispute_case_entry_v2` oder Invite-V2-Pfad |
 | `POST /disputes/{id}/reviewers/accept` | `disputeQuorum.acceptDisputeCase` | `dispute_quorum::accept_dispute_case_with_reputation_cfg` |
 | `POST /disputes/{id}/votes/commit` | `disputeQuorum.commitVote` | `dispute_quorum::commit_vote` |
 | `POST /disputes/{id}/votes/reveal` | `disputeQuorum.revealVote` | `dispute_quorum::reveal_vote` |
 | `POST /disputes/{id}/reviewers/replace` | `disputeQuorum.startReplacementRound` | `dispute_quorum::start_replacement_round` |
-| `POST /disputes/{id}/finalize` | `disputeQuorum.finalizeCase` | `dispute_quorum::finalize_case_with_quorum` |
-| `POST /disputes/{id}/fallback/resolve` | `disputeQuorum.resolveFallback` | `dispute_quorum::resolve_case_with_platform_fallback` |
-| `POST /disputes/{id}/fallback/timeout` | `disputeQuorum.resolveTimeoutFallback` | `dispute_quorum::resolve_case_with_timeout_fallback` |
-| `POST /disputes/{id}/resolve-escrow` | `orderEscrow.resolveDisputeWithBinding` | `order_escrow::resolve_dispute_with_binding` |
+| `POST /disputes/{id}/finalize` | `disputeQuorum.finalizeCase` | IOTA Fresh: ein `order_escrow::finalize_case_with_*_quorum_and_resolve_escrow` Wrapper-Call |
+| `POST /disputes/{id}/fallback/resolve` (Operator/Admin-only) | Admin-SDK `resolveFallback` | IOTA Fresh: ein `order_escrow::resolve_case_with_*_platform_fallback_and_resolve_escrow` Wrapper-Call |
+| `POST /disputes/{id}/fallback/timeout` | `disputeQuorum.resolveTimeoutFallback` | IOTA Fresh: ein `order_escrow::resolve_case_with_*_timeout_fallback_and_resolve_escrow` Wrapper-Call |
+| `POST /disputes/{id}/resolve-escrow` (Sui Legacy/Recovery) | `orderEscrow.resolveDisputeWithBinding` | IOTA: `410 Gone`; separater `order_escrow::resolve_dispute_with_binding` bleibt Sui-Legacy |
 | `N/A (direct SDK/PTB only)` | `buildApproveMutualCancelOrderEscrowTx` / `buildMutualCancelOrderEscrowTx` | `order_escrow::approve_mutual_cancel` / `order_escrow::mutual_cancel` |
+| `N/A (direct SDK/PTB only)` | `buildPayManagedStorageFeeIotaTx` / `buildSuiPayManagedStorageFeeSuiTx` | `manifest_anchor::pay_managed_storage_fee_iota_v2` / `manifest_anchor::pay_managed_storage_fee_sui_v2` |
 | `POST /orders/{orderId}/reviews` | `review.postWithEscrow/postWithMilestoneEscrow` | `review::post_review_with_escrow` / `review::post_review_with_milestone_escrow` |
 | `POST /orders/{orderId}/deadline-ext/propose` | `deadlineExt.propose` | `deadline_ext::propose_extension` |
 | `POST /deadline-ext/{id}/reject` | `deadlineExt.reject` | `deadline_ext::reject_extension` |
 
+Finalize, permissionless Timeout-Fallback und der Operator/Admin-only ArbCap
+Platform-Fallback bestehen auf Fresh IOTA jeweils aus genau einem atomaren
+`order_escrow`-Wrapper-Call. Der Public Helper exponiert den Platform-Fallback
+nicht. IOTA `/resolve-escrow` ist retired (`410 Gone`); die separate
+Legacy-/Recovery-/Reconciliation-Surface gilt nur fuer Sui.
+
 ## 4) Was fuer Bots typischerweise NICHT direkt relevant ist
 
 - Governance-Rotation, timelock admin flows (`admin::*`)
+- Es gibt im Fresh-DAG keine `bind_managed_storage_fee_config_v2`-Migration. Die Ops-FeeConfig ist ein bei Package-Init erzeugtes Singleton; Bots duerfen keine FeeConfig-ID am Milestone binden oder erfinden.
 - Tax/DSA administrative reporting paths
 - Interne maintenance/deletion helper fuer settled objects
 
@@ -145,7 +162,11 @@ Diese Funktionen bleiben fuer Operator-/Admin-Bots relevant, sind aber nicht Tei
 
 - Vollstaendige Funktionsmatrix inkl. Tests:
   - `docs/docsources/core/SMART_CONTRACT_FUNCTION_INVENTORY_AND_USER_TEST_MATRIX.md`
-- Callable Snapshot (Regression Guard):
-  - `docs/docsources/core/callable_surface.snapshot`
+- Callable Snapshots (Root-spezifische Regression Guards, ab Sync v4):
+  - `docs/docsources/core/callable-surfaces/iota/foundation.snapshot`
+  - `docs/docsources/core/callable-surfaces/iota/governance.snapshot`
+  - `docs/docsources/core/callable-surfaces/iota/settlement.snapshot`
+  - `docs/docsources/core/callable-surfaces/iota/fulfillment.snapshot`
+  - `docs/docsources/core/callable-surfaces/iota/ops.snapshot`
 - Architekturkarte:
   - `docs/docsources/core/SMART_CONTRACT_ARCHITECTURE_MAP.md`

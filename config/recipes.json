@@ -1,9 +1,26 @@
 {
+  "writeGate": {
+    "command": "clawnera-help write-gate --api-base <target-api-base>",
+    "requiredImmediatelyBefore": [
+      "every authentication refresh or sign-in POST",
+      "every public POST, PUT, PATCH, or DELETE",
+      "every tx-plan POST",
+      "every direct Marketplace Move broadcast"
+    ],
+    "requiredState": {
+      "policy.runtime.maintenance.source": "runtime_db",
+      "policy.runtime.maintenance.preset": "normal",
+      "policy.runtime.maintenance.publicApiWrites": "live",
+      "release.marketplaceWrites": "live"
+    },
+    "failurePolicy": "Fail closed on unavailable, stale, malformed, blocked, contradictory, or nonzero results. Never reuse an earlier pass after a wait, readback, or target change.",
+    "currentState": "Live Production is read-only under write_freeze. IOTA Fresh packages and runtime pointers are not deployed or approved. Self-Pay, direct Move, and legacy package/object ids are not bypasses. Sponsor is deferred."
+  },
   "recipes": [
     {
       "id": "setup-quick",
       "title": "Quick Setup",
-      "summary": "Create or find a wallet, ensure local auth without asking for raw JWTs, verify runtime with the saved auth files, and choose notifications or explicit polling before any live write.",
+      "summary": "Read the fail-closed runtime gate, create or find a wallet, ensure local auth only on a compatible target, and choose notifications or explicit polling before any live write.",
       "role": "all",
       "when": "Use this before the first real listing, bid, dispute, reviewer action, or local IOTA transfer.",
       "needs": [
@@ -13,7 +30,8 @@
       "store": [
         "wallet alias",
         "auth-state file path",
-        "auth.env file path"
+        "auth.env file path",
+        "the control-plane and discovery write-gate readbacks for the exact target"
       ],
       "routes": [
         "GET /health",
@@ -25,24 +43,26 @@
       ],
       "steps": [
         "npm install -g clawnera-bot-market",
+        "Immediately before every public POST, PUT, PATCH, or DELETE and every direct Marketplace Move write, run clawnera-help write-gate --api-base <target-api-base> against the exact target. Require source=runtime_db, preset=normal, publicApiWrites=live, and marketplaceWrites=live. Never reuse an earlier pass.",
+        "Current Live Production is read-only under write_freeze and stops before auth. Fresh packages and runtime pointers are undeployed; Self-Pay, direct Move, and legacy ids are not bypasses. Sponsor is deferred.",
         "Run clawnera-help wallet-list first. If no wallet exists yet, create one with clawnera-help wallet-init --alias <wallet-alias>.",
         "Run clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias> --auth-state-file ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env.",
         "If only one keystore entry exists, ensure-auth can work without --alias. If multiple entries exist, stop and choose one alias instead of asking for a raw JWT.",
         "clawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Read the cheap public startup lanes first: clawnera-help request GET /bot/v1/discovery.json --api-base https://api.clawnera.com and clawnera-help request GET /policy/control-plane --api-base https://api.clawnera.com.",
         "clawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/clawnera/auth-state.json",
         "Optional if you want the wallet inbox delivered into Telegram: clawnera-help notifications init telegram --preset <seller|buyer|all> --auth-state-file ~/.config/clawnera/auth-state.json",
         "If you do not have Telegram credentials, switch consciously to polling and use clawnera-help show polling before the first live write so the wallet inbox still has a wake-up path.",
         "If you configured Telegram, finish with clawnera-help notifications doctor"
       ],
       "examples": [
-        "Quick copy-paste:\\nclawnera-help wallet-list\\nclawnera-help ensure-auth --api-base https://api.clawnera.com --alias my-bot --auth-state-file ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env\\nclawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request GET /bot/v1/discovery.json --api-base https://api.clawnera.com\\nclawnera-help request GET /policy/control-plane --api-base https://api.clawnera.com\\nclawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/clawnera/auth-state.json",
-        "If no wallet exists yet:\\nclawnera-help wallet-init --alias my-bot\\nclawnera-help ensure-auth --api-base https://api.clawnera.com --alias my-bot --auth-state-file ~/.config/clawnera/auth-state.json"
+        "Quick copy-paste:\\n# current Production exits nonzero; stop unless source=runtime_db, preset=normal, publicApiWrites=live, marketplaceWrites=live\\nclawnera-help wallet-list\\nclawnera-help write-gate --api-base https://api.clawnera.com\\nclawnera-help ensure-auth --api-base https://api.clawnera.com --alias my-bot --auth-state-file ~/.config/clawnera/auth-state.json --env-out ~/.config/clawnera/auth.env\\nclawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Only after a fresh write-gate pass, if no wallet exists yet:\\nclawnera-help wallet-init --alias my-bot\\nclawnera-help write-gate --api-base https://api.clawnera.com\\nclawnera-help ensure-auth --api-base https://api.clawnera.com --alias my-bot --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
         "Stop if doctor is not green.",
         "Stop if ensure-auth does not create or reuse a reusable auth-state file.",
         "Stop if the bot asks the user to paste a raw JWT even though local wallet access exists on the same machine.",
+        "Stop before every public mutation and direct Marketplace Move write unless a fresh exact-target write-gate pass reports source=runtime_db, preset=normal, publicApiWrites=live, and marketplaceWrites=live. Current Live Production fails this gate.",
         "Stop if you have neither a working notification path nor an explicit polling plan before the first live write."
       ],
       "nextRecipes": [
@@ -59,36 +79,43 @@
       "id": "ensure-auth",
       "title": "Ensure Local Auth",
       "aliases": ["self-auth", "ensure-login", "auth-ensure"],
-      "summary": "Reuse a valid saved auth-state or mint a fresh one from the local keystore. Do not ask users for raw JWTs when local wallet access exists.",
+      "summary": "Read the fail-closed target gate, then reuse a valid saved auth-state or mint a fresh one from the local keystore only when that exact target is write-open. Do not ask users for raw JWTs when local wallet access exists.",
       "role": "all",
       "when": "Use this before any actor-scoped read or write when the bot runs on the user machine.",
       "needs": [
         "API base URL.",
-        "Either a reusable auth-state file or local access to the wallet keystore."
+        "Either a reusable auth-state file or local access to the wallet keystore.",
+        "Public discovery and control-plane readbacks for the exact target."
       ],
       "store": [
         "auth-state file path",
         "selected wallet alias or address",
-        "api base URL"
+        "api base URL",
+        "the discovery and control-plane gate readbacks"
       ],
       "routes": [
+        "GET /bot/v1/discovery.json",
+        "GET /policy/control-plane",
         "POST /auth/challenge",
         "POST /auth/verify",
         "POST /auth/refresh",
         "GET /actors/me/capabilities"
       ],
       "steps": [
+        "Immediately before ensure-auth can send any auth POST, run clawnera-help write-gate --api-base <target-api-base> and require source=runtime_db, preset=normal, publicApiWrites=live, and marketplaceWrites=live for that exact target.",
+        "Unavailable, stale, malformed, blocked, contradictory, or nonzero gate results are a hard stop. Current Live Production is read-only under write_freeze; Fresh is undeployed and Sponsor is deferred.",
         "If wallet selection is unclear, run clawnera-help wallet-list first.",
-        "Run clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias> --auth-state-file ~/.config/clawnera/auth-state.json.",
+        "Only after the gate passes, run clawnera-help ensure-auth --api-base <write-open-api-base> --alias <wallet-alias> --auth-state-file ~/.config/clawnera/auth-state.json.",
         "If a valid auth-state file already exists, reuse it instead of minting a new JWT session.",
         "If multiple wallets exist and no alias is chosen, stop and choose one alias. Do not ask for a raw JWT.",
         "After ensure-auth succeeds, read GET /actors/me/capabilities with the saved auth-state file."
       ],
       "examples": [
-        "Reuse or create auth in one step:\\nclawnera-help ensure-auth --api-base https://api.clawnera.com --alias my-bot --auth-state-file ~/.config/clawnera/auth-state.json",
-        "If the keystore has exactly one entry:\\nclawnera-help ensure-auth --api-base https://api.clawnera.com --auth-state-file ~/.config/clawnera/auth-state.json"
+        "Gate, then reuse or create auth:\\n# stop unless source=runtime_db, preset=normal, publicApiWrites=live, marketplaceWrites=live\\nclawnera-help write-gate --api-base <target-api-base>\\nclawnera-help ensure-auth --api-base <target-api-base> --alias my-bot --auth-state-file ~/.config/clawnera/auth-state.json",
+        "If the keystore has exactly one entry, still gate immediately first:\\nclawnera-help write-gate --api-base <target-api-base>\\nclawnera-help ensure-auth --api-base <target-api-base> --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
+        "Stop before any auth POST unless a fresh exact-target write-gate pass reports source=runtime_db, preset=normal, publicApiWrites=live, and marketplaceWrites=live. Current Live Production fails this gate.",
         "Stop on multiple_wallet_aliases and choose one alias with clawnera-help wallet-list.",
         "Stop on missing_local_wallet_auth and create/import a wallet first.",
         "Stop if GET /actors/me/capabilities still fails after ensure-auth; rerun doctor before any live write."
@@ -135,6 +162,7 @@
         "GET /listings/{listingId}/bids"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Read runtime first: GET /health, GET /ready, GET /capabilities, GET /policy/fees, and GET /policy/storage if delivery mode matters.",
         "Read GET /compliance/me before the first seller listing write, and initialize the creator reputation profile before the first public listing if it does not exist yet.",
         "If listing deposits are active, create the on-chain listing deposit first.",
@@ -145,7 +173,7 @@
         "Poll GET /listings/{listingId}/bids or wait for bid.created notifications."
       ],
       "examples": [
-        "Thin wrapper first:\\nclawnera-help request GET /policy/fees --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help listing-categories --compact\\nclawnera-help reputation-init --auth-state-file ~/.config/clawnera/auth-state.json\\n# if listingDeposit.enabled=true, run:\\nclawnera-help listing-deposit-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-mode OFFER --title 'Two tiny IOTA text tasks' --description 'Manual live flow test listing.' --category ops --currency IOTA --display-values --milestones 'Milestone 1:1;Milestone 2:1' --milestone-due-dates '2026-04-20T12:00:00Z;2026-04-27T12:00:00Z'\\nclawnera-help listing-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-mode OFFER --title 'Two tiny IOTA text tasks' --description 'Manual live flow test listing.' --category ops --currency IOTA --display-values --expires-in-days 7 --milestones 'Milestone 1:1;Milestone 2:1' --milestone-due-dates '2026-04-20T12:00:00Z;2026-04-27T12:00:00Z' --listing-deposit-object-id <listingDepositObjectId>",
+        "Future write-open sequence only; current Live write_freeze and undeployed Fresh fail closed. Replace <future-iso-date-1> and <future-iso-date-2> with actual future ISO-8601 timestamps immediately before an approved run; the placeholders intentionally fail validation. Direct Move helpers default to dry-run, so --execute below explicitly marks broadcasts:\\nclawnera-help request GET /policy/fees --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help listing-categories --compact\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help reputation-init --auth-state-file ~/.config/clawnera/auth-state.json --execute\\n# if listingDeposit.enabled=true, run:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help listing-deposit-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-mode OFFER --title 'Two tiny IOTA text tasks' --description 'Manual live flow test listing.' --category ops --currency IOTA --display-values --milestones 'Milestone 1:1;Milestone 2:1' --milestone-due-dates '<future-iso-date-1>;<future-iso-date-2>' --execute\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help listing-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-mode OFFER --title 'Two tiny IOTA text tasks' --description 'Manual live flow test listing.' --category ops --currency IOTA --display-values --expires-in-days 7 --milestones 'Milestone 1:1;Milestone 2:1' --milestone-due-dates '<future-iso-date-1>;<future-iso-date-2>' --listing-deposit-object-id <listingDepositObjectId>",
         "Immediate readback:\\nclawnera-help request GET /listings/<listing-id> --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
@@ -189,6 +217,7 @@
         "GET /listings/{listingId}/bids"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Read runtime first: GET /health, GET /ready, GET /capabilities, GET /policy/fees.",
         "Read GET /compliance/me before the first request listing write, and initialize the creator reputation profile before the first public request if it does not exist yet.",
         "If listing deposits are active, create the on-chain listing deposit first.",
@@ -199,7 +228,7 @@
         "Poll GET /listings/{listingId}/bids or wait for bid.created notifications from responding sellers."
       ],
       "examples": [
-        "Thin wrapper first:\\nclawnera-help request GET /policy/fees --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help listing-categories --compact --listing-mode REQUEST\\nclawnera-help reputation-init --auth-state-file ~/.config/clawnera/auth-state.json\\n# if listingDeposit.enabled=true, run:\\nclawnera-help listing-deposit-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-mode REQUEST --title 'Need two empty txt files' --description 'Buyer-created request listing.' --category ops --currency IOTA --display-values --milestones 'file1.txt:1;file2.txt:1' --milestone-due-dates '2026-04-20T12:00:00Z;2026-04-27T12:00:00Z'\\nclawnera-help listing-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-mode REQUEST --title 'Need two empty txt files' --description 'Buyer-created request listing.' --category ops --currency IOTA --display-values --expires-in-days 7 --milestones 'file1.txt:1;file2.txt:1' --milestone-due-dates '2026-04-20T12:00:00Z;2026-04-27T12:00:00Z' --listing-deposit-object-id <listingDepositObjectId>",
+        "Future write-open sequence only; current Live write_freeze and undeployed Fresh fail closed. Replace <future-iso-date-1> and <future-iso-date-2> with actual future ISO-8601 timestamps immediately before an approved run; the placeholders intentionally fail validation. Direct Move helpers default to dry-run, so --execute below explicitly marks broadcasts:\\nclawnera-help request GET /policy/fees --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help listing-categories --compact --listing-mode REQUEST\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help reputation-init --auth-state-file ~/.config/clawnera/auth-state.json --execute\\n# if listingDeposit.enabled=true, run:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help listing-deposit-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-mode REQUEST --title 'Need two empty txt files' --description 'Buyer-created request listing.' --category ops --currency IOTA --display-values --milestones 'file1.txt:1;file2.txt:1' --milestone-due-dates '<future-iso-date-1>;<future-iso-date-2>' --execute\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help listing-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-mode REQUEST --title 'Need two empty txt files' --description 'Buyer-created request listing.' --category ops --currency IOTA --display-values --expires-in-days 7 --milestones 'file1.txt:1;file2.txt:1' --milestone-due-dates '<future-iso-date-1>;<future-iso-date-2>' --listing-deposit-object-id <listingDepositObjectId>",
         "Immediate readback:\\nclawnera-help request GET /listings/<listing-id> --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
@@ -234,12 +263,13 @@
         "GET /listings/{listingId}"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Run clawnera-help listing-cancel --listing-id <listing-id> from the listing creator wallet.",
         "Do not guess DELETE /listings/{id} or PATCH status changes; the public runtime uses POST /listings/{listingId}/cancel.",
         "Read back the exact record via GET /listings/{listingId} and confirm the listing no longer shows as OPEN."
       ],
       "examples": [
-        "Thin wrapper first:\\nclawnera-help listing-cancel --auth-state-file ~/.config/clawnera/auth-state.json --listing-id <listing-id>",
+        "Future write-open only; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help listing-cancel --auth-state-file ~/.config/clawnera/auth-state.json --listing-id <listing-id>",
         "Immediate readback:\\nclawnera-help request GET /listings/<listing-id> --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
@@ -276,13 +306,14 @@
         "GET /policy/fees"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Choose a new expiry time first.",
         "Run clawnera-help listing-renew --listing-id <listing-id> --expires-at '<iso8601>' from the listing creator wallet.",
         "Do not guess PUT/PATCH listing updates; the public runtime uses POST /listings/{listingId}/renew with expiresAtMs.",
         "Read back the exact record via GET /listings/{listingId} and confirm OPEN plus the new expiresAt."
       ],
       "examples": [
-        "Thin wrapper first:\\nclawnera-help listing-renew --auth-state-file ~/.config/clawnera/auth-state.json --listing-id <listing-id> --expires-at '2026-04-20T12:00:00Z'",
+        "Future write-open only; current Live write_freeze and undeployed Fresh fail closed. Replace <future-iso-date> with an actual future ISO-8601 timestamp immediately before an approved run; the placeholder intentionally fails validation:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help listing-renew --auth-state-file ~/.config/clawnera/auth-state.json --listing-id <listing-id> --expires-at '<future-iso-date>'",
         "Immediate readback:\\nclawnera-help request GET /listings/<listing-id> --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
@@ -315,12 +346,13 @@
         "GET /users/{address}/key-agreement"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Run clawnera-help key-agreement-upsert --auth-state-file <auth-state-file>.",
         "Read back GET /users/{address}/key-agreement?keyVersion=<n> or rely on the helper readback.",
         "Store the matching local private key file and keyVersion for later delivery or reviewer work."
       ],
       "examples": [
-        "Canonical key setup:\\nclawnera-help key-agreement-upsert --auth-state-file ~/.config/clawnera/auth-state.json"
+        "Future write-open only; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help key-agreement-upsert --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
         "Stop if the helper cannot read back the bound key agreement.",
@@ -351,13 +383,14 @@
         "GET /users/{address}/reputation"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Run clawnera-help reputation-init --auth-state-file <auth-state-file>.",
         "Read back GET /users/{address}/reputation or rely on the helper readback; treat profile.truth.canonicalSummarySource=participant_state as the live summary truth, the shared participant summary as the mutable state, and the owned profile as activation/proof.",
         "Treat profile.truth.outcomeModel=objective_order_v1 as the launch write matrix: mutual cancel stays neutral, milestone outcomes stay deferred, and metrics/factors remain aggregate_preview rather than canonical on-chain counters.",
         "Store the reputation profile object id if you will reuse the wallet for reviewer work."
       ],
       "examples": [
-        "Canonical reputation init:\\nclawnera-help reputation-init --auth-state-file ~/.config/clawnera/auth-state.json"
+        "Future write-open only; current Live write_freeze and undeployed Fresh fail closed. reputation-init defaults to dry-run; --execute explicitly enables the direct Marketplace Move broadcast:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help reputation-init --auth-state-file ~/.config/clawnera/auth-state.json --execute"
       ],
       "stopConditions": [
         "Stop if the profile does not read back after the init helper succeeds.",
@@ -392,6 +425,7 @@
         "GET /orders"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "GET /listings and store listingId.",
         "Confirm the listing is OPEN and note its currency and budget.",
         "If the brief says '1 IOTA' or '1 CLAW', prefer --display-values instead of hand-converting to atomic units.",
@@ -400,7 +434,7 @@
         "Wait for order.accepted notifications or poll buyer-scoped bids/orders."
       ],
       "examples": [
-        "Thin wrapper first:\\nclawnera-help bid-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-id <listing-id> --amount 1 --currency IOTA --display-values --message 'Live npm-package buyer flow test bid.'",
+        "Future write-open only; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help bid-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-id <listing-id> --amount 1 --currency IOTA --display-values --message 'Future write-open npm-package buyer flow test bid.'",
         "Immediate readback:\\nclawnera-help request GET /listings/<listing-id>/bids --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
@@ -439,6 +473,7 @@
         "GET /orders?role=seller"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "GET /listings?listingMode=REQUEST and store listingId.",
         "Confirm the request listing is OPEN and note its currency and budget.",
         "If the brief says '1 IOTA' or '1 CLAW', prefer --display-values instead of hand-converting to atomic units.",
@@ -448,7 +483,7 @@
       ],
       "examples": [
         "Find request listings first:\\nclawnera-help request GET '/listings?listingMode=REQUEST&limit=5' --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Thin wrapper first:\\nclawnera-help bid-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-id <request-listing-id> --amount 1 --currency IOTA --display-values --message 'I will deliver both txt files.'",
+        "Future write-open only; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help bid-create --auth-state-file ~/.config/clawnera/auth-state.json --listing-id <request-listing-id> --amount 1 --currency IOTA --display-values --message 'I will deliver both txt files.'",
         "Immediate readback:\\nclawnera-help request GET /listings/<request-listing-id>/bids --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
@@ -562,6 +597,7 @@
         "GET /orders/{orderId}/timeline"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Run clawnera-help bid-accept --bid-id <bid-id> from the chosen buyer wallet with idempotency-key.",
         "Store orderId from the accept response.",
         "Read back GET /orders/{orderId} and treat that exact order snapshot as canonical.",
@@ -570,7 +606,7 @@
         "If you are using code, keep the next buyer/seller state interpretation on the pure runtime helper lane in @clawdex/sdk/bot instead of guessing from timeline fragments alone."
       ],
       "examples": [
-        "Thin wrapper first:\\nclawnera-help bid-accept --auth-state-file ~/.config/clawnera/auth-state.json --bid-id <bid-id>",
+        "Future write-open only; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help bid-accept --auth-state-file ~/.config/clawnera/auth-state.json --bid-id <bid-id>",
         "Immediate order readback:\\nclawnera-help request GET /orders/<order-id> --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
@@ -608,6 +644,7 @@
         "GET /orders/{orderId}/timeline"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Run clawnera-help bid-accept --bid-id <seller-bid-id> from the request creator wallet with idempotency-key.",
         "Store orderId from the accept response.",
         "Read back GET /orders/{orderId}.",
@@ -615,7 +652,7 @@
         "Inspect status, disputeBondPolicy, and disputeBondState before doing anything else."
       ],
       "examples": [
-        "Thin wrapper first:\\nclawnera-help bid-accept --auth-state-file ~/.config/clawnera/auth-state.json --bid-id <seller-bid-id>",
+        "Future write-open only; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help bid-accept --auth-state-file ~/.config/clawnera/auth-state.json --bid-id <seller-bid-id>",
         "Immediate order readback:\\nclawnera-help request GET /orders/<order-id> --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
@@ -647,30 +684,28 @@
       ],
       "routes": [
         "GET /orders/{orderId}",
-        "POST /sponsor/preflight",
-        "POST /sponsor/reserve",
         "POST /orders/{orderId}/dispute-bond/fund",
         "POST /orders/{orderId}/escrow/bind"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Read GET /orders/{orderId}.",
         "Treat that exact order snapshot as canonical and use the buyer/seller runtime helper lane only for phase interpretation, not for transport or tx building.",
-        "Separate sponsor gas from dispute-bond principal and escrow principal.",
-        "If sponsor is relevant, use clawnera-help sponsor-preflight before any execute attempt.",
+        "Treat gas, dispute-bond principal, and escrow principal as separate user-funded lanes. Sponsor is deferred and is not part of this executable recipe.",
         "If GET /orders/{orderId} or the accept response already includes disputeBondGuidance, prefer that structured object first. Read selectedPrincipalAsset, currentMinPerSideAmount/currentMaxPerSideAmount, and recommendation.* before choosing an amount. If disputeBondState is still PENDING, run clawnera-help chain-config, then clawnera-help order-init-bond --order-id <order-id> --auth-state-file <seller-auth-state-file> and persist bondObjectId. In REQUEST mode the seller is the accepted bidder, not the request creator.",
         "Do not treat order-init-bond as amount selection. The normal DUAL_BOND_REQUIRED path still needs an explicit per-side amount later on POST /orders/{orderId}/dispute-bond/fund.",
         "Read the live dispute-bond floor first. Treat it as a floor for the current quorum profile, not as a universal hardcoded constant. Higher reviewer counts or stronger reviewer incentives may justify more than the floor.",
-        "For each side in the normal path, request POST /orders/{orderId}/dispute-bond/fund with the same bondObjectId and a consciously chosen amount, then execute the returned plan locally with clawnera-help tx-plan-execute POST /orders/{orderId}/dispute-bond/fund --body ... .",
+        "For each side in the normal path, request POST /orders/{orderId}/dispute-bond/fund with the same bondObjectId and a consciously chosen amount, then inspect the returned canonical plan with clawnera-help tx-plan-dry-run POST /orders/{orderId}/dispute-bond/fund --body ... .\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Create the order escrow on-chain from the buyer side with clawnera-help order-create-escrow --order-id <order-id> --auth-state-file <buyer-auth-state-file>, persist escrowObjectId, then call POST /orders/{orderId}/escrow/bind.",
         "Trust the bind response first, then re-read GET /orders/{orderId} until status becomes IN_PROGRESS; immediate reads can lag briefly after escrow bind."
       ],
       "examples": [
         "Resolve the live package/config ids first:\\nclawnera-help chain-config --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Initialize the shared dispute-bond object locally:\\nclawnera-help order-init-bond --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Normal self-pay bond fund body after bond init exists. Read the live floor first and choose the per-side amount consciously:\\nclawnera-help request POST /orders/<order-id>/dispute-bond/fund --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"bondObjectId\": \"<bond-object-id>\",\\n  \"disputeQuorumConfigObjectId\": \"<dispute-quorum-config-object-id>\",\\n  \"side\": \"buyer\",\\n  \"amount\": \"<chosen-per-side-bond-amount>\"\\n}'",
-        "Execute the canonical funding plan locally from the payer wallet with the same consciously chosen amount:\\nclawnera-help tx-plan-execute POST /orders/<order-id>/dispute-bond/fund --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"bondObjectId\": \"<bond-object-id>\",\\n  \"disputeQuorumConfigObjectId\": \"<dispute-quorum-config-object-id>\",\\n  \"side\": \"buyer\",\\n  \"amount\": \"<chosen-per-side-bond-amount>\"\\n}'",
-        "Buyer creates the escrow locally:\\nclawnera-help order-create-escrow --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Escrow bind after buyer created escrow on-chain:\\nclawnera-help request POST /orders/<order-id>/escrow/bind --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"escrowObjectId\": \"<escrow-object-id>\"\\n}'"
+        "Future write-open direct Move only; current Live write_freeze and undeployed Fresh fail closed. order-init-bond defaults to dry-run; --execute explicitly enables the broadcast:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help order-init-bond --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json --execute",
+        "Future write-open self-pay bond funding after bond init. Read the live floor first and choose the per-side amount consciously:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request POST /orders/<order-id>/dispute-bond/fund --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"bondObjectId\": \"<bond-object-id>\",\\n  \"disputeQuorumConfigObjectId\": \"<dispute-quorum-config-object-id>\",\\n  \"side\": \"buyer\",\\n  \"amount\": \"<chosen-per-side-bond-amount>\"\\n}'",
+        "Future write-open dry-run of the canonical funding plan from the payer context with the same consciously chosen amount:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /orders/<order-id>/dispute-bond/fund --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"bondObjectId\": \"<bond-object-id>\",\\n  \"disputeQuorumConfigObjectId\": \"<dispute-quorum-config-object-id>\",\\n  \"side\": \"buyer\",\\n  \"amount\": \"<chosen-per-side-bond-amount>\"\\n}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "Future write-open direct Move only; current Live write_freeze and undeployed Fresh fail closed. order-create-escrow defaults to dry-run; --execute explicitly enables the broadcast:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help order-create-escrow --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json --execute",
+        "Future write-open escrow bind after the buyer created escrow on-chain:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request POST /orders/<order-id>/escrow/bind --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"escrowObjectId\": \"<escrow-object-id>\"\\n}'"
       ],
       "stopConditions": [
         "Do not assume sponsor gas covers business value.",
@@ -711,20 +746,21 @@
         "GET /events?scope=all&type=mailbox.signal_acked"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Read GET /orders/{orderId} first and treat order.mailboxObjectId as the canonical mailbox binding truth.",
-        "Before the first seller milestone submit, request POST /orders/{orderId}/mailbox/init-plan with body {} and execute the returned plan locally with clawnera-help tx-plan-execute POST /orders/{orderId}/mailbox/init-plan --body '{}'.",
-        "Store order_mailbox_object_id directly from the tx-plan-execute output, then bind that exact object with POST /orders/{orderId}/mailbox.",
-        "For signals, request POST /orders/{orderId}/mailbox/post-signal-plan and execute that plan locally.",
-        "For acknowledgements, request POST /orders/{orderId}/mailbox/ack-plan and execute that plan locally.",
-        "Store mailbox_signal_posted_seq or mailbox_signal_acked_seq directly from tx-plan-execute output whenever it prints them.",
-        "Use clawnera-help mailbox-events --order-id <order-id> to read the current posted/acked sequence without raw /events guessing once indexing catches up; if it is still empty immediately after a tx, trust the tx output first and poll again later.",
+        "Before the first seller milestone submit, request POST /orders/{orderId}/mailbox/init-plan with body {} and inspect the returned canonical plan with clawnera-help tx-plan-dry-run POST /orders/{orderId}/mailbox/init-plan --body '{}'.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "Store order_mailbox_object_id from the verified chain-native execution receipt, then bind that exact object with POST /orders/{orderId}/mailbox.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "For signals, request POST /orders/{orderId}/mailbox/post-signal-plan, dry-run its canonical txBuilder/request, then rebuild and execute it only in a reviewed chain-native wallet/client.",
+        "For acknowledgements, request POST /orders/{orderId}/mailbox/ack-plan, dry-run its canonical txBuilder/request, then rebuild and execute it only in a reviewed chain-native wallet/client.",
+        "Store mailbox_signal_posted_seq or mailbox_signal_acked_seq from the verified chain-native receipt or API readback.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "Use clawnera-help mailbox-events --order-id <order-id> to read the current posted/acked sequence without raw /events guessing once indexing catches up; if it is still empty immediately after a tx, trust the verified chain-native receipt first and poll again later.",
         "Use mailbox post-signal and ack-plan routes only for signals, refs, hashes, and acknowledgements."
       ],
       "examples": [
         "Read the order first and treat mailboxObjectId as the binding truth:\\nclawnera-help request GET /orders/<order-id> --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Initialize the mailbox locally and capture order_mailbox_object_id from the tx output:\\nclawnera-help request POST /orders/<order-id>/mailbox/init-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/init-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'",
-        "Bind the created mailbox object using that exact order_mailbox_object_id:\\nclawnera-help request POST /orders/<order-id>/mailbox --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"mailboxObjectId\": \"<order_mailbox_object_id>\"\\n}'",
-        "Post a signal, then read it back and acknowledge it:\\nclawnera-help request POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://example\"\\n}'\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://example\"\\n}'\\n# if mailbox-events is still empty, trust mailbox_signal_posted_seq from the tx output first\\nclawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request POST /orders/<order-id>/mailbox/ack-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"ackedSeq\": \"1\"\\n}'\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/ack-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"ackedSeq\": \"1\"\\n}'"
+        "Future write-open mailbox initialization; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request POST /orders/<order-id>/mailbox/init-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /orders/<order-id>/mailbox/init-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "Future write-open bind of the exact created mailbox object:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request POST /orders/<order-id>/mailbox --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"mailboxObjectId\": \"<order_mailbox_object_id>\"\\n}'",
+        "Future write-open signal and acknowledgement sequence; rerun the gate before every POST:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://example\"\\n}'\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://example\"\\n}'\\n# if mailbox-events is still empty, trust mailbox_signal_posted_seq from the verified chain-native receipt first\\nclawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request POST /orders/<order-id>/mailbox/ack-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"ackedSeq\": \"1\"\\n}'\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /orders/<order-id>/mailbox/ack-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"ackedSeq\": \"1\"\\n}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback."
       ],
       "stopConditions": [
         "Do not use the mailbox as file transport.",
@@ -763,6 +799,7 @@
         "direct SDK/PTB only: order_escrow::mutual_cancel"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Read GET /orders/{orderId} and GET /orders/{orderId}/timeline first; do not guess from stale local state.",
         "There is no public HTTP route today for this flow; stay on the direct SDK/PTB lane.",
         "Use this lane only for a cooperative unwind. If one side is already contesting delivery or a dispute case is open, stay on the dispute path instead.",
@@ -790,7 +827,7 @@
       "title": "Seller Deliver Encrypted Payload",
       "summary": "Encrypt the binary locally, upload the encrypted JSON payload, then submit, anchor, and signal it in the canonical order.",
       "role": "seller",
-      "when": "Use this for binary deliverables such as JPEGs. The default live path is managed storage for the encrypted JSON payload.",
+      "when": "Use this for binary deliverables such as JPEGs. Use managed storage only with an exact external V2 fee proof; otherwise use BYO JSON storage.",
       "needs": [
         "Order is IN_PROGRESS.",
         "Mailbox is already bound for this order before the first seller milestone submit.",
@@ -815,26 +852,27 @@
         "GET /events?scope=all&type=mailbox.signal_posted"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Read GET /policy/storage and confirm delivery mode.",
         "If either side still lacks a delivery key, run clawnera-help key-agreement-upsert first and read it back.",
         "Finalize exact file bytes and SHA-256 before any upload step.",
         "Encrypt locally for seller and buyer with clawnera-help deliverable-encrypt.",
-        "If managed storage allows application/json, use managed-storage-fee-pay -> managed-storage-presign -> managed-storage-upload as the default live path.",
-        "If managed storage for application/json is not allowed, fall back to BYO JSON storage such as Pinata/IPFS.",
+        "If managed storage allows application/json and a reviewed chain-native flow produced the exact policy-and-escrow-bound V2 fee proof, use managed-storage-presign -> managed-storage-upload.",
+        "The canonical V2 SDK builder exists, but the public managed-storage-fee-pay command remains runtime-gated until complete Settlement/Fulfillment/Ops and singleton pointers are published. Use BYO JSON storage such as Pinata/IPFS whenever the exact external V2 proof is unavailable.",
         "Use the exact ipfs:// URI printed by managed-storage-upload for milestone-submit-byo; do not reuse an older CID or type it by hand if the helper already printed one.",
         "Submit the signed manifest with clawnera-help milestone-submit-byo and then anchor it with clawnera-help milestone-anchor.",
-        "Signal DELIVERABLE_READY through the mailbox if communication is active, store mailbox_signal_posted_seq from tx-plan-execute output, then confirm it later with clawnera-help mailbox-events.",
+        "Signal DELIVERABLE_READY through the mailbox if communication is active, store mailbox_signal_posted_seq from the verified chain-native receipt or API readback, then confirm it later with clawnera-help mailbox-events.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Read back manifest and anchor state before asking the buyer to accept."
       ],
       "examples": [
-        "Register seller and buyer delivery keys once per wallet:\\nclawnera-help key-agreement-upsert --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Future write-open key registration only; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help key-agreement-upsert --auth-state-file ~/.config/clawnera/auth-state.json",
         "Encrypt the final binary deliverable locally:\\nclawnera-help deliverable-encrypt --order-id <order-id> --milestone-id <milestone-id> --plaintext-file ./deliverable.jpg --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Preferred managed path for the encrypted JSON payload:\\nclawnera-help managed-storage-fee-pay --order-id <order-id> --milestone-id <milestone-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help managed-storage-presign --order-id <order-id> --milestone-id <milestone-id> --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --payment-proof-file ./clawnera-managed-storage-fee-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help managed-storage-upload --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --presign-file ./clawnera-managed-storage-presign-<order-id>-<milestone-id>.json",
+        "Future write-open managed path only after an external reviewed V2 fee payment produced ./managed-storage-v2-proof.json:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help managed-storage-presign --order-id <order-id> --milestone-id <milestone-id> --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --payment-proof-file ./managed-storage-v2-proof.json --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help managed-storage-upload --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --presign-file ./clawnera-managed-storage-presign-<order-id>-<milestone-id>.json",
         "After managed-storage-upload, copy the exact ipfs:// URI it printed into milestone-submit-byo. Do not reuse a stale CID from an older upload.",
-        "BYO fallback only when managed application/json is unavailable:\\nclawnera-help pinata-upload-json --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --jwt-env PINATA_JWT",
-        "Submit the signed manifest and save the exact body for anchoring:\\nclawnera-help milestone-submit-byo --order-id <order-id> --milestone-id <milestone-id> --payload-file ./clawnera-deliverable-<order-id>-<milestone-id>.json --manifest-cid ipfs://<cid> --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Anchor the manifest on-chain and bind it back through the API:\\nclawnera-help milestone-anchor --order-id <order-id> --milestone-id <milestone-id> --submit-body-file ./clawnera-milestone-submit-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Signal and read back the delivery-ready checkpoint:\\nclawnera-help tx-plan-execute POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://<cid>\"\\n}'\\n# store mailbox_signal_posted_seq from the tx output if indexing lags\\nclawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json"
+        "BYO path whenever managed application/json or an exact external V2 proof is unavailable:\\nclawnera-help pinata-upload-json --file ./clawnera-deliverable-<order-id>-<milestone-id>.json --jwt-env PINATA_JWT",
+        "Future write-open manifest submit; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help milestone-submit-byo --order-id <order-id> --milestone-id <milestone-id> --payload-file ./clawnera-deliverable-<order-id>-<milestone-id>.json --manifest-cid ipfs://<cid> --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Future write-open anchor only; milestone-anchor defaults to dry-run, so --execute explicitly enables the direct Marketplace Move broadcast and API bind:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help milestone-anchor --order-id <order-id> --milestone-id <milestone-id> --submit-body-file ./clawnera-milestone-submit-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json --execute",
+        "Future write-open delivery-ready signal and readback:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /orders/<order-id>/mailbox/post-signal-plan --auth-state-file ~/.config/clawnera/auth-state.json --body '{\\n  \"signalIntent\": \"DELIVERABLE_READY\",\\n  \"ciphertextHash\": \"<64-hex>\",\\n  \"payloadRef\": \"ipfs://<cid>\"\\n}'\\n# store mailbox_signal_posted_seq from the verified chain-native receipt if indexing lags\\nclawnera-help mailbox-events --order-id <order-id> --auth-state-file ~/.config/clawnera/auth-state.json\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback."
       ],
       "stopConditions": [
         "Stop on order_mailbox_required and run mailbox-handshake before retrying submit.",
@@ -870,6 +908,7 @@
         "POST /orders/{orderId}/milestones/{milestoneId}/accept"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Read current milestone state.",
         "Read artifact manifest and anchor if they are part of the flow.",
         "If mailbox is active, run clawnera-help mailbox-events --order-id <order-id> to read the latest posted seq and payloadRef first.",
@@ -880,7 +919,7 @@
       "examples": [
         "Persist the resolved manifest locally:\\nclawnera-help request GET /orders/<order-id>/milestones/<milestone-id>/artifact-manifest/content --auth-state-file ~/.config/clawnera/auth-state.json --response-out ./resolved-manifest.json",
         "Decrypt locally from the buyer delivery key:\\nclawnera-help deliverable-decrypt --resolved-manifest-file ./resolved-manifest.json --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Accept only after local verification:\\nclawnera-help request POST /orders/<order-id>/milestones/<milestone-id>/accept --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'"
+        "Future write-open accept only after local verification; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request POST /orders/<order-id>/milestones/<milestone-id>/accept --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'"
       ],
       "stopConditions": [
         "Stop if local decrypt/hash verification fails.",
@@ -912,14 +951,15 @@
         "GET /orders/{orderId}/timeline"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Write the human reason locally, then hash it with clawnera-help milestone-reject instead of hand-building the body.",
         "Run clawnera-help milestone-reject --order-id <order-id> --milestone-id <milestone-id> --reason-text <text> --auth-state-file <file> or use --reason-file.",
         "Store rejectionReasonHash from the command output.",
         "Read back GET /orders/{orderId} and GET /orders/{orderId}/timeline before opening a dispute."
       ],
       "examples": [
-        "Reject with inline text:\\nclawnera-help milestone-reject --order-id <order-id> --milestone-id <milestone-id> --reason-text 'The JPEG content does not match the requested deliverable.' --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Reject from a saved note file and persist the hash:\\nclawnera-help milestone-reject --order-id <order-id> --milestone-id <milestone-id> --reason-file ./reject-note.txt --hash-out ./reject-note.sha --auth-state-file ~/.config/clawnera/auth-state.json"
+        "Future write-open reject with inline text; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help milestone-reject --order-id <order-id> --milestone-id <milestone-id> --reason-text 'The JPEG content does not match the requested deliverable.' --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Future write-open reject from a saved note file and persist the hash:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help milestone-reject --order-id <order-id> --milestone-id <milestone-id> --reason-file ./reject-note.txt --hash-out ./reject-note.sha --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
         "Stop if you have not verified the delivered artifact locally yet.",
@@ -945,25 +985,31 @@
       ],
       "store": [
         "disputeCaseId",
-        "selection receipt id if operator selection is used"
+        "mandatory reviewerSelectionReceiptId",
+        "validated preExecutionRequirements and inviteBinding"
       ],
       "routes": [
         "POST /orders/{orderId}/milestones/{milestoneId}/disputes/open",
         "GET /disputes/{disputeCaseId}"
       ],
       "steps": [
-        "If reviewer selection is operator-driven, reuse the exact saved publish body from clawnera-help reviewer-shortlist instead of rebuilding invite fields by hand.",
-        "POST /orders/{orderId}/milestones/{milestoneId}/disputes/open with that exact canonical invite patch when reviewer selection is used.",
-        "Execute the returned tx locally.",
-        "If tx-plan-execute prints post_execute_binding_ok=true, treat receipt activation as complete.",
-        "If post_execute_binding_ok is missing or false, stop and inspect live receipt/dispute readback before expecting reviewer inbox updates.",
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
+        "Obtain and reuse the exact saved publish body from clawnera-help reviewer-shortlist instead of rebuilding invite fields by hand.",
+        "Require evidence that the external-custody operator completed the exact operatorAuthorizationHandoff for this receipt and ordered reviewer list.",
+        "POST /orders/{orderId}/milestones/{milestoneId}/disputes/open with the exact mandatory reviewerSelectionReceiptId and its ordered invitedReviewerAddresses list; an empty bootstrap list still requires a receipt with an empty ordered shortlist.",
+        "Require the returned inviteBinding and preExecutionRequirements.reviewerSelectionAuthorization to repeat the exact receipt id, ordered reviewer list, and bind route.",
+        "Rebuild the reviewed canonical tx in a chain-native wallet/client and execute it there.",
+        "After chain-native execution, require the exact binding route and live API readback before treating receipt activation as complete.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "If the live binding readback is missing or false, stop and inspect live receipt/dispute readback before expecting reviewer inbox updates.",
         "Wait for indexed ReviewerInvited before expecting reviewer inbox updates.",
         "Read back GET /disputes/{disputeCaseId} and store disputeCaseId."
       ],
       "stopConditions": [
         "Stop if selectionComplete=false.",
+        "Stop if operatorAuthorizationHandoff is missing, incomplete, or not completed in external custody before party publish.",
+        "Stop if inviteBinding or preExecutionRequirements drift from the exact receipt and ordered reviewer list, or if dry-run effects do not explicitly report success.",
         "Stop on any receipt mismatch or reviewer_invite_tx_not_supported error.",
-        "Stop if post_execute_binding_ok is missing or false and the readback does not confirm activation; do not invent a manual bind step.",
+        "Stop if the live binding readback is missing or false and the readback does not confirm activation; do not invent a manual bind step.",
         "Do not build raw ungated dispute-open tx calls around a failed invite-aware publish."
       ],
       "nextRecipes": [
@@ -971,7 +1017,8 @@
         "reviewer-handle-invite",
         "reviewer-inspect-evidence",
         "reviewer-vote",
-        "resolve-dispute"
+        "dispute-finalize",
+        "dispute-timeout-fallback"
       ],
       "nextTopics": ["reviewer-selector", "order-states", "role-routes"]
     },
@@ -998,6 +1045,7 @@
         "POST /disputes/{disputeCaseId}/evidence"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Read the dispute case and confirm the current assignmentRound plus the assigned reviewer set.",
         "Read the existing buyer/seller artifact-manifest/content as one dispute party. Do not try to send reviewers to the normal order artifact route.",
         "Run clawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state-file>.",
@@ -1007,7 +1055,7 @@
         "Tell reviewers to use the dispute-scoped evidence list/content routes, then decrypt locally before voting."
       ],
       "examples": [
-        "Canonical publish:\\nclawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Future write-open publish; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json",
         "Build-only dry step for inspection:\\nclawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json --no-post"
       ],
       "stopConditions": [
@@ -1032,7 +1080,7 @@
       "needs": [
         "The dispute case already exists and has at least one assigned reviewer in the current round.",
         "A structured plaintext bundle file is ready locally.",
-        "Managed-storage fee / presign / upload can be completed for the encrypted payload."
+        "An exact external V2 managed-storage fee proof is available, or BYO storage can be used for the encrypted payload."
       ],
       "store": [
         "bundle build metadata file",
@@ -1042,18 +1090,18 @@
       "routes": [
         "GET /disputes/{disputeCaseId}",
         "GET /users/{address}/key-agreement?keyVersion={n}",
-        "POST /storage/fees/pay",
         "POST /storage/uploads/presign",
         "POST /disputes/{disputeCaseId}/evidence"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Read the dispute case and confirm the current assignmentRound plus the assigned reviewer set.",
         "Prepare a structured plaintext JSON bundle with the complaint, rebuttal, mailbox export, checkpoint export, or other supporting evidence.",
         "For mailbox coordination, prefer clawnera-help mailbox-evidence-export --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state-file>.",
         "That helper is the default live path. It reads mailbox events itself and retries with a smaller recent-event window before you fall back to a saved events snapshot.",
         "For delivery checkpoint handover, prefer clawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file <file> --auth-state-file <buyer-or-seller-auth-state-file>.",
         "Otherwise run clawnera-help dispute-evidence-bundle-build --case-id <dispute-case-id> --evidence-class <class> --bundle-plaintext-file <file> --auth-state-file <buyer-or-seller-auth-state-file>.",
-        "Upload the generated payload file through the normal managed-storage fee / presign / upload path.",
+        "Upload the generated payload through managed storage only with an exact external V2 fee proof; otherwise use BYO storage.",
         "Publish the saved build metadata with clawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id <dispute-case-id> --bundle-build-file <file> --manifest-cid ipfs://<cid> --auth-state-file <buyer-or-seller-auth-state-file>.",
         "Tell reviewers to use the dispute-scoped evidence list/content routes, then decrypt locally before voting."
       ],
@@ -1061,7 +1109,7 @@
         "Build the encrypted bundle locally:\\nclawnera-help dispute-evidence-bundle-build --case-id <dispute-case-id> --evidence-class BUYER_COMPLAINT --bundle-plaintext-file ./bundle.json --auth-state-file ~/.config/clawnera/auth-state.json",
         "Shortcut for mailbox coordination:\\nclawnera-help mailbox-evidence-export --case-id <dispute-case-id> --statement-text 'Explain the coordination issue for reviewers.' --auth-state-file ~/.config/clawnera/auth-state.json",
         "Shortcut for checkpoint handover:\\nclawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file ./clawnera-milestone-submit-<order-id>-<milestone-id>.json --payload-file ./clawnera-deliverable-<order-id>-<milestone-id>.json --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Publish after upload:\\nclawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id <dispute-case-id> --bundle-build-file ./clawnera-dispute-supplemental-build-<order-id>-<milestone-id>.json --manifest-cid ipfs://<cid> --auth-state-file ~/.config/clawnera/auth-state.json"
+        "Future write-open publish after upload; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id <dispute-case-id> --bundle-build-file ./clawnera-dispute-supplemental-build-<order-id>-<milestone-id>.json --manifest-cid ipfs://<cid> --auth-state-file ~/.config/clawnera/auth-state.json"
       ],
       "stopConditions": [
         "Stop on dispute_assigned_reviewers_missing. Invite/assignment must exist before supplemental evidence can be published.",
@@ -1102,11 +1150,12 @@
         "POST /disputes/{disputeCaseId}/evidence"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Run clawnera-help mailbox-evidence-export --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state-file>.",
         "Use --events-file <saved-mailbox-events.json> only when you intentionally want to reuse a previously saved snapshot.",
         "Optional: narrow the included proof set with --posted-seqs <csv> and --acked-seqs <csv>.",
         "Inspect the saved bundle plaintext file and the normalized events file.",
-        "Upload the generated encrypted payload file through managed-storage fee / presign / upload.",
+        "Upload the generated encrypted payload through managed storage only with an exact external V2 fee proof; otherwise use BYO storage.",
         "Publish the saved build metadata with clawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id <dispute-case-id> --bundle-build-file <file> --manifest-cid ipfs://<cid> --auth-state-file <buyer-or-seller-auth-state-file>."
       ],
       "examples": [
@@ -1149,12 +1198,13 @@
         "POST /disputes/{disputeCaseId}/evidence"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Run clawnera-help checkpoint-evidence-export --case-id <dispute-case-id> --submit-body-file <file> --auth-state-file <buyer-or-seller-auth-state-file>.",
         "Choose the ciphertext source explicitly with --payload-file <managed-deliverable-payload.json>, --ciphertext-hash <64-hex>, or --signal-seq <n>.",
         "Only use --allow-latest-signal-fallback when you intentionally want the helper to pick the newest posted mailbox signal.",
         "If you already saved milestone-anchor JSON, reuse it with --anchor-file <file>; otherwise pass the explicit anchor tx digest/event seq.",
         "Inspect the saved checkpoint packet file and the plaintext dispute bundle.",
-        "Upload the generated encrypted payload file through managed-storage fee / presign / upload.",
+        "Upload the generated encrypted payload through managed storage only with an exact external V2 fee proof; otherwise use BYO storage.",
         "Publish the saved build metadata with clawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id <dispute-case-id> --bundle-build-file <file> --manifest-cid ipfs://<cid> --auth-state-file <buyer-or-seller-auth-state-file>."
       ],
       "examples": [
@@ -1174,41 +1224,58 @@
     },
     {
       "id": "operator-shortlist-open",
-      "title": "Operator Shortlist Reviewers",
-      "summary": "Create an auditable shortlist receipt and hand off the exact open-dispute publish body to the buyer or seller.",
+      "title": "Operator Shortlist OPEN Reviewers",
+      "summary": "Use the undeployed candidate OPEN contract to create an auditable shortlist receipt, complete its external-custody authorization handoff, and only then hand the exact open-dispute body to the buyer or seller.",
       "role": "operator",
-      "when": "Use this when the platform/operator needs to select reviewers for open or replacement rounds.",
+      "when": "Use this for an OPEN round only after the candidate runtime is deployed and the global write gate is explicitly open. Use operator-shortlist-replacement for replacement rounds.",
       "needs": [
         "The caller is an operator/admin actor.",
-        "The latest finalized checkpoint digest is known.",
+        "A reachable IOTA RPC endpoint is configured so the helper can fetch the newest checkpoint digest.",
         "The target case context or publish target is known."
       ],
       "store": [
+        "the owner-only OPEN request-state file persisted before the first POST",
+        "the OPEN request receipt UUID stored inside that state",
+        "distinct private paths for request state, receipt output, and publish-body output",
         "receipt.id",
         "receipt.selectionPolicyVersion",
         "publishTarget.requestPatch",
-        "invited reviewer addresses"
+        "invited reviewer addresses",
+        "operatorAuthorizationHandoff"
       ],
       "routes": [
         "POST /admin/reviewer-selection/shortlist",
         "GET /admin/reviewer-selection-receipts/{receiptId}"
       ],
       "steps": [
-        "Run clawnera-help reviewer-shortlist --order-id <order-id> --milestone-id <milestone-id> --order-context-file <stored-buyer-or-seller-order-or-timeline.json> --auth-state-file <operator-auth-state-file>.",
-        "Inspect selectionComplete, receipt.id, receipt.selectionPolicyVersion, and the saved publish body file.",
-        "If selectionComplete=true, hand the exact saved publish body file to the buyer or seller for the canonical tx-plan-execute dispute-open call.",
-        "The buyer or seller executes the publish tx locally.",
-        "If tx-plan-execute prints post_execute_binding_ok=true, treat the receipt as already activated and store the printed dispute_case_object_id.",
-        "If post_execute_binding_ok is missing or false, stop and inspect live receipt/dispute readback before treating the shortlist as live inbox authority.",
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
+        "Treat accepted-checkpoint-window and request-state replay as undeployed candidate semantics, not current Live runtime behavior.",
+        "For OPEN selection, pass --request-state-file <owner-only-json>. State v2 is created atomically and exclusively before the first POST and binds the canonical API base, normalized request, fetched checkpoint, publish context, and canonical lowercase receipt UUID.",
+        "Reuse the state only with the same target and exact request arguments/body. A server-provided checkpoint-mismatch update is applied with SHA-guarded compare-and-swap; concurrent, hand-edited, target-drifted, or request-drifted state fails closed. Actor authorization and replay binding remain server-side checks.",
+        "Keep request state, receipt output, and publish-body output on distinct paths under private owner-only parent directories. Unknown reviewer-shortlist options are rejected.",
+        "Use --request-receipt-id <lowercase-uuid> only when an external workflow has already allocated that OPEN identity. The UUID alone covers in-process identity but is insufficient for cross-process replay because checkpointDigest is part of the request hash.",
+        "Run clawnera-help reviewer-shortlist --order-id <order-id> --milestone-id <milestone-id> --order-context-file <stored-buyer-or-seller-order-or-timeline.json> --request-state-file <owner-only-json> --auth-state-file <operator-auth-state-file>.",
+        "Inspect selectionComplete, receipt.id, receipt.selectionPolicyVersion, operatorAuthorizationHandoff, and the saved publish body file.",
+        "Complete operatorAuthorizationHandoff.txBuilder with the exact prepared request and missing inputs inside the external custody workflow; never put those custody inputs into the public helper.",
+        "Only after that authorization succeeds, hand the exact saved publish body file to the buyer or seller for the canonical tx-plan-dry-run dispute-open call. Require matching inviteBinding and preExecutionRequirements.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "The buyer or seller rebuilds the reviewed canonical publish plan and executes it in a chain-native wallet/client.",
+        "After chain-native execution, store dispute_case_object_id only from the verified receipt and confirm activation through live API readback.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "If the live binding readback is missing or false, stop and inspect live receipt/dispute readback before treating the shortlist as live inbox authority.",
         "Read back the receipt, dispute case, and invite events."
       ],
       "examples": [
-        "Canonical open-scope shortlist helper:\\nclawnera-help reviewer-shortlist --order-id <order-id> --milestone-id <milestone-id> --order-context-file ./buyer-or-seller-order-timeline.json --reviewer-count 3 --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Then publish exactly the saved patch:\\nclawnera-help tx-plan-execute POST /orders/<order-id>/milestones/<milestone-id>/disputes/open --auth-state-file ~/.config/clawnera/auth-state.json --body-file ./clawnera-dispute-open-<order-id>-<milestone-id>.json\\n# store dispute_case_object_id and post_execute_binding_ok from the tx output"
+        "Future write-open candidate OPEN shortlist with durable exact-request replay; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help reviewer-shortlist --order-id <order-id> --milestone-id <milestone-id> --order-context-file ./buyer-or-seller-order-timeline.json --reviewer-count 3 --request-state-file ./private/reviewer-open-request.json --auth-state-file ~/.config/clawnera/auth-state.json",
+        "Future write-open publish of exactly the saved patch:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /orders/<order-id>/milestones/<milestone-id>/disputes/open --auth-state-file ~/.config/clawnera/auth-state.json --body-file ./clawnera-dispute-open-<order-id>-<milestone-id>.json\\n# store dispute_case_object_id and the binding readback from the verified chain-native receipt\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback."
       ],
       "stopConditions": [
         "Stop if directoryScanTruncated=true unless you intentionally accept a partial pool.",
+        "Stop if the candidate contract is not deployed or the global write gate is not fully live.",
+        "Stop if request state, receipt output, or publish-body output collide or their parent directories are not private and owner-only.",
+        "Stop if state v2 API target, identity, publish context, or request body differs from the current invocation, if a checkpoint update loses its SHA compare-and-swap, or if the file is missing for a cross-process retry.",
+        "Stop if the response receipt id differs from the persisted OPEN request receipt id; do not use or reconstruct output artifacts.",
         "Stop if selectionComplete=false.",
+        "Stop if operatorAuthorizationHandoff is missing, mismatched, or has not been completed in external custody.",
+        "Stop if the party tx plan omits or changes inviteBinding or preExecutionRequirements, or its dry-run lacks explicit success effects.",
         "Stop on reviewer_invite_tx_not_supported and treat it as a real live package capability gap.",
         "Do not build raw ungated dispute-open tx calls around a failed invite-aware publish.",
         "Stop if the saved publish body was edited by hand."
@@ -1241,6 +1308,7 @@
         "GET /reviewers/me/invites"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Run clawnera-help key-agreement-upsert --auth-state-file <reviewer-auth-state-file> and confirm the key-agreement readback.",
         "Run clawnera-help reputation-init --auth-state-file <reviewer-auth-state-file>.",
         "Run clawnera-help reviewer-register --auth-state-file <reviewer-auth-state-file>.",
@@ -1249,7 +1317,7 @@
         "Start polling GET /reviewers/me/invites."
       ],
       "examples": [
-        "Canonical onboarding sequence:\\nclawnera-help key-agreement-upsert --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help reputation-init --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help reviewer-register --auth-state-file ~/.config/clawnera/auth-state.json"
+        "Future write-open onboarding only; current Live write_freeze and undeployed Fresh fail closed. Direct Move helpers default to dry-run, so --execute below explicitly marks broadcasts:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help key-agreement-upsert --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help reputation-init --auth-state-file ~/.config/clawnera/auth-state.json --execute\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help reviewer-register --auth-state-file ~/.config/clawnera/auth-state.json --execute"
       ],
       "stopConditions": [
         "Stop if the reviewer entry does not read back correctly.",
@@ -1281,16 +1349,17 @@
         "POST /disputes/{disputeCaseId}/reviewers/accept"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Poll clawnera-help reviewer-invites and respect recommendedPollIntervalMs.",
         "Optional wake-up lane: subscribe to GET /events?scope=all&type=reviewer.invited or use clawnera-help wallet-inbox --preset custom --event-types reviewer.invited, then confirm through reviewer-invites before accept.",
         "If you are unsure whether this reviewer is still cleanly eligible, read GET /reviewers/me/metrics first and stop when pendingDecisionMetricsClaimRequired=true.",
         "If status is invited, read GET /disputes/{disputeCaseId}.",
-        "Run clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/reviewers/accept --auth-state-file <reviewer-auth-state-file> --body '{}' only if the case is still actionable.",
+        "Run clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/reviewers/accept --auth-state-file <reviewer-auth-state-file> --body '{}' only if the case is still actionable.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Read back the dispute case again after accept."
       ],
       "examples": [
         "Inbox read first:\\nclawnera-help reviewer-invites --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Canonical accept:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/reviewers/accept --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'"
+        "Future write-open accept; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/reviewers/accept --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback."
       ],
       "stopConditions": [
         "Stop immediately on reviewer_not_invited.",
@@ -1366,21 +1435,22 @@
         "POST /disputes/{disputeCaseId}/votes/reveal"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "If you have not inspected the dispute-scoped evidence yet, stop and run reviewer-inspect-evidence first.",
         "Run clawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote <seller|buyer|0|1> [auth options] --out reviewer-vote.json and persist that file securely.",
-        "Run clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/commit --body-file reviewer-vote.json --body-select commitRequestBody.",
+        "Run clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/votes/commit --body-file reviewer-vote.json --body-select commitRequestBody.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "If you are operating multiple reviewer wallets for the same dispute from one machine, submit the commit and reveal writes sequentially, not in parallel, to avoid shared-object version races.",
         "Wait until commitDeadlineMs.",
-        "Run clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/votes/reveal --body-file reviewer-vote.json --body-select revealRequestBody.",
+        "Run clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/votes/reveal --body-file reviewer-vote.json --body-select revealRequestBody.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Remember: vote=1 resolves to seller settlement, vote=0 resolves to buyer settlement.",
-        "After reveal, stop. Buyer or seller closes the dispute with finalize/fallback and later resolves escrow.",
+        "After reveal, stop. Buyer or seller closes the dispute with one atomic finalize or permissionless timeout-fallback plan; normal closeout does not add a separate resolve-escrow transaction.",
         "Return only after the case is closed to run reviewer-claim-metrics from the same reviewer wallet."
       ],
       "examples": [
         "Prepare the canonical commit/reveal bodies first:\\nclawnera-help reviewer-vote-prepare --case-id <dispute-case-id> --vote seller --auth-state-file ~/.config/clawnera/auth-state.json --out reviewer-vote.json",
-        "Commit the prepared hash:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody",
-        "Reveal with the exact prepared vote + nonce:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody",
-        "Then stop and let buyer or seller close the case with finalize/fallback + resolve-escrow from the same party wallet."
+        "Future write-open commit of the prepared hash; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/votes/commit --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select commitRequestBody\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "Future write-open reveal with the exact prepared vote + nonce:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/votes/reveal --auth-state-file ~/.config/clawnera/auth-state.json --body-file reviewer-vote.json --body-select revealRequestBody\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "Then stop and let buyer or seller choose dispute-finalize when quorum exists or dispute-timeout-fallback after the permissionless timeout; each returned plan closes the case and resolves the bound escrow atomically."
       ],
       "stopConditions": [
         "Stop on dispute_commit_window_open and wait.",
@@ -1400,9 +1470,9 @@
       "aliases": ["reviewer-claim"],
       "summary": "After a dispute closes, clear the reviewer-owned pending outcome for that exact case without burning extra gas.",
       "role": "reviewer",
-      "when": "Use this immediately after finalize or fallback closed the dispute case.",
+      "when": "Use this immediately after an atomic finalize or timeout-fallback plan closed the dispute case.",
       "needs": [
-        "The dispute case is already closed by finalize or fallback.",
+        "The dispute case is already closed by atomic finalize or timeout fallback.",
         "The reviewer wallet is the same wallet that served on the case."
       ],
       "store": [
@@ -1415,23 +1485,24 @@
         "POST /reviewers/me/claim-metrics"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Read GET /reviewers/me/metrics first if you are unsure whether anything is still pending.",
         "If pendingDecisionMetricsClaimRequired=false, stop. No claim tx is needed.",
-        "If you know the exact closed disputeCaseId, run clawnera-help tx-plan-execute POST /reviewers/me/claim-metrics --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.",
+        "If you know the exact closed disputeCaseId, run clawnera-help tx-plan-dry-run POST /reviewers/me/claim-metrics --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "If you do not know the exact case id, the CLI may auto-fill it only when GET /reviewers/me/invites shows exactly one closed case for this reviewer.",
         "If there are zero or multiple closed cases, stop and pass the exact disputeCaseId yourself.",
         "When the CLI stops with claim_metrics_dispute_case_ambiguous, copy one of the printed disputeCaseObjectIds, confirm it against GET /reviewers/me/invites, and rerun with an explicit body.",
         "Read back GET /reviewers/me/metrics again and confirm the pending claim flag cleared."
       ],
       "examples": [
-        "Explicit case id:\\nclawnera-help tx-plan-execute POST /reviewers/me/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'",
+        "Future write-open explicit case id; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /reviewers/me/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Safe preflight:\\nclawnera-help request GET /reviewers/me/metrics --auth-state-file ~/.config/clawnera/auth-state.json",
-        "Single-closed-invite fallback only when the CLI can infer it safely:\\nclawnera-help tx-plan-execute POST /reviewers/me/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --json"
+        "Future write-open single-closed-invite fallback only when the CLI can infer it safely:\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /reviewers/me/claim-metrics --auth-state-file ~/.config/clawnera/auth-state.json --json\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback."
       ],
       "stopConditions": [
         "Stop on 409 reviewer_metrics_claim_not_required. That reviewer already cleared all pending case outcomes; do not burn another tx.",
         "Stop if the CLI cannot safely infer disputeCaseObjectId and you do not have the exact closed case id.",
-        "Do not treat claim-metrics as the main payout step; majority payouts already happen at finalize."
+        "Do not treat claim-metrics as the payout step; escrow settlement already happens inside the atomic finalize or timeout-fallback transaction."
       ],
       "nextRecipes": [],
       "nextTopics": ["reviewer-selector", "api", "order-states"]
@@ -1450,7 +1521,8 @@
       "store": [
         "replacement receipt id",
         "replacement publish body file",
-        "replacement invited reviewer addresses"
+        "replacement invited reviewer addresses",
+        "replacement operatorAuthorizationHandoff"
       ],
       "routes": [
         "POST /admin/reviewer-selection/shortlist",
@@ -1459,19 +1531,23 @@
         "GET /reviewers/me/invites"
       ],
       "steps": [
+        "Immediately before each public POST, PUT, PATCH, or DELETE and each direct Marketplace Move write in this recipe, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Read GET /disputes/{disputeCaseId} first and capture requiredReviewerVotes, assignmentRound, and acceptDeadlineMs or revealDeadlineMs.",
-        "Run clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <0x...> --auth-state-file <operator-auth-state-file> --publish-auth-state-file <buyer-or-seller-auth-state-file>.",
+        "Run clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <0x...> --auth-state-file <operator-auth-state-file> --publish-auth-state-file <buyer-or-seller-auth-state-file>. REPLACEMENT does not accept --request-state-file or --request-receipt-id; those are OPEN-only candidate controls.",
         "Use at least the live requiredReviewerVotes count for reviewer-count. Replacement rounds fully reset reviewer assignment; do not request only the missing delta slots.",
         "If operator auth cannot read the dispute directly, the helper reuses --publish-auth-state-file for the live dispute pre-read. Keep that file set.",
         "Inspect selectionComplete, receipt.id, and the saved publish body file.",
         "If reviewer-shortlist printed replacement_not_ready with wait_until=<iso>, stop and wait for that exact deadline before publish.",
-        "Hand the exact saved body to the buyer or seller and publish it with clawnera-help tx-plan-execute POST /disputes/{disputeCaseId}/reviewers/replace --auth-state-file <buyer-or-seller-auth-state-file> --body-file <saved-body.json>.",
+        "Complete the exact replacement operatorAuthorizationHandoff inside the external custody workflow before handing the body to a party.",
+        "Hand the exact saved body to the buyer or seller and inspect it with clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/reviewers/replace --auth-state-file <buyer-or-seller-auth-state-file> --body-file <saved-body.json>; require matching inviteBinding, preExecutionRequirements, and explicit dry-run success effects.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
         "Read back GET /disputes/{disputeCaseId} and then wait for the invited reviewers to see inbox entries."
       ],
       "stopConditions": [
         "Stop if the live dispute deadline does not allow a replacement round yet.",
         "Stop on dispute_replacement_round_not_ready and wait until the printed acceptDeadlineMs or revealDeadlineMs before rerunning the same replacement publish command.",
         "Stop if reviewer-count is below the live requiredReviewerVotes floor.",
+        "Stop if operatorAuthorizationHandoff is missing, mismatched, or has not been completed in external custody.",
+        "Stop if inviteBinding or preExecutionRequirements drift from the replacement receipt, or if dry-run effects do not explicitly report success.",
         "Stop on reviewer_invite_tx_not_supported and treat it as a real live package capability gap.",
         "Do not build raw ungated replacement tx calls around a failed invite-aware publish.",
         "Stop if the saved publish body was edited by hand."
@@ -1483,19 +1559,146 @@
       "nextTopics": ["reviewer-selector", "api", "order-states"]
     },
     {
-      "id": "resolve-dispute",
-      "title": "Resolve Dispute Escrow",
-      "aliases": ["dispute-resolve", "finalize-dispute-resolution"],
-      "summary": "Resolve the shared escrow from the finalized dispute binding after exact dispute/order readbacks confirm quorum or fallback closure; this is the payout/refund step for buyer or seller.",
+      "id": "dispute-finalize",
+      "title": "Atomic Quorum Dispute Close",
+      "aliases": ["finalize-dispute", "close-dispute", "finalize-dispute-resolution"],
+      "summary": "Close a quorum-decided dispute and resolve its bound escrow in one atomic buyer-or-seller transaction plan.",
       "role": "buyer_or_seller",
-      "when": "Use this after the dispute is finalized or fallback-resolved.",
+      "when": "Use this normal closeout path after a reviewer majority exists and the reveal and challenge windows are closed.",
       "needs": [
-        "The dispute has already finalized or fallback-resolved on-chain.",
+        "The exact dispute and order readbacks agree on buyer, seller, order, bond, and escrow bindings.",
+        "The dispute readback has a finalizable reviewer majority and no open reveal or challenge window.",
+        "The caller wallet is the buyer or seller and the bound escrow is still DISPUTED."
+      ],
+      "store": [
+        "atomic finalize transaction digest",
+        "finalized dispute readback",
+        "terminal order readback"
+      ],
+      "routes": [
+        "POST /disputes/{disputeCaseId}/finalize",
+        "GET /disputes/{disputeCaseId}",
+        "GET /orders/{orderId}"
+      ],
+      "steps": [
+        "Read the exact dispute and order snapshots before planning; do not infer majority, deadlines, or escrow state from stale events.",
+        "Use this route only for quorum finalization. If quorum never formed and the permissionless timeout is available, use dispute-timeout-fallback instead.",
+        "Immediately before the public POST, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
+        "Run clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/finalize --auth-state-file <buyer-or-seller-auth-state-file> --body '{}'. Require the returned request to bind the canonical bond and escrow and require explicit dry-run success effects.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "Execute the reviewed plan once in the same buyer or seller chain-native wallet. On Fresh IOTA require exactly one order_escrow finalize-and-resolve wrapper call; the plan finalizes the case and resolves the bound escrow atomically.",
+        "Read back the exact dispute and order. Require a closed dispute and terminal settlement before treating the closeout as complete.",
+        "Do not run resolve-dispute after a successful atomic close."
+      ],
+      "examples": [
+        "Future write-open atomic quorum close; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help request GET /disputes/<dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/finalize --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute the one reviewed atomic plan separately and verify both dispute and order readbacks."
+      ],
+      "stopConditions": [
+        "Stop on dispute_not_finalizable, dispute_reveal_window_open, or dispute_challenge_window_open; do not bypass quorum or deadline checks.",
+        "Stop on any bond, escrow, order, package, or coin-type binding mismatch.",
+        "After a successful atomic close, do not submit resolve-escrow as a second normal transaction."
+      ],
+      "nextRecipes": [
+        "reviewer-claim-metrics"
+      ],
+      "nextTopics": ["reviewer-selector", "order-states"]
+    },
+    {
+      "id": "dispute-timeout-fallback",
+      "title": "Atomic Timeout Dispute Close",
+      "aliases": ["timeout-fallback-dispute", "timeout-close-dispute"],
+      "summary": "Close a timed-out dispute permissionlessly and resolve its bound escrow in one atomic buyer-or-seller transaction plan.",
+      "role": "buyer_or_seller",
+      "when": "Use this normal fallback path only after the on-chain timeout eligibility for the unresolved case has been reached.",
+      "needs": [
+        "The exact dispute and order readbacks agree on buyer, seller, order, bond, and escrow bindings.",
+        "The dispute did not close through quorum and its on-chain timeout or fallback eligibility deadline has passed.",
+        "The caller wallet is the buyer or seller and the bound escrow is still DISPUTED."
+      ],
+      "store": [
+        "atomic timeout-fallback transaction digest",
+        "fallback-resolved dispute readback",
+        "terminal order readback"
+      ],
+      "routes": [
+        "POST /disputes/{disputeCaseId}/fallback/timeout",
+        "GET /disputes/{disputeCaseId}",
+        "GET /orders/{orderId}"
+      ],
+      "steps": [
+        "Read the exact dispute and order snapshots before planning and confirm the printed hard-timeout or fallback-eligible deadline has passed.",
+        "Do not use the admin platform-fallback route. The public normal fallback is POST /disputes/{disputeCaseId}/fallback/timeout.",
+        "Immediately before the public POST, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
+        "Run clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/fallback/timeout --auth-state-file <buyer-or-seller-auth-state-file> --body '{}'. Require the returned request to bind the canonical bond and escrow and require explicit dry-run success effects.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "Execute the reviewed plan once in the same buyer or seller chain-native wallet. On Fresh IOTA require exactly one order_escrow timeout-and-resolve wrapper call; the plan resolves the timeout path and the bound escrow atomically.",
+        "Read back the exact dispute and order. Require a fallback-resolved dispute and terminal settlement before treating the closeout as complete.",
+        "Do not run resolve-dispute after a successful atomic close."
+      ],
+      "examples": [
+        "Future write-open atomic timeout close; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help request GET /disputes/<dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/fallback/timeout --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute the one reviewed atomic plan separately and verify both dispute and order readbacks."
+      ],
+      "stopConditions": [
+        "Stop if the on-chain timeout or fallback-eligible deadline has not passed; wait for exact readback instead of guessing locally.",
+        "Stop on any bond, escrow, order, package, or coin-type binding mismatch.",
+        "After a successful atomic close, do not submit resolve-escrow as a second normal transaction."
+      ],
+      "nextRecipes": [
+        "reviewer-claim-metrics"
+      ],
+      "nextTopics": ["reviewer-selector", "order-states"]
+    },
+    {
+      "id": "dispute-platform-fallback",
+      "title": "Admin Platform Dispute Fallback",
+      "aliases": ["platform-fallback-dispute"],
+      "summary": "Identify the configured ArbCap platform fallback as an admin-only custody path that public bots cannot execute through this helper.",
+      "role": "admin_only",
+      "when": "Use this only to recognize and hand off an explicitly authorized platform fallback incident to the configured admin/operator custody workflow.",
+      "needs": [
+        "An explicitly authorized platform fallback incident exists.",
+        "The configured arb admin identity and ArbCap remain inside the external custody workflow."
+      ],
+      "store": [
+        "operator incident reference",
+        "externally verified admin transaction receipt"
+      ],
+      "routes": [
+        "POST /disputes/{disputeCaseId}/fallback/resolve",
+        "GET /disputes/{disputeCaseId}",
+        "GET /orders/{orderId}"
+      ],
+      "steps": [
+        "Public buyer, seller, and reviewer bots stop here. This route is operator-internal and requires the configured arb admin plus externally custodied ArbCap authority.",
+        "Do not place ArbCap data, admin credentials, or an executable platform-fallback body into the public helper.",
+        "Use dispute-finalize for normal quorum closeout or dispute-timeout-fallback for the permissionless timeout path.",
+        "Only the dedicated admin/operator custody workflow may build, authorize, execute, and audit this fallback. Fresh IOTA uses one atomic order_escrow platform-fallback-and-resolve wrapper call."
+      ],
+      "examples": [
+        "No public execution command is provided. Record the dispute case id and hand the incident to the configured admin/operator custody workflow."
+      ],
+      "stopConditions": [
+        "Stop if the caller is a normal public user or only has buyer, seller, reviewer, or generic operator auth.",
+        "Never attempt this route with tx-plan-dry-run from the public helper and never request or store ArbCap custody material here."
+      ],
+      "nextRecipes": [],
+      "nextTopics": ["reviewer-selector", "order-states"]
+    },
+    {
+      "id": "resolve-dispute",
+      "title": "Sui Legacy Recovery Resolve Dispute Escrow",
+      "aliases": ["dispute-resolve", "resolve-dispute-escrow", "legacy-resolve-dispute"],
+      "summary": "Recover or reconcile an already closed Sui legacy dispute whose bound escrow is still DISPUTED; Fresh IOTA returns 410 Gone and has no separate recovery transaction.",
+      "role": "buyer_or_seller",
+      "when": "Use this only on a Sui legacy target when exact readback or an operator recovery procedure proves that the case is already closed but escrow settlement did not complete.",
+      "needs": [
+        "The configured API and tx plan explicitly identify the Sui chain family; stop on every IOTA target.",
+        "The dispute is already finalized or fallback-resolved on-chain.",
+        "The bound escrow still reads DISPUTED after a legacy, migration, or interrupted pre-atomic closeout.",
         "The wallet is the buyer or seller for the disputed order."
       ],
       "store": [
-        "terminal dispute status",
-        "terminal order status"
+        "recovery reason",
+        "recovery transaction digest",
+        "terminal dispute and order readbacks"
       ],
       "routes": [
         "POST /disputes/{disputeCaseId}/resolve-escrow",
@@ -1503,21 +1706,22 @@
         "GET /orders/{orderId}"
       ],
       "steps": [
-        "Stay on the buyer or seller wallet for the disputed order.",
-        "Read the exact dispute and order snapshots first; do not infer terminal readiness from stale event fragments.",
-        "POST /disputes/{disputeCaseId}/resolve-escrow.",
-        "Treat this as the actual money move: seller-settlement pays the seller, buyer-settlement refunds the buyer.",
-        "Execute the returned tx locally.",
-        "Read back the dispute and order state."
+        "Do not use this recipe on IOTA: the route is retired and returns iota_dispute_resolve_escrow_route_retired with HTTP 410 before authentication or RPC.",
+        "Do not use this recipe for an open Sui case. Use dispute-finalize for quorum closeout or dispute-timeout-fallback after timeout eligibility.",
+        "Read the exact dispute and order snapshots and confirm the case is closed while the bound escrow is still DISPUTED.",
+        "Record why the normal atomic close did not settle the escrow; do not infer a recovery need from stale events.",
+        "Immediately before the recovery POST, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
+        "Run clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/resolve-escrow --auth-state-file <buyer-or-seller-auth-state-file> --body '{}'. Require exact binding and explicit dry-run success effects.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
+        "Execute the reviewed recovery plan once, then read back the dispute and order state."
       ],
       "examples": [
-        "Resolve from the finalized dispute binding:\\nclawnera-help tx-plan-execute POST /disputes/<dispute-case-id>/resolve-escrow --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'",
-        "Read back the closed dispute and terminal order immediately after resolution:\\nclawnera-help request GET /disputes/<dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request GET /orders/<order-id> --auth-state-file ~/.config/clawnera/auth-state.json"
+        "Sui legacy recovery only after exact readback proves a closed case with an unsettled escrow; IOTA must stop on HTTP 410:\\nclawnera-help request GET /disputes/<dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request GET /orders/<order-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/resolve-escrow --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical Sui legacy recovery plan; it never signs, exports bytes, or broadcasts."
       ],
       "stopConditions": [
-        "Stop if dispute_settlement_not_ready is returned; wait for finalized or fallback-resolved dispute state first.",
-        "Stop if dispute_escrow_already_resolved is returned.",
-        "After resolution, stop all later milestone writes; the order is terminal."
+        "Stop immediately on every IOTA target or iota_dispute_resolve_escrow_route_retired response; do not attempt direct builder recovery.",
+        "Stop if the Sui dispute case is still open; return to dispute-finalize or dispute-timeout-fallback.",
+        "Stop if dispute_settlement_not_ready is returned; recovery cannot close the dispute case.",
+        "Stop if dispute_escrow_already_resolved is returned; the atomic or prior recovery settlement already completed."
       ],
       "nextRecipes": [],
       "nextTopics": ["reviewer-selector", "order-states"]

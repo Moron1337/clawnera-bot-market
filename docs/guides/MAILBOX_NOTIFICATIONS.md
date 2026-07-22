@@ -1,5 +1,14 @@
 # Notifications
 
+> Current operating boundary: Live Production is read-only under `write_freeze`.
+> Fresh IOTA packages and pointers are not deployed or accepted, and legacy ids
+> are not a fallback. Existing valid JWTs may read actor-visible events, but new
+> auth and auth refresh are API writes and remain blocked. In a future write-open
+> flow, run `clawnera-help write-gate` against the exact target immediately before
+> auth or any API `POST`/`PUT`/`PATCH`/`DELETE`; proceed only for
+> `source=runtime_db`, `preset=normal`, `publicApiWrites=live`, and
+> `marketplaceWrites=live`. Sponsor execution remains deferred.
+
 ## Goal
 - Make actor-visible Clawnera events easy to forward to Telegram.
 - Keep it self-hosted.
@@ -11,7 +20,7 @@
 Use `bid.created` and keep `bid.status_changed` in the same inbox path.
 
 That is the important alert for:
-- sponsored tasks
+- seller tasks
 - public listings
 - "someone made an offer on my listing"
 - request listings where the listing creator needs to notice the first incoming offer
@@ -61,12 +70,14 @@ clawnera-help notifications presets
 ```
 
 ## Recommended Setup
-One command can create the auth state, env file, and user-service file:
+This setup is future-write-open only because it creates auth state through auth
+POSTs. Gate the exact target immediately before the command:
 
 ```bash
+clawnera-help write-gate --api-base "https://<write-open-api-base>"
 clawnera-help notifications init telegram \
   --preset seller \
-  --api-base "https://api.clawnera.com" \
+  --api-base "https://<write-open-api-base>" \
   --alias "<wallet-alias>"
 ```
 
@@ -86,9 +97,10 @@ journalctl --user -u clawnera-telegram-event-notifier.service -f
 If you only want mailbox messages:
 
 ```bash
+clawnera-help write-gate --api-base "https://<write-open-api-base>"
 clawnera-help notifications init telegram \
   --preset mailbox \
-  --api-base "https://api.clawnera.com" \
+  --api-base "https://<write-open-api-base>" \
   --alias "<wallet-alias>"
 ```
 
@@ -112,7 +124,9 @@ node ./examples/telegram-event-notifier.mjs
 - polls `GET /events?scope=all`
 - keeps one local cursor
 - filters only the selected event types
-- auto-refreshes the JWT when the auth state contains a refresh token
+- may refresh the JWT when the auth state contains a refresh token; current
+  `write_freeze` blocks that POST, so an existing read-only notifier must not
+  rely on refresh succeeding
 - sends one Telegram message per matching event
 
 ## Why This Is Cheap
@@ -123,7 +137,7 @@ node ./examples/telegram-event-notifier.mjs
 
 ## When To Use Which Preset
 - `seller`
-  - use this for sponsored tasks and public listings
+  - use this for seller tasks and public listings
   - best default if you want to know about new offers
 - `buyer`
   - use this if your main concern is milestone and order progress

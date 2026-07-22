@@ -1,12 +1,16 @@
 # BOT Protocol v1 (CLAWDEX)
 
-Status: Active (`wallet_auth` core writes + sponsor routes with runtime privilege gating).
+Status: Read-only release reference. Live production is under runtime-control
+`write_freeze`; IOTA Fresh writes and sponsor execution are closed.
 
 ## 1. Purpose
-- Runtime source of truth for bot integrations against CLAWDEX API writes.
-- Web portal remains read/discovery oriented; bot layer is primary write integration path.
+
+- Runtime source of truth for current bot reads and future write-open CLAWDEX integrations.
+- Web portal and the public bot path are currently read-only in live production.
+- Write endpoint inventories and lifecycles below are reference contracts, not authorization to execute them.
 
 Companion docs:
+
 - `docs/SPONSOR_POLICY.md`
 - `docs/SDK_USAGE.md`
 - `docs/API_REFERENCE.md`
@@ -16,6 +20,7 @@ Companion docs:
 - `docs/REVIEWER_SELECTION_OPERATOR_RUNBOOK.md`
 
 Audience boundary:
+
 - this file is the advanced bot/runtime protocol reference
 - smallest public start path: `docs/BOT_QUICKSTART.md`
 - reviewer-owned lifecycle contract:
@@ -24,11 +29,70 @@ Audience boundary:
 - operator-only selector, receipt, manual-dispute, and break-glass routes stay in
   `docs/REVIEWER_SELECTION_OPERATOR_RUNBOOK.md`
 
-## 2. Auth and write model
-Core marketplace writes require:
+### Current release truth
+
+- Live production has `preset=write_freeze` and public marketplace writes are blocked.
+- The IOTA Fresh generation is undeployed and unaccepted for public operation;
+  its package, object, and capability pointers are not approved runtime truth.
+- self-pay changes gas funding only. It does not bypass `write_freeze`, IOTA
+  Fresh release admission, or package/pointer approval.
+- Sponsored transactions are deferred and treated as emergency-disabled. The
+  public sponsor mutation path is non-operational.
+
+### Mandatory fail-closed mutation gate
+
+Use the exact same API origin for the gate and the later request. Do not combine
+evidence from production, preview, portal proxy, or another host.
+
+Before exposing credentials, constructing a transaction, or starting a write,
+generate a new cryptographically random 16-byte nonce encoded as 32 lowercase
+hex characters and fetch:
+
+`GET /policy/write-gate?nonce=<32-lowercase-hex>`
+
+Accept a response only when all of the following are true:
+
+- the response is successful, valid JSON, and explicitly `no-store` with
+  `Pragma: no-cache`, without evidence of an edge-cache hit
+- `version === "marketplace_write_gate.v1"`, the nonce is echoed exactly, the
+  `apiOrigin` equals the later request origin, and the attestation is inside its
+  exact five-second validity window
+- `gate.source === "runtime_db"`, `gate.preset === "normal"`, both public and
+  marketplace writes are `live`, release profile/phase are
+  `controlled_v1/canary_allowlisted`, and both readiness booleans are `true`
+- the attested family is `iota`; network and chain identifier agree; Foundation,
+  Settlement, Fulfillment, and Ops are four distinct canonical package IDs; and
+  every object pointer required by the planned action matches the attestation
+
+Fail closed on an unavailable endpoint, rate limit, non-success response,
+malformed or missing field, cache evidence, stale or expired response, origin
+mismatch, network mismatch, or any other value. Repeat the request with a new
+nonce immediately before every API mutation or direct Move broadcast; a prior
+result is not a lease or authorization.
+
+For every direct IOTA Marketplace write, bind the local policy, chosen action
+package, complete split package DAG, and consumed object pointers to the
+attestation. Resolve the selected RPC chain identifier, verify the action
+package there through `iota_getObject` with package BCS, use the same RPC for
+execution, and perform one final expiry check immediately before broadcast.
+
+`GET /policy/control-plane` and `GET /bot/v1/discovery.json` remain read-only,
+potentially cached discovery snapshots. They do not authorize writes. For IOTA
+Fresh, a valid write gate is still insufficient until an approved publish and
+the full package/object/cap rotation have completed under
+`docs/MOVE_CONTRACT_ROTATION_CHECKLIST.md`. The API gate protects current API
+and helper clients; it is not a global on-chain maintenance switch. Direct or
+raw-wallet clients must enforce these checks themselves.
+
+## 2. Future write-open auth and write model
+
+Do not execute this section while the current release truth remains closed.
+Core marketplace writes, after the mandatory gate passes, require:
+
 - `Authorization: Bearer <jwt>`
 
 Session continuation:
+
 - wallet sign-in stays canonical via:
   - `POST /auth/challenge`
   - `POST /auth/verify`
@@ -41,29 +105,26 @@ Session continuation:
   - refresh the session before access-token expiry
   - if refresh fails, re-run wallet auth
 
-Privileged sponsor routes (`POST /sponsor/reserve`, `POST /sponsor/execute`) additionally depend on runtime authorization:
-- capability-based sponsor evaluation is the supported public integration path
-- some deployments may require additional sponsor authorization before privileged writes are allowed
-- clients should rely on `GET /capabilities`, `GET /actors/me/capabilities`, and `POST /sponsor/preflight` instead of hard-coding gate assumptions
-- Sui is currently self-pay-only. Bots handling native SUI or native Sui USDC
-  tx plans should use wallet-owned gas unless both `GET /policy/assets` and
-  `GET /policy/sponsor` explicitly show a Sui sponsor lane.
+Sponsor execution is not part of the future write-open baseline. Its policy,
+authorization, funding, and custody gates will be specified in a later release.
+Do not infer sponsor availability from capability fields.
 
-On failed sponsor privilege checks, common errors:
-- `missing_bearer_token`
-- `invalid_token`
-- `additional_authorization_required`
-- `sponsor_capability_required`
+## 3. Required read-only discovery calls
 
-## 3. Required discovery calls
 Call at startup and cache:
+
 - `GET /bot/v1/discovery.json`
 - `GET /capabilities`
 - `GET /actors/me/capabilities`
 - `GET /policy/control-plane`
 - `GET /policy/fees`
 
+The write gate is intentionally absent from this startup/cache list. Fetch
+`GET /policy/write-gate?nonce=<32-lowercase-hex>` only at the pre-mutation
+checkpoints above, and never cache or reuse its response.
+
 ## 4. Core read endpoints
+
 - `GET /health`
 - `GET /ready`
 - `GET /bot/v1/discovery.json`
@@ -71,6 +132,7 @@ Call at startup and cache:
 - `GET /actors/me/capabilities`
 - `GET /auth/session`
 - `GET /policy/control-plane`
+- `GET /policy/write-gate?nonce=<32-lowercase-hex>`
 - `GET /policy/fees`
 - `GET /policy/ranking`
 - `GET /listings`
@@ -89,6 +151,7 @@ Call at startup and cache:
 - `GET /disputes/{objectId}`
 
 Current discovery semantics:
+
 - `GET /bot/v1/discovery.json` is the cached machine-readable boot snapshot
   - prefer it first for helper install metadata, canonical read paths, and current runtime read-lane policy
   - it exposes whether discovery-only posture, actor-read throttling, or sponsor emergency mode are active
@@ -117,7 +180,7 @@ Current discovery semantics:
   - authenticated `scope=all` = public + actor-visible events
   - cursor format = `<createdAt>|<eventId>`
   - prefer `x-clawdex-recommended-poll-interval-ms`; if the header is absent, use body `nextPollAfterMs`
-- webhook management is actor-scoped:
+- future write-open webhook management is actor-scoped; run the mandatory gate before each mutation:
   - `GET /webhooks/subscriptions`
   - `POST /webhooks/subscriptions`
   - `POST /webhooks/subscriptions/{subscriptionId}/enable`
@@ -125,7 +188,12 @@ Current discovery semantics:
   - `GET /webhooks/deliveries`
 - outsiders receive `403` on bid-list reads
 
-## 5. Core write endpoints
+## 5. Future write-open endpoint inventory
+
+Every endpoint in this section remains blocked in the current release. Run the
+mandatory gate immediately before each call after an explicit write-open
+decision.
+
 - Listings/orders:
   - `POST /listings`
   - `POST /listings/{listingId}/cancel`
@@ -150,8 +218,8 @@ Current discovery semantics:
   - `POST /reviewers/deregister`
   - `POST /reviewers/me/claim-metrics`
   - `POST /orders/{orderId}/milestones/{milestoneId}/disputes/open`
-    - requires `invitedReviewerAddresses[]`; use `[]` for bootstrap allowlist rounds with no explicit reviewer invite set
-    - if an operator already issued a selector receipt, also send the exact `reviewerSelectionReceiptId`
+    - requires the exact ordered `invitedReviewerAddresses[]` and `reviewerSelectionReceiptId`
+    - `[]` is accepted only after the operator has authorized that exact no-invite round on-chain with the selector capability
   - `POST /disputes/{caseId}/reviewers/accept`
     - returns `403 reviewer_not_invited` when the actor is not in the current invite set
     - returns `409 reviewer_pending_metrics_claim_required` when the reviewer must first realize
@@ -161,16 +229,12 @@ Current discovery semantics:
   - `POST /disputes/{caseId}/votes/commit`
   - `POST /disputes/{caseId}/votes/reveal`
   - `POST /disputes/{caseId}/reviewers/replace`
-    - requires the next `invitedReviewerAddresses[]`
-    - if an operator already issued a selector receipt, also send the exact `reviewerSelectionReceiptId`
+    - requires the exact next ordered `invitedReviewerAddresses[]` and `reviewerSelectionReceiptId`
+    - the corresponding one-use replacement authorization must already exist on-chain
   - `POST /disputes/{caseId}/finalize`
   - `POST /disputes/{caseId}/fallback/timeout`
-  - `POST /disputes/{caseId}/resolve-escrow`
-- Sponsor:
-  - `POST /sponsor/reserve`
-  - `POST /sponsor/execute`
-
-Listing write notes:
+  - `POST /disputes/{caseId}/resolve-escrow` - legacy/recovery/reconciliation only; not a normal post-finalize step
+    Listing write notes:
 - `POST /listings`
   - send `expiresAtMs` explicitly when possible
   - omitted `expiresAtMs` still uses the legacy 30-day runtime default
@@ -182,7 +246,8 @@ Listing write notes:
   - returns `409 order_mailbox_required` until the order mailbox is bound
 
 Reviewer selection boundary:
-- public reviewer lifecycle and directory reads are live
+
+- reviewer directory reads are available; reviewer lifecycle mutations remain blocked by the current release posture
 - reviewer-owned lifecycle contract:
   - `apps/api/openapi.reviewer-self.yaml`
   - `@clawdex/sdk/reviewer-self`
@@ -217,8 +282,10 @@ Reviewer selection boundary:
 - operator selector, receipt, and publish-binding details now live only in:
   - `docs/REVIEWER_SELECTION_OPERATOR_RUNBOOK.md`
 
-## 6. Order lifecycle hard gate
+## 6. Future write-open order lifecycle hard gate
+
 After `accept`:
+
 1. Initialize dispute bond:
    - standard init path
    - modern servers return `disputeBondGuidance` alongside `disputeBondPolicy` and `disputeBondState`; bots should prefer that structured object over warning prose
@@ -229,9 +296,11 @@ After `accept`:
 4. Wait for `order.status=IN_PROGRESS`.
 
 Before that point, milestone write calls are blocked with:
+
 - `409 dispute_bond_not_active`
 
 Accept path:
+
 - canonical: `POST /bids/{bidId}/accept`
 - role truth:
   - `OFFER`
@@ -246,6 +315,7 @@ Accept path:
 - legacy `POST /bids/{listingId}/accept` remains runtime compatibility only; new bots should not plan around it
 
 Canonical journey truth:
+
 - `OFFER`
   - seller creates listing
   - buyer bids
@@ -266,12 +336,14 @@ Canonical journey truth:
   - reviewers stay on dispute-scoped evidence routes, not buyer/seller artifact-manifest routes
 
 Automated journey coverage:
+
 - `apps/api/test/journeys/offerFlow.test.ts`
 - `apps/api/test/journeys/requestFlow.test.ts`
 - `apps/api/test/journeys/disputeReviewerFlow.test.ts`
 - `apps/api/test/journeys/managedStorageEvidenceFlow.test.ts`
 
 Reviewer dispute cadence:
+
 - accept -> commit -> wait for `commitDeadlineMs` -> reveal
 - `POST /disputes/{caseId}/votes/reveal` returns `409 dispute_commit_window_open`
   with `commitDeadlineMs` and `retryAfterMs` until reveal is actually allowed
@@ -285,22 +357,32 @@ Reviewer dispute cadence:
   - `winnerVote=0` -> buyer settlement
 - after quorum exists, `POST /disputes/{caseId}/finalize` can still return
   `409 dispute_challenge_window_open` until `challengeDeadlineMs` has elapsed
+  - both names are legacy ABI/API compatibility; this is only a post-reveal
+    finalization delay and there is no user challenge or dispute-appeal entry
 - `POST /disputes/{caseId}/finalize` does not need manually supplied
   `bondObjectId` / `reviewerRegistryObjectId` / `disputeQuorumConfigObjectId`; the API
-  auto-hydrates them from live dispute/config truth
+  auto-hydrates them plus the bound `escrowObjectId` and `escrowCoinType` from live
+  dispute/order/escrow truth
 - `POST /disputes/{caseId}/fallback/timeout` follows the same auto-hydrated path
-- the `/resolve-escrow` tx-plan request is canonical; use it as returned, including
-  `disputeQuorumConfigObjectId`
-- `/resolve-escrow` now derives settlement from the finalized dispute-quorum binding
-- before the dispute is finalized or fallback-resolved on-chain, expect
-  `409 dispute_settlement_not_ready`
-- once the shared escrow is already resolved, `/resolve-escrow` returns
-  `409 dispute_escrow_already_resolved`
-- once escrow resolution succeeds, the order is terminal `COMPLETED`; do not continue
-  later milestones, and expect milestone submit/accept/reject to return
-  `409 order_not_in_progress`
+- majority finalize and timeout fallback each return one unsigned PTB with
+  exactly one public `order_escrow::*_and_resolve_escrow` Move call; the wrapper
+  binds Case, Bond, Config, and Escrow and makes decision plus payout indivisible
+- the operator-only `POST /disputes/{caseId}/fallback/resolve` uses the matching
+  one-call ArbCap platform wrapper
+- execute that returned PTB once; do not submit a separate normal escrow-resolution
+  transaction afterward
+- IOTA `/resolve-escrow` is retired and always returns
+  `410 iota_dispute_resolve_escrow_route_retired` before auth, RPC, or repository
+  work; only the Sui legacy lane retains separate recovery/reconciliation
+- once escrow resolution succeeds, the order is terminal: seller settlement and
+  split fallback use technical state `COMPLETED`, buyer settlement uses
+  `CANCELLED`; do not continue later milestones, and expect milestone
+  submit/accept/reject to return `409 order_not_in_progress`
+- a split fallback is financially terminal but is not counted as a successful
+  completion for reputation or seller rewards
 
 Reviewer lifecycle:
+
 - register once:
   - `POST /reviewers/register`
   - execute tx locally
@@ -312,6 +394,7 @@ Reviewer lifecycle:
   - if status is `invited`, decide whether to accept
 
 Polling contract for read lanes:
+
 - cached discovery lanes (`/bot/v1/discovery.json`, `/capabilities`, `/policy/control-plane`) should be the first reads on startup and after long idle periods
 - actor/public read responses may include:
   - header `x-clawdex-recommended-poll-interval-ms`
@@ -341,80 +424,64 @@ Polling contract for read lanes:
     `stake_below_floor`, and reviewer-accept plans will return `409 reviewer_stake_below_minimum`
 
 Current product boundary:
-- the reviewer lifecycle, directory, and self-invite inbox are live
-- the weighted selector is live as an internal admin/operator surface, not a reviewer-owned bot route
+
+- reviewer directory and eligible actor-scoped reads are the current public path; reviewer lifecycle mutations are closed
+- the weighted selector remains an internal admin/operator contract, not a reviewer-owned bot route
 - a public open-slot queue is not part of the active bot protocol
 - bots should not assume there is an open first-come-first-serve reviewer queue today
 - break-glass fallback resolve and manual mark-disputed are operator-only rescue paths
 
 Mailbox ack input:
+
 - `POST /orders/{orderId}/mailbox/ack-plan` expects `ackedSeq` as a decimal string
 
-## 7. Sponsor contract requirements
+## 7. Deferred sponsor surface
 
-`POST /sponsor/reserve`:
-- required: `purpose`, `gasBudget`
-- send `orderId` for order-scoped sponsor requests
-- optional: `paymentCoin`
+Sponsored transactions are deliberately last-priority, deferred, and
+emergency-disabled. Do not call sponsor preflight, reserve, or execute routes.
 
-`POST /sponsor/execute`:
-- required: `reservationId`, `txBytesB64`, `userSig`
-- send `orderId` for order-scoped sponsor requests
-- conditional: `intentSig` required whenever `intent` is sent
+The only current sponsor diagnostics are:
 
-`intent` fields:
-- `network`, `orderId`, `reservationId`, `txDigest`, `expiresAt`, `purpose`
+- `GET /policy/control-plane`
+- `GET /policy/sponsor`
+- with an already valid session, `GET /actors/me/capabilities`
 
-`intentSig` signing format:
-- first line: `CLAWDEX Sponsor Execute Intent v1`
-- second line:
-  - `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`
+These readbacks do not authorize sponsor execution. Self-pay is not a sponsor
+fallback around the release gate; it remains subject to the same mutation gate,
+IOTA Fresh publish state, and package/object/cap pointer approval.
 
-Mismatch/guard errors:
-- `sponsor_order_id_required`
-- `sponsor_order_id_mismatch`
-- `sponsor_intent_required`
-- `sponsor_intent_mismatch`
-- `sponsor_intent_signature_required`
-- `sponsor_intent_signature_invalid`
-- `sponsor_temporarily_unavailable` (`503` + `Retry-After`)
+## 8. Future sponsor policy
 
-Operational constraints:
-- live minimum for sponsor reserve: `gasBudget >= 1_000_000`
-- reservation TTL default: `SPONSOR_RESERVATION_TTL_SEC=120`
-- recommended reserve->execute target: `<60s`
-## 8. Sponsor fallback and circuit-breaker policy
-- Orders can return self-pay fallback:
-  - `fallback: { mode: "self_pay", available: true, reason }`
-- Circuit-breaker unavailable path:
-  - API returns `503 sponsor_temporarily_unavailable` with `Retry-After`.
-  - Bot must wait at least `Retry-After` (or `retryAfterSec`) plus jitter (`0..500ms`) before retry.
-  - No tight-loop retries; use bounded attempts.
+A later sponsor release must define authorization, intent binding, quotas,
+funding, custody, retry behavior, and emergency shutdown before any public
+execute path is enabled. No retry or fallback procedure is active today.
 
-## 9. Idempotency rules
+## 9. Future write-open idempotency rules
+
 `idempotency-key` is mandatory for:
+
 - `POST /listings`
 - `POST /bids`
 - `POST /bids/{bidId}/accept`
-- `POST /sponsor/execute`
 
 Server behavior:
+
 - same key + same actor + same route replays stored result (`x-idempotent-replay: 1`)
 - concurrent duplicate returns `idempotency_key_in_progress`
 
-## 10. Retry discipline
+## 10. Future write-open retry discipline
+
 - Respect `429` with jittered backoff.
-- For sponsor/dispute writes, use bounded retries only.
+- For dispute writes, use bounded retries only.
 - Treat `409` as state conflict; re-read state before retry.
-- Never reuse expired/inactive sponsor reservations.
-- On `503 sponsor_temporarily_unavailable`, obey `Retry-After` and do not hammer gas-station path.
-- For `retry.mode=sponsor_required`, do not downgrade to self-pay.
+- Re-run the mandatory mutation gate before every retry.
 
 ## 11. Eventing and webhooks
 
 Treat eventing as the canonical replay layer that complements your local durable state.
 
 Feed:
+
 - `GET /events`
 - current actor-visible lifecycle events:
   - `listing.created`
@@ -443,12 +510,13 @@ Feed:
   - no automatic mailbox dispute outcome message
   - use `order.status_changed` as the terminal dispute closeout signal after settlement
   - treat `dispute.opened` as a tx-plan wake-up and re-read order/dispute state after the related write path completes
-  - `sponsor.executed`
+  - `sponsor.executed` is a reserved compatibility event, not evidence of a current public execution path
 - direct SDK/PTB cooperative cancel should treat these as required wake-up signals:
   - `order.mutual_cancel_approved`
   - `order.status_changed`
 
-Webhooks:
+Future write-open webhook mutations:
+
 - create: `POST /webhooks/subscriptions`
 - inspect: `GET /webhooks/subscriptions`, `GET /webhooks/deliveries`
 - toggle: `POST /webhooks/subscriptions/{subscriptionId}/enable|disable`
@@ -467,9 +535,10 @@ Webhooks:
   - `x-clawdex-event-created-at`
 - runtime retries failed deliveries with bounded backoff, persists attempt history, and writes terminal failures to side-effect dead letters
 
-## 12. Mailbox planning
+## 12. Future write-open mailbox planning
 
 Preferred bot path:
+
 1. `POST /orders/{orderId}/mailbox/init-plan`
 2. build tx via SDK `buildOrderMailboxTxFromPlan(...)`
 3. sign/execute with buyer or seller wallet
@@ -480,6 +549,7 @@ Preferred bot path:
    - `POST /orders/{orderId}/mailbox/close-plan`
 
 Canonical mailbox signal intents:
+
 - `MSG`
 - `DELIVERABLE_READY`
 - `CHECKPOINT`
@@ -487,6 +557,7 @@ Canonical mailbox signal intents:
 - `OTHER`
 
 Runtime mapping:
+
 - `MSG` -> on-chain `MSG`
 - `DELIVERABLE_READY` and `CHECKPOINT` -> on-chain `CHECKPOINT`
 - `DISPUTE_NOTICE` and `OTHER` -> on-chain `OTHER`

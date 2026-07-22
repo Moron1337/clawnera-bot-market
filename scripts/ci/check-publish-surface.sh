@@ -16,13 +16,34 @@ const fs = require("node:fs");
 const payloadPath = process.argv[2];
 const payload = JSON.parse(fs.readFileSync(payloadPath, "utf8"));
 const publishedPaths = new Set((payload[0]?.files || []).map((entry) => entry.path));
+const requiredPaths = [
+  "config/marketplace-deployments.json",
+  "lib/marketplace-deployment-identity.mjs",
+  "lib/marketplace-direct-reattest.mjs",
+  "lib/marketplace-write-gate.mjs",
+];
 const bannedPaths = [
+  "lib/dispute-ticket-compat.mjs",
+  "lib/sponsor-intent.mjs",
+  "docs/docsources/README.md",
+  "docs/docsources/SOURCE_MIRROR.md",
+  "docs/docsources/claw/CLAW_LOCAL_ORACLE_SYNC_RUNBOOK.md",
+  "docs/docsources/claw/CLAW_OPERATIONS_CURRENT.md",
+  "docs/docsources/claw/CLAW_SWAP_GATEWAY_CURRENT.md",
   "docs/docsources/core/apiContract.json",
   "docs/docsources/core/openapi.yaml",
   "docs/docsources/core/openapi.public.yaml",
   "docs/docsources/core/openapi.advanced.yaml",
   "docs/docsources/core/openapi.reviewer-self.yaml",
   "docs/docsources/core/callable_surface.snapshot",
+  "docs/docsources/core/SMART_CONTRACT_ARCHITECTURE_MAP.md",
+  "docs/docsources/core/SMART_CONTRACT_ERKLAERUNG_2026-02-25.md",
+  "docs/docsources/core/callable-surfaces/iota/foundation.snapshot",
+  "docs/docsources/core/callable-surfaces/iota/governance.snapshot",
+  "docs/docsources/core/callable-surfaces/iota/settlement.snapshot",
+  "docs/docsources/core/callable-surfaces/iota/fulfillment.snapshot",
+  "docs/docsources/core/callable-surfaces/iota/ops.snapshot",
+  "docs/docsources/core/NEXT_SESSION_STATUS.md",
   "docs/docsources/SYNC_MANIFEST.txt",
   "docs/guides/NPM_RELEASE_PREP.md",
   "docs/guides/KNOWLEDGE_SOURCES.md",
@@ -32,6 +53,14 @@ const bannedPaths = [
   "scripts/sync-local-sources.sh",
   "scripts/install_github_actions_runner_on_hetzner.sh"
 ];
+
+const missing = requiredPaths.filter((entry) => !publishedPaths.has(entry));
+if (missing.length > 0) {
+  for (const entry of missing) {
+    console.error(`missing_publish_surface_entry: ${entry}`);
+  }
+  process.exit(1);
+}
 
 const hits = bannedPaths.filter((entry) => publishedPaths.has(entry));
 if (hits.length > 0) {
@@ -109,6 +138,13 @@ if grep -q 'doctor --api-base' "$tmp_dir/help-min.txt"; then
   echo "default_text_help_still_exposes_doctor_in_minimal_path" >&2
   exit 1
 fi
+
+while IFS= read -r action_ref; do
+  if [[ ! "$action_ref" =~ @[a-f0-9]{40}$ ]]; then
+    echo "mutable_github_action_ref: $action_ref" >&2
+    exit 1
+  fi
+done < <(sed -nE 's/^[[:space:]]*uses:[[:space:]]*([^[:space:]#]+).*/\1/p' .github/workflows/*.yml)
 
 echo "default_surface_docs_guard_ok"
 echo "default_machine_help_guard_ok"

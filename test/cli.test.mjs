@@ -1,19 +1,80 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { classifyDisputeTxPlanExecutionError, classifyTxPlanExecutionError } from "../lib/tx-plan-errors.mjs";
+import { buildAuthChallengeV2Message } from "../lib/runtime-auth.mjs";
+
+process.umask(0o077);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
 const cliFile = path.join(repoRoot, "bin", "clawnera-help.mjs");
 const packageJson = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
+const WRITE_GATE_PACKAGE_IDS = Object.freeze({
+  foundation: `0x${"1".repeat(64)}`,
+  governance: `0x${"b".repeat(64)}`,
+  settlement: `0x${"2".repeat(64)}`,
+  fulfillment: `0x${"3".repeat(64)}`,
+  ops: `0x${"4".repeat(64)}`,
+});
+const WRITE_GATE_OBJECT_IDS = Object.freeze({
+  governanceConfigObjectId: `0x${"5".repeat(64)}`,
+  orderMailboxRegistryObjectId: `0x${"c".repeat(64)}`,
+  disputeQuorumConfigObjectId: `0x${"6".repeat(64)}`,
+  marketplaceFeeConfigObjectId: `0x${"7".repeat(64)}`,
+  reputationInitFeeConfigObjectId: `0x${"8".repeat(64)}`,
+  listingDepositConfigObjectId: `0x${"9".repeat(64)}`,
+  reviewerRegistryObjectId: `0x${"a".repeat(64)}`,
+});
+
+function buildMarketplaceWriteGateResponse(request, overrides = {}) {
+  const url = new URL(request.url || "/", `http://${request.headers.host}`);
+  const nonce = url.searchParams.get("nonce") || "";
+  const generatedAtMs = Date.now();
+  const gate = {
+    source: "runtime_db",
+    preset: "normal",
+    publicApiWrites: "live",
+    marketplaceWrites: "live",
+    releaseProfile: "controlled_v1",
+    releasePhase: "canary_allowlisted",
+    runtimeReady: true,
+    productiveWritesEnabled: true,
+    ...(overrides.gate || {}),
+  };
+  return {
+    status: overrides.status || 200,
+    headers: {
+      "cache-control": "private, no-store, max-age=0",
+      pragma: "no-cache",
+      ...(overrides.headers || {}),
+    },
+    body: overrides.body || {
+      version: "marketplace_write_gate.v1",
+      nonce,
+      generatedAt: new Date(generatedAtMs).toISOString(),
+      generatedAtMs,
+      expiresAtMs: generatedAtMs + 5_000,
+      apiOrigin: `http://${request.headers.host}`,
+      gate,
+      chain: {
+        family: "iota",
+        network: "testnet",
+        chainIdentifier: "2304aa97",
+        packageIds: WRITE_GATE_PACKAGE_IDS,
+        objectIds: WRITE_GATE_OBJECT_IDS,
+        ...(overrides.chain || {}),
+      },
+    },
+  };
+}
 
 function buildJwtWithExp(expSeconds) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -61,6 +122,46 @@ function runCliAsync(args = [], options = {}) {
   });
 }
 
+async function startMutationGateServer({
+  status = 200,
+  body,
+  gate,
+  chain,
+  headers,
+} = {}) {
+  const requests = [];
+  const server = http.createServer(async (req, res) => {
+    let raw = "";
+    for await (const chunk of req) {
+      raw += chunk;
+    }
+    requests.push({
+      method: req.method || "GET",
+      url: req.url || "/",
+      headers: req.headers,
+      raw,
+    });
+    if (req.method === "GET" && /^\/policy\/write-gate\?nonce=[0-9a-f]{32}$/.test(req.url || "")) {
+      const response = buildMarketplaceWriteGateResponse(req, { status, body, gate, chain, headers });
+      res.writeHead(response.status, { "content-type": "application/json", ...response.headers });
+      res.end(JSON.stringify(response.body));
+      return;
+    }
+    res.writeHead(500, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "unexpected_request" }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  return {
+    baseUrl: `http://127.0.0.1:${port}`,
+    requests,
+    async close() {
+      await new Promise((resolve) => server.close(resolve));
+    },
+  };
+}
+
 test("help command prints usage", () => {
   const result = runCli(["--help"]);
   assert.equal(result.status, 0);
@@ -71,6 +172,9 @@ test("help command prints usage", () => {
   assert.match(result.stdout, /clawnera-help next <role>/);
   assert.match(result.stdout, /clawnera-help next setup-quick/);
   assert.match(result.stdout, /Weak-bot rules:/);
+  assert.match(result.stdout, /Live production: write_freeze\/read-only/);
+  assert.match(result.stdout, /Fresh IOTA: undeployed\/unaccepted; no legacy fallback/);
+  assert.match(result.stdout, /exact-target clawnera-help write-gate is mandatory/);
   assert.match(result.stdout, /Use ensure-auth; do not ask the human for a raw JWT if local wallet access exists/i);
   assert.match(result.stdout, /clawnera-help show onboarding/);
   assert.match(result.stdout, /clawnera-help show http-examples/);
@@ -105,6 +209,12 @@ test("help json output is minimal by default", () => {
   assert.equal(result.status, 0);
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.mode, "minimal");
+  assert.deepEqual(payload.currentState, {
+    liveProduction: "write_freeze_read_only",
+    freshIota: "undeployed_unaccepted_no_legacy_fallback",
+    sponsoredTransactions: "deferred",
+    mutationRule: "exact_target_write_gate_before_auth_api_mutation_and_direct_marketplace_move_execution",
+  });
   assert.deepEqual(payload.botFirst.orderedStart, [
     "clawnera-help journeys",
     "clawnera-help journey <role> --compact",
@@ -254,6 +364,192 @@ test("request help prints usage", () => {
   assert.match(result.stdout, /Use API paths like \/health or \/orders\/<order-id>/);
 });
 
+test("write-gate succeeds only on complete exact-target live state", async () => {
+  const mock = await startMutationGateServer();
+  try {
+    const result = await runCliAsync(["write-gate", "--api-base", mock.baseUrl, "--json"]);
+    assert.equal(result.status, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.apiBase, mock.baseUrl);
+    assert.equal(payload.gate.source, "runtime_db");
+    assert.equal(payload.gate.preset, "normal");
+    assert.equal(payload.gate.marketplaceWrites, "live");
+    assert.equal(mock.requests.length, 1);
+    assert.match(mock.requests[0].url, /^\/policy\/write-gate\?nonce=[0-9a-f]{32}$/);
+    assert.ok(mock.requests.every((request) => request.headers.authorization === undefined));
+  } finally {
+    await mock.close();
+  }
+});
+
+test("write-gate exits 78 when runtime state is frozen or incomplete", async (t) => {
+  const cases = [
+    {
+      name: "write freeze",
+      options: {
+        gate: {
+          preset: "write_freeze",
+          publicApiWrites: "frozen",
+          marketplaceWrites: "frozen",
+          runtimeReady: false,
+          productiveWritesEnabled: false,
+        },
+      },
+      error: "marketplace_mutation_gate_closed",
+    },
+    {
+      name: "missing release field",
+      options: { gate: { marketplaceWrites: undefined } },
+      error: "marketplace_mutation_gate_closed",
+    },
+    {
+      name: "write gate unavailable",
+      options: { status: 503, body: { error: "unavailable" } },
+      error: "marketplace_mutation_gate_unavailable",
+    },
+  ];
+  for (const testCase of cases) {
+    await t.test(testCase.name, async () => {
+      const mock = await startMutationGateServer(testCase.options);
+      try {
+        const result = await runCliAsync(["write-gate", "--api-base", mock.baseUrl, "--json"]);
+        assert.equal(result.status, 78);
+        const payload = JSON.parse(result.stdout);
+        assert.equal(payload.ok, false);
+        assert.equal(payload.error, testCase.error);
+        assert.equal(payload.exitCode, 78);
+        assert.equal(mock.requests.length, 1);
+      } finally {
+        await mock.close();
+      }
+    });
+  }
+});
+
+test("frozen gate blocks API mutations before side effects", async () => {
+  const frozen = {
+    gate: {
+      preset: "write_freeze",
+      publicApiWrites: "frozen",
+      marketplaceWrites: "frozen",
+      runtimeReady: false,
+      productiveWritesEnabled: false,
+    },
+  };
+
+  for (const args of [
+    ["request", "POST", "/listings", "--jwt", "test-jwt", "--body", "{}"],
+    ["listing-cancel", "--listing-id", "listing-frozen", "--jwt", "test-jwt"],
+    ["bid-accept", "--bid-id", "bid-frozen", "--jwt", "test-jwt"],
+    ["tx-plan-dry-run", "POST", "/orders/order-frozen/mailbox/init-plan", "--jwt", "test-jwt", "--body", "{}"],
+    ["milestone-reject", "--order-id", "order-frozen", "--milestone-id", "milestone-frozen", "--reason-text", "not accepted", "--jwt", "test-jwt"],
+    ["sponsor-preflight", "--jwt", "test-jwt"],
+  ]) {
+    const mock = await startMutationGateServer(frozen);
+    try {
+      const result = await runCliAsync([...args, "--api-base", mock.baseUrl, "--json"]);
+      assert.equal(result.status, 78);
+      const payload = JSON.parse(result.stdout);
+      assert.equal(payload.error, "marketplace_mutation_gate_closed");
+      assert.equal(payload.exitCode, 78);
+      assert.equal(mock.requests.length, 1);
+      assert.match(mock.requests[0].url, /^\/policy\/write-gate\?nonce=[0-9a-f]{32}$/);
+      assert.ok(mock.requests.every((request) => request.headers.authorization === undefined));
+    } finally {
+      await mock.close();
+    }
+  }
+});
+
+test("bundled empty deployment registry blocks every direct execute path before side effects", async () => {
+  const tempHome = mkdtempSync(path.join(os.tmpdir(), "clawnera-deployment-registry-closed-"));
+  const commands = [
+    ["listing-deposit-create", "--execute"],
+    ["order-init-bond", "--order-id", "order-closed", "--execute"],
+    ["order-create-escrow", "--order-id", "order-closed", "--execute"],
+    ["reputation-init", "--execute"],
+    ["reviewer-register", "--execute"],
+    ["reviewer-update", "--execute"],
+    ["milestone-anchor", "--order-id", "order-closed", "--milestone-id", "milestone-closed", "--execute"],
+  ];
+
+  const mock = await startMutationGateServer();
+  try {
+    for (const command of commands) {
+      const result = await runCliAsync([...command, "--api-base", mock.baseUrl, "--json"], {
+        env: {
+          HOME: tempHome,
+          CLAWNERA_IOTA_NETWORK: "testnet",
+          CLAWNERA_IOTA_RPC_URL: `${mock.baseUrl}/rpc`,
+        },
+      });
+      assert.equal(result.status, 78, `${command[0]}: ${result.stdout || result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert.equal(payload.error, "marketplace_deployment_identity_unavailable");
+      assert.equal(payload.exitCode, 78);
+      assert.equal(payload.mutationGate?.error, "marketplace_direct_write_gate_failed");
+    }
+    assert.equal(mock.requests.length, 0);
+    assert.deepEqual(readdirSync(tempHome), []);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("conflicting Marketplace execution flags fail before network access", async () => {
+  const mock = await startMutationGateServer();
+  try {
+    const result = await runCliAsync([
+      "listing-deposit-create",
+      "--execute",
+      "--dry-run",
+      "--api-base",
+      mock.baseUrl,
+      "--json",
+    ]);
+    assert.equal(result.status, 1);
+    assert.equal(JSON.parse(result.stdout).error, "invalid_marketplace_execution_mode");
+    assert.equal(mock.requests.length, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("every direct Marketplace transaction path is dry-run by default and rechecks the gate before broadcast", () => {
+  const source = readFileSync(cliFile, "utf8");
+  const guardedModes = [...source.matchAll(/try \{\n\s+const executionMode = marketplaceExecutionMode\(options\);/g)];
+  assert.equal(guardedModes.length, 7);
+  assert.match(
+    source,
+    /function marketplaceExecutionMode\(options = \{\}\)[\s\S]*?if \(mode === "execute"\) \{\s+assertBundledMarketplaceDeploymentRegistryAvailable\(\);/,
+  );
+  const matches = [...source.matchAll(/await executeTransaction\(/g)];
+  assert.equal(matches.length, 7);
+  for (const match of matches) {
+    const functionStart = source.lastIndexOf("async function run", match.index);
+    assert.notEqual(functionStart, -1);
+    const functionSlice = source.slice(functionStart, match.index);
+    assert.match(functionSlice, /const executionMode = marketplaceExecutionMode\(options\)/);
+    const preModeSlice = functionSlice.slice(0, functionSlice.indexOf("const executionMode = marketplaceExecutionMode(options)"));
+    assert.doesNotMatch(
+      preModeSlice,
+      /\b(?:await|callApiRoute|resolveApiRuntimeContext|resolveRuntimeSignerEntry|resolveRuntimeIotaOptions|loadKeystoreEntries|getIotaGas|getIotaBalance|executeTransaction)\b/,
+    );
+    assert.match(functionSlice, /if \(executionMode === "dry_run"\)/);
+    const immediateGate = functionSlice
+      .slice(-320)
+      .match(/assertMarketplaceDirectGateStillFresh\(directGate, "(settlement|ops)"\);/);
+    assert.ok(immediateGate);
+    assert.match(source.slice(match.index, match.index + 500), /beforeBroadcast: directGate\.beforeBroadcast/);
+  }
+  assert.match(
+    source,
+    /beforeBroadcast: createMarketplaceDirectReattestation\(\{\s+initialGate: directGate,\s+input,\s+verifyGate: verifyMarketplaceDirectExecutionGate,\s+wrapError: marketplaceDirectGateError,\s+\}\)/,
+  );
+  assert.doesNotMatch(source, /parseBooleanOption\(options\["dry-run"\], false\)/);
+});
+
 test("chain-config help explains live floor semantics", () => {
   const result = runCli(["chain-config", "--help"]);
   assert.equal(result.status, 0);
@@ -323,6 +619,31 @@ test("thin write helpers print usage", () => {
   }
 });
 
+test("mutation help exposes the exact-target release gate", () => {
+  for (const command of [
+    "auth-login",
+    "ensure-auth",
+    "request",
+    "listing-create",
+    "listing-cancel",
+    "listing-renew",
+    "bid-create",
+    "bid-accept",
+    "tx-plan-dry-run",
+    "key-agreement-upsert",
+    "dispute-evidence-publish",
+    "managed-storage-presign",
+    "milestone-submit-byo",
+    "milestone-reject",
+  ]) {
+    const result = runCli([command, "--help"]);
+    assert.equal(result.status, 0, command);
+    assert.match(result.stdout, /Live production is write_freeze\/read-only/, command);
+    assert.match(result.stdout, /Before auth, any API POST\/PUT\/PATCH\/DELETE/, command);
+    assert.match(result.stdout, /clawnera-help write-gate/, command);
+  }
+});
+
 test("listing-create help explains display values and categories", () => {
   const result = runCli(["listing-create", "--help"]);
   assert.equal(result.status, 0);
@@ -380,10 +701,13 @@ test("natural lifecycle aliases resolve to the canonical listing helpers", () =>
   assert.match(reopenAlias.stdout, /Listing renew helper/);
 });
 
-test("compact cancel recipe prints the direct helper command", () => {
+test("compact cancel recipe gates the direct helper command", () => {
   const result = runCli(["next", "creator-cancel-listing"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /do:clawnera-help listing-cancel --auth-state-file ~\/\.config\/clawnera\/auth-state\.json --listing-id <listingId>/);
+  assert.match(
+    result.stdout,
+    /do:clawnera-help write-gate --auth-state-file ~\/\.config\/clawnera\/auth-state\.json && clawnera-help listing-cancel --auth-state-file ~\/\.config\/clawnera\/auth-state\.json --listing-id <listingId>/,
+  );
   assert.match(result.stdout, /write:POST \/listings\/\{listingId\}\/cancel/);
 });
 
@@ -406,9 +730,16 @@ test("reviewer shortlist help prints operator and publish role split", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Reviewer shortlist helper/);
   assert.match(result.stdout, /Replacement usage:/);
-  assert.match(result.stdout, /writes the exact publish body for dispute-open or reviewer-replace/);
+  assert.match(result.stdout, /writes the exact future publish body for dispute-open or reviewer-replace/);
+  assert.match(result.stdout, /--request-receipt-id <lowercase-uuid\|auto>/);
+  assert.match(result.stdout, /--request-state-file <owner-only-json>/);
+  assert.match(result.stdout, /atomically persists one canonical receipt UUID, the exact normalized request, and canonical API base/);
+  assert.match(result.stdout, /distinct paths under owner-only directories/);
+  assert.match(result.stdout, /server decides whether it is inside the accepted finalized window/);
   assert.match(result.stdout, /buyer\/seller GET \/orders\/\{orderId\}\/timeline readback/);
-  assert.match(result.stdout, /The shortlist call itself uses operator auth and only prepares the receipt plus the exact publish body/);
+  assert.match(result.stdout, /only prepares the receipt, operatorAuthorizationHandoff, and exact future publish body/);
+  assert.match(result.stdout, /publish_ready=false/);
+  assert.match(result.stdout, /matching inviteBinding and preExecutionRequirements/);
   assert.match(result.stdout, /OPEN publish is buyer\/seller-owned/);
   assert.match(result.stdout, /REPLACEMENT publish is buyer\/seller-owned/);
   assert.match(result.stdout, /post_execute_binding_ok/);
@@ -556,7 +887,7 @@ test("tx plan error classifier marks shared object version races as retryable", 
     code: "shared_object_version_race",
     retryable: true,
     hint:
-      "A shared dispute object advanced while this tx was being built or executed. Rerun the same tx-plan-execute command once. If you are driving multiple reviewer wallets for the same dispute from one machine, submit commit/reveal steps sequentially.",
+      "A shared dispute object advanced while this tx was being built or simulated. Rerun the same tx-plan-dry-run command once, review the rebuilt plan, and submit eventual chain-native commit/reveal writes sequentially.",
   });
 });
 
@@ -660,7 +991,7 @@ test("journey compact output keeps only ids, handoffs, and next hints", () => {
   assert.match(result.stdout, /steps:setup-quick > reputation-init > seller-create-listing > seller-review-bids > buyer-accept-bid\[handoff,wait_for_buyer_accept]/);
   assert.match(
     result.stdout,
-    /later:creator-cancel-listing \| creator-renew-listing \| order-mutual-cancel \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
+    /later:creator-cancel-listing \| creator-renew-listing \| order-mutual-cancel \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| dispute-finalize \| dispute-timeout-fallback/
   );
   assert.match(result.stdout, /next_if_not_setup:setup-quick/);
   assert.match(result.stdout, /next_if_setup:reputation-init/);
@@ -685,7 +1016,7 @@ test("request journeys separate buyer-created requests from offer flow", () => {
   );
   assert.match(
     buyerResult.stdout,
-    /later:creator-cancel-listing \| creator-renew-listing \| order-mutual-cancel \| buyer-reject-delivery \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
+    /later:creator-cancel-listing \| creator-renew-listing \| order-mutual-cancel \| buyer-reject-delivery \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| dispute-finalize \| dispute-timeout-fallback/
   );
   assert.match(
     buyerResult.stdout,
@@ -701,7 +1032,7 @@ test("request journeys separate buyer-created requests from offer flow", () => {
   );
   assert.match(
     sellerResult.stdout,
-    /later:order-mutual-cancel \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
+    /later:order-mutual-cancel \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| dispute-finalize \| dispute-timeout-fallback/
   );
 });
 
@@ -712,7 +1043,7 @@ test("buyer compact journey does not suggest listing-creator maintenance actions
   assert.doesNotMatch(result.stdout, /creator-renew-listing/);
   assert.match(
     result.stdout,
-    /later:order-mutual-cancel \| buyer-reject-delivery \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| resolve-dispute/
+    /later:order-mutual-cancel \| buyer-reject-delivery \| dispute-open \| dispute-evidence-linked-deliverable \| dispute-evidence-supplemental-bundle \| dispute-finalize \| dispute-timeout-fallback/
   );
 });
 
@@ -809,6 +1140,10 @@ test("recipes command lists minimal task recipes", () => {
   assert.match(result.stdout, /reviewer-vote: Reviewer Commit And Reveal Vote.*reviewer-vote-reveal/);
   assert.match(result.stdout, /reviewer-claim-metrics: Reviewer Claim Metrics/);
   assert.match(result.stdout, /operator-shortlist-replacement: Operator Shortlist Replacement/);
+  assert.match(result.stdout, /dispute-finalize: Atomic Quorum Dispute Close/);
+  assert.match(result.stdout, /dispute-timeout-fallback: Atomic Timeout Dispute Close/);
+  assert.match(result.stdout, /dispute-platform-fallback: Admin Platform Dispute Fallback \[role: admin_only]/);
+  assert.match(result.stdout, /resolve-dispute: Sui Legacy Recovery Resolve Dispute Escrow/);
 });
 
 test("recipes compact output is token-light", () => {
@@ -881,7 +1216,7 @@ test("setup-quick compact output uses ensure-auth", () => {
   const result = runCli(["recipe", "setup-quick", "--compact"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^recipe:setup-quick/m);
-  assert.match(result.stdout, /do:clawnera-help wallet-list && clawnera-help ensure-auth --api-base https:\/\/api\.clawnera\.com --alias <wallet-alias>/);
+  assert.match(result.stdout, /do:clawnera-help wallet-list && clawnera-help write-gate --api-base https:\/\/api\.clawnera\.com && clawnera-help ensure-auth --api-base https:\/\/api\.clawnera\.com --alias <wallet-alias>/);
   assert.doesNotMatch(result.stdout, /^write:GET /m);
   assert.match(
     result.stdout,
@@ -893,15 +1228,16 @@ test("ensure-auth recipe compact output uses the self-auth helper", () => {
   const result = runCli(["recipe", "ensure-auth", "--compact"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^recipe:ensure-auth/m);
-  assert.match(result.stdout, /do:clawnera-help ensure-auth --api-base https:\/\/api\.clawnera\.com --alias <wallet-alias>/);
+  assert.match(result.stdout, /do:clawnera-help write-gate --api-base https:\/\/api\.clawnera\.com && clawnera-help ensure-auth --api-base https:\/\/api\.clawnera\.com --alias <wallet-alias>/);
 });
 
 test("key agreement compact output points only to real next recipes", () => {
   const result = runCli(["recipe", "key-agreement-upsert", "--compact"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /^do:clawnera-help key-agreement-upsert --auth-state-file ~\/\.config\/clawnera\/auth-state\.json/m);
+  assert.match(result.stdout, /^do:clawnera-help write-gate --auth-state-file ~\/\.config\/clawnera\/auth-state\.json && clawnera-help key-agreement-upsert --auth-state-file ~\/\.config\/clawnera\/auth-state\.json/m);
   assert.match(result.stdout, /^next:mailbox-handshake \| reputation-init \| reviewer-register/m);
   assert.doesNotMatch(result.stdout, /seller-deliverable-flow/);
+  assert.doesNotMatch(result.stdout, /privateKeyMultibase|privateKeyEnvelope|master-secret|passphrase/i);
 });
 
 test("seller review compact output stays read-only and marks the buyer handoff", () => {
@@ -938,7 +1274,7 @@ test("dispute-open compact output highlights the canonical dispute-open route", 
   assert.equal(result.status, 0);
   assert.match(
     result.stdout,
-    /^do:clawnera-help tx-plan-execute POST \/orders\/<orderId>\/milestones\/<milestoneId>\/disputes\/open --auth-state-file ~\/\.config\/clawnera\/auth-state\.json --body-file \.\/clawnera-dispute-open-<orderId>-<milestoneId>\.json/m
+    /^do:clawnera-help write-gate --auth-state-file ~\/\.config\/clawnera\/auth-state\.json && clawnera-help tx-plan-dry-run POST \/orders\/<orderId>\/milestones\/<milestoneId>\/disputes\/open --auth-state-file ~\/\.config\/clawnera\/auth-state\.json --body-file \.\/clawnera-dispute-open-<orderId>-<milestoneId>\.json/m
   );
   assert.match(
     result.stdout,
@@ -961,7 +1297,7 @@ test("reviewer evidence compact output highlights dispute-scoped reads before vo
 test("dispute evidence publish compact output highlights the publish route", () => {
   const result = runCli(["recipe", "dispute-evidence-linked-deliverable", "--compact"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /^do:clawnera-help dispute-evidence-publish --case-id <disputeCaseId> --auth-state-file ~\/\.config\/clawnera\/auth-state\.json/m);
+  assert.match(result.stdout, /^do:clawnera-help write-gate --auth-state-file ~\/\.config\/clawnera\/auth-state\.json && clawnera-help dispute-evidence-publish --case-id <disputeCaseId> --auth-state-file ~\/\.config\/clawnera\/auth-state\.json/m);
   assert.match(result.stdout, /^write:POST \/disputes\/\{disputeCaseId\}\/evidence/m);
   assert.match(result.stdout, /^next:dispute-evidence-supplemental-bundle \| reviewer-inspect-evidence \| reviewer-vote/m);
 });
@@ -971,13 +1307,87 @@ test("replacement compact output highlights live case readback and replace publi
   assert.equal(result.status, 0);
   assert.match(
     result.stdout,
-    /^do:clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <disputeCaseId> --auth-state-file ~\/\.config\/clawnera\/auth-state\.json/m
+    /^do:clawnera-help write-gate --auth-state-file ~\/\.config\/clawnera\/auth-state\.json && clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <disputeCaseId> --auth-state-file ~\/\.config\/clawnera\/auth-state\.json/m
   );
   assert.match(
     result.stdout,
     /^write:operator prep: POST \/admin\/reviewer-selection\/shortlist \| buyer\/seller publish: POST \/disputes\/\{disputeCaseId\}\/reviewers\/replace/m
   );
   assert.match(result.stdout, /^read:GET \/disputes\/\{disputeCaseId\}/m);
+});
+
+test("normal dispute close recipes use atomic finalize and timeout-fallback plans", () => {
+  const finalize = runCli(["recipe", "dispute-finalize", "--compact"]);
+  assert.equal(finalize.status, 0);
+  assert.match(
+    finalize.stdout,
+    /^do:clawnera-help write-gate .* && clawnera-help tx-plan-dry-run POST \/disputes\/<disputeCaseId>\/finalize .* --body '\{\}'/m
+  );
+  assert.match(
+    finalize.stdout,
+    /^write:atomic buyer\/seller close: POST \/disputes\/\{disputeCaseId\}\/finalize/m
+  );
+  assert.doesNotMatch(finalize.stdout, /resolve-escrow/);
+
+  const timeout = runCli(["recipe", "dispute-timeout-fallback", "--compact"]);
+  assert.equal(timeout.status, 0);
+  assert.match(
+    timeout.stdout,
+    /^do:clawnera-help write-gate .* && clawnera-help tx-plan-dry-run POST \/disputes\/<disputeCaseId>\/fallback\/timeout .* --body '\{\}'/m
+  );
+  assert.match(
+    timeout.stdout,
+    /^write:atomic buyer\/seller close: POST \/disputes\/\{disputeCaseId\}\/fallback\/timeout/m
+  );
+  assert.doesNotMatch(timeout.stdout, /resolve-escrow/);
+});
+
+test("platform fallback is admin-only and has no public executable helper command", () => {
+  const result = runCli(["recipe", "dispute-platform-fallback", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^role:admin_only/m);
+  assert.match(
+    result.stdout,
+    /^do:STOP: admin-only external-custody path; the public helper does not execute or dry-run platform fallback/m
+  );
+  assert.match(
+    result.stdout,
+    /^write:admin-only, not publicly executable: POST \/disputes\/\{disputeCaseId\}\/fallback\/resolve/m
+  );
+  assert.doesNotMatch(result.stdout, /tx-plan-dry-run POST \/disputes\/<disputeCaseId>\/fallback\/resolve/);
+});
+
+test("public tx-plan dry-run rejects the admin platform fallback locally", () => {
+  const disputeCaseId = `0x${"a".repeat(64)}`;
+  const path = `/disputes/${disputeCaseId}/fallback/resolve`;
+  const result = runCli(["tx-plan-dry-run", "POST", path, "--body", "{}", "--json"]);
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, "dispute_platform_fallback_admin_only");
+  assert.match(payload.hint, /public helper cannot build or dry-run the ArbCap platform fallback/i);
+  assert.match(payload.hint, /external admin custody workflow/i);
+
+  const absolute = runCli([
+    "tx-plan-dry-run",
+    "POST",
+    `https://api.example.test${path}`,
+    "--body",
+    "{}",
+    "--json",
+  ]);
+  assert.equal(absolute.status, 1);
+  assert.equal(JSON.parse(absolute.stdout).error, "absolute_api_url_not_allowed");
+});
+
+test("operator journey exposes platform fallback only as an admin handoff", () => {
+  const result = runCli(["journey", "operator", "--compact"]);
+  assert.equal(result.status, 0);
+  assert.match(
+    result.stdout,
+    /^later:operator-shortlist-replacement \| dispute-open \| dispute-platform-fallback\[handoff]/m
+  );
+  assert.doesNotMatch(result.stdout, /resolve-dispute/);
 });
 
 test("recipe json output is parseable", () => {
@@ -990,10 +1400,13 @@ test("recipe json output is parseable", () => {
   assert.equal(typeof payload.recipe.compactHints?.do, "string");
   assert.equal(payload.recipe.compactHints.write, "POST /disputes/{disputeCaseId}/votes/commit | POST /disputes/{disputeCaseId}/votes/reveal");
   assert.equal(payload.recipe.compactHints.next, "reviewer-claim-metrics[after_buyer_or_seller_closeout]");
-  assert.ok(payload.recipe.steps.some((step) => /tx-plan-execute POST .*votes\/commit/.test(step)));
+  assert.ok(payload.recipe.steps.some((step) => /tx-plan-dry-run POST .*votes\/commit/.test(step)));
   assert.ok(payload.recipe.steps.some((step) => /reviewer-vote-prepare/.test(step)));
   assert.ok(payload.recipe.steps.some((step) => /sequentially, not in parallel/.test(step)));
   assert.ok(payload.recipe.steps.some((step) => /buyer or seller closes the dispute/i.test(step)));
+  assert.ok(payload.recipe.steps.some((step) => /one atomic finalize or permissionless timeout-fallback plan/i.test(step)));
+  assert.ok(payload.recipe.examples.some((example) => /resolves the bound escrow atomically/i.test(example)));
+  assert.ok(payload.recipe.steps.every((step) => !/later resolves escrow/i.test(step)));
   assert.ok(payload.recipe.stopConditions.some((step) => /reviewers do not run finalize/i.test(step)));
   assert.ok(payload.recipe.stopConditions.some((step) => /reviewer_vote_already_committed/.test(step)));
   assert.ok(payload.recipe.stopConditions.some((step) => /reviewer_vote_commit_window_closed/.test(step)));
@@ -1035,7 +1448,8 @@ test("journey json includes machine-readable next hints", () => {
 test("dispute-open recipe explains activation proof and no-manual-bind fallback", () => {
   const result = runCli(["recipe", "dispute-open"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /post_execute_binding_ok=true/);
+  assert.match(result.stdout, /live binding readback/);
+  assert.match(result.stdout, /chain-native wallet\/client/);
   assert.match(result.stdout, /stop and inspect live receipt\/dispute readback/i);
   assert.match(result.stdout, /do not invent a manual bind step/i);
 });
@@ -1053,8 +1467,12 @@ test("mailbox handshake recipe explains tx output seq fallback", () => {
 test("next mailbox-handshake includes the explicit bind handoff after init-plan", () => {
   const result = runCli(["next", "mailbox-handshake"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /^do:clawnera-help tx-plan-execute POST \/orders\/<orderId>\/mailbox\/init-plan/m);
-  assert.match(result.stdout, /then bind POST \/orders\/<orderId>\/mailbox with order_mailbox_object_id/);
+  assert.match(
+    result.stdout,
+    /^do:clawnera-help write-gate --auth-state-file ~\/\.config\/clawnera\/auth-state\.json && clawnera-help tx-plan-dry-run POST \/orders\/<orderId>\/mailbox\/init-plan/m,
+  );
+  assert.match(result.stdout, /rerun the gate before executing the reviewed canonical plan/);
+  assert.match(result.stdout, /binding its verified order_mailbox_object_id/);
 });
 
 test("replacement recipe explains full reassignment semantics", () => {
@@ -1097,6 +1515,12 @@ test("reviewer vote prepare json output matches contract semantics", () => {
 test("milestone reject computes canonical rejection reason hash", async () => {
   const expectedHash = createHash("sha256").update("bad jpeg", "utf8").digest("hex");
   const server = http.createServer(async (req, res) => {
+    if (req.method === "GET" && /^\/policy\/write-gate\?nonce=[0-9a-f]{32}$/.test(req.url || "")) {
+      const response = buildMarketplaceWriteGateResponse(req);
+      res.writeHead(response.status, { "content-type": "application/json", ...response.headers });
+      res.end(JSON.stringify(response.body));
+      return;
+    }
     let raw = "";
     for await (const chunk of req) {
       raw += chunk;
@@ -1137,7 +1561,10 @@ test("recipe aliases work", () => {
   const result = runCli(["next", "buyer-place-bid"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^recipe:buyer-place-bid/m);
-  assert.match(result.stdout, /^do:clawnera-help bid-create .* --display-values/m);
+  assert.match(
+    result.stdout,
+    /^do:clawnera-help write-gate --auth-state-file .* && clawnera-help bid-create .* --display-values/m,
+  );
   assert.match(result.stdout, /^write:POST \/bids/m);
   assert.match(result.stdout, /^next:buyer-accept-bid/m);
 });
@@ -1160,14 +1587,26 @@ test("mailbox signal alias resolves to the mailbox handshake recipe", () => {
   assert.ok(payload.recipe.routes.some((route) => /mailbox\/post-signal-plan/.test(route)));
 });
 
-test("resolve dispute alias resolves to the canonical resolve recipe", () => {
+test("resolve dispute alias resolves to the Sui-only legacy recovery recipe", () => {
   const result = runCli(["recipe", "dispute-resolve", "--json"]);
   assert.equal(result.status, 0);
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, true);
   assert.equal(payload.recipe.id, "resolve-dispute");
+  assert.match(payload.recipe.summary, /Sui legacy/i);
+  assert.match(payload.recipe.summary, /Fresh IOTA returns 410 Gone/i);
   assert.ok(payload.recipe.examples.some((example) => /resolve-escrow/.test(example)));
   assert.ok(payload.recipe.examples.every((example) => !/quorumResolutionTicketObjectId/.test(example)));
+});
+
+test("finalize dispute resolution alias resolves to atomic quorum close", () => {
+  const result = runCli(["recipe", "finalize-dispute-resolution", "--json"]);
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.recipe.id, "dispute-finalize");
+  assert.equal(payload.recipe.routes[0], "POST /disputes/{disputeCaseId}/finalize");
+  assert.match(payload.recipe.summary, /one atomic buyer-or-seller transaction plan/i);
 });
 
 test("seller review recipe warns that seller cannot accept the bid", () => {
@@ -1235,14 +1674,23 @@ test("reviewer claim recipe explains explicit case-id versus safe inference", ()
   assert.match(result.stdout, /reviewer_metrics_claim_not_required/);
 });
 
-test("resolve dispute recipe shows the binding-based resolve flow", () => {
+test("resolve dispute recipe is limited to Sui legacy recovery and retires IOTA", () => {
   const result = runCli(["recipe", "resolve-dispute"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /finalized dispute binding/);
+  assert.match(result.stdout, /# Sui Legacy Recovery Resolve Dispute Escrow/);
+  assert.match(result.stdout, /Fresh IOTA returns 410 Gone/i);
+  assert.match(result.stdout, /iota_dispute_resolve_escrow_route_retired/);
+  assert.match(result.stdout, /case is already closed but escrow settlement did not complete/i);
+  assert.match(result.stdout, /Use dispute-finalize for quorum closeout or dispute-timeout-fallback/i);
   assert.match(result.stdout, /dispute_settlement_not_ready/);
   assert.doesNotMatch(result.stdout, /quorumResolutionTicketObjectId/);
   assert.doesNotMatch(result.stdout, /quorum_resolution_ticket_object_id/);
   assert.match(result.stdout, /GET \/disputes\/<dispute-case-id>/);
+
+  const compact = runCli(["recipe", "resolve-dispute", "--compact"]);
+  assert.equal(compact.status, 0);
+  assert.match(compact.stdout, /^do:SUI LEGACY RECOVERY ONLY \(IOTA: 410 GONE\):/m);
+  assert.match(compact.stdout, /^write:Sui legacy\/recovery only; IOTA 410 Gone:/m);
 });
 
 test("show recipes topic works", () => {
@@ -1267,8 +1715,8 @@ test("show canonical-flow topic works", () => {
   const result = runCli(["show", "canonical-flow"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Canonical Live Run Checklist/);
-  assert.match(result.stdout, /One live write, one readback/);
-  assert.match(result.stdout, /choose exactly one wake-up path before writing anything live/);
+  assert.match(result.stdout, /One future write-open action, one readback/);
+  assert.match(result.stdout, /choose exactly one wake-up path before writing anything/);
 });
 
 test("show live-order-flow topic works", () => {
@@ -1305,6 +1753,38 @@ test("curated docs do not contain stale reviewer vote redirection examples", () 
     const matches = text.matchAll(/reviewer-vote-prepare[\s\S]{0,240}> *reviewer-vote\.json/g);
     for (const match of matches) {
       assert.match(match[0], /--json/, `${relativePath} contains a stale reviewer-vote redirect example without --json`);
+    }
+  }
+});
+
+test("public guidance never recommends generic tx-plan execution", () => {
+  const files = [
+    "README.md",
+    "config/journeys.json",
+    "config/recipes.json",
+    "config/topics.json",
+    ...readdirSync(path.join(repoRoot, "docs", "guides"))
+      .filter((entry) => entry.endsWith(".md") && entry !== "SECURITY_GUIDELINES.md")
+      .map((entry) => path.join("docs", "guides", entry)),
+  ];
+  for (const relativePath of files) {
+    assert.doesNotMatch(
+      readFileSync(path.join(repoRoot, relativePath), "utf8"),
+      /tx-plan-execute/,
+      `${relativePath} still recommends the disabled generic execute command`,
+    );
+  }
+  assert.match(
+    readFileSync(path.join(repoRoot, "docs", "guides", "SECURITY_GUIDELINES.md"), "utf8"),
+    /tx-plan-execute.*fail-closed deaktiviert/,
+  );
+
+  const recipes = JSON.parse(readFileSync(path.join(repoRoot, "config", "recipes.json"), "utf8"));
+  for (const recipe of recipes.recipes || []) {
+    for (const entry of [...(recipe.steps || []), ...(recipe.examples || [])]) {
+      if (entry.includes("tx-plan-dry-run")) {
+        assert.match(entry, /Security boundary:.*never signs, exports bytes, or broadcasts/);
+      }
     }
   }
 });
@@ -2475,6 +2955,10 @@ test("notifications init rejects auth state apiBase mismatch", () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /auth_state_api_base_mismatch/);
   assert.match(result.stderr, /staging\.clawnera\.example/);
+  assert.match(
+    result.stderr,
+    /clawnera-help write-gate --api-base 'https:\/\/api\.clawnera\.com' && clawnera-help ensure-auth --api-base 'https:\/\/api\.clawnera\.com' --auth-state-file/,
+  );
 });
 
 test("notifications init rejects invalid package roots before writing files", () => {
@@ -2796,7 +3280,7 @@ test("auth-login help prints usage", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Auth login helper/);
   assert.match(result.stdout, /--state-out/);
-  assert.match(result.stdout, /auto-refresh sessions/);
+  assert.match(result.stdout, /Tokens are never printed/);
 });
 
 test("ensure-auth help prints usage", () => {
@@ -2822,6 +3306,7 @@ test("wallet-init creates a local keystore entry", () => {
     assert.equal(result.status, 0);
     assert.match(result.stdout, /wallet_init_ok/);
     assert.match(result.stdout, /wallet_alias=sdk-buyer/);
+    assert.match(result.stdout, /next_hint=clawnera-help write-gate --api-base 'https:\/\/api\.clawnera\.com' &&/);
     assert.match(result.stdout, /clawnera-help ensure-auth --api-base https:\/\/api\.clawnera\.com/);
     assert.equal(existsSync(keystoreFile), true);
 
@@ -2857,16 +3342,41 @@ test("auth-login falls back to the sole keystore entry when no IOTA CLI address 
     const bodyText = Buffer.concat(chunks).toString("utf8");
     const body = bodyText ? JSON.parse(bodyText) : {};
 
+    if (req.method === "GET" && /^\/policy\/write-gate\?nonce=[0-9a-f]{32}$/.test(req.url || "")) {
+      const response = buildMarketplaceWriteGateResponse(req);
+      res.writeHead(response.status, { "content-type": "application/json", ...response.headers });
+      res.end(JSON.stringify(response.body));
+      return;
+    }
+
     if (req.url === "/auth/challenge" && req.method === "POST") {
       assert.equal(body.address, createdAddress);
+      assert.equal(body.chainFamily, "iota");
+      const nowMs = Date.now();
+      const context = {
+        origin: apiBase,
+        audience: "clawdex-client",
+        environment: "test",
+        chainFamily: "iota",
+        network: "localnet",
+        address: createdAddress,
+        nonce: "nonce-1",
+        issuedAtMs: nowMs - 1_000,
+        expiresAtMs: nowMs + 60_000
+      };
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ messageToSign: "clawnera-auth-test", nonce: "nonce-1" }));
+      res.end(JSON.stringify({
+        protocol: "clawdex.auth",
+        version: 2,
+        ...context,
+        messageToSign: buildAuthChallengeV2Message(context)
+      }));
       return;
     }
 
     if (req.url === "/auth/verify" && req.method === "POST") {
       assert.equal(body.address, createdAddress);
-      assert.equal(body.message, "clawnera-auth-test");
+      assert.match(body.message, /^CLAWDEX Sign-In v2\n/);
       assert.equal(typeof body.signature, "string");
       res.writeHead(200, { "content-type": "application/json" });
       res.end(
@@ -2914,6 +3424,7 @@ test("auth-login falls back to the sole keystore entry when no IOTA CLI address 
 
     assert.equal(result.status, 0);
     assert.match(result.stdout, /auth_login_ok/);
+    assert.doesNotMatch(result.stdout, new RegExp(issuedToken.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.equal(existsSync(stateFile), true);
     assert.equal(existsSync(envFile), true);
 
@@ -2936,15 +3447,17 @@ test("ensure-auth alias help resolves to the canonical helper", () => {
 test("sponsor-execute help prints usage", () => {
   const result = runCli(["sponsor-execute", "--help"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /Sponsor execute helper/);
-  assert.match(result.stdout, /reserve -> run --build-cmd -> execute/);
+  assert.match(result.stdout, /Sponsor execution is quarantined/);
+  assert.match(result.stdout, /--dry-run is also disabled/);
+  assert.match(result.stdout, /non-reserving\/non-executing protocol diagnostic/);
 });
 
 test("sponsor-preflight help prints usage", () => {
   const result = runCli(["sponsor-preflight", "--help"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Sponsor preflight helper/);
-  assert.match(result.stdout, /strategy, diagnostics, tx family, and gas recommendations/);
+  assert.match(result.stdout, /without reserving gas or executing a transaction/);
+  assert.match(result.stdout, /Live write_freeze blocks this POST/);
 });
 
 test("telegram event notifier example prints help", () => {
@@ -2959,10 +3472,10 @@ test("telegram event notifier example prints help", () => {
   assert.match(result.stdout, /CLAWNERA_NOTIFY_PRESET/);
 });
 
-test("sponsor-execute fails without api base and jwt", () => {
+test("sponsor-execute is quarantined before runtime validation", () => {
   const result = runCli(["sponsor-execute", "--dry-run"]);
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /sponsor_execute_helper_error/);
+  assert.equal(result.status, 78);
+  assert.match(result.stderr, /sponsor_execute_helper_error: sponsor_execute_quarantined/);
 });
 
 test("sponsor-preflight fails without api base and jwt", () => {

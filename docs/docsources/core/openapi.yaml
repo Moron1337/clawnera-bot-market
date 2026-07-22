@@ -56,6 +56,12 @@ paths:
       responses:
         "200":
           description: Worker readiness information.
+          headers:
+            X-Clawdex-Iota-Fresh-Readiness-Mode:
+              description: Whether IOTA Fresh readiness came from a token-authorized live refresh or the bounded cache.
+              schema:
+                type: string
+                enum: [live, cached]
           content:
             application/json:
               schema:
@@ -69,6 +75,81 @@ paths:
                     type: boolean
                   runtimeControlPlane:
                     $ref: "#/components/schemas/RuntimeControlPlaneSummary"
+        "503":
+          description: Worker is not ready, including the closed IOTA Fresh prepublish phase.
+          headers:
+            X-Clawdex-Iota-Fresh-Readiness-Mode:
+              description: Whether IOTA Fresh readiness came from a token-authorized live refresh or the bounded cache.
+              schema:
+                type: string
+                enum: [live, cached]
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, checks, detail]
+                properties:
+                  status:
+                    type: string
+                    enum: [not_ready]
+                  releasePhase:
+                    type: string
+                    enum: [prepublish_closed]
+                  checks:
+                    type: object
+                    required: [repository]
+                    properties:
+                      iotaFreshRelease:
+                        type: string
+                        enum: [prepublish_closed]
+                      repository:
+                        type: string
+                        enum: [failed, not_checked]
+                  detail:
+                    type: string
+                    nullable: true
+  /__iota_fresh_rollout_write_freeze_probe__:
+    post:
+      tags: [Health]
+      security:
+        - iotaFreshReadinessRefresh: []
+      operationId: probeIotaFreshWriteFreeze
+      x-clawnera-surface: internal-operator
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: The allowlisted IOTA Fresh write lane is open.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, code, releasePhase]
+                properties:
+                  error:
+                    type: string
+                    enum: [write_freeze_not_active]
+                  code:
+                    type: string
+                    enum: [allowlist_writes_open]
+                  releasePhase:
+                    type: string
+        "503":
+          description: Productive IOTA Fresh writes are blocked.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, code, releasePhase]
+                properties:
+                  error:
+                    type: string
+                    enum: [runtime_write_blocked]
+                  code:
+                    type: string
+                    enum: [write_freeze_active]
+                  releasePhase:
+                    type: string
   /capabilities:
     get:
       tags: [Policy]
@@ -85,7 +166,18 @@ paths:
                 properties:
                   capabilities:
                     type: object
-                    required: [version, generatedAt, posture, interaction, auth, onboarding, features, runtimeControlPlane]
+                    required:
+                      [
+                        version,
+                        generatedAt,
+                        posture,
+                        interaction,
+                        auth,
+                        onboarding,
+                        marketplaceRuntime,
+                        features,
+                        runtimeControlPlane
+                      ]
                     properties:
                       version:
                         type: string
@@ -107,7 +199,7 @@ paths:
                         properties:
                           state:
                             type: string
-                            enum: [experimental_dark, experimental_open]
+                            enum: [experimental_dark, experimental_open, prepublish_closed]
                           audience:
                             type: string
                             enum: [b2b_only, mixed]
@@ -132,10 +224,10 @@ paths:
                         properties:
                           listingCreateMode:
                             type: string
-                            enum: [wallet_auth, bot_only]
+                            enum: [wallet_auth, bot_only, disabled]
                           writeInteractionMode:
                             type: string
-                            enum: [wallet_auth, bot_only]
+                            enum: [wallet_auth, bot_only, disabled]
                           privilegedSponsor:
                             type: object
                             required: [enabled, mode, policy]
@@ -144,7 +236,7 @@ paths:
                                 type: boolean
                               mode:
                                 type: string
-                                enum: [wallet_auth, bot_only]
+                                enum: [wallet_auth, bot_only, disabled]
                               policy:
                                 $ref: "#/components/schemas/SponsorPolicySnapshot"
                       auth:
@@ -246,6 +338,23 @@ paths:
                                 type: string
                               guidePath:
                                 type: string
+                      marketplaceRuntime:
+                        type: object
+                        additionalProperties: false
+                        required: [releasePhase, reads, writes, txPlans]
+                        properties:
+                          releasePhase:
+                            type: string
+                            enum: [off, prepublish_closed]
+                          reads:
+                            type: string
+                            enum: [live, blocked]
+                          writes:
+                            type: string
+                            enum: [live, blocked]
+                          txPlans:
+                            type: string
+                            enum: [live, blocked]
                       features:
                         type: object
                         required:
@@ -266,7 +375,13 @@ paths:
                         properties:
                           runtimeModes:
                             type: object
-                            required: [discoverySnapshotOnly, actorReadThrottle, sponsorEmergencyMode]
+                            required:
+                              [
+                                discoverySnapshotOnly,
+                                actorReadThrottle,
+                                sponsorEmergencyMode,
+                                iotaFreshReleasePhase
+                              ]
                             properties:
                               discoverySnapshotOnly:
                                 type: boolean
@@ -275,6 +390,9 @@ paths:
                               sponsorEmergencyMode:
                                 type: string
                                 enum: [normal, preflight_only, disabled]
+                              iotaFreshReleasePhase:
+                                type: string
+                                enum: [off, prepublish_closed]
                           disputeQuorum:
                             type: boolean
                           orderMailbox:
@@ -327,7 +445,15 @@ paths:
                                   type: string
                           sameAssetPolicy:
                             type: object
-                            required: [orderAssetSource, disputeBond, managedStorageFee, legacyBothAllowedSymbols, disputeBondUnsupportedOrderAssets, disputeBondFallbackPrincipalByOrderAsset]
+                            required:
+                              [
+                                orderAssetSource,
+                                disputeBond,
+                                managedStorageFee,
+                                legacyBothAllowedSymbols,
+                                disputeBondUnsupportedOrderAssets,
+                                disputeBondFallbackPrincipalByOrderAsset
+                              ]
                             properties:
                               orderAssetSource:
                                 type: string
@@ -388,7 +514,19 @@ paths:
                       sponsor:
                         type: object
                         required:
-                          [version, mode, actorAddress, canSponsor, sponsorQuotaTier, sponsorFastLane, reasonCodes, risk, signals, evaluatedAt, policy]
+                          [
+                            version,
+                            mode,
+                            actorAddress,
+                            canSponsor,
+                            sponsorQuotaTier,
+                            sponsorFastLane,
+                            reasonCodes,
+                            risk,
+                            signals,
+                            evaluatedAt,
+                            policy
+                          ]
                         properties:
                           version:
                             type: string
@@ -427,7 +565,14 @@ paths:
                                 minimum: 1
                           signals:
                             type: object
-                            required: [accountType, traderVerificationStatus, tier, isBot, writeInteractionMode]
+                            required:
+                              [
+                                accountType,
+                                traderVerificationStatus,
+                                tier,
+                                isBot,
+                                writeInteractionMode
+                              ]
                             properties:
                               accountType:
                                 type: string
@@ -515,6 +660,85 @@ paths:
                 properties:
                   policy:
                     $ref: "#/components/schemas/MarketControlPlanePolicy"
+  /policy/write-gate:
+    get:
+      tags: [Policy]
+      security: []
+      operationId: getMarketplaceWriteGateAttestation
+      description: Returns a nonce-bound, uncached runtime and chain attestation for immediate pre-mutation verification.
+      parameters:
+        - name: nonce
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^[0-9a-f]{32}$"
+      responses:
+        "200":
+          description: Fresh runtime, chain, package, and object-pointer attestation.
+          headers:
+            Cache-Control:
+              description: Prevents storage or reuse of this short-lived attestation.
+              schema:
+                type: string
+            Pragma:
+              description: Legacy no-cache directive.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketplaceWriteGateAttestation"
+        "400":
+          description: The nonce is missing or malformed.
+          headers:
+            Cache-Control:
+              description: Prevents storage or reuse of the error response.
+              schema:
+                type: string
+            Pragma:
+              description: Legacy no-cache directive.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: The write-gate attestation rate limit was exceeded.
+          headers:
+            Cache-Control:
+              description: Prevents storage or reuse of the error response.
+              schema:
+                type: string
+            Pragma:
+              description: Legacy no-cache directive.
+              schema:
+                type: string
+            Retry-After:
+              description: Seconds until the client may retry.
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Runtime, chain, or package attestation unavailable; writes must fail closed.
+          headers:
+            Cache-Control:
+              description: Prevents storage or reuse of the error response.
+              schema:
+                type: string
+            Pragma:
+              description: Legacy no-cache directive.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /policy/sponsor:
     get:
       tags: [Policy, Sponsor]
@@ -3553,7 +3777,7 @@ paths:
               $ref: "#/components/schemas/DisputeFinalizeRequest"
       responses:
         "200":
-          description: Transaction plan for quorum finalization.
+          description: Atomic transaction plan for quorum finalization followed by bound escrow resolution.
           content:
             application/json:
               schema:
@@ -3583,7 +3807,7 @@ paths:
               $ref: "#/components/schemas/DisputeFallbackResolveRequest"
       responses:
         "200":
-          description: Transaction plan for ArbCap fallback resolution (configured arb operator path).
+          description: Atomic transaction plan for ArbCap fallback resolution followed by bound escrow resolution (configured arb operator path).
           content:
             application/json:
               schema:
@@ -3613,7 +3837,7 @@ paths:
               $ref: "#/components/schemas/DisputeTimeoutFallbackRequest"
       responses:
         "200":
-          description: Transaction plan for permissionless timeout fallback resolution.
+          description: Atomic transaction plan for permissionless timeout fallback resolution followed by bound escrow resolution.
           content:
             application/json:
               schema:
@@ -3629,6 +3853,10 @@ paths:
       tags: [Disputes]
       operationId: resolveEscrowWithDisputeBindingPlan
       x-clawnera-surface: public-user
+      description: >-
+        Retained Sui recovery route for resolving an escrow after a separately finalized dispute.
+        IOTA Fresh finalization and fallback routes resolve the bound escrow atomically, so IOTA
+        requests fail closed with `410 Gone` before authentication, RPC, or repository work.
       parameters:
         - name: disputeCaseId
           in: path
@@ -3643,13 +3871,19 @@ paths:
               $ref: "#/components/schemas/DisputeResolveEscrowRequest"
       responses:
         "200":
-          description: Transaction plan for `order_escrow::resolve_dispute_with_binding`.
+          description: Sui recovery/reconciliation transaction plan for `order_escrow::resolve_dispute_with_binding`.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/TxPlanResponse"
         "409":
           description: Escrow/order mismatch, already-resolved escrow, or dispute settlement not yet finalized on-chain.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "410":
+          description: IOTA recovery planning is retired because dispute finalization and fallback settlement are atomic.
           content:
             application/json:
               schema:
@@ -4460,7 +4694,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "409":
-          description: Supplied checkpoint digest does not match the latest finalized checkpoint digest fetched server-side.
+          description: Supplied checkpoint is outside the accepted finalized window, or `receiptId` is already bound to another actor or normalized request.
           content:
             application/json:
               schema:
@@ -4505,6 +4739,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    iotaFreshReadinessRefresh:
+      type: apiKey
+      in: header
+      name: x-clawdex-iota-fresh-readiness-refresh
   responses:
     BadRequest:
       description: Bad request.
@@ -4617,7 +4855,16 @@ components:
     ComplianceBusinessOnboarding:
       type: object
       required:
-        [state, submissionRoute, redirectTo, actorBinding, preconditionStatus, requiredForRoutes, contexts, confirmations]
+        [
+          state,
+          submissionRoute,
+          redirectTo,
+          actorBinding,
+          preconditionStatus,
+          requiredForRoutes,
+          contexts,
+          confirmations
+        ]
       properties:
         state:
           type: string
@@ -4639,7 +4886,13 @@ components:
           type: array
           items:
             type: string
-            enum: ["POST /listings", "POST /listings/{listingId}/renew", "POST /bids", "POST /bids/{bidId}/accept"]
+            enum:
+              [
+                "POST /listings",
+                "POST /listings/{listingId}/renew",
+                "POST /bids",
+                "POST /bids/{bidId}/accept"
+              ]
         contexts:
           type: array
           items:
@@ -4707,7 +4960,17 @@ components:
     BusinessWritePreconditionResponse:
       type: object
       required:
-        [error, detail, redirectTo, compliancePath, useContextPath, route, preconditionStatus, documentVersions, businessOnboarding]
+        [
+          error,
+          detail,
+          redirectTo,
+          compliancePath,
+          useContextPath,
+          route,
+          preconditionStatus,
+          documentVersions,
+          businessOnboarding
+        ]
       properties:
         error:
           type: string
@@ -4725,7 +4988,14 @@ components:
           enum: [/compliance/me/use-context]
         route:
           type: string
-          enum: ["POST /listings", "POST /listings/{listingId}/renew", "POST /bids", "POST /bids/{bidId}/accept", "POST /compliance/me/trader-verification"]
+          enum:
+            [
+              "POST /listings",
+              "POST /listings/{listingId}/renew",
+              "POST /bids",
+              "POST /bids/{bidId}/accept",
+              "POST /compliance/me/trader-verification"
+            ]
         preconditionStatus:
           type: integer
           enum: [428]
@@ -4746,16 +5016,58 @@ components:
           type: string
           minLength: 1
           maxLength: 200
+        chainFamily:
+          type: string
+          enum: [iota, sui]
     AuthChallengeResponse:
       type: object
-      required: [nonce, address, messageToSign, expiresAtMs]
+      additionalProperties: false
+      required:
+        [
+          protocol,
+          version,
+          origin,
+          audience,
+          environment,
+          chainFamily,
+          network,
+          nonce,
+          address,
+          messageToSign,
+          issuedAtMs,
+          expiresAtMs
+        ]
       properties:
+        protocol:
+          type: string
+          enum: [clawdex.auth]
+        version:
+          type: integer
+          enum: [2]
+        origin:
+          type: string
+          format: uri
+          pattern: "^https://"
+        audience:
+          type: string
+          enum: [clawdex-client]
+        environment:
+          type: string
+        chainFamily:
+          type: string
+          enum: [iota, sui]
+        network:
+          type: string
         nonce:
           type: string
         address:
           type: string
         messageToSign:
           type: string
+          description: Canonical CLAWDEX Sign-In v2 message containing every response field in fixed order.
+        issuedAtMs:
+          type: integer
+          format: int64
         expiresAtMs:
           type: integer
           format: int64
@@ -4780,6 +5092,9 @@ components:
           type: string
           minLength: 1
           maxLength: 8192
+        chainFamily:
+          type: string
+          enum: [iota, sui]
     AuthRefreshRequest:
       type: object
       additionalProperties: false
@@ -4791,11 +5106,38 @@ components:
           maxLength: 8192
     AuthSessionView:
       type: object
-      required: [refreshAvailable]
+      required:
+        [
+          id,
+          authVersion,
+          origin,
+          environment,
+          chainFamily,
+          network,
+          refreshAvailable,
+          issuedAtMs,
+          refreshExpiresAtMs,
+          lastRefreshedAtMs,
+          revokedAtMs
+        ]
       properties:
         id:
           type: string
           format: uuid
+        authVersion:
+          type: integer
+          enum: [2]
+        origin:
+          type: string
+          format: uri
+          pattern: "^https://"
+        environment:
+          type: string
+        chainFamily:
+          type: string
+          enum: [iota, sui]
+        network:
+          type: string
         refreshAvailable:
           type: boolean
         issuedAtMs:
@@ -4859,13 +5201,7 @@ components:
       type: object
       additionalProperties: false
       required:
-        [
-          publicKeyMultibase,
-          keyVersion,
-          expiresAtMs,
-          walletBindingMessage,
-          walletBindingSignature
-        ]
+        [publicKeyMultibase, keyVersion, expiresAtMs, walletBindingMessage, walletBindingSignature]
       properties:
         publicKeyMultibase:
           type: string
@@ -4999,8 +5335,7 @@ components:
           $ref: "#/components/schemas/ReputationRoleMetrics"
         factors:
           type: object
-          required:
-            [completionRate, disputeRate, responsivenessRate, volumeFactor, penaltyPoints]
+          required: [completionRate, disputeRate, responsivenessRate, volumeFactor, penaltyPoints]
           properties:
             completionRate:
               type: number
@@ -5297,7 +5632,17 @@ components:
     OrderCommunicationAgreement:
       type: object
       required:
-        [version, status, orderId, transport, relayUrls, buyer, seller, negotiatedAt, policySnapshot]
+        [
+          version,
+          status,
+          orderId,
+          transport,
+          relayUrls,
+          buyer,
+          seller,
+          negotiatedAt,
+          policySnapshot
+        ]
       properties:
         version:
           type: string
@@ -5430,6 +5775,7 @@ components:
       required:
         [
           version,
+          enabled,
           emergencyMode,
           allowedPurposes,
           allowedPaymentCoins,
@@ -5448,6 +5794,8 @@ components:
         version:
           type: string
           enum: [sponsor_policy.v2]
+        enabled:
+          type: boolean
         emergencyMode:
           type: string
           enum: [normal, preflight_only, disabled]
@@ -5476,7 +5824,7 @@ components:
           type: boolean
         orderIdMode:
           type: string
-          enum: [optional, required]
+          enum: [required]
         reservationTtlSec:
           type: integer
           minimum: 1
@@ -5489,8 +5837,11 @@ components:
         reserve:
           type: object
           additionalProperties: false
-          required: [orderIdRequired, rateLimitPerMin, windowSec, windowTxCap, windowGasCap]
+          required:
+            [enabled, orderIdRequired, rateLimitPerMin, windowSec, windowTxCap, windowGasCap]
           properties:
+            enabled:
+              type: boolean
             orderIdRequired:
               type: boolean
             rateLimitPerMin:
@@ -5508,8 +5859,18 @@ components:
         execute:
           type: object
           additionalProperties: false
-          required: [idempotencyHeader, intentSupported, intentRequired, intentSignatureRequired]
+          required:
+            [
+              enabled,
+              idempotencyHeader,
+              intentSupported,
+              intentRequired,
+              intentSignatureRequired,
+              executableTxFamilies
+            ]
           properties:
+            enabled:
+              type: boolean
             idempotencyHeader:
               type: string
               enum: [idempotency-key]
@@ -5519,48 +5880,30 @@ components:
               type: boolean
             intentSignatureRequired:
               type: boolean
+            executableTxFamilies:
+              type: array
+              minItems: 0
+              maxItems: 2
+              uniqueItems: true
+              items:
+                type: string
+                enum: [marketplace_write, claw_payment]
         recommendedGasBudgets:
           type: object
           additionalProperties: false
-          required:
-            [
-              marketplace_write,
-              mailbox_signal,
-              milestone_submit,
-              review_post,
-              deadline_extension,
-              dispute_bond,
-              dispute_vote,
-              dispute_resolution,
-              claw_payment
-            ]
           properties:
             marketplace_write:
-              $ref: "#/components/schemas/SponsorGasEstimate"
-            mailbox_signal:
-              $ref: "#/components/schemas/SponsorGasEstimate"
-            milestone_submit:
-              $ref: "#/components/schemas/SponsorGasEstimate"
-            review_post:
-              $ref: "#/components/schemas/SponsorGasEstimate"
-            deadline_extension:
-              $ref: "#/components/schemas/SponsorGasEstimate"
-            dispute_bond:
-              $ref: "#/components/schemas/SponsorGasEstimate"
-            dispute_vote:
-              $ref: "#/components/schemas/SponsorGasEstimate"
-            dispute_resolution:
               $ref: "#/components/schemas/SponsorGasEstimate"
             claw_payment:
               $ref: "#/components/schemas/SponsorGasEstimate"
     SponsorReserveRequest:
       type: object
       additionalProperties: false
-      required: [purpose, gasBudget]
+      required: [purpose, gasBudget, orderId]
       properties:
         purpose:
           type: string
-          enum: [claw_payment, bond, marketplace_tx]
+          enum: [claw_payment, marketplace_tx]
         gasBudget:
           type: integer
           minimum: 1
@@ -5577,11 +5920,11 @@ components:
     SponsorPreflightRequest:
       type: object
       additionalProperties: false
-      required: [purpose]
+      required: [purpose, orderId]
       properties:
         purpose:
           type: string
-          enum: [claw_payment, bond, marketplace_tx]
+          enum: [claw_payment, marketplace_tx]
         paymentCoin:
           type: string
           minLength: 1
@@ -5599,7 +5942,7 @@ components:
     SponsorExecuteRequest:
       type: object
       additionalProperties: false
-      required: [reservationId, txBytesB64, userSig]
+      required: [reservationId, orderId, txBytesB64, userSig, intent, intentSig]
       properties:
         reservationId:
           type: string
@@ -5625,18 +5968,38 @@ components:
           description: |
             Serialized wallet personal-message signature over the canonical
             sponsor intent message:
-            first line `CLAWDEX Sponsor Execute Intent v1`, second line
-            `network=<network>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|expires_at=<expiresAt>|purpose=<purpose>`.
-            Required whenever `intent` is provided.
+            first line `CLAWDEX Sponsor Execute Intent v2`, second line
+            `version=<version>|chain_family=<chainFamily>|network=<network>|tx_family=<txFamily>|order_id=<orderId>|reservation_id=<reservationId>|tx_digest=<txDigest>|chain_tx_digest=<chainTxDigest>|expires_at=<expiresAt>|purpose=<purpose>`.
+            Required for every sponsor execution.
     SponsorExecutionIntentRequest:
       type: object
       additionalProperties: false
-      required: [network, orderId, reservationId, txDigest, expiresAt, purpose]
+      required:
+        [
+          version,
+          chainFamily,
+          network,
+          txFamily,
+          orderId,
+          reservationId,
+          txDigest,
+          chainTxDigest,
+          expiresAt,
+          purpose
+        ]
       properties:
+        version:
+          type: string
+          enum: [sponsor_execute_intent.v2]
+        chainFamily:
+          type: string
+          enum: [iota, sui]
         network:
           type: string
           minLength: 1
           maxLength: 64
+        txFamily:
+          $ref: "#/components/schemas/SponsorTxFamily"
         orderId:
           type: string
           minLength: 1
@@ -5648,6 +6011,10 @@ components:
         txDigest:
           type: string
           pattern: "^[a-f0-9]{64}$"
+        chainTxDigest:
+          type: string
+          minLength: 16
+          maxLength: 128
         expiresAt:
           type: string
           format: date-time
@@ -5839,7 +6206,15 @@ components:
           type: object
           additionalProperties: false
           required:
-            [sponsorLikelyAllowed, selfPayFallbackAvailable, strictMode, intentRequired, intentSignatureRequired, authGate]
+            [
+              sponsorLikelyAllowed,
+              selfPayFallbackAvailable,
+              strictMode,
+              intentRequired,
+              intentSignatureRequired,
+              executionSupported,
+              authGate
+            ]
           properties:
             sponsorLikelyAllowed:
               type: boolean
@@ -5850,6 +6225,8 @@ components:
             intentRequired:
               type: boolean
             intentSignatureRequired:
+              type: boolean
+            executionSupported:
               type: boolean
             authGate:
               type: object
@@ -5951,6 +6328,7 @@ components:
           strictMode,
           intentRequired,
           intentSignatureRequired,
+          executionSupported,
           selfPayFallbackAvailable,
           reservationTtlSec
         ]
@@ -5981,6 +6359,8 @@ components:
         intentRequired:
           type: boolean
         intentSignatureRequired:
+          type: boolean
+        executionSupported:
           type: boolean
         selfPayFallbackAvailable:
           type: boolean
@@ -6081,7 +6461,7 @@ components:
           pattern: "^[1-9][0-9]*$"
         asset:
           type: string
-          enum: [IOTA, CLAW, SUI, TESTUSD]
+          enum: [IOTA, SUI]
         recipientAddress:
           type: string
           minLength: 3
@@ -6138,7 +6518,13 @@ components:
         policy:
           type: object
           required:
-            [maxFileSizeBytes, maxFileSizeByMimeBytes, allowedMimeTypes, blockedExtensions, requireSha256InManagedMode]
+            [
+              maxFileSizeBytes,
+              maxFileSizeByMimeBytes,
+              allowedMimeTypes,
+              blockedExtensions,
+              requireSha256InManagedMode
+            ]
           properties:
             maxFileSizeBytes:
               type: integer
@@ -6194,7 +6580,8 @@ components:
               type: string
         policy:
           type: object
-          required: [blockedExtensions, requireSha256InManagedMode, illegalContentForbidden, reportEndpoint]
+          required:
+            [blockedExtensions, requireSha256InManagedMode, illegalContentForbidden, reportEndpoint]
           properties:
             blockedExtensions:
               type: array
@@ -6213,23 +6600,19 @@ components:
     ReviewerRegisterRequest:
       type: object
       additionalProperties: false
-      required:
-        [
-          reviewerRegistryObjectId,
-          disputeQuorumConfigObjectId,
-          reputationProfileObjectId,
-          transportType,
-          transportPubkeyHex,
-          stakeAmount
-        ]
+      required: [reputationProfileObjectId, transportType, transportPubkeyHex, stakeAmount]
       anyOf:
         - required: [minCaseRewardNative]
         - required: [minCaseRewardIota]
       properties:
         reviewerRegistryObjectId:
           type: string
+          deprecated: true
+          description: Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied values.
         disputeQuorumConfigObjectId:
           type: string
+          deprecated: true
+          description: Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied values.
         reputationProfileObjectId:
           type: string
         transportType:
@@ -6255,20 +6638,15 @@ components:
     ReviewerUpdateRequest:
       type: object
       additionalProperties: false
-      required:
-        [
-          reviewerRegistryObjectId,
-          reviewerEntryObjectId,
-          transportType,
-          transportPubkeyHex,
-          active
-        ]
+      required: [reviewerEntryObjectId, transportType, transportPubkeyHex, active]
       anyOf:
         - required: [minCaseRewardNative]
         - required: [minCaseRewardIota]
       properties:
         reviewerRegistryObjectId:
           type: string
+          deprecated: true
+          description: Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied values.
         reviewerEntryObjectId:
           type: string
         transportType:
@@ -6293,10 +6671,12 @@ components:
     ReviewerDeregisterRequest:
       type: object
       additionalProperties: false
-      required: [reviewerRegistryObjectId, reviewerEntryObjectId]
+      required: [reviewerEntryObjectId]
       properties:
         reviewerRegistryObjectId:
           type: string
+          deprecated: true
+          description: Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied values.
         reviewerEntryObjectId:
           type: string
     ReviewerClaimMetricsRequest:
@@ -6314,12 +6694,14 @@ components:
     DisputeBondFundRequest:
       type: object
       additionalProperties: false
-      required: [bondObjectId, disputeQuorumConfigObjectId, side, amount]
+      required: [bondObjectId, side, amount]
       properties:
         bondObjectId:
           type: string
         disputeQuorumConfigObjectId:
           type: string
+          deprecated: true
+          description: Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied values.
         side:
           type: string
           enum: [buyer, seller]
@@ -6334,7 +6716,7 @@ components:
     DisputeOpenRequest:
       type: object
       additionalProperties: false
-      required: [escrowObjectId, bondObjectId, invitedReviewerAddresses]
+      required: [escrowObjectId, bondObjectId, invitedReviewerAddresses, reviewerSelectionReceiptId]
       properties:
         escrowObjectId:
           type: string
@@ -6348,7 +6730,7 @@ components:
             type: string
         reviewerSelectionReceiptId:
           type: string
-          description: "Canonical operator shortlist publishes should carry the exact selector receipt id. Omit only for explicit manual recovery / hand-curated fallback publishing."
+          description: "Required selector receipt id. Its ordered shortlist must exactly match invitedReviewerAddresses, including an empty bootstrap shortlist."
         clockObjectId:
           type: string
     DisputeAcceptRequest:
@@ -6544,7 +6926,13 @@ components:
       type: object
       additionalProperties: false
       required:
-        [containsStatement, attachmentCount, mailboxSignalCount, mailboxAckCount, checkpointRefCount]
+        [
+          containsStatement,
+          attachmentCount,
+          mailboxSignalCount,
+          mailboxAckCount,
+          checkpointRefCount
+        ]
       properties:
         containsStatement:
           type: boolean
@@ -6581,7 +6969,16 @@ components:
           format: date-time
     DisputeLinkedDeliverableEvidenceSummary:
       type: object
-      required: [orderId, milestoneId, manifestCid, manifestSha256, cipherSuite, contentProtocol, hasContent]
+      required:
+        [
+          orderId,
+          milestoneId,
+          manifestCid,
+          manifestSha256,
+          cipherSuite,
+          contentProtocol,
+          hasContent
+        ]
       properties:
         orderId:
           type: string
@@ -6658,7 +7055,16 @@ components:
     DisputeLinkedDeliverableEvidenceItem:
       type: object
       required:
-        [evidenceId, kind, declaredByActorAddress, assignmentRound, status, createdAt, summary, actorCanReadContent]
+        [
+          evidenceId,
+          kind,
+          declaredByActorAddress,
+          assignmentRound,
+          status,
+          createdAt,
+          summary,
+          actorCanReadContent
+        ]
       properties:
         evidenceId:
           type: string
@@ -6686,7 +7092,16 @@ components:
     DisputeSupplementalBundleEvidenceItem:
       type: object
       required:
-        [evidenceId, kind, declaredByActorAddress, assignmentRound, status, createdAt, summary, actorCanReadContent]
+        [
+          evidenceId,
+          kind,
+          declaredByActorAddress,
+          assignmentRound,
+          status,
+          createdAt,
+          summary,
+          actorCanReadContent
+        ]
       properties:
         evidenceId:
           type: string
@@ -6746,7 +7161,15 @@ components:
     DisputeEvidenceBundleManifest:
       type: object
       required:
-        [orderId, milestoneId, manifestCid, manifestSha256, cipherSuite, contentProtocol, evidenceClass]
+        [
+          orderId,
+          milestoneId,
+          manifestCid,
+          manifestSha256,
+          cipherSuite,
+          contentProtocol,
+          evidenceClass
+        ]
       properties:
         orderId:
           type: string
@@ -6855,19 +7278,21 @@ components:
     DisputeReplaceReviewersRequest:
       type: object
       additionalProperties: false
-      required: [reviewerRegistryObjectId, invitedReviewerAddresses]
+      required: [invitedReviewerAddresses, reviewerSelectionReceiptId]
       properties:
         reviewerRegistryObjectId:
           type: string
+          deprecated: true
+          description: Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied values.
         invitedReviewerAddresses:
           type: array
-          minItems: 1
+          minItems: 0
           maxItems: 32
           items:
             type: string
         reviewerSelectionReceiptId:
           type: string
-          description: "Canonical operator shortlist publishes should carry the exact selector receipt id. Omit only for explicit manual recovery / hand-curated fallback publishing."
+          description: "Required selector receipt id. Its ordered shortlist must exactly match invitedReviewerAddresses, including an empty bootstrap shortlist."
         clockObjectId:
           type: string
     DisputeFinalizeRequest:
@@ -6903,10 +7328,11 @@ components:
     DisputeFallbackResolveRequest:
       type: object
       additionalProperties: false
-      required: [arbCapObjectId]
       properties:
         arbCapObjectId:
           type: string
+          deprecated: true
+          description: Compatibility-only custody pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied values.
         bondObjectId:
           type: string
           description: "Optional. When omitted, the API auto-hydrates the bound dispute bond object id from the live dispute case."
@@ -6938,10 +7364,67 @@ components:
           type: string
         fn:
           type: string
+    ReviewerSelectionInviteBinding:
+      type: object
+      additionalProperties: false
+      required:
+        - mode
+        - invitedReviewerAddresses
+        - reviewerSelectionReceiptId
+        - postExecuteBindingRequired
+        - bindRoute
+      properties:
+        mode:
+          type: string
+          enum: [selection_receipt_activation]
+        invitedReviewerAddresses:
+          type: array
+          description: Exact ordered reviewer sequence committed by the selection receipt. Duplicates are forbidden.
+          uniqueItems: true
+          items:
+            type: string
+        reviewerSelectionReceiptId:
+          type: string
+          minLength: 1
+        postExecuteBindingRequired:
+          type: boolean
+          enum: [true]
+        bindRoute:
+          type: string
+          description: Route that must bind the executed dispute case to this receipt after publish.
+    ReviewerSelectionAuthorizationRequirement:
+      type: object
+      additionalProperties: false
+      required: [required, state, reviewerSelectionReceiptId, orderedReviewerAddresses]
+      properties:
+        required:
+          type: boolean
+          enum: [true]
+        state:
+          type: string
+          enum: [EXTERNAL_OPERATOR_ACTION_REQUIRED]
+        reviewerSelectionReceiptId:
+          type: string
+          minLength: 1
+        orderedReviewerAddresses:
+          type: array
+          description: Exact ordered reviewer sequence that the external operator must authorize on-chain before publish.
+          uniqueItems: true
+          items:
+            type: string
+    TxPlanPreExecutionRequirements:
+      type: object
+      additionalProperties: false
+      required: [reviewerSelectionAuthorization]
+      properties:
+        reviewerSelectionAuthorization:
+          $ref: "#/components/schemas/ReviewerSelectionAuthorizationRequirement"
     TxPlanResponse:
       type: object
-      required: [status, txBuilder, request]
+      required: [status, txBuilder, request, chainIdentifier]
       properties:
+        chainIdentifier:
+          $ref: "#/components/schemas/ChainIdentifier"
         status:
           type: string
           enum: [tx_plan_unsigned]
@@ -6950,6 +7433,10 @@ components:
         request:
           type: object
           additionalProperties: true
+        inviteBinding:
+          $ref: "#/components/schemas/ReviewerSelectionInviteBinding"
+        preExecutionRequirements:
+          $ref: "#/components/schemas/TxPlanPreExecutionRequirements"
         txMoveCall:
           allOf:
             - $ref: "#/components/schemas/TxMoveCallSummary"
@@ -6999,17 +7486,25 @@ components:
         [
           chainFamily,
           chainNetwork,
+          chainIdentifier,
           status,
           asset,
           executionAllowed,
+          txPlanOnly,
+          signerRequired,
           publicLaunchReady,
           apiSideExecution,
+          runtimeAccessScope,
+          actorAllowlistEnforced,
           transactionBytesBase64,
+          sourceGuard,
           orderId,
           target,
           txPlan
         ]
       properties:
+        chainIdentifier:
+          $ref: "#/components/schemas/ChainIdentifier"
         chainFamily:
           type: string
           enum: [sui]
@@ -7023,7 +7518,9 @@ components:
               sui_order_escrow_create_tx_plan_unsigned,
               sui_order_escrow_release_tx_plan_unsigned,
               sui_usdc_order_escrow_create_tx_plan_unsigned,
-              sui_usdc_order_escrow_release_tx_plan_unsigned
+              sui_usdc_order_escrow_release_tx_plan_unsigned,
+              sui_order_escrow_claim_after_deadline_tx_plan_unsigned,
+              sui_usdc_order_escrow_claim_after_deadline_tx_plan_unsigned
             ]
         asset:
           type: string
@@ -7032,6 +7529,14 @@ components:
           type: boolean
           enum: [false]
           description: "False: the API does not sign, custody, submit, or execute Sui transactions."
+        txPlanOnly:
+          type: boolean
+          enum: [true]
+          description: "True: the response is an unsigned Sui transaction plan only."
+        signerRequired:
+          type: boolean
+          enum: [true]
+          description: "True: the caller wallet must sign and submit the unsigned transaction bytes."
         publicLaunchReady:
           type: boolean
           description: "True when the route is operating on the public Sui mainnet package line; API-side execution stays closed."
@@ -7039,6 +7544,10 @@ components:
           type: boolean
           enum: [false]
           description: "False: API-side execution stays closed; callers must use their own wallet."
+        runtimeAccessScope:
+          type: string
+          enum: [public_mainnet, allowlisted_non_mainnet]
+          description: "Public mainnet routes are open; non-mainnet routes require configured actor allowlists."
         repositoryMutation:
           type: boolean
           enum: [false]
@@ -7047,11 +7556,13 @@ components:
           type: boolean
           enum: [false]
           description: "False: no escrow object binding is created by this tx-plan response."
-        canaryActorAllowlistEnforced:
+        actorAllowlistEnforced:
           type: boolean
         transactionBytesBase64:
           type: string
           description: Unsigned Sui transaction bytes for the caller wallet.
+        sourceGuard:
+          $ref: "#/components/schemas/SuiTxPlanSourceGuard"
         orderId:
           type: string
         target:
@@ -7072,6 +7583,33 @@ components:
           type: object
           additionalProperties: true
           description: "automated public-client coin selection and wallet-split behavior are not claimed."
+    ChainIdentifier:
+      type: string
+      pattern: "^[0-9a-f]{8}$"
+      description: RPC-verified chain identifier. Wallets must compare it with their selected RPC before approval, dry-run, or signing.
+    SuiTxPlanSourceGuard:
+      type: object
+      additionalProperties: true
+      required: [kind, chainIdentifier, transactionBytesSha256, transactionBytesHashAlgorithm]
+      properties:
+        kind:
+          type: string
+          enum:
+            [
+              sui_order_escrow_create_plan_lock,
+              sui_order_escrow_release_binding_guard,
+              sui_order_escrow_claim_after_deadline_binding_guard
+            ]
+        chainIdentifier:
+          allOf:
+            - $ref: "#/components/schemas/ChainIdentifier"
+          description: Must exactly equal the top-level chainIdentifier.
+        transactionBytesSha256:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+        transactionBytesHashAlgorithm:
+          type: string
+          enum: [sha256]
     ReviewerSummary:
       type: object
       required: [objectId, type, owner, active]
@@ -7270,7 +7808,16 @@ components:
     ReviewerInviteSummary:
       type: object
       required:
-        [disputeCaseObjectId, reviewerAddress, assignmentRound, invitedAtMs, status, actorCanAccept, acceptReadiness, source]
+        [
+          disputeCaseObjectId,
+          reviewerAddress,
+          assignmentRound,
+          invitedAtMs,
+          status,
+          actorCanAccept,
+          acceptReadiness,
+          source
+        ]
       properties:
         disputeCaseObjectId:
           type: string
@@ -7474,6 +8021,11 @@ components:
         scope:
           type: string
           enum: [OPEN, REPLACEMENT]
+        receiptId:
+          type: string
+          format: uuid
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          description: "Optional client-persisted idempotency key. It must be a canonical lowercase UUID. An existing receipt is replayed before checkpoint freshness only for an exactly matching actor-bound OPEN request."
         reviewerCount:
           type: integer
           minimum: 1
@@ -7485,7 +8037,7 @@ components:
           description: "Maximum reviewer directory size scanned for this operator selection run. If more reviewer entries exist, the receipt marks `directoryScanTruncated=true`."
         checkpointDigest:
           type: string
-          description: "Must equal the latest finalized IOTA checkpoint digest fetched server-side at shortlist time. The route rejects stale or arbitrary digests with `409 checkpoint_digest_mismatch`."
+          description: "Must identify a finalized IOTA checkpoint inside the server-verified recent sequence-and-age window. The route fetches the latest checkpoint server-side and rejects future, stale, unknown, or arbitrary digests with `409 checkpoint_digest_mismatch`."
         orderId:
           type: string
         milestoneId:
@@ -7523,7 +8075,16 @@ components:
     ReviewerSelectionCandidate:
       type: object
       required:
-        [reviewerAddress, reviewerObjectId, active, exclusionReasons, eligible, selectionScore, selectionSignals, computedWeight]
+        [
+          reviewerAddress,
+          reviewerObjectId,
+          active,
+          exclusionReasons,
+          eligible,
+          selectionScore,
+          selectionSignals,
+          computedWeight
+        ]
       properties:
         reviewerAddress:
           type: string
@@ -7662,6 +8223,10 @@ components:
           type: integer
         selectionPolicyVersion:
           type: string
+        requestHash:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+          description: "SHA-256 fingerprint of the actor, effective receipt UUID, and normalized shortlist request. Historical receipts may omit it and are not eligible for early replay."
         checkpointDigest:
           type: string
         checkpointSequenceNumber:
@@ -7723,7 +8288,14 @@ components:
           type: string
     ReviewerSelectionShortlistResponse:
       type: object
-      required: [receipt, selectionComplete, directoryScanTruncated, publishTarget]
+      required:
+        [
+          receipt,
+          selectionComplete,
+          directoryScanTruncated,
+          publishTarget,
+          operatorAuthorizationHandoff
+        ]
       properties:
         receipt:
           $ref: "#/components/schemas/ReviewerSelectionReceipt"
@@ -7748,6 +8320,52 @@ components:
                     type: string
                 reviewerSelectionReceiptId:
                   type: string
+        operatorAuthorizationHandoff:
+          type: object
+          additionalProperties: false
+          description: "Non-executable custody handoff reconstructed from current runtime pointers. On replay, package and shared-object config IDs may differ from the original response and must be exact-bound and revalidated by the custody runner before publish."
+          required:
+            [
+              state,
+              requiredBeforePublish,
+              custodyBoundary,
+              txBuilder,
+              receiptId,
+              orderedReviewerAddresses,
+              preparedRequest,
+              missingOperatorInputs
+            ]
+          properties:
+            state:
+              type: string
+              enum: [BLOCKED_EXTERNAL_CUSTODY_INPUTS]
+            requiredBeforePublish:
+              type: boolean
+              enum: [true]
+            custodyBoundary:
+              type: string
+              enum: [external]
+            txBuilder:
+              type: string
+              enum:
+                [
+                  disputeQuorum.authorizeOrderReviewerSelection,
+                  disputeQuorum.authorizeReplacementReviewerSelection
+                ]
+            receiptId:
+              type: string
+            orderedReviewerAddresses:
+              type: array
+              items:
+                type: string
+            preparedRequest:
+              type: object
+              additionalProperties: true
+            missingOperatorInputs:
+              type: array
+              description: "All values still required before custody execution, including unavailable current runtime pointers such as `packageId` or `disputeQuorumConfigObjectId`."
+              items:
+                type: string
     DisputeCaseSnapshot:
       type: object
       required: [objectId, type, orderId, milestoneId]
@@ -8083,12 +8701,14 @@ components:
     ReviewPostRequest:
       type: object
       additionalProperties: false
-      required: [reviewRegistryObjectId, escrowObjectId, escrowType, rating, reviewHash]
+      required: [escrowObjectId, escrowType, rating, reviewHash]
       properties:
         reviewRegistryObjectId:
           type: string
           minLength: 3
           maxLength: 200
+          deprecated: true
+          description: Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied values.
         escrowObjectId:
           type: string
           minLength: 3
@@ -8116,12 +8736,14 @@ components:
     DeadlineExtProposeRequest:
       type: object
       additionalProperties: false
-      required: [deadlineExtRegistryObjectId, escrowId, currentDeadlineMs, proposedDeadlineMs]
+      required: [escrowId, currentDeadlineMs, proposedDeadlineMs]
       properties:
         deadlineExtRegistryObjectId:
           type: string
           minLength: 3
           maxLength: 200
+          deprecated: true
+          description: Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied values.
         escrowId:
           type: string
           minLength: 3
@@ -8139,19 +8761,35 @@ components:
     DeadlineExtActionRequest:
       type: object
       additionalProperties: false
-      required: [deadlineExtRegistryObjectId]
       properties:
         deadlineExtRegistryObjectId:
           type: string
           minLength: 3
           maxLength: 200
+          deprecated: true
+          description: Compatibility-only pointer. IOTA Fresh resolves this from the signed generation and rejects client-supplied values.
         clockObjectId:
           type: string
           minLength: 3
           maxLength: 200
     AuthClaims:
       type: object
-      required: [sub, iat, exp, jti, iss, aud]
+      required:
+        [
+          sub,
+          iat,
+          exp,
+          jti,
+          iss,
+          aud,
+          sid,
+          tokenType,
+          authVersion,
+          origin,
+          environment,
+          chainFamily,
+          network
+        ]
       properties:
         sub:
           type: string
@@ -8175,9 +8813,35 @@ components:
         tokenType:
           type: string
           enum: [access]
+        authVersion:
+          type: integer
+          enum: [2]
+        origin:
+          type: string
+          format: uri
+          pattern: "^https://"
+        environment:
+          type: string
+        chainFamily:
+          type: string
+          enum: [iota, sui]
+        network:
+          type: string
     Listing:
       type: object
-      required: [id, creatorAddress, listingMode, title, description, currency, budgetAmount, milestones, status, createdAt]
+      required:
+        [
+          id,
+          creatorAddress,
+          listingMode,
+          title,
+          description,
+          currency,
+          budgetAmount,
+          milestones,
+          status,
+          createdAt
+        ]
       properties:
         id:
           type: string
@@ -8421,8 +9085,7 @@ components:
           type: array
           items:
             type: object
-            required:
-              [asset, targetReviewerPayoutPerReviewer, warningReviewerPayoutPerReviewer]
+            required: [asset, targetReviewerPayoutPerReviewer, warningReviewerPayoutPerReviewer]
             properties:
               asset:
                 type: string
@@ -8620,7 +9283,8 @@ components:
           minimum: 1
     AcceptBidResponse:
       type: object
-      required: [order, disputeBondRequired, disputeBondState, disputeBondPolicy, disputeBondGuidance]
+      required:
+        [order, disputeBondRequired, disputeBondState, disputeBondPolicy, disputeBondGuidance]
       properties:
         order:
           $ref: "#/components/schemas/Order"
@@ -8805,7 +9469,18 @@ components:
     WebhookDelivery:
       type: object
       required:
-        [id, subscriptionId, eventId, actorAddress, targetUrl, eventType, attempts, status, createdAt, updatedAt]
+        [
+          id,
+          subscriptionId,
+          eventId,
+          actorAddress,
+          targetUrl,
+          eventType,
+          attempts,
+          status,
+          createdAt,
+          updatedAt
+        ]
       properties:
         id:
           type: string
@@ -8854,18 +9529,7 @@ components:
     OrderMilestone:
       type: object
       required:
-        [
-          id,
-          orderId,
-          seq,
-          title,
-          amount,
-          dueAtMs,
-          reviewWindowHours,
-          status,
-          createdAt,
-          updatedAt
-        ]
+        [id, orderId, seq, title, amount, dueAtMs, reviewWindowHours, status, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -9036,7 +9700,16 @@ components:
     SponsorCircuitStatusResponse:
       type: object
       required:
-        [generatedAt, sponsorProxyMode, gasStationCircuit, sponsorWindow, abusePolicy, capabilityPolicy, metrics, activeAbuse]
+        [
+          generatedAt,
+          sponsorProxyMode,
+          gasStationCircuit,
+          sponsorWindow,
+          abusePolicy,
+          capabilityPolicy,
+          metrics,
+          activeAbuse
+        ]
       properties:
         generatedAt:
           type: string
@@ -9059,7 +9732,16 @@ components:
         sponsorWindow:
           type: object
           required:
-            [windowSec, txCap, gasCap, windowStartedAtMs, windowEndsAtMs, txCount, gasTotal, blockedCount]
+            [
+              windowSec,
+              txCap,
+              gasCap,
+              windowStartedAtMs,
+              windowEndsAtMs,
+              txCount,
+              gasTotal,
+              blockedCount
+            ]
           properties:
             windowSec:
               type: integer
@@ -9341,7 +10023,8 @@ components:
     ProfessionalAcknowledgementRequest:
       type: object
       additionalProperties: false
-      required: [confirmedProfessionalCapacity, confirmedAge18Plus, termsVersion, riskDisclosureVersion]
+      required:
+        [confirmedProfessionalCapacity, confirmedAge18Plus, termsVersion, riskDisclosureVersion]
       properties:
         confirmedProfessionalCapacity:
           type: boolean
@@ -9457,7 +10140,8 @@ components:
           type: boolean
     ConsumerAcknowledgement:
       type: object
-      required: [acknowledgedRisks, confirmedAge18Plus, termsVersion, riskDisclosureVersion, acknowledgedAt]
+      required:
+        [acknowledgedRisks, confirmedAge18Plus, termsVersion, riskDisclosureVersion, acknowledgedAt]
       properties:
         acknowledgedRisks:
           type: boolean
@@ -9472,7 +10156,14 @@ components:
           format: date-time
     ProfessionalAcknowledgement:
       type: object
-      required: [confirmedProfessionalCapacity, confirmedAge18Plus, termsVersion, riskDisclosureVersion, acknowledgedAt]
+      required:
+        [
+          confirmedProfessionalCapacity,
+          confirmedAge18Plus,
+          termsVersion,
+          riskDisclosureVersion,
+          acknowledgedAt
+        ]
       properties:
         confirmedProfessionalCapacity:
           type: boolean
@@ -9543,6 +10234,8 @@ components:
           properties:
             foundationPackageId:
               type: string
+            governancePackageId:
+              type: string
             settlementPackageId:
               type: string
             fulfillmentPackageId:
@@ -9550,6 +10243,8 @@ components:
             opsPackageId:
               type: string
             governanceConfigObjectId:
+              type: string
+            orderMailboxRegistryObjectId:
               type: string
             assetLaneManagerPackageId:
               type: string
@@ -9678,7 +10373,15 @@ components:
                 type: string
         sameAssetPolicy:
           type: object
-          required: [orderAssetSource, disputeBond, managedStorageFee, legacyBothAllowedSymbols, disputeBondUnsupportedOrderAssets, disputeBondFallbackPrincipalByOrderAsset]
+          required:
+            [
+              orderAssetSource,
+              disputeBond,
+              managedStorageFee,
+              legacyBothAllowedSymbols,
+              disputeBondUnsupportedOrderAssets,
+              disputeBondFallbackPrincipalByOrderAsset
+            ]
           properties:
             orderAssetSource:
               type: string
@@ -9711,8 +10414,7 @@ components:
             $ref: "#/components/schemas/AssetPolicyAssetEntry"
     AssetPolicyAssetEntry:
       type: object
-      required:
-        [symbol, displayName, decimals, fundingMode, feeMode, publicStatus, lanes, networks]
+      required: [symbol, displayName, decimals, fundingMode, feeMode, publicStatus, lanes, networks]
       properties:
         symbol:
           type: string
@@ -9814,6 +10516,8 @@ components:
           properties:
             foundationPackageId:
               type: string
+            governancePackageId:
+              type: string
             settlementPackageId:
               type: string
             fulfillmentPackageId:
@@ -9824,15 +10528,27 @@ components:
               type: string
             governanceConfigObjectId:
               type: string
+            orderMailboxRegistryObjectId:
+              type: string
             disputeQuorumConfigObjectId:
               type: string
             reputationInitFeeConfigObjectId:
               type: string
             listingDepositConfigObjectId:
               type: string
+            managedStorageFeeConfigObjectId:
+              type: string
         controlPlane:
           type: object
-          required: [escrowFee, listingFee, listingDeposit, reputationInitFee, disputeEconomics]
+          required:
+            [
+              escrowFee,
+              listingFee,
+              listingDeposit,
+              reputationInitFee,
+              disputeEconomics,
+              managedStorageFee
+            ]
           properties:
             escrowFee:
               type: object
@@ -9947,7 +10663,16 @@ components:
                       type: string
             listingDeposit:
               type: object
-              required: [source, updateMode, queueRouteId, approveRouteId, cancelRouteId, applyRouteId, sourceStatus]
+              required:
+                [
+                  source,
+                  updateMode,
+                  queueRouteId,
+                  approveRouteId,
+                  cancelRouteId,
+                  applyRouteId,
+                  sourceStatus
+                ]
               properties:
                 source:
                   type: string
@@ -9974,7 +10699,16 @@ components:
                   type: string
             reputationInitFee:
               type: object
-              required: [source, updateMode, queueRouteId, approveRouteId, cancelRouteId, applyRouteId, sourceStatus]
+              required:
+                [
+                  source,
+                  updateMode,
+                  queueRouteId,
+                  approveRouteId,
+                  cancelRouteId,
+                  applyRouteId,
+                  sourceStatus
+                ]
               properties:
                 source:
                   type: string
@@ -10045,6 +10779,71 @@ components:
                   enum: [live_onchain, not_configured, read_unavailable]
                 detail:
                   type: string
+            managedStorageFee:
+              oneOf:
+                - type: object
+                  required: [source, updateMode, envKeys]
+                  properties:
+                    source:
+                      type: string
+                      enum: [runtime_env]
+                    updateMode:
+                      type: string
+                      enum: [worker_redeploy]
+                    envKeys:
+                      type: array
+                      items:
+                        type: string
+                - type: object
+                  required:
+                    [
+                      source,
+                      updateMode,
+                      queueRouteId,
+                      approveRouteId,
+                      cancelRouteId,
+                      applyRouteId,
+                      managedFields,
+                      readOnlyFields,
+                      fixedFields,
+                      sourceStatus
+                    ]
+                  properties:
+                    source:
+                      type: string
+                      enum: [onchain_config]
+                    updateMode:
+                      type: string
+                      enum: [admin_chain_plan]
+                    configObjectId:
+                      type: string
+                    packageId:
+                      type: string
+                    queueRouteId:
+                      type: string
+                    approveRouteId:
+                      type: string
+                    cancelRouteId:
+                      type: string
+                    applyRouteId:
+                      type: string
+                    managedFields:
+                      type: array
+                      items:
+                        type: string
+                    readOnlyFields:
+                      type: array
+                      items:
+                        type: string
+                    fixedFields:
+                      type: array
+                      items:
+                        type: string
+                    sourceStatus:
+                      type: string
+                      enum: [live_onchain, not_configured, read_unavailable]
+                    detail:
+                      type: string
         escrowFeeBps:
           type: object
           required: [IOTA, CLAW, sourceStatus]
@@ -10241,7 +11040,8 @@ components:
                   type: string
                   enum: [IOTA]
                 minAmount:
-                  type: [string, "null"]
+                  type: string
+                  nullable: true
                   pattern: "^[0-9]+$"
             disputeBondPerSide:
               type: object
@@ -10251,31 +11051,38 @@ components:
                   type: string
                   enum: [IOTA]
                 minAmount:
-                  type: [string, "null"]
+                  type: string
+                  nullable: true
                   pattern: "^[0-9]+$"
                 maxAmount:
-                  type: [string, "null"]
+                  type: string
+                  nullable: true
                   pattern: "^[0-9]+$"
             quorumVotes:
               type: object
               required: [defaultRequiredVotes, minRequiredVotes, maxRequiredVotes]
               properties:
                 defaultRequiredVotes:
-                  type: [integer, "null"]
+                  type: integer
+                  nullable: true
                 minRequiredVotes:
-                  type: [integer, "null"]
+                  type: integer
+                  nullable: true
                 maxRequiredVotes:
-                  type: [integer, "null"]
+                  type: integer
+                  nullable: true
             payoutsBps:
               type: object
               required: [reviewer, platformFallback]
               properties:
                 reviewer:
-                  type: [integer, "null"]
+                  type: integer
+                  nullable: true
                   minimum: 0
                   maximum: 10000
                 platformFallback:
-                  type: [integer, "null"]
+                  type: integer
+                  nullable: true
                   minimum: 0
                   maximum: 10000
             reviewerSlashBps:
@@ -10283,19 +11090,23 @@ components:
               required: [noshow, invalidReveal, overturn]
               properties:
                 noshow:
-                  type: [integer, "null"]
+                  type: integer
+                  nullable: true
                   minimum: 0
                   maximum: 10000
                 invalidReveal:
-                  type: [integer, "null"]
+                  type: integer
+                  nullable: true
                   minimum: 0
                   maximum: 10000
                 overturn:
-                  type: [integer, "null"]
+                  type: integer
+                  nullable: true
                   minimum: 0
                   maximum: 10000
             platformFallbackSink:
-              type: [string, "null"]
+              type: string
+              nullable: true
             recommendation:
               $ref: "#/components/schemas/DisputeBondRecommendationPolicy"
     MarketControlPlanePolicy:
@@ -10310,9 +11121,147 @@ components:
           $ref: "#/components/schemas/FeePolicy"
         runtime:
           $ref: "#/components/schemas/RuntimeReadLanePolicy"
+    MarketplaceWriteGateAttestation:
+      type: object
+      required: [version, nonce, generatedAt, generatedAtMs, expiresAtMs, apiOrigin, gate, chain]
+      properties:
+        version:
+          type: string
+          enum: [marketplace_write_gate.v1]
+        nonce:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+        generatedAt:
+          type: string
+          format: date-time
+        generatedAtMs:
+          type: integer
+          minimum: 0
+        expiresAtMs:
+          type: integer
+          minimum: 0
+        apiOrigin:
+          type: string
+          format: uri
+        gate:
+          type: object
+          required:
+            [
+              source,
+              preset,
+              publicApiWrites,
+              marketplaceWrites,
+              releaseProfile,
+              releasePhase,
+              runtimeReady,
+              productiveWritesEnabled
+            ]
+          properties:
+            source:
+              type: string
+              enum: [runtime_db, stale_cache, unavailable_default_normal, write_gate_fail_closed]
+            preset:
+              type: string
+              enum: [normal, write_freeze, maintenance_public]
+            publicApiWrites:
+              type: string
+              enum: [live, blocked]
+            marketplaceWrites:
+              type: string
+              enum: [live, blocked]
+            releaseProfile:
+              type: string
+              enum: [off, controlled_v1]
+            releasePhase:
+              type: string
+              enum: [off, prepublish_closed, pre_canary_closed, canary_allowlisted]
+            runtimeReady:
+              type: boolean
+            productiveWritesEnabled:
+              type: boolean
+        chain:
+          type: object
+          required: [family, network, chainIdentifier, packageIds, objectIds]
+          properties:
+            family:
+              type: string
+              enum: [iota, sui]
+            network:
+              type: string
+              enum: [mainnet, testnet]
+            chainIdentifier:
+              type: string
+              pattern: "^[0-9a-f]{8}$"
+            packageIds:
+              type: object
+              required: [foundation, governance, settlement, fulfillment, ops]
+              properties:
+                foundation:
+                  type: string
+                  pattern: "^0x[0-9a-f]{64}$"
+                governance:
+                  type: string
+                  pattern: "^0x[0-9a-f]{64}$"
+                settlement:
+                  type: string
+                  pattern: "^0x[0-9a-f]{64}$"
+                fulfillment:
+                  type: string
+                  pattern: "^0x[0-9a-f]{64}$"
+                ops:
+                  type: string
+                  pattern: "^0x[0-9a-f]{64}$"
+            objectIds:
+              type: object
+              required:
+                [
+                  governanceConfigObjectId,
+                  orderMailboxRegistryObjectId,
+                  disputeQuorumConfigObjectId,
+                  marketplaceFeeConfigObjectId,
+                  reputationInitFeeConfigObjectId,
+                  listingDepositConfigObjectId,
+                  reviewerRegistryObjectId
+                ]
+              properties:
+                governanceConfigObjectId:
+                  type: string
+                  nullable: true
+                  pattern: "^0x[0-9a-f]{64}$"
+                orderMailboxRegistryObjectId:
+                  type: string
+                  nullable: true
+                  pattern: "^0x[0-9a-f]{64}$"
+                disputeQuorumConfigObjectId:
+                  type: string
+                  nullable: true
+                  pattern: "^0x[0-9a-f]{64}$"
+                marketplaceFeeConfigObjectId:
+                  type: string
+                  nullable: true
+                  pattern: "^0x[0-9a-f]{64}$"
+                reputationInitFeeConfigObjectId:
+                  type: string
+                  nullable: true
+                  pattern: "^0x[0-9a-f]{64}$"
+                listingDepositConfigObjectId:
+                  type: string
+                  nullable: true
+                  pattern: "^0x[0-9a-f]{64}$"
+                reviewerRegistryObjectId:
+                  type: string
+                  nullable: true
+                  pattern: "^0x[0-9a-f]{64}$"
     RuntimeReadLanePolicy:
       type: object
-      required: [discoverySnapshotOnlyMode, actorReadThrottleMode, sponsorEmergencyMode, maintenance, readLanes]
+      required:
+        [
+          discoverySnapshotOnlyMode,
+          actorReadThrottleMode,
+          sponsorEmergencyMode,
+          maintenance,
+          readLanes
+        ]
       properties:
         discoverySnapshotOnlyMode:
           type: boolean
@@ -10423,7 +11372,7 @@ components:
           enum: [runtime_db, stale_cache, unavailable_default_normal]
     BotDiscoverySnapshot:
       type: object
-      required: [version, generatedAt, helper, publicRead, portalMirror, runtime, guidance]
+      required: [version, generatedAt, helper, publicRead, portalMirror, release, runtime, guidance]
       properties:
         version:
           type: string
@@ -10520,6 +11469,23 @@ components:
               type: string
             guidePath:
               type: string
+        release:
+          type: object
+          additionalProperties: false
+          required: [phase, marketplaceReads, marketplaceWrites, txPlans]
+          properties:
+            phase:
+              type: string
+              enum: [off, prepublish_closed]
+            marketplaceReads:
+              type: string
+              enum: [live, blocked]
+            marketplaceWrites:
+              type: string
+              enum: [live, blocked]
+            txPlans:
+              type: string
+              enum: [live, blocked]
         runtime:
           $ref: "#/components/schemas/RuntimeReadLanePolicy"
         guidance:
@@ -10532,8 +11498,6 @@ components:
                 type: string
             actorFeeds:
               type: object
-              required:
-                [eventsPath, ordersPath, orderTimelinePathTemplate, orderMailboxPathTemplate, disputePathTemplate]
               properties:
                 eventsPath:
                   type: string

@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -9,6 +8,15 @@ import {
   tokenExpiresSoon,
   validateRuntimeAuthState
 } from "../lib/runtime-auth.mjs";
+import {
+  normalizeAuthenticatedBaseUrl,
+  readPrivateFile,
+  writePrivateJsonAtomic
+} from "../lib/local-security.mjs";
+import {
+  createMarketplaceWriteGateNonce,
+  validateMarketplaceWriteGateAttestation
+} from "../lib/marketplace-write-gate.mjs";
 import {
   CUSTOM_NOTIFICATION_PRESET,
   DEFAULT_NOTIFICATION_BATCH_LIMIT,
@@ -66,6 +74,7 @@ Auth precedence:
 - Env auth wins when valid.
 - Invalid env auth fails startup by default.
 - Set CLAWNERA_NOTIFY_ALLOW_AUTH_STATE_FALLBACK=1 to let the notifier fall back to a valid auth state file.
+- Token refresh is an auth mutation and runs only after the exact API target passes the Marketplace write gate.
 `;
 const CURSOR_PERSIST_ATTEMPTS = 3;
 const CURSOR_PERSIST_RETRY_DELAY_MS = 150;
@@ -82,12 +91,9 @@ function readRequiredEnv(name) {
 
 function normalizeApiBase(value) {
   try {
-    const parsed = new URL(String(value || "").trim());
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      throw new Error("invalid_protocol");
-    }
-    const normalized = parsed.toString();
-    return normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+    return normalizeAuthenticatedBaseUrl(String(value || ""), {
+      errorCode: "missing_or_invalid_api_base"
+    });
   } catch {
     return "";
   }
@@ -151,7 +157,7 @@ function backupStateFile(cursorFile) {
 }
 
 async function readCursorStateFile(cursorFile) {
-  const raw = await fs.readFile(cursorFile, "utf8");
+  const raw = await readPrivateFile(cursorFile, "utf8");
   const parsed = JSON.parse(raw);
   return typeof parsed.cursor === "string" && parsed.cursor ? { cursor: parsed.cursor } : { cursor: undefined };
 }
@@ -187,13 +193,10 @@ export async function loadState(cursorFile) {
 
 export async function saveState(cursorFile, state) {
   const target = path.resolve(cursorFile);
-  const tempFile = `${target}.${process.pid}.${Date.now()}.tmp`;
   const backupFile = backupStateFile(target);
-  await fs.mkdir(path.dirname(target), { recursive: true });
-  await fs.writeFile(tempFile, JSON.stringify(state, null, 2), { mode: 0o600 });
-  await fs.rename(tempFile, target);
+  await writePrivateJsonAtomic(target, state);
   try {
-    await fs.copyFile(target, backupFile);
+    await writePrivateJsonAtomic(backupFile, state);
     return {
       backupWarning: null
     };
@@ -221,6 +224,7 @@ async function fetchEventPage({ apiBase, jwt, cursor, batchLimit, timeoutMs, eve
 
   const response = await fetch(url, {
     method: "GET",
+    redirect: "error",
     headers: {
       accept: "application/json",
       authorization: `Bearer ${jwt}`
@@ -236,6 +240,54 @@ async function fetchEventPage({ apiBase, jwt, cursor, batchLimit, timeoutMs, eve
     items: Array.isArray(payload.items) ? payload.items : [],
     nextCursor: typeof payload.nextCursor === "string" && payload.nextCursor ? payload.nextCursor : null
   };
+}
+
+async function assertNotifierAuthRefreshWriteGate({ apiBase, timeoutMs }) {
+  const nonce = createMarketplaceWriteGateNonce();
+  const gateUrl = new URL("/policy/write-gate", apiBase);
+  gateUrl.searchParams.set("nonce", nonce);
+  let response;
+  let body;
+  try {
+    response = await fetch(gateUrl, {
+      method: "GET",
+      cache: "no-store",
+      redirect: "error",
+      headers: {
+        accept: "application/json",
+        "cache-control": "no-cache, no-store",
+        pragma: "no-cache"
+      },
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+    if (!response.ok) {
+      throw new Error(`marketplace_write_gate_http_${response.status}`);
+    }
+    body = await response.json();
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "marketplace_write_gate_request_failed";
+    throw new Error(`auth_refresh_write_gate_unavailable:${reason}`);
+  }
+
+  try {
+    return validateMarketplaceWriteGateAttestation({
+      body,
+      headers: response.headers,
+      apiBase,
+      nonce
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "marketplace_write_gate_validation_failed";
+    if (reason === "marketplace_write_gate_closed") {
+      throw new Error("auth_refresh_write_gate_closed");
+    }
+    throw new Error(`auth_refresh_write_gate_unavailable:${reason}`);
+  }
+}
+
+async function refreshNotifierAuthState({ apiBase, authState, timeoutMs }) {
+  await assertNotifierAuthRefreshWriteGate({ apiBase, timeoutMs });
+  return refreshAuthState({ apiBase, authState, timeoutMs });
 }
 
 async function loadNotifierAuthState({ apiBase, authStateFile }) {
@@ -331,7 +383,7 @@ async function ensureFreshToken({ authState, authStateFile, timeoutMs, refreshSk
     if (!authState?.refreshToken) {
       throw new Error("missing_auth_token");
     }
-    const refreshed = await refreshAuthState({
+    const refreshed = await refreshNotifierAuthState({
       apiBase: authState.apiBase,
       authState,
       timeoutMs
@@ -350,7 +402,7 @@ async function ensureFreshToken({ authState, authStateFile, timeoutMs, refreshSk
     throw new Error("expired_auth_no_refresh");
   }
 
-  const refreshed = await refreshAuthState({
+  const refreshed = await refreshNotifierAuthState({
     apiBase: authState.apiBase,
     authState,
     timeoutMs
@@ -396,7 +448,7 @@ async function fetchEventPageWithRefresh({
       throw error;
     }
 
-    activeState = await refreshAuthState({
+    activeState = await refreshNotifierAuthState({
       apiBase: activeState.apiBase,
       authState: activeState,
       timeoutMs
@@ -432,6 +484,7 @@ async function fetchEventPageWithRefresh({
 async function sendTelegramMessage({ botToken, chatId, text, timeoutMs }) {
   const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",
+    redirect: "error",
     headers: {
       "content-type": "application/json"
     },
@@ -465,6 +518,7 @@ function isFatalNotifierError(message) {
     message.startsWith("invalid_env_auth_source:") ||
     message.startsWith("auth_state_api_base_mismatch") ||
     message.startsWith("invalid_auth_state_file") ||
+    message.startsWith("auth_refresh_write_gate_") ||
     message.startsWith("auth_refresh_failed:400") ||
     message.startsWith("auth_refresh_failed:401") ||
     message.startsWith("auth_refresh_failed:403") ||

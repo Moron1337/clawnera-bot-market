@@ -18,9 +18,11 @@ import {
   resolveIotaRpcUrl,
 } from "../lib/iota-local.mjs";
 import {
+  claimIotaTransferDraft,
   DEFAULT_TRANSFER_DRAFT_TTL_SEC,
   defaultIotaTransferDraftsPath,
   deleteIotaTransferDraft,
+  finalizeIotaTransferDraft,
   loadIotaTransferDraft,
   saveIotaTransferDraft,
 } from "../lib/iota-transfer-drafts.mjs";
@@ -221,11 +223,17 @@ test("getIotaGas returns the local IOTA gas objects for the selected signer", as
 
 test("executeIotaTransfer accepts a precomputed signature and executes locally", async () => {
   const executions = [];
+  let signatureVerified = false;
+  let beforeBroadcastCalls = 0;
   const result = await executeIotaTransfer(
     {
       txBytesB64: Buffer.from("payload").toString("base64"),
       signature: "AQIDBA==",
       signerAddress: A,
+      beforeBroadcast: async () => {
+        assert.equal(signatureVerified, true);
+        beforeBroadcastCalls += 1;
+      },
     },
     {
       clientFactory: () => ({
@@ -234,16 +242,20 @@ test("executeIotaTransfer accepts a precomputed signature and executes locally",
           return { digest: "0xdeadbeef" };
         },
       }),
-      verifyTransactionSignature: async () => ({
-        toIotaAddress() {
-          return A;
-        },
-      }),
+      verifyTransactionSignature: async () => {
+        signatureVerified = true;
+        return {
+          toIotaAddress() {
+            return A;
+          },
+        };
+      },
     },
   );
 
   assert.equal(result.signature, "AQIDBA==");
   assert.equal(result.verifyResult.signerAddress, A);
+  assert.equal(beforeBroadcastCalls, 1);
   assert.deepEqual(executions, [
     {
       transactionBlock: Buffer.from("payload"),
@@ -287,7 +299,8 @@ test("executeIotaTransfer signs locally when no external signature is supplied",
 });
 
 test("transfer drafts save, load, and delete cleanly", async () => {
-  const draftsPath = defaultIotaTransferDraftsPath(path.join(os.tmpdir(), "clawnera-drafts-test"));
+  const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawnera-drafts-test-"));
+  const draftsPath = defaultIotaTransferDraftsPath(homeDir);
   const draft = {
     id: "draft-1",
     kind: "iota_transfer",
@@ -302,18 +315,92 @@ test("transfer drafts save, load, and delete cleanly", async () => {
     rpcUrl: "https://rpc.example",
   };
 
-  await saveIotaTransferDraft(draftsPath, draft);
-  const loaded = await loadIotaTransferDraft(draftsPath, "draft-1");
-  assert.equal(loaded.id, "draft-1");
-  assert.equal(loaded.signerAddress, A);
+  try {
+    await saveIotaTransferDraft(draftsPath, draft);
+    const loaded = await loadIotaTransferDraft(draftsPath, "draft-1");
+    assert.equal(loaded.id, "draft-1");
+    assert.equal(loaded.signerAddress, A);
 
-  await deleteIotaTransferDraft(draftsPath, "draft-1");
-  await assert.rejects(async () => loadIotaTransferDraft(draftsPath, "draft-1"), /transfer_draft_not_found/);
+    await deleteIotaTransferDraft(draftsPath, "draft-1");
+    await assert.rejects(async () => loadIotaTransferDraft(draftsPath, "draft-1"), /transfer_draft_consumed/);
+    await assert.rejects(() => saveIotaTransferDraft(draftsPath, draft), /transfer_draft_already_consumed/);
+  } finally {
+    await fs.rm(homeDir, { recursive: true, force: true });
+  }
+});
+
+test("concurrent transfer draft saves preserve both approvals", async () => {
+  const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawnera-drafts-concurrent-save-"));
+  const draftsPath = defaultIotaTransferDraftsPath(homeDir);
+  const baseDraft = {
+    kind: "iota_transfer",
+    createdAt: Date.now(),
+    expiresAt: Date.now() + DEFAULT_TRANSFER_DRAFT_TTL_SEC * 1000,
+    signerAddress: A,
+    recipient: B,
+    amountNanos: "100",
+    inputCoins: [C],
+    txBytesB64: "QUJD",
+    network: "mainnet",
+    rpcUrl: "https://rpc.example",
+  };
+  try {
+    await Promise.all([
+      saveIotaTransferDraft(draftsPath, { ...baseDraft, id: "draft-concurrent-a" }),
+      saveIotaTransferDraft(draftsPath, { ...baseDraft, id: "draft-concurrent-b" }),
+    ]);
+    assert.equal((await loadIotaTransferDraft(draftsPath, "draft-concurrent-a")).id, "draft-concurrent-a");
+    assert.equal((await loadIotaTransferDraft(draftsPath, "draft-concurrent-b")).id, "draft-concurrent-b");
+  } finally {
+    await fs.rm(homeDir, { recursive: true, force: true });
+  }
+});
+
+test("transfer draft claims are single-use and uncertainty tombstones contain no transaction bytes", async () => {
+  const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawnera-drafts-claim-"));
+  const draftsPath = defaultIotaTransferDraftsPath(homeDir);
+  const draft = {
+    id: "draft-single-use",
+    kind: "iota_transfer",
+    createdAt: Date.now(),
+    expiresAt: Date.now() + DEFAULT_TRANSFER_DRAFT_TTL_SEC * 1000,
+    signerAddress: A,
+    recipient: B,
+    amountNanos: "100",
+    inputCoins: [C],
+    txBytesB64: "QUJD",
+    network: "mainnet",
+    rpcUrl: "https://rpc.example",
+  };
+  try {
+    await saveIotaTransferDraft(draftsPath, draft);
+    const claims = await Promise.allSettled([
+      claimIotaTransferDraft(draftsPath, draft.id, "claim-a"),
+      claimIotaTransferDraft(draftsPath, draft.id, "claim-b"),
+    ]);
+    const winner = claims.find((entry) => entry.status === "fulfilled");
+    const loser = claims.find((entry) => entry.status === "rejected");
+    assert.ok(winner);
+    assert.match(loser.reason.message, /transfer_draft_execution_uncertain/);
+    const claimId = claims[0].status === "fulfilled" ? "claim-a" : "claim-b";
+    await finalizeIotaTransferDraft(draftsPath, draft.id, {
+      claimId,
+      status: "UNCERTAIN",
+    });
+    await assert.rejects(() => loadIotaTransferDraft(draftsPath, draft.id), /transfer_draft_execution_uncertain/);
+    await assert.rejects(() => saveIotaTransferDraft(draftsPath, draft), /transfer_draft_already_consumed/);
+    const stored = await fs.readFile(draftsPath, "utf8");
+    assert.equal(stored.includes("txBytesB64"), false);
+    assert.equal(stored.includes("QUJD"), false);
+  } finally {
+    await fs.rm(homeDir, { recursive: true, force: true });
+  }
 });
 
 test("transfer drafts tolerate an existing empty drafts file", async () => {
-  const draftsPath = path.join(os.tmpdir(), `clawnera-empty-drafts-${Date.now()}.json`);
-  await fs.writeFile(draftsPath, "");
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawnera-empty-drafts-"));
+  const draftsPath = path.join(tempDir, "drafts.json");
+  await fs.writeFile(draftsPath, "", { mode: 0o600 });
 
   const draft = {
     id: "draft-empty-file",
@@ -333,4 +420,22 @@ test("transfer drafts tolerate an existing empty drafts file", async () => {
   const loaded = await loadIotaTransferDraft(draftsPath, draft.id);
   assert.equal(loaded.id, draft.id);
   await fs.unlink(draftsPath);
+});
+
+test("transfer drafts reject permissive or symlinked approval state", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawnera-unsafe-drafts-"));
+  const unsafePath = path.join(tempDir, "unsafe.json");
+  const symlinkPath = path.join(tempDir, "symlink.json");
+  await fs.writeFile(unsafePath, JSON.stringify({ version: 1, drafts: [] }), { mode: 0o644 });
+  await fs.chmod(unsafePath, 0o644);
+  await fs.symlink(unsafePath, symlinkPath);
+
+  await assert.rejects(
+    () => loadIotaTransferDraft(unsafePath, "draft-1"),
+    /unsafe_secret_file_mode/,
+  );
+  await assert.rejects(
+    () => loadIotaTransferDraft(symlinkPath, "draft-1"),
+    /unsafe_secret_file_symlink/,
+  );
 });

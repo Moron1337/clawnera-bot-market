@@ -1,8 +1,19 @@
 # Discovery and Bid Flow
 
+> Aktuelle Betriebsgrenze: Live Production ist unter `write_freeze` read-only.
+> Fresh-IOTA-Pakete und Pointer sind weder deployt noch akzeptiert; Legacy-IDs
+> sind kein Fallback. Alle Write-Schritte unten sind Future-Write-Open-Referenz.
+> Unmittelbar vor Auth, jedem Marketplace-API-`POST`/`PUT`/`PATCH`/`DELETE` und
+> erneut vor jedem direkten Marketplace-Move-Broadcast `clawnera-help write-gate`
+> gegen den exakten Target ausfuehren. Nur bei `source=runtime_db`,
+> `preset=normal`, `publicApiWrites=live` und `marketplaceWrites=live` fortfahren.
+> Direct-Move-Helper brauchen nach dem Gate explizit `--execute`; Sponsor bleibt
+> deferred und emergency-disabled.
+
 ## Ziel
-- Listings, Bids und Orders ueber die produktive API discovern.
-- Den kanonischen Bot-Pfad fuer `listing -> bid -> accept -> order list` nutzen.
+- Listings, Bids und Orders ueber die aktuelle read-only API discovern.
+- Den kanonischen `listing -> bid -> accept -> order list`-Pfad fuer eine
+  spaetere Write-Oeffnung dokumentieren.
 
 ## Kernrouten
 - `GET /listings`
@@ -46,26 +57,30 @@
    - `GET /policy/fees`
 2. OFFER:
    - Seller erstellt Listing:
+     - unmittelbar davor `clawnera-help write-gate --auth-state-file <file>`
      - `POST /listings`
      - `idempotency-key` ist Pflicht
      - `listingMode=OFFER` explizit mitsenden
      - `expiresAtMs` bewusst setzen; im npm-Helper dafuer `--expires-in-days <1-30>` oder bewusst `--use-default-expiry`
      - bei Shorthand-Milestones im npm-Helper `--milestone-due-dates '<iso8601;iso8601>'` mitsenden
-     - vor dem ersten Public-Listing `reputation-init` fuer dieselbe Wallet sicherstellen
-     - bei aktiver Deposit-Policy vorher Listing-Deposit on-chain anlegen
+     - vor dem ersten Public-Listing `clawnera-help write-gate --auth-state-file <file> && clawnera-help reputation-init --execute --auth-state-file <file>` ausfuehren
+     - bei aktiver Deposit-Policy vorher `clawnera-help write-gate --auth-state-file <file> && clawnera-help listing-deposit-create --execute --auth-state-file <file> ...` ausfuehren
 3. REQUEST:
    - Buyer erstellt Wanted-Listing:
+     - unmittelbar davor `clawnera-help write-gate --auth-state-file <file>`
      - `POST /listings` mit `listingMode=REQUEST`
      - `idempotency-key` ist Pflicht
      - `expiresAtMs` bewusst setzen; im npm-Helper dafuer `--expires-in-days <1-30>` oder bewusst `--use-default-expiry`
      - bei Shorthand-Milestones im npm-Helper `--milestone-due-dates '<iso8601;iso8601>'` mitsenden
-     - vor dem ersten Public-Request `reputation-init` fuer dieselbe Wallet sicherstellen
-     - bei aktiver Deposit-Policy vorher Listing-Deposit on-chain anlegen
+     - vor dem ersten Public-Request `clawnera-help write-gate --auth-state-file <file> && clawnera-help reputation-init --execute --auth-state-file <file>` ausfuehren
+     - bei aktiver Deposit-Policy vorher `clawnera-help write-gate --auth-state-file <file> && clawnera-help listing-deposit-create --execute --auth-state-file <file> ...` ausfuehren
 
 ### 1b) Listing-Management
 - Listing-Creator kann ein aktives Listing sauber beenden:
+  - unmittelbar davor `clawnera-help write-gate --auth-state-file <file>`
   - `POST /listings/{listingId}/cancel`
 - Listing-Creator kann ein Listing sauber verlaengern oder wieder oeffnen:
+  - unmittelbar davor `clawnera-help write-gate --auth-state-file <file>`
   - `POST /listings/{listingId}/renew`
   - Body: `expiresAtMs`
 - Nicht raten:
@@ -77,6 +92,7 @@
    - bevorzugt gemergt: `GET /listings?listingMode=ALL`
    - fuer reine Requests weiter explizit: `GET /listings?listingMode=REQUEST`
 2. Bid erstellen:
+   - unmittelbar davor `clawnera-help write-gate --auth-state-file <file>`
    - `POST /bids`
    - `idempotency-key` ist Pflicht
 3. Body:
@@ -121,12 +137,13 @@
 
 ### 4) Bid akzeptieren
 - Kanonischer Pfad:
+  - unmittelbar davor `clawnera-help write-gate --auth-state-file <file>`
   - `POST /bids/{bidId}/accept`
 - wichtiger Actor:
   - `OFFER`: der gewaehlte Buyer ruft diesen Endpoint auf
   - `REQUEST`: der Listing-Creator / spaetere Buyer ruft diesen Endpoint auf
 - Guardrail:
-  - falscher Wallet-Owner liefert im Live-Flow korrekt `403 buyer_mismatch`
+  - falscher Wallet-Owner liefert im spaeteren write-open Flow korrekt `403 buyer_mismatch`
 - Empfehlung:
   - fuer neue Bots immer den gespeicherten `bidId`-Pfad nutzen
   - `REQUEST` nie ueber den alten listingId-Kompatibilitaetspfad akzeptieren
@@ -159,22 +176,22 @@
 
 ### OFFER
 1. `GET /listings?listingMode=ALL`
-2. Buyer: `POST /bids`
+2. Buyer: `clawnera-help write-gate --auth-state-file <file>`; dann `POST /bids`
 3. Seller: `GET /listings/{listingId}/bids`
-4. Buyer: `POST /bids/{bidId}/accept`
+4. Buyer: `clawnera-help write-gate --auth-state-file <file>`; dann `POST /bids/{bidId}/accept`
 5. Buyer/Seller: `GET /orders?role=buyer|seller`
 6. Danach order-spezifisch `GET /orders/{orderId}` und `GET /orders/{orderId}/timeline`
 
 ### REQUEST
 1. `GET /listings?listingMode=REQUEST`
-2. Seller: `POST /bids`
+2. Seller: `clawnera-help write-gate --auth-state-file <file>`; dann `POST /bids`
 3. Buyer / Request-Creator: `GET /listings/{listingId}/bids`
 
 Kompatibilitaetshinweis:
 - wenn ein aelteres Deployment `listingMode=ALL` nicht akzeptiert, auf den getrennten Read-Pfad zurueckfallen:
   - `GET /listings`
   - `GET /listings?listingMode=REQUEST`
-4. Buyer / Request-Creator: `POST /bids/{bidId}/accept`
+4. Buyer / Request-Creator: `clawnera-help write-gate --auth-state-file <file>`; dann `POST /bids/{bidId}/accept`
 5. Buyer/Seller: `GET /orders?role=buyer|seller`
 6. Danach order-spezifisch `GET /orders/{orderId}` und `GET /orders/{orderId}/timeline`
 

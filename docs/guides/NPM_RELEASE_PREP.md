@@ -29,15 +29,16 @@ Bevor irgendein Version Bump oder Publish-Versuch passiert:
    - `npm run test`
    - `npm run release:check`
 3. Doku/Topics sync:
-   - `npm run sync:local` (falls Core/CLAW geaendert wurde)
+   - `MARKETPLACE_SOURCE_ROOT=/path/to/clawdex MARKETPLACE_SOURCE_COMMIT=<reviewed-full-40-char-sha> npm run sync:local` (falls Core/SDK geaendert wurde)
    - `npm run validate -- --strict`
+   - Der IOTA-Fresh-Sync fuer die neue Fuenf-Paket-Topologie ist in diesem Helper-Commit bewusst noch nicht ausgefuehrt. Er darf erst gegen den final gepushten und reviewten Clawdex-Commit laufen; siehe den Abschnitt "Ausstehender IOTA-Fresh-Source-Sync".
 4. Evidence-Datei anlegen:
    - z. B. `docs/reports/bot-market-release-hardening-YYYYMMDD.md`
    - festhalten:
      - `git rev-parse HEAD`
      - `git status --short`
      - `git diff --name-only`
-     - ob `sync:local` gefahren wurde oder bewusst nicht
+     - welcher saubere Clawdex-Commit mit `MARKETPLACE_SOURCE_ROOT=/path/to/clawdex MARKETPLACE_SOURCE_COMMIT=<reviewed-full-40-char-sha> npm run sync:local` synchronisiert wurde
      - Ergebnis von `npm run release:check`
 
 ## 3) Versionieren
@@ -66,34 +67,34 @@ Wichtig:
 - der installierte Bin-Name bleibt `clawnera-help`
 - `npx clawnera-help --help` ist nicht die kanonische Registry-Truth
 
-## 5) Publish (wenn Token gesetzt)
+## 5) Publish
 
 1. Bevorzugter offizieller Publish-Pfad:
    - GitHub Actions Trusted Publish ueber `.github/workflows/publish.yml`
-   - Trigger:
-     - bevorzugt GitHub Release `published`
-     - alternativ kontrolliert per `workflow_dispatch`
+   - Trigger: ausschliesslich ein veroeffentlichtes GitHub Release mit Tag `v<package-version>`
+   - geschuetztes GitHub Environment: `npm-publish`
    - wichtig:
      - `publish.yml` bleibt bewusst auf GitHub-hosted Actions
-     - der normale `ci`-Workflow darf auf dem Hetzner self-hosted Runner laufen, der Publish-Workflow aber nicht
-2. Publish:
-   - `npm publish --access public --provenance`
-3. Wichtiger Hinweis:
-   - lokaler Maintainer-Publish mit `--provenance` kann ausserhalb eines unterstuetzten CI/OIDC-Providers mit
-     `Automatic provenance generation not supported for provider: null`
-     scheitern
+     - Pull-Request-, CI-, Nightly- und Publish-Workflows laufen nur auf literal konfigurierten GitHub-hosted Runnern
+2. Der Workflow prueft vor dem Publish:
+   - Tag entspricht exakt der Package-Version
+   - Checkout-Commit entspricht exakt dem Tag-Commit
+   - Tag-Commit liegt auf `origin/main`
+   - der Source-Checkout ist nach Install und Tests weiterhin sauber; Tag/Main-Bindung wird unmittelbar vor dem Pack erneut geprueft
+   - Registry-Version existiert noch nicht
+   - Build/Test/Pack laufen in einem separaten Job mit ausschliesslich `contents: read`; dort ist kein OIDC-Token-Scope vorhanden
+   - der Environment-geschuetzte Publish-Job hat als einziger `id-token: write`, fuehrt weder Checkout noch Repo-Code, Installationen oder Nachtests aus und akzeptiert nur das heruntergeladene, inline erneut gepruefte Evidence-Artefakt
+3. Publish:
+   - genau ein Tarball wird mit `npm pack --json --ignore-scripts` erzeugt
+   - Tarball, SHA-256-Manifest und Source-Commit-Evidence werden als Workflow-Artefakt gespeichert
+   - ausschliesslich dieser bereits gehashte Tarball wird als letzter OIDC-Schritt mit `npm publish <artifact.tgz> --access public --provenance --ignore-scripts` publiziert
+4. Wichtiger Hinweis:
    - npm Trusted Publishing verlangt aktuell `npm CLI 11.5.1+` und einen GitHub-hosted Runner
-4. Rescue-only Fallback:
-   - nur wenn GitHub Trusted Publish gerade nicht verfuegbar ist, darf ein lokaler Maintainer-Publish als expliziter Ausnahmefall gefahren werden
-   - Kommando:
-     - `npm publish --access public --provenance=false`
-   - dabei immer festhalten:
-     - warum der GitHub Publish-Pfad nicht genutzt wurde
-     - wer lokal publiziert hat
-     - welche Version betroffen war
-   - dieser Fallback ist ein dokumentierter Rescue-Pfad, nicht der Normalfall
+   - lokale oder tokenbasierte Publishes sowie `--provenance=false` sind kein erlaubter Fallback; bei Ausfall bleibt das Release blockiert
 5. Registry-Truth verifizieren:
    - `npm view clawnera-bot-market version dist --json`
+   - ein separater GitHub-hosted Folgejob ohne OIDC vergleicht `dist.shasum` (SHA-1) und `dist.integrity` (SHA-512) zwingend mit den lokal vor dem Publish berechneten Digests desselben Tarballs
+   - ein vorhandener Versionsstring ohne passenden Digest ist kein erfolgreicher Readback
    - `npx clawnera-bot-market --help`
 6. Release-Paritaet pruefen:
    - `bash ./scripts/release/verify-release-parity.sh <version>`
@@ -111,6 +112,42 @@ Wichtig:
 
 ## 5a) Externe Pflicht-Config fuer npm Trusted Publishing
 
+**Live-Blocker (Read-only-Stand 2026-07-10):** `main` liefert fuer Branch Protection `404`, und die Environment-Liste enthaelt kein `npm-publish`. Der Workflow-Code ist repo-seitig vorbereitet, aber ein Publish ist absichtlich durch `check:release-live-prerequisites` blockiert. Der Environment-Name im YAML ist fuer sich allein kein Schutz und darf nicht als konfigurierte Freigabe gewertet werden.
+
+**IOTA-Fresh-Blocker (Repo-Stand 2026-07-11):** Die eingecheckte Version `0.1.104` ist ein ungepublizierter Kandidat fuer die Governance-gebundene Fresh-ABI. Sie darf nicht publiziert werden, solange Clawdex den Fresh-Runtime- und ABI-Release nicht explizit freigegeben und per Readback belegt hat. npm `latest` bleibt bis dahin `0.1.103`; ein Legacy-ABI-Fallback wird nicht eingebaut.
+
+### Ausstehender IOTA-Fresh-Source-Sync
+
+Dieser Helper-Stand enthaelt die lokale fail-closed Bindung an Foundation -> Governance -> Settlement -> Fulfillment -> Ops und `orderMailboxRegistryObjectId`, aber noch nicht den automatisch erzeugten Clawdex-Mirror. Nach dem finalen Clawdex-Push:
+
+1. Einen sauberen Clawdex-Checkout exakt auf dem finalen, gepushten, vollstaendigen 40-Zeichen-SHA verwenden. Der Commit muss auf `origin` liegen und auf `origin/main` basieren.
+   - Vor dem Sync muessen `README.md`, `contracts/README.md` und `docs/SMART_CONTRACT_ARCHITECTURE_MAP.md` im Clawdex-Commit ebenfalls die fuenf aktiven Fresh-Roots nennen. Ein Stand, der nur `claw_foundation` + `claw_settlement_core` als aktive Wahrheit ausweist, ist nicht sync-faehig.
+   - `docs/SMART_CONTRACT_ERKLAERUNG_2026-02-25.md` bleibt als veraltete Monolith-Erklaerung ausserhalb des freigegebenen Public-Mirrors.
+2. Im Helper-Repo genau einmal ausfuehren:
+   - `MARKETPLACE_SOURCE_ROOT=/path/to/clean/clawdex MARKETPLACE_SOURCE_COMMIT=<final-pushed-full-40-char-sha> bash ./scripts/sync-local-sources.sh`
+3. Den gesamten v4-Mirror mit 27 Dateien und `docs/docsources/SYNC_MANIFEST.txt` als eine Rotation reviewen. Fuer diese Aenderung insbesondere pruefen:
+   - `docs/docsources/core/openapi.yaml`
+   - `docs/docsources/core/openapi.public.yaml`
+   - `docs/docsources/core/openapi.advanced.yaml`
+   - `docs/docsources/core/apiContract.json`
+   - `docs/docsources/core/callable-surfaces/iota/{foundation,governance,settlement,fulfillment,ops}.snapshot`
+   - `lib/vendor/clawdex-sdk/tx/orderMailbox.js`
+   - `config/marketplace-deployments.json`
+   - die alten Pfade `docs/docsources/core/callable_surface.snapshot` und `docs/docsources/core/SMART_CONTRACT_ERKLAERUNG_2026-02-25.md` muessen entfernt sein
+4. Im vendorten Mailbox-Builder nachweisen, dass Fresh `settlementAbi` auswertet, `orderMailboxRegistryObjectId` zwingend verlangt und an `orderMailbox.init` weitergibt. In den API-Schemata muessen `governancePackageId` und `orderMailboxRegistryObjectId` enthalten sein.
+5. Keine Admin-/Operator-Kommandos fuer Fee-Queue, -Approve oder -Apply in CLI, Recipes, Topics oder Examples uebernehmen.
+6. Danach `npm run check:sync-provenance`, die fokussierten Topologie-/Write-Gate-Tests, `npm run validate -- --strict` und `npm run release:check` ausfuehren.
+
+Bis dieser Sync samt Review und Tests abgeschlossen ist, bleibt der Fresh-Release-Kandidat blockiert.
+
+Vor dem ersten Publish muessen extern und anschliessend read-only verifiziert werden:
+
+- Branch Protection fuer `main` mit den vorgesehenen Reviews und Pflichtchecks
+- GitHub Environment `npm-publish` mit Required Reviewers und ohne unkontrollierten Admin-Bypass
+- Deployment-Policy ausschliesslich fuer die vorgesehenen geschuetzten Release-Tags
+- npm Trusted Publisher fuer Repository `Moron1337/clawnera-bot-market`, Workflow `publish.yml`, Environment `npm-publish`
+- frische Evidence in `docs/reports/npm-publish-live-prerequisites.json`; erst danach darf `status` auf `ready` wechseln
+
 Auf `npmjs.com` unter `Packages -> clawnera-bot-market -> Settings -> Trusted publishing`:
 
 1. Provider:
@@ -122,7 +159,8 @@ Auf `npmjs.com` unter `Packages -> clawnera-bot-market -> Settings -> Trusted pu
 4. Workflow filename:
    - `publish.yml`
 5. Environment name:
-   - leer lassen, solange kein GitHub Environment fuer Publish-Gates genutzt wird
+   - `npm-publish`
+   - im GitHub Environment mindestens Required Reviewers und Schutz vor unkontrolliertem Admin-Bypass konfigurieren
 
 Danach als sicherer Folge-Schritt unter `Settings -> Publishing access`:
 - `Require two-factor authentication and disallow tokens`
@@ -132,12 +170,11 @@ Erst nachdem der Trusted Publisher erfolgreich getestet wurde.
 ## 6) Post Release
 
 1. GitHub Release/Notes erstellen.
-2. Falls der Publish lokal als Rescue-Pfad lief, Tag + GitHub Release sofort nachziehen und danach erneut `bash ./scripts/release/verify-release-parity.sh <version>` fahren.
-3. Integratoren ueber neue Version informieren.
-4. Pflicht auf den lokalen Operator-Maschinen:
+2. Integratoren ueber neue Version informieren.
+3. Pflicht auf den lokalen Operator-Maschinen:
    - `npm run release:sync-global`
    - nur danach mit dem globalen `clawnera-help` weiterarbeiten
-5. Optional: vorherige Version als Rollback-Referenz dokumentieren.
+4. Optional: vorherige Version als Rollback-Referenz dokumentieren.
 
 ## 7) Abort / Containment
 

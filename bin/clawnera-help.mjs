@@ -5,6 +5,7 @@ import path from "node:path";
 import { execSync, spawnSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import {
   appendEd25519KeystoreEntry,
   buildAuthEnvText,
@@ -14,6 +15,7 @@ import {
   loadAuthState,
   loadKeystoreEntries,
   parseEnvAssignmentValue,
+  parseJwtPayload,
   refreshAuthState,
   resolveKeystoreEntry,
   saveAuthState,
@@ -24,7 +26,6 @@ import {
   DEFAULT_ORDER_ESCROW_DEADLINE_DELTA_MS,
   buildCreateListingDepositTx,
   buildCreateReputationProfileTx,
-  buildManagedStorageFeeTx,
   buildMilestoneAnchorTx,
   buildClawdexTxFromPlan,
   buildCreateOrderEscrowTx,
@@ -41,6 +42,7 @@ import {
   resolveClawdexReputationProfileObjectIdByOwner,
   dryRunTransaction,
 } from "../lib/clawdex-onchain.mjs";
+import { persistVerifiedDryRunPlan } from "../lib/verified-plan-output.mjs";
 import {
   DEFAULT_E2EE_CIPHER_SUITE,
   assertIpfsManifestCid,
@@ -59,7 +61,9 @@ import {
   normalizeDisputeSupplementalBundlePayload,
   defaultKeyAgreementRecordPath,
   generateKeyAgreementKeypair,
+  isExactKeyAgreementNotFound,
   loadKeyAgreementRecord,
+  migrateLegacyKeyAgreementRecord,
   prepareMilestoneManifestForSigning,
   rewrapManagedDeliverableForRecipients,
   saveKeyAgreementRecord,
@@ -85,9 +89,30 @@ import {
 } from "../lib/iota-local.mjs";
 import { resolveRuntimeIotaOptions } from "../lib/runtime-iota-context.mjs";
 import {
+  normalizeAuthenticatedBaseUrl,
+  normalizeAuthenticatedUrl,
+  readPrivateFile,
+  withPrivateFileOperationLock,
+  writePrivateFileAtomic,
+  writePrivateFileAtomicExclusive,
+  writePrivateFileAtomicSync,
+} from "../lib/local-security.mjs";
+import {
+  assertMarketplaceDirectIntentBinding,
+  assertMarketplacePackageObjectResponse,
+  assertMarketplaceWriteGateFresh,
+  createMarketplaceWriteGateNonce,
+  expectedIotaChainIdentifier,
+  validateMarketplaceWriteGateAttestation,
+} from "../lib/marketplace-write-gate.mjs";
+import { createMarketplaceDirectReattestation } from "../lib/marketplace-direct-reattest.mjs";
+import { extractMarketplacePolicyPackageContext } from "../lib/marketplace-runtime-topology.mjs";
+import { assertMarketplaceDeploymentRegistryAvailable } from "../lib/marketplace-deployment-identity.mjs";
+import {
   DEFAULT_TRANSFER_DRAFT_TTL_SEC,
+  claimIotaTransferDraft,
   defaultIotaTransferDraftsPath,
-  deleteIotaTransferDraft,
+  finalizeIotaTransferDraft,
   loadIotaTransferDraft,
   saveIotaTransferDraft
 } from "../lib/iota-transfer-drafts.mjs";
@@ -119,14 +144,9 @@ import {
   normalizeTxPlanErrorMessage,
 } from "../lib/tx-plan-errors.mjs";
 import {
-  canonicalPackageIdFromObjectType,
-  isMissingResolveDisputeWithBindingFunctionError,
-  resolveQuorumTicketFromFinalizeTx,
-} from "../lib/dispute-ticket-compat.mjs";
-import { decodeSuiPrivateKey, SIGNATURE_FLAG_TO_SCHEME } from "@mysten/sui/cryptography";
-import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
-import { Secp256k1Keypair } from "@mysten/sui/keypairs/secp256k1";
-import { Secp256r1Keypair } from "@mysten/sui/keypairs/secp256r1";
+  assertReviewerShortlistAuthorizationHandoff,
+  assertTxPlanRouteAndActorIntent,
+} from "../lib/tx-plan-guard.mjs";
 import { isValidSuiAddress, normalizeSuiAddress } from "@mysten/sui/utils";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -138,71 +158,18 @@ const DEFAULT_SUI_RPC_URLS = Object.freeze({
   testnet: "https://fullnode.testnet.sui.io:443",
   devnet: "https://fullnode.devnet.sui.io:443",
 });
-const DEFAULT_SUI_KEYSTORE_PATH = path.join(os.homedir(), ".sui", "sui_config", "sui.keystore");
 const SUPPORTED_MARKET_ASSETS = Object.freeze({
   IOTA: {
-    symbol: "IOTA",
-    displayName: "IOTA",
     decimals: 9,
-    capabilities: {
-      listingSingleAsset: true,
-      bidCurrency: true,
-      orderCurrency: true,
-      orderEscrowCreate: true,
-      listingDeposit: true,
-      reputationInit: true,
-      managedStorageFee: true,
-      sponsorReserve: true,
-      sponsorExecute: true,
-    },
   },
   CLAW: {
-    symbol: "CLAW",
-    displayName: "CLAW",
     decimals: 6,
-    capabilities: {
-      listingSingleAsset: true,
-      bidCurrency: true,
-      orderCurrency: true,
-      orderEscrowCreate: true,
-      listingDeposit: false,
-      reputationInit: false,
-      managedStorageFee: true,
-      sponsorReserve: true,
-      sponsorExecute: true,
-    },
   },
   SUI: {
-    symbol: "SUI",
-    displayName: "Native SUI on Sui",
     decimals: 9,
-    capabilities: {
-      listingSingleAsset: true,
-      bidCurrency: true,
-      orderCurrency: true,
-      orderEscrowCreate: true,
-      listingDeposit: true,
-      reputationInit: true,
-      managedStorageFee: true,
-      sponsorReserve: false,
-      sponsorExecute: false,
-    },
   },
   USDC: {
-    symbol: "USDC",
-    displayName: "Native Sui USDC",
     decimals: 6,
-    capabilities: {
-      listingSingleAsset: true,
-      bidCurrency: true,
-      orderCurrency: true,
-      orderEscrowCreate: true,
-      listingDeposit: false,
-      reputationInit: false,
-      managedStorageFee: false,
-      sponsorReserve: false,
-      sponsorExecute: false,
-    },
   },
 });
 const SUPPORTED_MARKET_ASSET_SYMBOLS = Object.freeze(Object.keys(SUPPORTED_MARKET_ASSETS));
@@ -240,6 +207,9 @@ const SUPPLEMENTAL_EVIDENCE_CLASSES = Object.freeze([
   "SUPPORTING_EXHIBIT",
 ]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CANONICAL_LOWERCASE_UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const REVIEWER_OPEN_REQUEST_STATE_FORMAT = "clawnera.reviewer-shortlist.open-request.v2";
 const FORWARDED_REQUEST_OPTION_NAMES = Object.freeze([
   "auth-state-file",
   "env-file",
@@ -249,7 +219,44 @@ const FORWARDED_REQUEST_OPTION_NAMES = Object.freeze([
   "response-out",
   "idempotency-key",
 ]);
+const REVIEWER_SHORTLIST_OPTION_NAMES = Object.freeze([
+  "allow-new-reviewers",
+  "allow-truncated-scan",
+  "api-base",
+  "auth-state-file",
+  "blocked-reviewers",
+  "bond-object-id",
+  "buyer-address",
+  "directory-scan-limit",
+  "dispute-case-id",
+  "env-file",
+  "escrow-object-id",
+  "excluded-reviewers",
+  "idempotency-key",
+  "jwt",
+  "max-commit-reveal-failures",
+  "max-noshow-count",
+  "milestone-id",
+  "min-decisions-total",
+  "min-performance-score",
+  "min-reputation-confidence",
+  "min-reputation-score",
+  "network",
+  "order-context-file",
+  "order-id",
+  "publish-auth-state-file",
+  "publish-body-out",
+  "receipt-out",
+  "request-receipt-id",
+  "request-state-file",
+  "reviewer-count",
+  "rpc-url",
+  "scope",
+  "seller-address",
+  "timeout-ms",
+]);
 const packageJsonFile = path.join(repoRoot, "package.json");
+const marketplaceDeploymentsFile = path.join(repoRoot, "config", "marketplace-deployments.json");
 const topicsFile = path.join(repoRoot, "config", "topics.json");
 const recipesFile = path.join(repoRoot, "config", "recipes.json");
 const journeysFile = path.join(repoRoot, "config", "journeys.json");
@@ -304,7 +311,7 @@ const TRIAGE_RULES = Object.freeze([
     keywords: ["auth", "jwt", "token", "challenge", "verify", "401", "403"],
     topics: ["onboarding", "api", "security"],
     commands: [
-      "clawnera-help ensure-auth --api-base <url> --alias <wallet-alias>",
+      "clawnera-help write-gate --api-base <url> && clawnera-help ensure-auth --api-base <url> --alias <wallet-alias>",
       "clawnera-help show onboarding",
       "clawnera-help show api",
       "clawnera-help doctor --api-base <url> --jwt <token>"
@@ -331,7 +338,7 @@ const TRIAGE_RULES = Object.freeze([
       "clawnera-help show sponsor",
       "clawnera-help show api",
       "clawnera-help doctor --api-base <url> --jwt <token>",
-      "clawnera-help sponsor-preflight --api-base <url> --jwt <token>",
+      "clawnera-help sponsor-preflight --help",
       "clawnera-help sponsor-execute --help"
     ],
     issueCategory: "integration-help"
@@ -351,13 +358,15 @@ const TRIAGE_RULES = Object.freeze([
   },
   {
     id: "dispute",
-    keywords: ["dispute", "quorum", "reviewer", "bond", "fallback", "vote", "resolve-escrow"],
+    keywords: ["dispute", "quorum", "reviewer", "bond", "fallback", "finalize", "timeout", "platform", "vote", "resolve-escrow"],
     topics: ["order-states", "role-routes", "reviewer-selector", "contracts", "playbooks"],
     commands: [
       "clawnera-help show reviewer-selector",
       "clawnera-help show order-states",
       "clawnera-help show role-routes",
       "clawnera-help show contracts",
+      "clawnera-help recipe dispute-finalize",
+      "clawnera-help recipe dispute-timeout-fallback",
       "clawnera-help doctor --api-base <url> --jwt <token>"
     ],
     issueCategory: "bug"
@@ -445,11 +454,25 @@ const DEFAULT_MINIMAL_HELP = Object.freeze({
   })
 });
 
+const MARKETPLACE_RELEASE_STATE = Object.freeze({
+  liveProduction: "write_freeze_read_only",
+  freshIota: "undeployed_unaccepted_no_legacy_fallback",
+  sponsoredTransactions: "deferred",
+  mutationRule:
+    "exact_target_write_gate_before_auth_api_mutation_and_direct_marketplace_move_execution",
+});
+
+const MARKETPLACE_MUTATION_USAGE_LINES = Object.freeze([
+  "- Release state: Live production is write_freeze/read-only; Fresh IOTA is undeployed/unaccepted with no legacy fallback.",
+  "- Before auth, any API POST/PUT/PATCH/DELETE, or any direct Marketplace Move execution, run `clawnera-help write-gate` against the exact API target; unavailable or conflicting state is a hard stop.",
+]);
+
 function buildMinimalHelpJson() {
   return {
     name: "clawnera-help",
     version: readPackageVersion(),
     mode: "minimal",
+    currentState: { ...MARKETPLACE_RELEASE_STATE },
     botFirst: {
       orderedStart: [...DEFAULT_MINIMAL_HELP.orderedStart],
       rules: [...DEFAULT_MINIMAL_HELP.rules],
@@ -483,6 +506,7 @@ function buildFullHelpJson(topics, journeys, recipes) {
       "auth-login",
       "ensure-auth",
       "units",
+      "write-gate",
       "request",
       "listing-categories",
       "listing-deposit-create",
@@ -496,6 +520,7 @@ function buildFullHelpJson(topics, journeys, recipes) {
       "tx-plan-execute",
       "order-init-bond",
       "order-create-escrow",
+      "key-agreement-migrate",
       "key-agreement-upsert",
       "reputation-init",
       "reviewer-register",
@@ -542,9 +567,19 @@ function buildFullHelpJson(topics, journeys, recipes) {
   };
 }
 
+function printMarketplaceReleaseState() {
+  console.log("Current release state:");
+  console.log("  - Live production: write_freeze/read-only");
+  console.log("  - Fresh IOTA: undeployed/unaccepted; no legacy fallback");
+  console.log("  - Sponsored transactions: deferred");
+  console.log("  - Mutations: exact-target clawnera-help write-gate is mandatory");
+  console.log("");
+}
+
 function printUsage() {
   console.log("CLAWNERA Bot Market CLI");
   console.log("");
+  printMarketplaceReleaseState();
   console.log("Bot-first start (do this in order):");
   DEFAULT_MINIMAL_HELP.orderedStart.forEach((step, index) => {
     console.log(`  ${index + 1}. ${step}`);
@@ -573,6 +608,7 @@ function printUsage() {
 function printUsageAll() {
   console.log("CLAWNERA Bot Market CLI");
   console.log("");
+  printMarketplaceReleaseState();
   console.log("Bot-first start (do this in order):");
   console.log("  1. clawnera-help journeys");
   console.log("  2. clawnera-help journey <role> --compact");
@@ -607,40 +643,42 @@ function printUsageAll() {
   console.log("  clawnera-help auth-login [options]        Create JWT + refresh token from local IOTA keystore");
   console.log("  clawnera-help ensure-auth [options]       Reuse or create a saved auth-state from the local wallet");
   console.log(`  clawnera-help units [options]             Show ${SUPPORTED_MARKET_ASSET_SYMBOLS.join("/")} decimals and atomic-unit examples`);
+  console.log("  clawnera-help write-gate [options]        Fail-closed preflight for every Marketplace mutation");
   console.log("  clawnera-help request <METHOD> <path>     Call Clawnera API with auth/env shortcuts");
   console.log("  clawnera-help listing-categories          Show the canonical listing category slugs");
-  console.log("  clawnera-help listing-deposit-create [options]  Build and execute the listing deposit locally");
-  console.log("  clawnera-help listing-create [options]    Thin helper for the first POST /listings write");
+  console.log("  clawnera-help listing-deposit-create [options]  Build or explicitly execute a listing deposit locally");
+  console.log("  clawnera-help listing-create [options]    Future write-open POST /listings helper");
   console.log("  clawnera-help listing-cancel [options]    Thin helper for POST /listings/{listingId}/cancel");
   console.log("  clawnera-help listing-renew [options]     Thin helper for POST /listings/{listingId}/renew");
-  console.log("  clawnera-help bid-create [options]        Thin helper for the first POST /bids write");
-  console.log("  clawnera-help bid-accept [options]        Thin helper for the first POST /bids/{bidId}/accept write");
+  console.log("  clawnera-help bid-create [options]        Future write-open POST /bids helper");
+  console.log("  clawnera-help bid-accept [options]        Future write-open bid acceptance helper");
   console.log("  clawnera-help chain-config [options]      Resolve live Clawdex package/config object ids");
   console.log("  clawnera-help tx-plan-dry-run <METHOD> <path>  Fetch API tx plan, build it locally, then dry-run");
-  console.log("  clawnera-help tx-plan-execute <METHOD> <path>  Fetch API tx plan, build it locally, sign, and broadcast");
-  console.log("  clawnera-help order-init-bond [options]   Build and execute the initial dispute-bond object locally");
-  console.log("  clawnera-help order-create-escrow [options]  Build and execute the buyer escrow creation locally");
+  console.log("  clawnera-help tx-plan-execute <METHOD> <path>  Disabled: never fetches, signs, or broadcasts");
+  console.log("  clawnera-help order-init-bond [options]   Build or explicitly execute the initial dispute-bond object locally");
+  console.log("  clawnera-help order-create-escrow [options]  Build or explicitly execute buyer escrow creation locally");
+  console.log("  clawnera-help key-agreement-migrate [options]  Encrypt one legacy plaintext local key record in place");
   console.log("  clawnera-help key-agreement-upsert [options]  Bind a local E2EE key-agreement key to the actor wallet");
   console.log("  clawnera-help reputation-init [options]   Create the actor reputation profile on-chain locally");
   console.log("  clawnera-help reviewer-register [options]  Register the actor as a reviewer with auto-filled live config");
   console.log("  clawnera-help reviewer-update [options]    Refresh reviewer transport metadata after key rotation");
   console.log("  clawnera-help deliverable-encrypt [options]  Encrypt one seller deliverable for seller + buyer locally");
   console.log("  clawnera-help dispute-evidence-bundle-build [options]  Build encrypted supplemental dispute evidence locally");
-  console.log("  clawnera-help dispute-evidence-publish [options]  Publish reviewer-readable linked deliverable evidence");
+  console.log("  clawnera-help dispute-evidence-publish [options]  Future write-open evidence publish helper");
   console.log("  clawnera-help dispute-evidence-list [options]  Read dispute-scoped evidence summaries");
   console.log("  clawnera-help dispute-evidence-content [options]  Fetch actor-scoped dispute evidence content");
   console.log("  clawnera-help dispute-evidence-decrypt [options]  Decrypt saved dispute evidence locally");
   console.log("  clawnera-help mailbox-evidence-export [options]  Export mailbox coordination into one encrypted dispute bundle");
   console.log("  clawnera-help checkpoint-evidence-export [options]  Export checkpoint handover evidence into one encrypted dispute bundle");
-  console.log("  clawnera-help managed-storage-fee-pay [options]  Pay the managed storage fee on-chain locally");
+  console.log("  clawnera-help managed-storage-fee-pay [options]  Disabled until the runtime publishes the complete V2 DAG pointers");
   console.log("  clawnera-help managed-storage-presign [options]  Get a signed managed-storage upload URL");
   console.log("  clawnera-help managed-storage-upload [options]   Upload the encrypted JSON payload to managed storage");
   console.log("  clawnera-help reviewer-shortlist [options]   Build the canonical operator shortlist body with live checkpoint digest");
   console.log("  clawnera-help reviewer-invites [options]     Read reviewer inbox state plus recommended poll interval");
   console.log("  clawnera-help mailbox-events [options]      Read mailbox posted/acked events without raw /events guessing");
   console.log("  clawnera-help pinata-upload-json [options]    Upload encrypted deliverable JSON to Pinata");
-  console.log("  clawnera-help milestone-submit-byo [options]  Sign and submit one managed milestone manifest");
-  console.log("  clawnera-help milestone-anchor [options]      Create and bind the on-chain manifest anchor locally");
+  console.log("  clawnera-help milestone-submit-byo [options]  Future write-open managed manifest submit helper");
+  console.log("  clawnera-help milestone-anchor [options]      Dry-run or explicitly execute a manifest anchor");
   console.log("  clawnera-help milestone-reject [options]      Compute rejectionReasonHash locally and reject a milestone");
   console.log("  clawnera-help deliverable-decrypt [options]   Decrypt one managed deliverable locally");
   console.log("  clawnera-help reviewer-vote-prepare [options]  Compute canonical reviewer commit/reveal payloads");
@@ -653,8 +691,8 @@ function printUsageAll() {
   console.log("  clawnera-help iota-execute-transfer [options]  Sign and broadcast a prepared local IOTA transfer");
   console.log("  clawnera-help notifications [options]     Scaffold and check Telegram event notifications");
   console.log("  clawnera-help first-steps [--run]         Show or run IOTA first-step bootstrap");
-  console.log("  clawnera-help sponsor-preflight [options] Read sponsor policy/strategy/diagnostics");
-  console.log("  clawnera-help sponsor-execute [options]   Reserve->sign->execute sponsor helper");
+  console.log("  clawnera-help sponsor-preflight [options] Target-dependent non-reserving protocol check");
+  console.log("  clawnera-help sponsor-execute [options]   Quarantined until explicit post-release approval");
   console.log("  clawnera-help validate [--strict]         Validate topic/docs consistency");
   console.log("  clawnera-help sync [--require-sources]    Sync local source snapshots (maintainer only)");
   console.log("  clawnera-help bootstrap [--sync] [--require-sources]  Run doctor + validate (+ optional maintainer sync)");
@@ -708,51 +746,53 @@ function selectReadRoutes(routes) {
 
 function compactRecipeCommand(recipe) {
   const auth = "--auth-state-file ~/.config/clawnera/auth-state.json";
+  const gate = `clawnera-help write-gate ${auth}`;
+  const gated = (command) => `${gate} && ${command}`;
   switch (recipe.id) {
     case "setup-quick":
-      return "clawnera-help wallet-list && clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias> && clawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json && clawnera-help request GET /bot/v1/discovery.json --api-base https://api.clawnera.com && clawnera-help request GET /policy/control-plane --api-base https://api.clawnera.com && clawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/clawnera/auth-state.json";
+      return "clawnera-help wallet-list && clawnera-help write-gate --api-base https://api.clawnera.com && clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias> && clawnera-help doctor --auth-state-file ~/.config/clawnera/auth-state.json && clawnera-help request GET /bot/v1/discovery.json --api-base https://api.clawnera.com && clawnera-help request GET /policy/control-plane --api-base https://api.clawnera.com && clawnera-help request GET /actors/me/capabilities --auth-state-file ~/.config/clawnera/auth-state.json";
     case "ensure-auth":
-      return "clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias>";
+      return "clawnera-help write-gate --api-base https://api.clawnera.com && clawnera-help ensure-auth --api-base https://api.clawnera.com --alias <wallet-alias>";
     case "key-agreement-upsert":
-      return `clawnera-help key-agreement-upsert ${auth}`;
+      return gated(`clawnera-help key-agreement-upsert ${auth}`);
     case "reputation-init":
-      return `clawnera-help reputation-init ${auth}`;
+      return gated(`clawnera-help reputation-init ${auth} --execute`);
     case "seller-create-listing":
-      return `clawnera-help request GET /policy/assets ${auth} && clawnera-help request GET /policy/fees ${auth} && clawnera-help listing-categories --compact && if listingDeposit.enabled=true then clawnera-help listing-deposit-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' && clawnera-help listing-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' --listing-deposit-object-id <listingDepositObjectId>; else clawnera-help listing-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'; fi`;
+      return `clawnera-help request GET /policy/assets ${auth} && clawnera-help request GET /policy/fees ${auth} && clawnera-help listing-categories --compact && if listingDeposit.enabled=true then ${gate} && clawnera-help listing-deposit-create ${auth} --execute --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' && ${gate} && clawnera-help listing-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' --listing-deposit-object-id <listingDepositObjectId>; else ${gate} && clawnera-help listing-create ${auth} --listing-mode OFFER --title '<title>' --description '<description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'; fi`;
     case "buyer-create-request":
-      return `clawnera-help request GET /policy/assets ${auth} && clawnera-help request GET /policy/fees ${auth} && clawnera-help listing-categories --compact --listing-mode REQUEST && if listingDeposit.enabled=true then clawnera-help listing-deposit-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' && clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' --listing-deposit-object-id <listingDepositObjectId>; else clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'; fi`;
+      return `clawnera-help request GET /policy/assets ${auth} && clawnera-help request GET /policy/fees ${auth} && clawnera-help listing-categories --compact --listing-mode REQUEST && if listingDeposit.enabled=true then ${gate} && clawnera-help listing-deposit-create ${auth} --execute --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' && ${gate} && clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' --listing-deposit-object-id <listingDepositObjectId>; else ${gate} && clawnera-help listing-create ${auth} --listing-mode REQUEST --title '<wanted-title>' --description '<wanted-description>' --category <canonical-category> --currency <IOTA|CLAW|SUI|USDC> --display-values --expires-in-days 7 --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'; fi`;
     case "creator-cancel-listing":
-      return `clawnera-help listing-cancel ${auth} --listing-id <listingId>`;
+      return gated(`clawnera-help listing-cancel ${auth} --listing-id <listingId>`);
     case "creator-renew-listing":
-      return `clawnera-help listing-renew ${auth} --listing-id <listingId> --expires-at '<iso8601>'`;
+      return gated(`clawnera-help listing-renew ${auth} --listing-id <listingId> --expires-at '<iso8601>'`);
     case "buyer-place-bid":
-      return `clawnera-help bid-create ${auth} --listing-id <listingId> --amount <amount> --currency <IOTA|CLAW|SUI|USDC> --display-values`;
+      return gated(`clawnera-help bid-create ${auth} --listing-id <listingId> --amount <amount> --currency <IOTA|CLAW|SUI|USDC> --display-values`);
     case "seller-answer-request":
-      return `clawnera-help bid-create ${auth} --listing-id <requestListingId> --amount <amount> --currency <IOTA|CLAW|SUI|USDC> --display-values`;
+      return gated(`clawnera-help bid-create ${auth} --listing-id <requestListingId> --amount <amount> --currency <IOTA|CLAW|SUI|USDC> --display-values`);
     case "buyer-accept-bid":
-      return `clawnera-help bid-accept ${auth} --bid-id <bidId>`;
+      return gated(`clawnera-help bid-accept ${auth} --bid-id <bidId>`);
     case "buyer-accept-request-bid":
-      return `clawnera-help bid-accept ${auth} --bid-id <sellerBidId>`;
+      return gated(`clawnera-help bid-accept ${auth} --bid-id <sellerBidId>`);
     case "fund-order":
       return `clawnera-help request GET /orders/<orderId> ${auth}`;
     case "mailbox-handshake":
-      return `clawnera-help tx-plan-execute POST /orders/<orderId>/mailbox/init-plan ${auth} --body '{}' ; then bind POST /orders/<orderId>/mailbox with order_mailbox_object_id from the previous output`;
+      return gated(`clawnera-help tx-plan-dry-run POST /orders/<orderId>/mailbox/init-plan ${auth} --body '{}' ; then rerun the gate before executing the reviewed canonical plan in a chain-native client and binding its verified order_mailbox_object_id`);
     case "order-mutual-cancel":
-      return "local SDK/PTB only: buildApproveMutualCancelOrderEscrowTx(...) from buyer and seller, then buildMutualCancelOrderEscrowTx(...) from either party";
+      return `${gate} && local SDK/PTB only: buildApproveMutualCancelOrderEscrowTx(...) from buyer and seller, rerun the gate, then buildMutualCancelOrderEscrowTx(...) from either party`;
     case "seller-deliver-encrypted":
       return `clawnera-help deliverable-encrypt --order-id <orderId> --milestone-id <milestoneId> --plaintext-file ./deliverable.bin ${auth}`;
     case "buyer-accept-delivery":
       return `clawnera-help request GET /orders/<orderId>/milestones/<milestoneId>/artifact-manifest/content ${auth} --response-out ./resolved-manifest.json`;
     case "buyer-reject-delivery":
-      return `clawnera-help milestone-reject --order-id <orderId> --milestone-id <milestoneId> --reason-text '<reason>' ${auth}`;
+      return gated(`clawnera-help milestone-reject --order-id <orderId> --milestone-id <milestoneId> --reason-text '<reason>' ${auth}`);
     case "dispute-open":
-      return `clawnera-help tx-plan-execute POST /orders/<orderId>/milestones/<milestoneId>/disputes/open ${auth} --body-file ./clawnera-dispute-open-<orderId>-<milestoneId>.json`;
+      return gated(`clawnera-help tx-plan-dry-run POST /orders/<orderId>/milestones/<milestoneId>/disputes/open ${auth} --body-file ./clawnera-dispute-open-<orderId>-<milestoneId>.json`);
     case "dispute-evidence-linked-deliverable":
-      return `clawnera-help dispute-evidence-publish --case-id <disputeCaseId> ${auth}`;
+      return gated(`clawnera-help dispute-evidence-publish --case-id <disputeCaseId> ${auth}`);
     case "operator-shortlist-open":
-      return `clawnera-help reviewer-shortlist --order-id <orderId> --milestone-id <milestoneId> --order-context-file ./order-context.json ${auth}`;
+      return gated(`clawnera-help reviewer-shortlist --order-id <orderId> --milestone-id <milestoneId> --order-context-file ./order-context.json --request-state-file ~/.config/clawnera/artifacts/reviewer-open-<orderId>-<milestoneId>.json ${auth}`);
     case "reviewer-register":
-      return `clawnera-help reviewer-register ${auth}`;
+      return gated(`clawnera-help reviewer-register ${auth} --execute`);
     case "reviewer-handle-invite":
       return `clawnera-help reviewer-invites ${auth} --json`;
     case "reviewer-inspect-evidence":
@@ -760,11 +800,17 @@ function compactRecipeCommand(recipe) {
     case "reviewer-vote":
       return "clawnera-help reviewer-vote-prepare --case-id <disputeCaseId> --address <reviewerAddress> --vote seller|buyer --out reviewer-vote.json";
     case "reviewer-claim-metrics":
-      return `clawnera-help tx-plan-execute POST /reviewers/me/claim-metrics ${auth} --body-file claim-metrics.json`;
+      return gated(`clawnera-help tx-plan-dry-run POST /reviewers/me/claim-metrics ${auth} --body-file claim-metrics.json`);
     case "operator-shortlist-replacement":
-      return `clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <disputeCaseId> ${auth}`;
+      return gated(`clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <disputeCaseId> ${auth}`);
+    case "dispute-finalize":
+      return gated(`clawnera-help tx-plan-dry-run POST /disputes/<disputeCaseId>/finalize ${auth} --body '{}'`);
+    case "dispute-timeout-fallback":
+      return gated(`clawnera-help tx-plan-dry-run POST /disputes/<disputeCaseId>/fallback/timeout ${auth} --body '{}'`);
+    case "dispute-platform-fallback":
+      return "STOP: admin-only external-custody path; the public helper does not execute or dry-run platform fallback";
     case "resolve-dispute":
-      return `clawnera-help tx-plan-execute POST /disputes/<disputeCaseId>/resolve-escrow ${auth}`;
+      return `SUI LEGACY RECOVERY ONLY (IOTA: 410 GONE): ${gated(`clawnera-help tx-plan-dry-run POST /disputes/<disputeCaseId>/resolve-escrow ${auth} --body '{}'`)}`;
     case "local-iota-transfer":
       return "clawnera-help iota-prepare-transfer --to <address> --amount <amount>";
     default:
@@ -815,6 +861,14 @@ function compactRecipeWriteText(recipe) {
       return "POST /disputes/{disputeCaseId}/votes/commit | POST /disputes/{disputeCaseId}/votes/reveal";
     case "operator-shortlist-replacement":
       return "operator prep: POST /admin/reviewer-selection/shortlist | buyer/seller publish: POST /disputes/{disputeCaseId}/reviewers/replace";
+    case "dispute-finalize":
+      return "atomic buyer/seller close: POST /disputes/{disputeCaseId}/finalize";
+    case "dispute-timeout-fallback":
+      return "atomic buyer/seller close: POST /disputes/{disputeCaseId}/fallback/timeout";
+    case "dispute-platform-fallback":
+      return "admin-only, not publicly executable: POST /disputes/{disputeCaseId}/fallback/resolve";
+    case "resolve-dispute":
+      return "Sui legacy/recovery only; IOTA 410 Gone: POST /disputes/{disputeCaseId}/resolve-escrow";
     default: {
       const routes = Array.isArray(recipe.routes) ? recipe.routes : [];
       return selectPrimaryWriteRoute(routes);
@@ -835,6 +889,9 @@ function compactRecipeNextText(recipe) {
       return "reviewer-claim-metrics[after_buyer_or_seller_closeout]";
     case "operator-shortlist-replacement":
       return "reviewer-handle-invite[after_buyer_or_seller_publish] | reviewer-vote";
+    case "dispute-finalize":
+    case "dispute-timeout-fallback":
+      return "reviewer-claim-metrics[reviewer_handoff_after_atomic_close]";
     default:
       return nextRecipes.join(" | ");
   }
@@ -1866,7 +1923,15 @@ function normalizeUuidOption(rawValue, fieldName) {
   return normalized;
 }
 
-function parsePositiveIntOption(rawValue, fieldName, fallback) {
+function normalizeCanonicalLowercaseUuidOption(rawValue, fieldName) {
+  const normalized = normalizeString(rawValue);
+  if (!CANONICAL_LOWERCASE_UUID_PATTERN.test(normalized)) {
+    throw new Error(`invalid_${fieldName}`);
+  }
+  return normalized;
+}
+
+function parsePositiveIntOption(rawValue, fieldName, fallback, maximum = Number.MAX_SAFE_INTEGER) {
   if (rawValue === undefined || rawValue === null || rawValue === "") {
     return fallback;
   }
@@ -1875,13 +1940,13 @@ function parsePositiveIntOption(rawValue, fieldName, fallback) {
     throw new Error(`invalid_${fieldName}`);
   }
   const parsed = Number(normalized);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+  if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > maximum) {
     throw new Error(`invalid_${fieldName}`);
   }
   return parsed;
 }
 
-function parseNonNegativeIntOption(rawValue, fieldName, fallback) {
+function parseNonNegativeIntOption(rawValue, fieldName, fallback, maximum = Number.MAX_SAFE_INTEGER) {
   if (rawValue === undefined || rawValue === null || rawValue === "") {
     return fallback;
   }
@@ -1890,7 +1955,7 @@ function parseNonNegativeIntOption(rawValue, fieldName, fallback) {
     throw new Error(`invalid_${fieldName}`);
   }
   const parsed = Number(normalized);
-  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > maximum) {
     throw new Error(`invalid_${fieldName}`);
   }
   return parsed;
@@ -2151,9 +2216,13 @@ function buildMilestoneSubmitByoHintLines(result) {
     "cause=order_mailbox_required",
     "detail=bind_the_order_mailbox_before_retrying_the_first_seller_submit",
     "next_hint=clawnera-help recipe mailbox-handshake",
-    `next_init=clawnera-help tx-plan-execute POST /orders/${orderId}/mailbox/init-plan --auth-state-file <file> --body '{}'`,
-    "bind_source=use order_mailbox_object_id from the previous tx-plan-execute output",
-    `next_bind=clawnera-help request POST /orders/${orderId}/mailbox --auth-state-file <file> --body '{\"mailboxObjectId\":\"<order_mailbox_object_id>\"}'`,
+    `next_init=${buildMarketplaceWriteHint(
+      `clawnera-help tx-plan-dry-run POST /orders/${orderId}/mailbox/init-plan --auth-state-file <file> --body '{}'`,
+    )}`,
+    "bind_source=execute the reviewed canonical plan in a chain-native client and use order_mailbox_object_id from its verified receipt",
+    `next_bind=${buildMarketplaceWriteHint(
+      `clawnera-help request POST /orders/${orderId}/mailbox --auth-state-file <file> --body '{\"mailboxObjectId\":\"<order_mailbox_object_id>\"}'`,
+    )}`,
   ];
 }
 
@@ -2490,12 +2559,7 @@ function normalizeApiBase(rawValue) {
     return null;
   }
   try {
-    const parsed = new URL(String(rawValue).trim());
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      return null;
-    }
-    const out = parsed.toString();
-    return out.endsWith("/") ? out.slice(0, -1) : out;
+    return normalizeAuthenticatedBaseUrl(String(rawValue), { errorCode: "invalid_authenticated_url" });
   } catch {
     return null;
   }
@@ -2507,6 +2571,7 @@ async function requestJson(url, init, timeoutMs) {
   try {
     const response = await fetch(url, {
       ...init,
+      redirect: "error",
       signal: controller.signal
     });
     const text = await response.text();
@@ -2557,141 +2622,30 @@ function sleep(ms) {
   });
 }
 
-function parseBuildOutputPayload(stdout) {
-  const trimmed = String(stdout || "").trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  const parseCandidate = (candidate) => {
-    try {
-      const parsed = JSON.parse(candidate);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        return null;
-      }
-      if (typeof parsed.txBytesB64 !== "string" || typeof parsed.userSig !== "string") {
-        return null;
-      }
-      if (!parsed.txBytesB64.trim() || !parsed.userSig.trim()) {
-        return null;
-      }
-      return {
-        txBytesB64: parsed.txBytesB64.trim(),
-        userSig: parsed.userSig.trim()
-      };
-    } catch {
-      return null;
-    }
-  };
-
-  const full = parseCandidate(trimmed);
-  if (full) {
-    return full;
-  }
-
-  const lines = trimmed.split(/\r?\n/);
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const line = lines[index].trim();
-    if (!line) {
-      continue;
-    }
-    const parsed = parseCandidate(line);
-    if (parsed) {
-      return parsed;
-    }
-  }
-
-  return null;
-}
-
-function runBuildCommand(command, env, timeoutMs) {
-  const result = spawnSync("bash", ["-lc", command], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    env,
-    timeout: timeoutMs
-  });
-
-  if (result.error) {
-    if (result.error && typeof result.error === "object" && "code" in result.error && result.error.code === "ETIMEDOUT") {
-      return {
-        ok: false,
-        error: "builder_timeout"
-      };
-    }
-    return {
-      ok: false,
-      error: result.error instanceof Error ? result.error.message : "builder_spawn_failed"
-    };
-  }
-
-  if (result.status !== 0) {
-    return {
-      ok: false,
-      error: `builder_failed_exit_${result.status ?? "unknown"}`
-    };
-  }
-
-  const payload = parseBuildOutputPayload(result.stdout || "");
-  if (!payload) {
-    return {
-      ok: false,
-      error: "builder_output_invalid"
-    };
-  }
-
-  return {
-    ok: true,
-    payload
-  };
-}
-
-function hasSelfPayFallback(payload) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    return false;
-  }
-  const fallback = payload.fallback;
-  if (!fallback || typeof fallback !== "object" || Array.isArray(fallback)) {
-    return false;
-  }
-  return fallback.mode === "self_pay";
-}
-
 function sponsorExecuteUsageLines() {
   return [
-    "Sponsor execute helper:",
-    "- Required auth: --auth-state-file <file> or --env-file <file> or --jwt <token>",
-    "- Default flow: reserve -> run --build-cmd -> execute",
-    "- Required unless --dry-run: --build-cmd '<shell command>'",
-    "- Defaults: --purpose marketplace_tx --gas-budget 1000000 --payment-coin claw",
-    "- Optional: --order-id <id> --idempotency-key <key> --timeout-ms <ms> --builder-timeout-ms <ms> --reservation-out <file>",
-    "- Canonical live posture: pass --order-id <id> on every order-scoped reserve/execute call.",
-    "- Build command receives env vars:",
-    "  CLAWNERA_SPONSOR_RESERVATION_JSON",
-    "  CLAWNERA_SPONSOR_RESERVATION_ID",
-    "  CLAWNERA_SPONSOR_API_BASE_URL",
-    "  CLAWNERA_SPONSOR_PURPOSE",
-    "  CLAWNERA_SPONSOR_PAYMENT_COIN",
-    "  CLAWNERA_SPONSOR_GAS_COINS_JSON",
-    "  CLAWNERA_SPONSOR_RESERVATION_FILE (only when --reservation-out is used)",
-    "- Build command must output JSON with fields: txBytesB64, userSig",
-    "- For sponsored IOTA value tx: use user payment coin object for business amount; sponsor coins are gas-only."
+    "Sponsor execution is quarantined:",
+    "- sponsor-execute performs no auth, network, user-state/artifact file, builder, reserve, or execute action.",
+    "- --dry-run is also disabled because the former flow reserved gas before returning.",
+    "- sponsor-preflight is only a non-reserving/non-executing protocol diagnostic on an explicitly write-open compatible target.",
+    "- The release candidate uses self-pay as its base mode after marketplace writes reopen.",
+    "- Sponsored execution remains deferred until the IOTA and Sui exits pass and operators approve a separate rollout."
   ];
 }
 
 function authLoginUsageLines() {
   return [
     "Auth login helper:",
+    ...MARKETPLACE_MUTATION_USAGE_LINES,
     "- Required: --api-base <url>",
     "- Optional selector: --alias <wallet-alias> or --address <wallet-address>",
     `- Default keystore path: ${defaultIotaKeystorePath()}`,
     "- If no selector is given, the active IOTA CLI address is used when available",
     "- Without the IOTA CLI, auth-login can still use the sole keystore entry automatically",
     "- Default network timeout: 60000ms (override with --timeout-ms <ms>)",
-    "- Optional outputs: --state-out <file> --env-out <file>",
-    "- Writes short-lived access token plus refresh token for long-lived runtimes",
-    "- Use --state-out for mailbox notifiers or bots that should auto-refresh sessions",
+    `- Secure auth-state output defaults to ${defaultAuthStatePath()}; override with --state-out <file>`,
+    "- Optional --env-out <file> writes credentials to an explicit owner-only file",
+    "- Tokens are never printed to stdout, stderr, or JSON output",
     "- Lower-level helper: prefer `clawnera-help ensure-auth` when a bot should reuse existing auth before minting a new session"
   ];
 }
@@ -2703,6 +2657,7 @@ function defaultAuthEnvPath(homeDir) {
 function ensureAuthUsageLines() {
   return [
     "Ensure auth helper:",
+    ...MARKETPLACE_MUTATION_USAGE_LINES,
     "- Preferred bot path: reuse a valid saved auth-state or log in from the local keystore automatically",
     "- Required for a fresh login: --api-base <url> (or CLAWNERA_API_BASE_URL)",
     "- Optional selector: --alias <wallet-alias> or --address <wallet-address>",
@@ -2934,7 +2889,7 @@ async function runAuthLogin(commandArgs) {
   const stateOut =
     typeof options["state-out"] === "string" && options["state-out"].trim()
       ? path.resolve(String(options["state-out"]).trim())
-      : "";
+      : defaultAuthStatePath();
   const envOut =
     typeof options["env-out"] === "string" && options["env-out"].trim()
       ? path.resolve(String(options["env-out"]).trim())
@@ -2979,17 +2934,16 @@ async function runAuthLogin(commandArgs) {
       };
     }
 
+    await assertMarketplaceMutationGate({ ...options, "api-base": apiBase, "timeout-ms": timeoutMs });
     const authState = await signInWithKeystoreEntry({
       apiBase,
       entry,
+      chainFamily: "iota",
+      network: resolveRuntimeIotaOptions(options, { apiBase }).network || "",
       timeoutMs
     });
 
-    let savedStateFile = null;
-    if (stateOut) {
-      await saveAuthState(stateOut, authState);
-      savedStateFile = stateOut;
-    }
+    await saveAuthState(stateOut, authState);
 
     let savedEnvFile = null;
     if (envOut) {
@@ -3003,18 +2957,13 @@ async function runAuthLogin(commandArgs) {
       keystorePath,
       address: authState.address,
       alias: authState.alias || null,
-      token: authState.token,
-      refreshToken: authState.refreshToken,
       expiresAtMs: authState.expiresAtMs,
       refreshExpiresAtMs: authState.session.refreshExpiresAtMs,
-      stateOut: savedStateFile,
+      stateOut,
       envOut: savedEnvFile
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "auth_login_failed"
-    };
+    return marketplaceMutationFailure(error, "auth_login_failed");
   }
 }
 
@@ -3160,6 +3109,7 @@ async function loadReusableAuthState({
       ["missing_or_invalid_auth_token", "invalid_auth_token_format", "expired_auth_no_refresh"].includes(issue)
     );
   if (!authValidation.ok && shouldTryRefresh) {
+    await assertMarketplaceMutationGate({ "api-base": apiBaseForValidation, "timeout-ms": timeoutMs });
     authState = await refreshAuthState({
       apiBase: apiBaseForValidation,
       authState,
@@ -3214,6 +3164,7 @@ async function loadReusableAuthState({
           error: "auth_session_rejected"
         };
       }
+      await assertMarketplaceMutationGate({ "api-base": apiBaseForValidation, "timeout-ms": timeoutMs });
       authState = await refreshAuthState({
         apiBase: apiBaseForValidation,
         authState: authValidation.authState,
@@ -3312,10 +3263,11 @@ async function runEnsureAuth(commandArgs) {
       verifyRemoteSession: Boolean(apiBase)
     });
   } catch (error) {
-    reusable = {
-      ok: false,
-      error: error instanceof Error ? error.message : "invalid_auth_state"
-    };
+    const failure = marketplaceMutationFailure(error, "invalid_auth_state");
+    if (failure.exitCode === 78) {
+      return failure;
+    }
+    reusable = failure;
   }
 
   if (reusable.ok && authStateMatchesSelector(reusable.authState, selector)) {
@@ -3376,9 +3328,21 @@ async function runEnsureAuth(commandArgs) {
   }
 
   try {
+    await assertMarketplaceMutationGate(
+      {
+        ...options,
+        "api-base": effectiveApiBase,
+        "auth-state-file": authStateFile,
+        "timeout-ms": timeoutMs,
+      },
+      null,
+      { allowMissingAuthStateFile: true },
+    );
     const authState = await signInWithKeystoreEntry({
       apiBase: effectiveApiBase,
       entry: walletResolution.entry,
+      chainFamily: "iota",
+      network: resolveRuntimeIotaOptions(options, { apiBase: effectiveApiBase }).network || "",
       timeoutMs
     });
     await saveAuthState(authStateFile, authState);
@@ -3398,9 +3362,8 @@ async function runEnsureAuth(commandArgs) {
     };
   } catch (error) {
     return {
-      ok: false,
-      error: error instanceof Error ? error.message : "ensure_auth_failed",
-      keystorePath
+      ...marketplaceMutationFailure(error, "ensure_auth_failed"),
+      keystorePath,
     };
   }
 }
@@ -3750,27 +3713,92 @@ async function runIotaExecuteTransfer(commandArgs) {
       typeof options["drafts-file"] === "string" && options["drafts-file"].trim()
         ? path.resolve(String(options["drafts-file"]).trim())
         : defaultIotaTransferDraftsPath();
-    const draft = await loadIotaTransferDraft(draftsPath, draftId);
-    const result = await executeIotaTransfer({
-      network: draft.network,
-      rpcUrl: draft.rpcUrl,
-      txBytesB64: draft.txBytesB64,
-      keystorePath:
-        typeof options["keystore-path"] === "string" && options["keystore-path"].trim()
-          ? path.resolve(String(options["keystore-path"]).trim())
-          : defaultIotaKeystorePath(),
-      address: typeof options["signer-address"] === "string" ? options["signer-address"].trim() : draft.signerAddress,
-      alias: typeof options["signer-alias"] === "string" ? options["signer-alias"].trim() : "",
-      signerAddress: draft.signerAddress,
-      signature: typeof options.signature === "string" ? options.signature.trim() : "",
-    });
-    assertExecutionSuccess(result, "iota_transfer_execution_failed");
-    await deleteIotaTransferDraft(draftsPath, draftId);
+    const claimId = randomUUID();
+    const draft = await claimIotaTransferDraft(draftsPath, draftId, claimId);
+    let result;
+    try {
+      result = await executeIotaTransfer({
+        network: draft.network,
+        rpcUrl: draft.rpcUrl,
+        txBytesB64: draft.txBytesB64,
+        keystorePath:
+          typeof options["keystore-path"] === "string" && options["keystore-path"].trim()
+            ? path.resolve(String(options["keystore-path"]).trim())
+            : defaultIotaKeystorePath(),
+        address: typeof options["signer-address"] === "string" ? options["signer-address"].trim() : draft.signerAddress,
+        alias: typeof options["signer-alias"] === "string" ? options["signer-alias"].trim() : "",
+        signerAddress: draft.signerAddress,
+        signature: typeof options.signature === "string" ? options.signature.trim() : "",
+      });
+      assertExecutionSuccess(result, "iota_transfer_execution_failed");
+    } catch (error) {
+      let tombstonePersisted = false;
+      try {
+        await finalizeIotaTransferDraft(draftsPath, draftId, {
+          claimId,
+          status: "UNCERTAIN",
+        });
+        tombstonePersisted = true;
+      } catch {
+        // The durable EXECUTING claim remains fail-closed when finalization cannot be persisted.
+      }
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "iota_execute_transfer_failed",
+        draftId,
+        draftsPath,
+        executionUncertain: true,
+        tombstonePersisted,
+        doNotRetry: true,
+        verifyHint: "Reconcile the transaction on the verified IOTA RPC before preparing a new transfer.",
+      };
+    }
+    const txDigest = result?.result?.digest || result?.result?.effects?.transactionDigest || null;
+    if (!txDigest) {
+      let tombstonePersisted = false;
+      try {
+        await finalizeIotaTransferDraft(draftsPath, draftId, {
+          claimId,
+          status: "UNCERTAIN",
+        });
+        tombstonePersisted = true;
+      } catch {
+        // The durable EXECUTING claim remains fail-closed when finalization cannot be persisted.
+      }
+      return {
+        ok: false,
+        error: "iota_transfer_execution_digest_missing",
+        draftId,
+        draftsPath,
+        executionUncertain: true,
+        tombstonePersisted,
+        doNotRetry: true,
+        verifyHint: "Execution returned no digest. Reconcile the signer activity on the verified IOTA RPC before preparing a new transfer.",
+      };
+    }
+    try {
+      await finalizeIotaTransferDraft(draftsPath, draftId, {
+        claimId,
+        status: "EXECUTED",
+        txDigest: txDigest || "",
+      });
+    } catch {
+      return {
+        ok: false,
+        error: "transfer_draft_tombstone_persist_failed",
+        draftId,
+        draftsPath,
+        txDigest,
+        executionUncertain: true,
+        doNotRetry: true,
+        verifyHint: "The transaction succeeded, but local finalization failed. Reconcile by digest and do not reuse this draft.",
+      };
+    }
     return {
       ok: true,
       draftId,
       draftsPath,
-      txDigest: result?.result?.digest || result?.result?.effects?.transactionDigest || null,
+      txDigest,
       signerAddress: result?.verifyResult?.signerAddress || draft.signerAddress,
       result: result.result,
       signature: result.signature,
@@ -3788,7 +3816,7 @@ function notificationsUsageLines() {
   return [
     "Notifications helper:",
     "- Usage: clawnera-help notifications <init|presets|doctor> [options]",
-    "- Init telegram notifier: clawnera-help notifications init telegram --preset seller --api-base https://api.clawnera.com --alias <wallet-alias>",
+    "- Fresh-login init: clawnera-help write-gate --api-base https://api.clawnera.com && clawnera-help notifications init telegram --preset seller --api-base https://api.clawnera.com --alias <wallet-alias>",
     "- Use --auth-state-file <file> to reuse an existing auth state; use --state-out <file> only when init should create a fresh auth state via --alias/--address",
     "- Fresh login without --state-out writes to a preset-scoped default auth state file.",
     "- Passing --event-types without --preset uses custom-only events; --preset custom is also supported explicitly",
@@ -3833,6 +3861,10 @@ function writeModeForPath(targetPath) {
 }
 
 function writeTextFile(targetPath, content, mode) {
+  if (mode === 0o600) {
+    writePrivateFileAtomicSync(targetPath, content);
+    return;
+  }
   const resolvedPath = path.resolve(targetPath);
   const tempFile = `${resolvedPath}.${process.pid}.${Date.now()}.tmp`;
   fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
@@ -3973,11 +4005,63 @@ function resolvePreferredKeystorePath(options = {}, context = {}) {
   return defaultIotaKeystorePath();
 }
 
+function resolveExactApiBaseFromSources(
+  sources = [],
+  { fallbackApiBase = DEFAULT_CLAWNERA_API_BASE } = {},
+) {
+  const normalized = [];
+  for (const source of sources) {
+    const raw = normalizeString(source?.value);
+    if (!raw) {
+      continue;
+    }
+    const apiBase = normalizeApiBase(raw);
+    if (!apiBase) {
+      throw new Error("missing_or_invalid_api_base");
+    }
+    normalized.push({ source: source.source, apiBase });
+  }
+  const distinct = [...new Set(normalized.map((entry) => entry.apiBase))];
+  if (distinct.length > 1) {
+    const error = new Error("api_base_source_mismatch");
+    error.apiBaseSources = normalized;
+    throw error;
+  }
+  return distinct[0] || fallbackApiBase;
+}
+
+async function resolveApiRecoveryBase(options = {}) {
+  const envFile = resolveOptionalPathOption(options["env-file"] || process.env.CLAWNERA_ENV_FILE);
+  let envValues = {};
+  if (envFile) {
+    if (!fs.existsSync(envFile)) {
+      throw new Error("missing_env_file");
+    }
+    envValues = parseSimpleEnvFile(fs.readFileSync(envFile, "utf8"));
+  }
+
+  const authStateFile = resolveOptionalPathOption(
+    options["auth-state-file"] || process.env.CLAWNERA_AUTH_STATE_FILE,
+  );
+  const authState = authStateFile && fs.existsSync(authStateFile)
+    ? await loadAuthState(authStateFile)
+    : null;
+
+  return resolveExactApiBaseFromSources(
+    [
+      { source: "cli", value: options["api-base"] },
+      { source: "process_env", value: process.env.CLAWNERA_API_BASE_URL },
+      { source: "env_file", value: envValues.CLAWNERA_API_BASE_URL },
+      { source: "auth_state", value: authState?.apiBase },
+    ],
+    { fallbackApiBase: "" },
+  );
+}
+
 async function resolveApiRuntimeContext(options = {}) {
   const envFile = resolveOptionalPathOption(options["env-file"] || process.env.CLAWNERA_ENV_FILE);
   const authStateFile = resolveOptionalPathOption(options["auth-state-file"] || process.env.CLAWNERA_AUTH_STATE_FILE);
   const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 8_000);
-  const explicitApiBase = normalizeApiBase(options["api-base"] || process.env.CLAWNERA_API_BASE_URL);
   const explicitJwt =
     typeof options.jwt === "string" ? String(options.jwt).trim() : String(process.env.CLAWNERA_API_JWT || "").trim();
   let envValues = {};
@@ -3996,13 +4080,15 @@ async function resolveApiRuntimeContext(options = {}) {
       throw new Error("missing_auth_state_file");
     }
     authState = await loadAuthState(authStateFile);
-    const apiBaseForValidation =
-      explicitApiBase ||
-      normalizeApiBase(envValues.CLAWNERA_API_BASE_URL || process.env.CLAWNERA_API_BASE_URL || authState.apiBase) ||
-      DEFAULT_CLAWNERA_API_BASE;
+    const apiBaseForValidation = resolveExactApiBaseFromSources([
+      { source: "cli", value: options["api-base"] },
+      { source: "process_env", value: process.env.CLAWNERA_API_BASE_URL },
+      { source: "env_file", value: envValues.CLAWNERA_API_BASE_URL },
+      { source: "auth_state", value: authState.apiBase },
+    ]);
     let authValidation = validateRuntimeAuthState(authState, {
       apiBaseFallback: apiBaseForValidation,
-      requiredApiBase: explicitApiBase || "",
+      requiredApiBase: apiBaseForValidation,
       refreshSkewMs: 60_000
     });
     const shouldTryRefresh =
@@ -4013,6 +4099,11 @@ async function resolveApiRuntimeContext(options = {}) {
         ["missing_or_invalid_auth_token", "invalid_auth_token_format", "expired_auth_no_refresh"].includes(issue)
       );
     if (!authValidation.ok && shouldTryRefresh) {
+      await assertMarketplaceMutationGate({
+        ...options,
+        "api-base": apiBaseForValidation,
+        "timeout-ms": timeoutMs,
+      });
       authState = await refreshAuthState({
         apiBase: apiBaseForValidation,
         authState,
@@ -4022,7 +4113,7 @@ async function resolveApiRuntimeContext(options = {}) {
       authStateRefreshed = true;
       authValidation = validateRuntimeAuthState(authState, {
         apiBaseFallback: apiBaseForValidation,
-        requiredApiBase: explicitApiBase || "",
+        requiredApiBase: apiBaseForValidation,
         refreshSkewMs: 60_000
       });
     }
@@ -4032,12 +4123,12 @@ async function resolveApiRuntimeContext(options = {}) {
     authState = authValidation.authState;
   }
 
-  const apiBase =
-    explicitApiBase ||
-    normalizeApiBase(envValues.CLAWNERA_API_BASE_URL || process.env.CLAWNERA_API_BASE_URL) ||
-    authState?.apiBase ||
-    DEFAULT_CLAWNERA_API_BASE ||
-    null;
+  const apiBase = resolveExactApiBaseFromSources([
+    { source: "cli", value: options["api-base"] },
+    { source: "process_env", value: process.env.CLAWNERA_API_BASE_URL },
+    { source: "env_file", value: envValues.CLAWNERA_API_BASE_URL },
+    { source: "auth_state", value: authState?.apiBase },
+  ]);
   const jwt = explicitJwt || String(envValues.CLAWNERA_API_JWT || "").trim() || authState?.token || "";
 
   return {
@@ -4049,6 +4140,504 @@ async function resolveApiRuntimeContext(options = {}) {
     authState,
     authStateRefreshed
   };
+}
+
+async function resolveMarketplaceMutationGateApiBase(
+  options = {},
+  runtimeContext = null,
+  { allowMissingAuthStateFile = false } = {},
+) {
+  let envValues = {};
+  const envFile = resolveOptionalPathOption(options["env-file"] || process.env.CLAWNERA_ENV_FILE);
+  if (envFile) {
+    if (!fs.existsSync(envFile)) {
+      throw new Error("missing_env_file");
+    }
+    envValues = parseSimpleEnvFile(fs.readFileSync(envFile, "utf8"));
+  }
+
+  let authState = null;
+  const authStateFile = resolveOptionalPathOption(
+    options["auth-state-file"] || process.env.CLAWNERA_AUTH_STATE_FILE,
+  );
+  if (authStateFile) {
+    if (!fs.existsSync(authStateFile)) {
+      if (!allowMissingAuthStateFile) {
+        throw new Error("missing_auth_state_file");
+      }
+    } else {
+      authState = await loadAuthState(authStateFile);
+    }
+  }
+  return resolveExactApiBaseFromSources([
+    { source: "runtime_context", value: runtimeContext?.apiBase },
+    { source: "cli", value: options["api-base"] },
+    { source: "process_env", value: process.env.CLAWNERA_API_BASE_URL },
+    { source: "env_file", value: envValues.CLAWNERA_API_BASE_URL },
+    { source: "auth_state", value: authState?.apiBase },
+  ]);
+}
+
+async function inspectMarketplaceMutationGate(options = {}, runtimeContext = null, validation = {}) {
+  const apiBase = await resolveMarketplaceMutationGateApiBase(options, runtimeContext, {
+    allowMissingAuthStateFile: validation.allowMissingAuthStateFile === true,
+  });
+  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 8_000);
+  const nonce = createMarketplaceWriteGateNonce();
+  const response = await requestJson(
+    `${apiBase}/policy/write-gate?nonce=${nonce}`,
+    {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        "cache-control": "no-cache, no-store",
+        pragma: "no-cache",
+      },
+    },
+    timeoutMs,
+  );
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: "marketplace_mutation_gate_unavailable",
+      exitCode: 78,
+      apiBase,
+      status: response.status,
+      reason: response.error || normalizeString(response.body?.error) || "marketplace_write_gate_request_failed",
+    };
+  }
+  let attestation;
+  try {
+    attestation = validateMarketplaceWriteGateAttestation({
+      body: response.body,
+      headers: response.headers,
+      apiBase,
+      nonce,
+      expectedNetwork: validation.expectedNetwork || "",
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "marketplace_write_gate_validation_failed";
+    return {
+      ok: false,
+      error: reason === "marketplace_write_gate_closed"
+        ? "marketplace_mutation_gate_closed"
+        : "marketplace_mutation_gate_unavailable",
+      exitCode: 78,
+      apiBase,
+      status: response.status,
+      reason,
+      gate: asRecord(response.body?.gate) || null,
+    };
+  }
+  return {
+    ok: true,
+    apiBase,
+    gate: attestation.gate,
+    attestation,
+  };
+}
+
+async function assertMarketplaceMutationGate(options = {}, runtimeContext = null, validation = {}) {
+  const result = await inspectMarketplaceMutationGate(options, runtimeContext, validation);
+  if (!result.ok) {
+    const error = new Error(result.error);
+    error.gate = result;
+    error.exitCode = result.exitCode ?? 78;
+    throw error;
+  }
+  return result;
+}
+
+function marketplaceDirectGateError(cause, details = {}) {
+  if (cause && typeof cause === "object" && cause.exitCode === 78 && cause.gate) {
+    return cause;
+  }
+  const reason = cause instanceof Error ? cause.message : "marketplace_direct_write_gate_failed";
+  const error = new Error(reason);
+  error.exitCode = 78;
+  error.gate = {
+    ok: false,
+    error: "marketplace_direct_write_gate_failed",
+    reason,
+    exitCode: 78,
+    ...details,
+  };
+  return error;
+}
+
+function loadBundledMarketplaceDeploymentRegistry() {
+  try {
+    return JSON.parse(fs.readFileSync(marketplaceDeploymentsFile, "utf8"));
+  } catch {
+    throw new Error("marketplace_deployment_identity_registry_invalid");
+  }
+}
+
+function assertBundledMarketplaceDeploymentRegistryAvailable() {
+  try {
+    return assertMarketplaceDeploymentRegistryAvailable(loadBundledMarketplaceDeploymentRegistry());
+  } catch (error) {
+    throw marketplaceDirectGateError(error);
+  }
+}
+
+function assertMarketplaceDirectGateStillFresh(directGate, packageAlias) {
+  try {
+    return assertMarketplaceWriteGateFresh(directGate.attestation);
+  } catch (error) {
+    throw marketplaceDirectGateError(error, {
+      apiBase: directGate.apiBase,
+      packageAlias,
+    });
+  }
+}
+
+function assertReviewerDirectTxPlanBinding(input, attestation) {
+  const txPlan = input.txPlan;
+  const request = asRecord(txPlan?.request);
+  const moveCall = asRecord(txPlan?.txMoveCall);
+  const sourceGuard = asRecord(txPlan?.sourceGuard);
+  const settlementPackageId = attestation.chain.packageIds.settlement;
+  const actorAddress = normalizeIotaAddress(input.actorAddress || "");
+  if (
+    !request ||
+    !moveCall ||
+    !actorAddress ||
+    txPlan.txBuilder !== input.expectedBuilder ||
+    normalizeString(request.chainFamily).toLowerCase() !== "iota" ||
+    normalizeIotaAddress(request.sender || "") !== actorAddress ||
+    normalizeIotaAddress(request.packageId || "") !== settlementPackageId ||
+    normalizeString(moveCall.target) !== `${settlementPackageId}::dispute_quorum::${input.expectedFunction}`
+  ) {
+    throw new Error("marketplace_write_gate_reviewer_plan_binding_invalid");
+  }
+  if (txPlan.chainFamily !== undefined && normalizeString(txPlan.chainFamily).toLowerCase() !== "iota") {
+    throw new Error("marketplace_write_gate_reviewer_plan_family_mismatch");
+  }
+  for (const network of [txPlan.chainNetwork, request.chainNetwork].filter(Boolean)) {
+    if (normalizeString(network).toLowerCase() !== attestation.chain.network) {
+      throw new Error("marketplace_write_gate_reviewer_plan_network_mismatch");
+    }
+  }
+  if (txPlan.chainIdentifier !== attestation.chain.chainIdentifier) {
+    throw new Error("marketplace_write_gate_reviewer_plan_chain_identifier_mismatch");
+  }
+  if (txPlan.sourceGuard !== undefined) {
+    if (
+      !sourceGuard ||
+      sourceGuard.chainIdentifier !== attestation.chain.chainIdentifier ||
+      (sourceGuard.chainFamily !== undefined &&
+        normalizeString(sourceGuard.chainFamily).toLowerCase() !== "iota") ||
+      (sourceGuard.family !== undefined && normalizeString(sourceGuard.family).toLowerCase() !== "iota") ||
+      (sourceGuard.chainNetwork !== undefined &&
+        normalizeString(sourceGuard.chainNetwork).toLowerCase() !== attestation.chain.network) ||
+      (sourceGuard.network !== undefined &&
+        normalizeString(sourceGuard.network).toLowerCase() !== attestation.chain.network)
+    ) {
+      throw new Error("marketplace_write_gate_reviewer_plan_source_guard_mismatch");
+    }
+  }
+
+  const expected = asRecord(input.expectedRequest);
+  const allowedRequestFields = new Set(
+    input.expectedBuilder === "disputeQuorum.registerReviewer"
+      ? [
+          "packageId",
+          "sender",
+          "chainFamily",
+          "chainNetwork",
+          "governanceConfigObjectId",
+          "reviewerRegistryObjectId",
+          "disputeQuorumConfigObjectId",
+          "reputationFeeConfigObjectId",
+          "reputationProfileObjectId",
+          "transportType",
+          "transportPubkeyHex",
+          "minCaseRewardNative",
+          "minCaseRewardIota",
+          "stakeAmount",
+        ]
+      : [
+          "packageId",
+          "sender",
+          "chainFamily",
+          "chainNetwork",
+          "reviewerRegistryObjectId",
+          "reviewerEntryObjectId",
+          "disputeQuorumConfigObjectId",
+          "transportType",
+          "transportPubkeyHex",
+          "minCaseRewardNative",
+          "minCaseRewardIota",
+          "active",
+        ],
+  );
+  if (!expected || Object.keys(request).some((field) => !allowedRequestFields.has(field))) {
+    throw new Error("marketplace_write_gate_reviewer_plan_fields_invalid");
+  }
+  const canonicalUint = (value, field) => {
+    try {
+      const normalized = BigInt(value).toString();
+      if (!/^[0-9]+$/.test(normalized)) {
+        throw new Error();
+      }
+      return normalized;
+    } catch {
+      throw new Error(`marketplace_write_gate_reviewer_plan_${field}_invalid`);
+    }
+  };
+  const planReward = canonicalUint(
+    request.minCaseRewardNative ?? request.minCaseRewardIota,
+    "min_case_reward",
+  );
+  const planTransportPubkey = normalizeString(request.transportPubkeyHex).toLowerCase();
+  const expectedTransportPubkey = normalizeString(expected.transportPubkeyHex).toLowerCase();
+  if (
+    !Number.isSafeInteger(request.transportType) ||
+    request.transportType !== expected.transportType ||
+    !/^[0-9a-f]{32,512}$/.test(planTransportPubkey) ||
+    planTransportPubkey.length % 2 !== 0 ||
+    planTransportPubkey !== expectedTransportPubkey ||
+    (request.minCaseRewardNative !== undefined && request.minCaseRewardIota !== undefined &&
+      canonicalUint(request.minCaseRewardNative, "min_case_reward") !==
+        canonicalUint(request.minCaseRewardIota, "min_case_reward")) ||
+    planReward !== canonicalUint(expected.minCaseRewardNative, "min_case_reward")
+  ) {
+    throw new Error("marketplace_write_gate_reviewer_plan_user_intent_mismatch");
+  }
+  if (input.expectedBuilder === "disputeQuorum.registerReviewer") {
+    const planProfileObjectId = normalizeIotaAddress(request.reputationProfileObjectId || "");
+    const expectedProfileObjectId = normalizeIotaAddress(expected.reputationProfileObjectId || "");
+    if (
+      !planProfileObjectId ||
+      !expectedProfileObjectId ||
+      planProfileObjectId !== expectedProfileObjectId ||
+      canonicalUint(request.stakeAmount, "stake_amount") !== canonicalUint(expected.stakeAmount, "stake_amount")
+    ) {
+      throw new Error("marketplace_write_gate_reviewer_plan_user_intent_mismatch");
+    }
+  } else {
+    const planEntryObjectId = normalizeIotaAddress(request.reviewerEntryObjectId || "");
+    const expectedEntryObjectId = normalizeIotaAddress(expected.reviewerEntryObjectId || "");
+    if (
+      !planEntryObjectId ||
+      !expectedEntryObjectId ||
+      planEntryObjectId !== expectedEntryObjectId ||
+      request.active !== expected.active
+    ) {
+      throw new Error("marketplace_write_gate_reviewer_plan_user_intent_mismatch");
+    }
+  }
+
+  const objectIds = {
+    reviewerRegistryObjectId: request.reviewerRegistryObjectId,
+    ...(request.disputeQuorumConfigObjectId
+      ? { disputeQuorumConfigObjectId: request.disputeQuorumConfigObjectId }
+      : {}),
+  };
+  if (input.expectedBuilder === "disputeQuorum.registerReviewer") {
+    if (!normalizeIotaAddress(request.disputeQuorumConfigObjectId || "")) {
+      throw new Error("marketplace_write_gate_reviewer_plan_dispute_quorum_missing");
+    }
+    objectIds.disputeQuorumConfigObjectId = request.disputeQuorumConfigObjectId;
+    objectIds.governanceConfigObjectId = request.governanceConfigObjectId;
+    objectIds.reputationInitFeeConfigObjectId = request.reputationFeeConfigObjectId;
+  }
+  return objectIds;
+}
+
+function resolveExplicitMarketplaceIotaNetwork(options = {}, runtimeContext = null) {
+  const envValues = asRecord(runtimeContext?.envValues) || {};
+  const hints = [
+    options.network,
+    envValues.CLAWNERA_IOTA_NETWORK,
+    envValues.IOTA_NETWORK,
+    process.env.CLAWNERA_IOTA_NETWORK,
+    process.env.IOTA_NETWORK,
+  ]
+    .map((value) => normalizeString(value).toLowerCase())
+    .filter(Boolean);
+  if (hints.some((network) => !["mainnet", "testnet"].includes(network))) {
+    throw new Error("marketplace_write_gate_network_invalid");
+  }
+  const unique = [...new Set(hints)];
+  if (unique.length > 1) {
+    throw new Error("marketplace_write_gate_network_conflict");
+  }
+  return unique[0] || "";
+}
+
+async function verifyMarketplaceDirectExecutionGate({
+  options = {},
+  runtimeContext,
+  iotaRuntime = {},
+  packageAlias,
+  packageId,
+  packageIds,
+  objectIds = {},
+  reviewerPlan = null,
+}) {
+  let apiBase = null;
+  try {
+    const explicitNetwork = resolveExplicitMarketplaceIotaNetwork(options, runtimeContext);
+    const gate = await assertMarketplaceMutationGate(options, runtimeContext, {
+      expectedNetwork: explicitNetwork,
+    });
+    apiBase = gate.apiBase;
+    const resolvedRuntime = resolveIotaRpcUrl({
+      network: gate.attestation.chain.network,
+      rpcUrl: iotaRuntime.rpcUrl,
+    });
+    if (resolvedRuntime.network !== gate.attestation.chain.network) {
+      throw new Error("marketplace_write_gate_network_mismatch");
+    }
+    const planObjectIds = reviewerPlan
+      ? assertReviewerDirectTxPlanBinding(reviewerPlan, gate.attestation)
+      : {};
+    assertMarketplaceDirectIntentBinding({
+      attestation: gate.attestation,
+      packageAlias,
+      packageId,
+      packageIds,
+      objectIds: { ...objectIds, ...planObjectIds },
+    });
+
+    const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
+    const chainIdentifierResponse = await requestJson(
+      resolvedRuntime.rpcUrl,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: `clawnera-write-gate-chain-${gate.attestation.nonce}`,
+          method: "iota_getChainIdentifier",
+          params: [],
+        }),
+      },
+      timeoutMs,
+    );
+    const chainIdentifier = normalizeString(chainIdentifierResponse.body?.result).toLowerCase();
+    if (
+      !chainIdentifierResponse.ok ||
+      chainIdentifierResponse.body?.error ||
+      chainIdentifier !== gate.attestation.chain.chainIdentifier ||
+      chainIdentifier !== expectedIotaChainIdentifier(resolvedRuntime.network)
+    ) {
+      throw new Error("marketplace_write_gate_rpc_chain_identifier_mismatch");
+    }
+
+    const packageResponse = await requestJson(
+      resolvedRuntime.rpcUrl,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: `clawnera-write-gate-package-${gate.attestation.nonce}`,
+          method: "iota_getObject",
+          params: [packageId, { showBcs: true }],
+        }),
+      },
+      timeoutMs,
+    );
+    if (!packageResponse.ok) {
+      throw new Error("marketplace_write_gate_package_rpc_unavailable");
+    }
+    assertMarketplacePackageObjectResponse(packageResponse.body, packageId);
+    assertMarketplaceWriteGateFresh(gate.attestation);
+
+    return {
+      ...gate,
+      iotaRuntime: {
+        network: resolvedRuntime.network,
+        rpcUrl: resolvedRuntime.rpcUrl,
+      },
+    };
+  } catch (error) {
+    throw marketplaceDirectGateError(error, {
+      ...(apiBase ? { apiBase } : {}),
+      packageAlias,
+    });
+  }
+}
+
+async function assertMarketplaceDirectExecutionGate(input) {
+  assertBundledMarketplaceDeploymentRegistryAvailable();
+  const directGate = await verifyMarketplaceDirectExecutionGate(input);
+  return {
+    ...directGate,
+    beforeBroadcast: createMarketplaceDirectReattestation({
+      initialGate: directGate,
+      input,
+      verifyGate: verifyMarketplaceDirectExecutionGate,
+      wrapError: marketplaceDirectGateError,
+    }),
+  };
+}
+
+function marketplaceMutationFailure(error, fallbackError) {
+  const failure = {
+    ok: false,
+    error: error instanceof Error ? error.message : fallbackError,
+  };
+  if (error && typeof error === "object" && error.gate) {
+    failure.exitCode = Number.isInteger(error.exitCode) ? error.exitCode : 78;
+    failure.mutationGate = error.gate;
+  }
+  return failure;
+}
+
+function marketplaceExecutionMode(options = {}) {
+  const execute = parseBooleanOption(options.execute, false);
+  const dryRun = parseBooleanOption(options["dry-run"], !execute);
+  if (execute === dryRun) {
+    throw new Error("invalid_marketplace_execution_mode");
+  }
+  const mode = execute ? "execute" : "dry_run";
+  if (mode === "execute") {
+    assertBundledMarketplaceDeploymentRegistryAvailable();
+  }
+  return mode;
+}
+
+async function runMarketplaceWriteGate(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: [
+        "Marketplace mutation gate:",
+        "- Usage: clawnera-help write-gate --api-base <url>",
+        "- Reads only nonce-bound GET /policy/write-gate from the exact target with cache bypass and no-store validation.",
+        "- Succeeds only for a fresh controlled_v1 canary with runtime_db/normal/live state and a verified split IOTA package DAG.",
+        "- Run immediately before every public mutation or direct Marketplace Move execution; missing or conflicting state exits 78.",
+      ],
+    };
+  }
+  if (positionals.length > 0) {
+    return { ok: false, error: "unexpected_positional_arguments", details: positionals };
+  }
+  const unexpectedOptions = findUnexpectedOptions(options, [
+    "api-base",
+    "auth-state-file",
+    "env-file",
+    "timeout-ms",
+    "json",
+  ]);
+  if (unexpectedOptions.length > 0) {
+    return { ok: false, error: "unexpected_options", unexpectedOptions };
+  }
+  try {
+    return await inspectMarketplaceMutationGate(options);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "marketplace_mutation_gate_unavailable",
+      exitCode: 78,
+    };
+  }
 }
 
 function isInvalidTokenResponse(result) {
@@ -4095,6 +4684,10 @@ async function requestJsonWithRuntimeContext({
     !runtimeContext.authStateRefreshed;
 
   if (shouldRetryInvalidToken) {
+    await assertMarketplaceMutationGate(
+      { "api-base": runtimeContext.apiBase || normalizeApiBase(url), "timeout-ms": timeoutMs },
+      runtimeContext,
+    );
     const refreshedAuthState = await refreshAuthState({
       apiBase: runtimeContext.apiBase || normalizeApiBase(url),
       authState: runtimeContext.authState,
@@ -4513,9 +5106,12 @@ async function runNotifications(commandArgs) {
           keystorePath
         };
       }
+      await assertMarketplaceMutationGate({ ...options, "api-base": apiBase, "timeout-ms": timeoutMs });
       authState = await signInWithKeystoreEntry({
         apiBase,
         entry,
+        chainFamily: "iota",
+        network: resolveRuntimeIotaOptions(options, { apiBase }).network || "",
         timeoutMs
       });
       await saveAuthState(authStateFile, authState);
@@ -4528,28 +5124,38 @@ async function runNotifications(commandArgs) {
         refreshSkewMs
       });
       if (!authValidation.ok) {
+        const recoveryTarget = { apiBase };
+        const recoverySelector = buildMarketplaceTargetSelector(recoveryTarget);
         return {
           ok: false,
           error: authValidation.issues[0],
           hint:
             authValidation.issues[0] === "auth_state_api_base_mismatch" && apiBase
-              ? `existing auth state points at ${authState.apiBase || "another api base"}; rerun ensure-auth for ${apiBase} or use a matching --auth-state-file`
+              ? `existing auth state points at ${authState.apiBase || "another api base"}; ` +
+                buildMarketplaceWriteHint(
+                  `clawnera-help ensure-auth ${recoverySelector} --auth-state-file ${shellQuote(authStateFile)}`,
+                  recoveryTarget,
+                )
               : undefined
         };
       }
       authState = authValidation.authState;
     } else {
+      const targetApiBase = apiBase || "<target-api-base>";
+      const recoveryTarget = { apiBase: targetApiBase };
+      const recoverySelector = buildMarketplaceTargetSelector(recoveryTarget);
       return {
         ok: false,
         error: "missing_auth_state_setup",
-        hint: "run clawnera-help ensure-auth first or pass --api-base with --alias/--address"
+        hint:
+          buildMarketplaceWriteHint(
+            `clawnera-help ensure-auth ${recoverySelector} --auth-state-file ${shellQuote(authStateFile)}`,
+            recoveryTarget,
+          ) + "; or pass the same --api-base with --alias/--address",
       };
     }
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "notifications_init_failed"
-    };
+    return marketplaceMutationFailure(error, "notifications_init_failed");
   }
 
   const effectiveApiBase = authState.apiBase || apiBase;
@@ -4799,6 +5405,16 @@ function parseApiMethodPath(positionals) {
   return { method, rawPath };
 }
 
+function assertRelativeApiRequestPath(rawPath) {
+  const candidate = normalizeString(rawPath);
+  const hasAbsoluteScheme = /^[A-Za-z][A-Za-z\d+.-]*:/.test(candidate);
+  const hasNetworkPathPrefix = /^[\\/]{2}/.test(candidate);
+  const hasLeadingBackslash = candidate.startsWith("\\");
+  if (hasAbsoluteScheme || hasNetworkPathPrefix || hasLeadingBackslash) {
+    throw new Error("absolute_api_url_not_allowed");
+  }
+}
+
 function resolveBodySelectionPath(jsonBody, selector) {
   const selection = String(selector || "").trim();
   if (!selection) {
@@ -4841,9 +5457,12 @@ function loadApiRequestBody(options = {}) {
 }
 
 async function callApiRoute({ method, rawPath, options = {}, timeoutMs = 20_000 }) {
-  if (normalizeApiBase(rawPath)) {
-    throw new Error("absolute_api_url_not_allowed");
-  }
+  assertRelativeApiRequestPath(rawPath);
+  const normalizedMethod = normalizeString(method).toUpperCase();
+  const isMutation = ["POST", "PUT", "PATCH", "DELETE"].includes(normalizedMethod);
+  const initialMutationGate = isMutation
+    ? await assertMarketplaceMutationGate({ ...options, "timeout-ms": timeoutMs })
+    : null;
   const context = await resolveApiRuntimeContext({
     ...options,
     "timeout-ms": timeoutMs
@@ -4854,6 +5473,18 @@ async function callApiRoute({ method, rawPath, options = {}, timeoutMs = 20_000 
   if (!apiBase) {
     throw new Error("missing_or_invalid_api_base");
   }
+  if (initialMutationGate && initialMutationGate.apiBase !== apiBase) {
+    const error = new Error("marketplace_mutation_gate_target_mismatch");
+    error.exitCode = 78;
+    error.gate = {
+      ...initialMutationGate,
+      ok: false,
+      error: "marketplace_mutation_gate_target_mismatch",
+      exitCode: 78,
+      resolvedApiBase: apiBase,
+    };
+    throw error;
+  }
 
   const idempotencyMode =
     typeof options["idempotency-key"] === "string" && options["idempotency-key"].trim()
@@ -4862,7 +5493,11 @@ async function callApiRoute({ method, rawPath, options = {}, timeoutMs = 20_000 
         ? "auto"
         : "";
   const idempotencyKey = idempotencyMode === "auto" ? randomUUID() : idempotencyMode;
-  const url = `${apiBase}${rawPath.startsWith("/") ? rawPath : `/${rawPath}`}`;
+  const parsedUrl = new URL(rawPath.startsWith("/") ? rawPath : `/${rawPath}`, `${apiBase}/`);
+  if (parsedUrl.origin !== apiBase) {
+    throw new Error("absolute_api_url_not_allowed");
+  }
+  const url = parsedUrl.toString();
   const buildHeaders = () => {
     const headers = {};
     if (runtimeContext.jwt) {
@@ -4877,10 +5512,13 @@ async function callApiRoute({ method, rawPath, options = {}, timeoutMs = 20_000 
     return headers;
   };
 
+  if (isMutation) {
+    await assertMarketplaceMutationGate({ ...options, "timeout-ms": timeoutMs }, runtimeContext);
+  }
   let result = await requestJson(
     url,
     {
-      method,
+      method: normalizedMethod,
       headers: buildHeaders(),
       ...(body ? { body } : {})
     },
@@ -4899,6 +5537,7 @@ async function callApiRoute({ method, rawPath, options = {}, timeoutMs = 20_000 
     !options.jwt;
 
   if (shouldRetryInvalidToken) {
+    await assertMarketplaceMutationGate({ ...options, "timeout-ms": timeoutMs }, runtimeContext);
     const refreshedAuthState = await refreshAuthState({
       apiBase: apiBase || normalizeApiBase(rawPath),
       authState: runtimeContext.authState,
@@ -4908,10 +5547,13 @@ async function callApiRoute({ method, rawPath, options = {}, timeoutMs = 20_000 
     runtimeContext.authState = refreshedAuthState;
     runtimeContext.jwt = refreshedAuthState.token;
     runtimeContext.authStateRefreshed = true;
+    if (isMutation) {
+      await assertMarketplaceMutationGate({ ...options, "timeout-ms": timeoutMs }, runtimeContext);
+    }
     result = await requestJson(
       url,
       {
-        method,
+        method: normalizedMethod,
         headers: buildHeaders(),
         ...(body ? { body } : {})
       },
@@ -4923,7 +5565,7 @@ async function callApiRoute({ method, rawPath, options = {}, timeoutMs = 20_000 
     context: runtimeContext,
     apiBase: apiBase || normalizeApiBase(rawPath),
     idempotencyKey: idempotencyKey || null,
-    method,
+    method: normalizedMethod,
     rawPath,
     url,
     body,
@@ -4991,16 +5633,36 @@ function detectTxPlanPayload(body) {
     return null;
   }
   const txBuilder = typeof body.txBuilder === "string" ? body.txBuilder.trim() : "";
-  const request = body.request;
-  if (!txBuilder || !request || typeof request !== "object" || Array.isArray(request)) {
+  const rawRequest = body.request;
+  if (!txBuilder || !rawRequest || typeof rawRequest !== "object" || Array.isArray(rawRequest)) {
     return null;
+  }
+  const request = { ...rawRequest };
+  if (!request.chainFamily && body.chainFamily) {
+    request.chainFamily = body.chainFamily;
+  }
+  if (!request.chainNetwork && body.chainNetwork) {
+    request.chainNetwork = body.chainNetwork;
   }
   return {
     txBuilder,
     request,
+    chainFamily: normalizeString(body.chainFamily || request.chainFamily).toLowerCase() || null,
+    chainNetwork: normalizeString(body.chainNetwork || request.chainNetwork).toLowerCase() || null,
+    chainIdentifier: normalizeString(body.chainIdentifier) || null,
+    sourceGuard:
+      body.sourceGuard && typeof body.sourceGuard === "object" && !Array.isArray(body.sourceGuard)
+        ? body.sourceGuard
+        : null,
     inviteBinding:
       body.inviteBinding && typeof body.inviteBinding === "object" && !Array.isArray(body.inviteBinding)
         ? body.inviteBinding
+        : null,
+    preExecutionRequirements:
+      body.preExecutionRequirements &&
+      typeof body.preExecutionRequirements === "object" &&
+      !Array.isArray(body.preExecutionRequirements)
+        ? body.preExecutionRequirements
         : null,
     txMoveCall: body.txMoveCall ?? null,
   };
@@ -5021,12 +5683,19 @@ function detectSuiTransactionBytesPayload(body) {
     return null;
   }
   const chainNetwork = normalizeString(body.chainNetwork).toLowerCase() || null;
+  const chainIdentifier = normalizeString(body.chainIdentifier) || null;
+  const sourceGuard =
+    body.sourceGuard && typeof body.sourceGuard === "object" && !Array.isArray(body.sourceGuard)
+      ? body.sourceGuard
+      : null;
   const target = normalizeString(body.target || txPlan?.target) || null;
   return {
     chainFamily: "sui",
     chainNetwork,
+    chainIdentifier,
     transactionBytesBase64,
-    transactionBytesSha256: normalizeString(body.sourceGuard?.transactionBytesSha256) || null,
+    transactionBytesSha256: normalizeString(sourceGuard?.transactionBytesSha256) || null,
+    sourceGuardChainIdentifier: normalizeString(sourceGuard?.chainIdentifier) || null,
     txBuilder: normalizeString(body.status) || txPlanKind || "sui_ptb",
     txPlanKind: txPlanKind || "sui_ptb",
     target,
@@ -5042,7 +5711,10 @@ function resolveSuiRpcUrlForHelper(options = {}, chainNetwork = "") {
     return explicit;
   }
   const normalizedNetwork = normalizeString(chainNetwork || options.network).toLowerCase();
-  return DEFAULT_SUI_RPC_URLS[normalizedNetwork] || DEFAULT_SUI_RPC_URLS.mainnet;
+  if (!normalizedNetwork || !DEFAULT_SUI_RPC_URLS[normalizedNetwork]) {
+    throw new Error("sui_network_required_or_unsupported");
+  }
+  return DEFAULT_SUI_RPC_URLS[normalizedNetwork];
 }
 
 async function callSuiJsonRpcForHelper(options = {}, body, chainNetwork = "") {
@@ -5086,6 +5758,83 @@ async function dryRunSuiTransactionBytes(suiTxBytesPlan, options = {}) {
   );
 }
 
+function assertSuiRawTransactionPlanIntegrity(suiTxBytesPlan) {
+  const bytes = Buffer.from(suiTxBytesPlan.transactionBytesBase64, "base64");
+  if (bytes.length === 0 || bytes.toString("base64") !== suiTxBytesPlan.transactionBytesBase64) {
+    throw new Error("invalid_sui_transaction_bytes");
+  }
+  if (!suiTxBytesPlan.transactionBytesSha256) {
+    throw new Error("sui_transaction_bytes_sha256_required");
+  }
+  const actualHash = createHash("sha256").update(bytes).digest("hex");
+  if (actualHash !== suiTxBytesPlan.transactionBytesSha256.toLowerCase()) {
+    throw new Error("sui_transaction_bytes_sha256_mismatch");
+  }
+  if (
+    !suiTxBytesPlan.chainIdentifier ||
+    !suiTxBytesPlan.sourceGuardChainIdentifier ||
+    suiTxBytesPlan.chainIdentifier !== suiTxBytesPlan.sourceGuardChainIdentifier
+  ) {
+    throw new Error("tx_plan_chain_identifier_missing_or_mismatched");
+  }
+  if (!suiTxBytesPlan.chainNetwork) {
+    throw new Error("sui_chain_network_required");
+  }
+  return actualHash;
+}
+
+async function readRpcChainIdentifier(chainFamily, options = {}, chainNetwork = "") {
+  const method = chainFamily === "sui" ? "sui_getChainIdentifier" : "iota_getChainIdentifier";
+  if (chainFamily === "sui") {
+    const response = await callSuiJsonRpcForHelper(
+      options,
+      { jsonrpc: "2.0", id: "clawnera-chain-identifier", method, params: [] },
+      chainNetwork,
+    );
+    const identifier = normalizeString(response.result);
+    if (!identifier) {
+      throw new Error("invalid_rpc_chain_identifier");
+    }
+    return { rpcUrl: response.rpcUrl, chainIdentifier: identifier };
+  }
+  const { rpcUrl } = resolveIotaRpcUrl({ network: chainNetwork, rpcUrl: options["rpc-url"] });
+  const response = await requestJson(
+    rpcUrl,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: "clawnera-chain-identifier", method, params: [] }),
+    },
+    parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
+  );
+  const identifier = normalizeString(response.body?.result);
+  if (!response.ok || !identifier || response.body?.error) {
+    throw new Error("invalid_rpc_chain_identifier");
+  }
+  return { rpcUrl, chainIdentifier: identifier };
+}
+
+async function assertTxPlanChainIdentity(plan, options = {}) {
+  const chainFamily = normalizeString(plan.chainFamily || plan.request?.chainFamily).toLowerCase();
+  const chainNetwork = normalizeString(plan.chainNetwork || plan.request?.chainNetwork).toLowerCase();
+  const chainIdentifier = normalizeString(plan.chainIdentifier);
+  const guardedIdentifier = normalizeString(plan.sourceGuard?.chainIdentifier);
+  if (!["iota", "sui"].includes(chainFamily) || !chainNetwork) {
+    throw new Error("tx_plan_chain_context_required");
+  }
+  if (!chainIdentifier) {
+    throw new Error("tx_plan_chain_identifier_missing_or_mismatched");
+  }
+  if (plan.sourceGuard && (!guardedIdentifier || chainIdentifier !== guardedIdentifier)) {
+    throw new Error("tx_plan_chain_identifier_missing_or_mismatched");
+  }
+  const rpc = await readRpcChainIdentifier(chainFamily, options, chainNetwork);
+  if (rpc.chainIdentifier !== chainIdentifier) {
+    throw new Error("tx_plan_rpc_chain_identifier_mismatch");
+  }
+  return { chainFamily, chainNetwork, chainIdentifier, rpcUrl: rpc.rpcUrl };
+}
+
 function normalizeSuiAddressOrEmpty(value) {
   const normalized = normalizeString(value);
   if (!normalized) {
@@ -5097,234 +5846,6 @@ function normalizeSuiAddressOrEmpty(value) {
   } catch {
     return "";
   }
-}
-
-function suiKeypairFromParsedSecret(scheme, secretKey) {
-  if (scheme === "ED25519") {
-    return Ed25519Keypair.fromSecretKey(secretKey);
-  }
-  if (scheme === "Secp256k1") {
-    return Secp256k1Keypair.fromSecretKey(secretKey);
-  }
-  if (scheme === "Secp256r1") {
-    return Secp256r1Keypair.fromSecretKey(secretKey);
-  }
-  throw new Error("unsupported_sui_signature_scheme");
-}
-
-function suiKeypairFromSecretKey(value) {
-  const normalized = normalizeString(value);
-  if (!normalized) {
-    throw new Error("missing_sui_private_key");
-  }
-  if (normalized.startsWith("suiprivkey")) {
-    const parsed = decodeSuiPrivateKey(normalized);
-    return {
-      keypair: suiKeypairFromParsedSecret(parsed.scheme, parsed.secretKey),
-      scheme: parsed.scheme,
-    };
-  }
-
-  const decoded = Buffer.from(normalized, "base64");
-  if (decoded.length !== 33) {
-    throw new Error("invalid_sui_private_key");
-  }
-  const scheme = SIGNATURE_FLAG_TO_SCHEME[decoded[0]];
-  if (!scheme) {
-    throw new Error("unsupported_sui_signature_scheme");
-  }
-  return {
-    keypair: suiKeypairFromParsedSecret(scheme, decoded.subarray(1)),
-    scheme,
-  };
-}
-
-function collectSuiKeystoreSecrets(value) {
-  if (Array.isArray(value)) {
-    return value.flatMap((entry, index) => {
-      if (typeof entry === "string") {
-        return [{ secretKey: entry, alias: "", index }];
-      }
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-        return [];
-      }
-      const secretKey = normalizeString(
-        entry.privateKey || entry.secretKey || entry.key || entry.value || entry.encoded || entry.keystore,
-      );
-      if (!secretKey) {
-        return [];
-      }
-      return [{
-        secretKey,
-        alias: normalizeString(entry.alias || entry.name),
-        index,
-      }];
-    });
-  }
-  if (value && typeof value === "object") {
-    for (const field of ["keystore", "keys", "accounts", "entries"]) {
-      if (Array.isArray(value[field])) {
-        return collectSuiKeystoreSecrets(value[field]);
-      }
-    }
-  }
-  return [];
-}
-
-async function loadSuiKeystoreEntries(keystorePath = DEFAULT_SUI_KEYSTORE_PATH) {
-  let parsed;
-  try {
-    parsed = JSON.parse(await fs.promises.readFile(keystorePath, "utf8"));
-  } catch (error) {
-    if (error && error.code === "ENOENT") {
-      return [];
-    }
-    throw new Error("invalid_sui_keystore");
-  }
-
-  const entries = [];
-  for (const item of collectSuiKeystoreSecrets(parsed)) {
-    try {
-      const { keypair, scheme } = suiKeypairFromSecretKey(item.secretKey);
-      entries.push({
-        address: keypair.toSuiAddress(),
-        alias: item.alias || null,
-        index: item.index,
-        scheme,
-        keypair,
-      });
-    } catch {
-      // Ignore malformed entries so one stale key does not hide usable keys.
-    }
-  }
-  return entries;
-}
-
-function summarizeSuiSignerCandidates(entries = []) {
-  return entries.map((entry) => ({
-    address: entry.address,
-    alias: entry.alias,
-    index: entry.index,
-    scheme: entry.scheme,
-  }));
-}
-
-async function resolveSuiSignerForPlan(suiTxBytesPlan, options = {}) {
-  const expectedSender = normalizeSuiAddressOrEmpty(suiTxBytesPlan.sender || "");
-  const explicitAddress = normalizeSuiAddressOrEmpty(options["sui-address"] || "");
-  const explicitAlias = normalizeString(options["sui-alias"] || "");
-  const explicitPrivateKey = normalizeString(
-    options["sui-private-key"] || process.env.CLAWNERA_SUI_PRIVATE_KEY || process.env.SUI_PRIVATE_KEY,
-  );
-
-  if (explicitPrivateKey) {
-    const { keypair, scheme } = suiKeypairFromSecretKey(explicitPrivateKey);
-    const address = keypair.toSuiAddress();
-    if (explicitAddress && address !== explicitAddress) {
-      throw new Error("sui_private_key_address_mismatch");
-    }
-    if (expectedSender && address !== expectedSender) {
-      throw new Error("sui_signer_does_not_match_tx_sender");
-    }
-    return {
-      address,
-      alias: null,
-      scheme,
-      keypair,
-      source: "private_key",
-      keystorePath: null,
-    };
-  }
-
-  const keystorePath =
-    typeof options["sui-keystore-path"] === "string" && options["sui-keystore-path"].trim()
-      ? path.resolve(String(options["sui-keystore-path"]).trim())
-      : normalizeString(process.env.CLAWNERA_SUI_KEYSTORE_PATH || process.env.SUI_KEYSTORE_PATH) ||
-        DEFAULT_SUI_KEYSTORE_PATH;
-  const entries = await loadSuiKeystoreEntries(keystorePath);
-  const candidates = summarizeSuiSignerCandidates(entries);
-  let selected = null;
-  if (explicitAddress) {
-    selected = entries.find((entry) => entry.address === explicitAddress) || null;
-  } else if (explicitAlias) {
-    selected = entries.find((entry) => entry.alias && entry.alias.toLowerCase() === explicitAlias.toLowerCase()) || null;
-  } else if (expectedSender) {
-    selected = entries.find((entry) => entry.address === expectedSender) || null;
-  } else if (entries.length === 1) {
-    selected = entries[0];
-  } else if (entries.length > 1) {
-    const error = new Error("ambiguous_sui_keystore");
-    error.candidates = candidates;
-    error.keystorePath = keystorePath;
-    throw error;
-  }
-
-  if (!selected) {
-    const error = new Error(entries.length === 0 ? "sui_keystore_empty_or_missing" : "sui_keystore_entry_not_found");
-    error.candidates = candidates;
-    error.keystorePath = keystorePath;
-    throw error;
-  }
-  if (expectedSender && selected.address !== expectedSender) {
-    throw new Error("sui_signer_does_not_match_tx_sender");
-  }
-
-  return {
-    ...selected,
-    source: "keystore",
-    keystorePath,
-  };
-}
-
-function suiExecutionStatus(result) {
-  const status = result?.effects?.status;
-  if (typeof status === "string") {
-    return status;
-  }
-  return normalizeString(status?.status);
-}
-
-function suiExecutionError(result) {
-  const status = result?.effects?.status;
-  return normalizeString(status?.error || result?.errors?.join("; ") || result?.error);
-}
-
-async function executeSuiTransactionBytes(suiTxBytesPlan, options = {}) {
-  const signer = await resolveSuiSignerForPlan(suiTxBytesPlan, options);
-  const txBytes = Buffer.from(suiTxBytesPlan.transactionBytesBase64, "base64");
-  if (txBytes.length === 0) {
-    throw new Error("invalid_sui_transaction_bytes");
-  }
-  const signed = await signer.keypair.signTransaction(txBytes);
-  const executed = await callSuiJsonRpcForHelper(
-    options,
-    {
-      jsonrpc: "2.0",
-      id: "clawnera-sui-execute-1",
-      method: "sui_executeTransactionBlock",
-      params: [
-        signed.bytes,
-        [signed.signature],
-        {
-          showEffects: true,
-          showEvents: true,
-          showObjectChanges: true,
-          showBalanceChanges: true,
-          showInput: true,
-        },
-      ],
-    },
-    suiTxBytesPlan.chainNetwork || "",
-  );
-  return {
-    ...executed,
-    signer,
-    signedBytesBase64: signed.bytes,
-    signature: signed.signature,
-    txDigest: normalizeString(executed.result?.digest) || null,
-    executionStatus: suiExecutionStatus(executed.result),
-    executionError: suiExecutionError(executed.result),
-  };
 }
 
 function resolveTxExecutionDigest(executed) {
@@ -5412,6 +5933,33 @@ function resolveKeyAgreementRecordPathOption(address, keyVersion, value, authSta
   }
   const inferredHome = inferHomeDirFromAuthStatePath(authStateFile);
   return defaultKeyAgreementRecordPath(address, keyVersion, inferredHome || undefined);
+}
+
+function assertNoInlineKeyAgreementProtectionSecret(options = {}) {
+  const forbidden = ["passphrase", "master-secret", "master-key", "key-secret", "private-key"];
+  if (forbidden.some((name) => options[name] !== undefined)) {
+    throw new Error("inline_key_agreement_secret_rejected");
+  }
+  if (
+    process.env.CLAWNERA_KEY_AGREEMENT_PASSPHRASE !== undefined ||
+    process.env.CLAWNERA_KEY_AGREEMENT_MASTER_SECRET !== undefined
+  ) {
+    throw new Error("inline_key_agreement_secret_rejected");
+  }
+}
+
+function keyAgreementOperationError(error, fallback) {
+  const failure = marketplaceMutationFailure(error, fallback);
+  const message = failure.error;
+  if (message !== "secret_file_write_in_progress") {
+    return failure;
+  }
+  return {
+    ok: false,
+    error: message,
+    lockFile: typeof error?.lockPath === "string" ? error.lockPath : null,
+    hint: "Fail closed: stop key-agreement writers; verify the .lock file is owner-only, regular, names the exact target, and its recorded PID is no longer running; then remove only that stale .lock file and retry. Never remove the key record or master key.",
+  };
 }
 
 function listKeyAgreementRecordCandidatePaths(address, authStateFile = "", keyVersion = null) {
@@ -5506,20 +6054,40 @@ async function resolveLocalKeyAgreementRecord(address, keyVersion, {
   return candidates[0];
 }
 
-function buildTxPlanNextCommandHint(method, rawPath, { body, bodyFile, bodySelect } = {}) {
-  const parts = ["clawnera-help", "tx-plan-execute", method, shellQuote(rawPath)];
-  if (bodyFile) {
-    parts.push("--body-file", shellQuote(bodyFile));
-    if (bodySelect) {
-      parts.push("--body-select", shellQuote(bodySelect));
-    }
-  } else if (body) {
-    parts.push("--body", shellQuote(body));
-  }
-  return parts.join(" ");
+function buildMarketplaceWriteHint(
+  command,
+  {
+    authStateFile = "",
+    apiBase = "",
+    authStatePlaceholder = "<file>",
+    fallbackSelector = "",
+  } = {},
+) {
+  const gateSelector = buildMarketplaceTargetSelector({
+    authStateFile,
+    apiBase,
+    authStatePlaceholder,
+    fallbackSelector,
+  });
+  return `clawnera-help write-gate ${gateSelector} && ${command}`;
 }
 
-function buildSuiTxBytesNextCommandHint(method, rawPath, { body, bodyFile, bodySelect } = {}) {
+function buildMarketplaceTargetSelector({
+  authStateFile = "",
+  apiBase = "",
+  authStatePlaceholder = "<file>",
+  fallbackSelector = "",
+} = {}) {
+  const normalizedAuthStateFile = normalizeString(authStateFile);
+  const normalizedApiBase = normalizeString(apiBase);
+  return normalizedAuthStateFile
+    ? `--auth-state-file ${shellQuote(normalizedAuthStateFile)}`
+    : normalizedApiBase
+      ? `--api-base ${shellQuote(normalizedApiBase)}`
+      : fallbackSelector || `--auth-state-file ${authStatePlaceholder}`;
+}
+
+function buildTxPlanNextCommandHint(method, rawPath, { body, bodyFile, bodySelect, apiBase, context } = {}) {
   const parts = ["clawnera-help", "tx-plan-dry-run", method, shellQuote(rawPath)];
   if (bodyFile) {
     parts.push("--body-file", shellQuote(bodyFile));
@@ -5529,16 +6097,33 @@ function buildSuiTxBytesNextCommandHint(method, rawPath, { body, bodyFile, bodyS
   } else if (body) {
     parts.push("--body", shellQuote(body));
   }
-  parts.push("--tx-bytes-out", "./sui-tx.b64");
-  return parts.join(" ");
+  const authStateFile = normalizeString(context?.authStateFile);
+  const normalizedApiBase = normalizeString(apiBase);
+  if (authStateFile) {
+    parts.push("--auth-state-file", shellQuote(authStateFile));
+  } else if (normalizedApiBase) {
+    parts.push("--api-base", shellQuote(normalizedApiBase));
+  } else {
+    parts.push("--api-base", "<target-api-base>");
+  }
+  return buildMarketplaceWriteHint(parts.join(" "), {
+    authStateFile,
+    apiBase: normalizedApiBase,
+    fallbackSelector: "--api-base <target-api-base>",
+  });
 }
 
 function resolveApiPathname(rawPath, apiBase = "") {
   try {
-    const url = normalizeApiBase(rawPath)
-      ? rawPath
-      : `${apiBase}${String(rawPath || "").startsWith("/") ? rawPath : `/${rawPath}`}`;
-    return new URL(url).pathname;
+    const normalizedPath = String(rawPath || "").trim();
+    if (!normalizedPath) {
+      return "";
+    }
+    if (normalizeApiBase(normalizedPath)) {
+      return new URL(normalizedPath).pathname;
+    }
+    const baseUrl = normalizeApiBase(apiBase) || "https://clawnera.invalid";
+    return new URL(normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`, baseUrl).pathname;
   } catch {
     return "";
   }
@@ -5582,7 +6167,7 @@ function classifyReviewerSelfTxPlanRoute(method, rawPath, apiBase = "") {
   return null;
 }
 
-function classifyRetiredTxPlanRoute(method, rawPath, apiBase = "") {
+function classifyDisabledTxPlanRoute(method, rawPath, apiBase = "") {
   if (String(method || "").toUpperCase() !== "POST") {
     return null;
   }
@@ -5594,6 +6179,12 @@ function classifyRetiredTxPlanRoute(method, rawPath, apiBase = "") {
     return {
       error: "reviewer_claim_metrics_path_retired",
       hint: "Use POST /reviewers/me/claim-metrics with the reviewer auth state.",
+    };
+  }
+  if (/^\/disputes\/0x[a-f0-9]+\/fallback\/resolve$/i.test(pathname)) {
+    return {
+      error: "dispute_platform_fallback_admin_only",
+      hint: "The public helper cannot build or dry-run the ArbCap platform fallback. Use atomic dispute-finalize or dispute-timeout-fallback for public closeout, or hand an authorized incident to the external admin custody workflow.",
     };
   }
   return null;
@@ -5715,7 +6306,11 @@ function resolveClaimMetricsDisputeCaseCandidateFromMetricsContext(metricsBody) 
 
 function buildClaimMetricsContextUnavailableHint(rawPath) {
   const normalizedPath = canonicalClaimMetricsDisplayPath();
-  return `Read GET /reviewers/me/metrics and inspect pendingMetricsClaimContext. If the server cannot prove the binding yet, rerun clawnera-help tx-plan-execute POST '${normalizedPath}' --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.`;
+  const retryCommand = buildMarketplaceWriteHint(
+    `clawnera-help tx-plan-dry-run POST '${normalizedPath}' --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'`,
+    { authStatePlaceholder: "<reviewer-auth-state-file>" },
+  );
+  return `Read GET /reviewers/me/metrics and inspect pendingMetricsClaimContext. If the server cannot prove the binding yet, rerun ${retryCommand}.`;
 }
 
 function buildClaimMetricsDisputeCaseHint(rawPath, disputeCaseObjectIds = [], source = "metrics") {
@@ -5724,10 +6319,14 @@ function buildClaimMetricsDisputeCaseHint(rawPath, disputeCaseObjectIds = [], so
     Array.isArray(disputeCaseObjectIds) && disputeCaseObjectIds.length > 0
       ? ` Candidate disputeCaseObjectIds: ${disputeCaseObjectIds.join(", ")}.`
       : "";
+  const retryCommand = buildMarketplaceWriteHint(
+    `clawnera-help tx-plan-dry-run POST '${normalizedPath}' --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'`,
+    { authStatePlaceholder: "<reviewer-auth-state-file>" },
+  );
   if (source === "invites") {
-    return `Read GET /reviewers/me/invites, choose the correct closed disputeCaseObjectId, then rerun clawnera-help tx-plan-execute POST '${normalizedPath}' --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.${candidateSuffix}`;
+    return `Read GET /reviewers/me/invites, choose the correct closed disputeCaseObjectId, then rerun ${retryCommand}.${candidateSuffix}`;
   }
-  return `Read GET /reviewers/me/metrics and inspect pendingMetricsClaimContext, choose the correct closed disputeCaseObjectId, then rerun clawnera-help tx-plan-execute POST '${normalizedPath}' --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"<closed-dispute-case-id>\"}'.${candidateSuffix}`;
+  return `Read GET /reviewers/me/metrics and inspect pendingMetricsClaimContext, choose the correct closed disputeCaseObjectId, then rerun ${retryCommand}.${candidateSuffix}`;
 }
 
 function reviewerSelfRouteNeedsHydration(route, currentBody) {
@@ -6047,12 +6646,14 @@ async function fetchLatestCheckpointRefForCli(options = {}) {
     throw new Error(latestSequence.error || "latest_checkpoint_sequence_failed");
   }
   const latestPayload = asRecord(latestSequence.body);
-  const sequenceNumber = typeof latestPayload?.result === "string"
-    ? latestPayload.result.trim()
-    : Number.isFinite(latestPayload?.result)
-      ? String(latestPayload.result)
-      : "";
-  if (!/^[0-9]+$/.test(sequenceNumber)) {
+  const latestSequenceValue = latestPayload?.result;
+  const sequenceNumber =
+    typeof latestSequenceValue === "string" && /^(0|[1-9][0-9]*)$/.test(latestSequenceValue)
+      ? latestSequenceValue
+      : Number.isSafeInteger(latestSequenceValue) && latestSequenceValue >= 0
+        ? String(latestSequenceValue)
+        : "";
+  if (!sequenceNumber) {
     throw new Error("invalid_checkpoint_sequence_payload");
   }
   const checkpoint = await requestJson(
@@ -6074,57 +6675,31 @@ async function fetchLatestCheckpointRefForCli(options = {}) {
   }
   const checkpointPayload = asRecord(checkpoint.body);
   const checkpointRecord = asRecord(checkpointPayload?.result);
-  const digest = typeof checkpointRecord?.digest === "string" ? checkpointRecord.digest.trim() : "";
-  if (!digest) {
+  let timestampMs;
+  try {
+    timestampMs = reviewerCheckpointTimestampMs(checkpointRecord?.timestampMs, "invalid_checkpoint_payload");
+  } catch {
     throw new Error("invalid_checkpoint_payload");
+  }
+  const checkpointRef = normalizeReviewerCheckpoint(
+    {
+      digest: checkpointRecord?.digest,
+      sequenceNumber: checkpointRecord?.sequenceNumber,
+      timestampMs,
+    },
+    "invalid_checkpoint_payload",
+  );
+  if (checkpointRef.sequenceNumber !== sequenceNumber) {
+    throw new Error("latest_checkpoint_sequence_mismatch");
   }
   return {
     rpcUrl,
-    digest,
-    sequenceNumber,
-    timestampMs:
-      typeof checkpointRecord?.timestampMs === "string" && /^[0-9]+$/.test(checkpointRecord.timestampMs)
-        ? Number.parseInt(checkpointRecord.timestampMs, 10)
-        : Number.isFinite(checkpointRecord?.timestampMs)
-          ? Number.parseInt(String(checkpointRecord.timestampMs), 10)
-          : null,
+    ...checkpointRef,
   };
 }
 
-function extractPackageIdFromPolicyResponse(responseBody) {
-  const policy = responseBody?.policy;
-  if (!policy || typeof policy !== "object" || Array.isArray(policy)) {
-    throw new Error("policy_fees_payload_invalid");
-  }
-  const packageIdCandidates = [
-    policy?.chainConfig?.marketplacePackageId,
-    policy?.listingDeposit?.packageId,
-    policy?.reputationInitFee?.packageId,
-    policy?.chain?.packageId,
-    policy?.packageId,
-  ];
-  for (const candidate of packageIdCandidates) {
-    const normalized = normalizeIotaAddress(candidate || "");
-    if (normalized) {
-      return normalized;
-    }
-  }
-  throw new Error("marketplace_package_id_missing");
-}
-
-function extractChainConfigHintsFromPolicyResponse(responseBody) {
-  const policy = asRecord(responseBody?.policy);
-  const chainConfig = asRecord(policy?.chainConfig || policy?.chain);
-  return {
-    marketplacePackageId: normalizeIotaAddress(chainConfig?.marketplacePackageId || chainConfig?.packageId || ""),
-    marketplaceFeeConfigObjectId: normalizeIotaAddress(
-      chainConfig?.marketplaceFeeConfigObjectId || chainConfig?.escrowFeeConfigObjectId || "",
-    ),
-    governanceConfigObjectId: normalizeIotaAddress(chainConfig?.governanceConfigObjectId || ""),
-    disputeQuorumConfigObjectId: normalizeIotaAddress(chainConfig?.disputeQuorumConfigObjectId || ""),
-    reputationInitFeeConfigObjectId: normalizeIotaAddress(chainConfig?.reputationInitFeeConfigObjectId || ""),
-    listingDepositConfigObjectId: normalizeIotaAddress(chainConfig?.listingDepositConfigObjectId || ""),
-  };
+function extractPackageIdFromPolicyResponse(responseBody, packageAlias = "settlement") {
+  return extractMarketplacePolicyPackageContext(responseBody, packageAlias).packageId;
 }
 
 function extractReputationInitFeePolicy(responseBody) {
@@ -6221,6 +6796,7 @@ async function runApiRequest(commandArgs) {
   let rawPath;
   try {
     ({ method, rawPath } = parseApiMethodPath(positionals));
+    assertRelativeApiRequestPath(rawPath);
   } catch (error) {
     return {
       ok: false,
@@ -6233,10 +6809,34 @@ async function runApiRequest(commandArgs) {
   try {
     apiCall = await callApiRoute({ method, rawPath, options, timeoutMs });
   } catch (error) {
+    const failure = marketplaceMutationFailure(error, "request_failed");
+    const recoveryAuthStateFile = normalizeString(
+      options["auth-state-file"] || process.env.CLAWNERA_AUTH_STATE_FILE,
+    );
+    let recoveryApiBase = "";
+    if (failure.exitCode !== 78) {
+      try {
+        recoveryApiBase = await resolveApiRecoveryBase(options);
+      } catch {
+        recoveryApiBase = "";
+      }
+    }
+    const recoveryTarget = { apiBase: recoveryApiBase };
+    const recoverySelector = buildMarketplaceTargetSelector(recoveryTarget);
+    const recoveryStateArg = recoveryAuthStateFile
+      ? ` --auth-state-file ${shellQuote(recoveryAuthStateFile)}`
+      : "";
     return {
-      ok: false,
-      error: error instanceof Error ? error.message : "request_failed",
-      hint: "run clawnera-help ensure-auth --api-base <url> first, or set --api-base with --jwt / --env-file / --auth-state-file"
+      ...failure,
+      hint:
+        failure.exitCode === 78
+          ? "stop: the exact-target Marketplace mutation gate is closed or unavailable"
+          : !recoveryApiBase
+            ? "stop: the API target could not be resolved; set an explicit --api-base before retrying authentication"
+          : buildMarketplaceWriteHint(
+              `clawnera-help ensure-auth ${recoverySelector}${recoveryStateArg}`,
+              recoveryTarget,
+            ),
     };
   }
   const { context, apiBase, idempotencyKey, url, result } = apiCall;
@@ -6270,13 +6870,12 @@ async function runApiRequest(commandArgs) {
     nextPollAfterMs: bodyNextPollAfterMs,
     retryAfterMs: responseTimingHints.retryAfterMs,
     response: result.body,
-    txPlanDetected: Boolean(txPlan || suiTxBytesPlan),
+    txPlanDetected: Boolean(txPlan),
     txPlanFamily: suiTxBytesPlan ? "sui" : txPlan ? "iota" : null,
+    rawTransactionBytesUnverified: Boolean(suiTxBytesPlan),
     nextCommandHint: txPlan
       ? buildTxPlanNextCommandHint(method, rawPath, apiCall)
-      : suiTxBytesPlan
-        ? buildSuiTxBytesNextCommandHint(method, rawPath, apiCall)
-        : null,
+      : null,
     raw: result.raw || "",
     error: result.ok ? null : summarizeApiFailure(result)
   };
@@ -6395,6 +6994,7 @@ function prepareListingDraftOptions(options = {}, runtimeContext = {}) {
 function listingCreateUsageLines() {
   return [
     "Listing create helper:",
+    ...MARKETPLACE_MUTATION_USAGE_LINES,
     `- Usage: clawnera-help listing-create --listing-mode <OFFER|REQUEST> --title <text> --description <text> --category <slug> --currency <${SUPPORTED_MARKET_ASSET_SYMBOLS.join("|")}> --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>' (--expires-at '<iso8601>' | --expires-at-ms <unix-ms> | --expires-in-days <1-30> | --use-default-expiry) [auth options]`,
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
     "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
@@ -6429,7 +7029,9 @@ function listingDepositCreateUsageLines() {
     "- Reads /policy/fees, resolves the live listing-deposit config, computes the canonical listingRef digest locally, then builds the current local helper lane PTB",
     "- Optional explicit ref: --listing-ref-digest-hex <64-hex> if you already computed the exact canonical binding digest",
     "- Optional payment override: --payment-coin-object-id <0x...>",
-    "- Optional outputs: --proof-out <file> --dry-run --shared",
+    "- Default mode is dry-run. Use --execute only after `clawnera-help write-gate` succeeds for the exact API target; --dry-run and --execute are mutually exclusive.",
+    "- Live production currently reports write_freeze, and Fresh IOTA is not deployed/accepted, so execute mode must remain closed on both targets.",
+    "- Optional outputs: --proof-out <file> --shared",
     "- Optional human mode: add --display-values when the later listing-create will also use whole-user units so both commands hash the same canonical listingRef",
     ...buildCurrencyUnitLines("IOTA"),
     ...buildCurrencyUnitLines("CLAW"),
@@ -6446,6 +7048,7 @@ function listingDepositCreateUsageLines() {
 function listingCancelUsageLines() {
   return [
     "Listing cancel helper:",
+    ...MARKETPLACE_MUTATION_USAGE_LINES,
     "- Usage: clawnera-help listing-cancel --listing-id <listing-id> [auth options]",
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
     "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
@@ -6459,6 +7062,7 @@ function listingCancelUsageLines() {
 function listingRenewUsageLines() {
   return [
     "Listing renew helper:",
+    ...MARKETPLACE_MUTATION_USAGE_LINES,
     "- Usage: clawnera-help listing-renew --listing-id <listing-id> (--expires-at-ms <unix-ms> | --expires-at '<iso8601>') [auth options]",
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
     "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
@@ -6472,6 +7076,7 @@ function listingRenewUsageLines() {
 function bidCreateUsageLines() {
   return [
     "Bid create helper:",
+    ...MARKETPLACE_MUTATION_USAGE_LINES,
     `- Usage: clawnera-help bid-create --listing-id <listing-id> --amount <int> --currency <${SUPPORTED_MARKET_ASSET_SYMBOLS.join("|")}> [auth options]`,
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
     "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
@@ -6513,6 +7118,7 @@ function unitsUsageLines() {
 function bidAcceptUsageLines() {
   return [
     "Bid accept helper:",
+    ...MARKETPLACE_MUTATION_USAGE_LINES,
     "- Usage: clawnera-help bid-accept --bid-id <bid-id> [auth options]",
     "- Required auth: --auth-state-file <file> or --env-file <file> or --api-base <url> --jwt <token>",
     "- Preferred bot auth: clawnera-help ensure-auth --api-base <url> and then reuse --auth-state-file",
@@ -6647,8 +7253,7 @@ async function runListingCreate(commandArgs) {
     const listingModeRaw = normalizeString(options["listing-mode"]).toUpperCase();
     const listingMode = ["OFFER", "REQUEST"].includes(listingModeRaw) ? listingModeRaw : "";
     const response = {
-      ok: false,
-      error: errorCode,
+      ...marketplaceMutationFailure(error, "listing_create_failed"),
       hintLines: buildListingCreateHintLines({ error: errorCode }, listingMode)
     };
     if (errorCode === "display_values_require_single_currency") {
@@ -6691,6 +7296,7 @@ async function runListingDepositCreate(commandArgs) {
     "payment-coin-object-id",
     "proof-out",
     "dry-run",
+    "execute",
     "shared",
     "expires-at",
     "expires-at-ms",
@@ -6706,6 +7312,10 @@ async function runListingDepositCreate(commandArgs) {
     };
   }
   try {
+    const executionMode = marketplaceExecutionMode(options);
+    if (executionMode === "execute") {
+      await assertMarketplaceMutationGate(options);
+    }
     const runtimeContext = await resolveApiRuntimeContext(options);
     const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
     const prepared = prepareListingDraftOptions(options, runtimeContext);
@@ -6726,12 +7336,13 @@ async function runListingDepositCreate(commandArgs) {
       };
     }
 
-    const { feesCall, packageId, chainConfig, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfig(options, {
+    const { feesCall, packageId, packageIds, chainConfig, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfigForMarketplaceExecution(options, {
+      packageAlias: "ops",
       requireDisputeQuorumConfig: false,
       requireEscrowFeeConfig: false,
-      requireGovernanceConfig: false,
+      requireGovernanceConfig: true,
       ...iotaRuntime,
-    });
+    }, executionMode);
     const listingDepositPolicy = extractListingDepositPolicy(feesCall.result.body);
     if (!listingDepositPolicy.enabled) {
       return {
@@ -6771,6 +7382,7 @@ async function runListingDepositCreate(commandArgs) {
       packageId,
       sender: prepared.creatorAddress,
       owner: prepared.creatorAddress,
+      governanceConfigObjectId: chainConfig.governanceConfigObjectId,
       listingDepositConfigObjectId: listingDepositPolicy.configObjectId,
       depositAmount: BigInt(listingDepositPolicy.amount),
       listingRefDigestHex,
@@ -6778,7 +7390,7 @@ async function runListingDepositCreate(commandArgs) {
       ...(paymentCoinObjectId ? { paymentCoinObjectId } : {}),
     };
     const transaction = buildCreateListingDepositTx(request);
-    if (parseBooleanOption(options["dry-run"], false)) {
+    if (executionMode === "dry_run") {
       const result = await dryRunTransaction(transaction, {
         ...resolvedIotaRuntime,
       });
@@ -6801,11 +7413,26 @@ async function runListingDepositCreate(commandArgs) {
       return payload;
     }
 
+    const directGate = await assertMarketplaceDirectExecutionGate({
+      options,
+      runtimeContext,
+      iotaRuntime: resolvedIotaRuntime,
+      packageAlias: "ops",
+      packageId,
+      packageIds,
+      objectIds: {
+        governanceConfigObjectId: chainConfig.governanceConfigObjectId,
+        orderMailboxRegistryObjectId: chainConfig.orderMailboxRegistryObjectId,
+        listingDepositConfigObjectId: listingDepositPolicy.configObjectId,
+      },
+    });
+    assertMarketplaceDirectGateStillFresh(directGate, "ops");
     const executed = await executeTransaction(transaction, {
       alias: signer.alias,
       address: signer.address,
       keystorePath: signer.keystorePath,
-      ...resolvedIotaRuntime,
+      ...directGate.iotaRuntime,
+      beforeBroadcast: directGate.beforeBroadcast,
     });
     const payload = {
       ok: true,
@@ -6829,10 +7456,7 @@ async function runListingDepositCreate(commandArgs) {
     }
     return payload;
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "listing_deposit_create_failed",
-    };
+    return marketplaceMutationFailure(error, "listing_deposit_create_failed");
   }
 }
 
@@ -6871,7 +7495,10 @@ async function runListingCancel(commandArgs) {
     };
   } catch (error) {
     const errorCode = error instanceof Error ? error.message : "listing_cancel_failed";
-    return { ok: false, error: errorCode, hintLines: buildListingCancelHintLines({ error: errorCode }) };
+    return {
+      ...marketplaceMutationFailure(error, "listing_cancel_failed"),
+      hintLines: buildListingCancelHintLines({ error: errorCode }),
+    };
   }
 }
 
@@ -6928,7 +7555,7 @@ async function runListingRenew(commandArgs) {
       expiresAt: normalizeString(result.response?.listing?.expiresAt) || null,
     };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "listing_renew_failed" };
+    return marketplaceMutationFailure(error, "listing_renew_failed");
   }
 }
 
@@ -6968,6 +7595,9 @@ function buildListingCancelHintLines(result = {}) {
 
 function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
   const error = typeof result?.error === "string" ? result.error.trim() : "";
+  const actorAuthStatePlaceholder = `<${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`;
+  const gated = (command) =>
+    buildMarketplaceWriteHint(command, { authStatePlaceholder: actorAuthStatePlaceholder });
   switch (error) {
     case "missing_listing_mode":
     case "listing_mode_required":
@@ -7009,7 +7639,7 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
       return [
         "cause=public_listing_create_requires_reputation_profile",
         "detail=run_reputation_init_from_the_same_wallet_before_retrying_the_listing_write",
-        `next_hint=clawnera-help reputation-init --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
+        `next_hint=${gated(`clawnera-help reputation-init --auth-state-file ${actorAuthStatePlaceholder} --execute`)}`,
         `next_hint=clawnera-help request GET /users/<${listingMode === "REQUEST" ? "request-buyer" : "seller"}-address>/reputation --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
       ];
     case "consumer_accounts_disabled":
@@ -7024,31 +7654,31 @@ function buildListingCreateHintLines(result = {}, listingMode = "OFFER") {
       return [
         "cause=protected_listing_write_requires_canonical_professional_onboarding",
         "detail=public_listing_create_now_requires_reputation_init_plus_current_use_context_onboarding",
-        `next_hint=clawnera-help reputation-init --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
+        `next_hint=${gated(`clawnera-help reputation-init --auth-state-file ${actorAuthStatePlaceholder} --execute`)}`,
         `next_hint=clawnera-help request GET /compliance/me --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
-        `next_hint=clawnera-help request POST /compliance/me/use-context --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file> --body '{\"useContext\":\"COMPANY\",\"professionalAcknowledgement\":{\"confirmedProfessionalCapacity\":true,\"confirmedAge18Plus\":true,\"termsVersion\":\"<current-from-GET-/compliance/me>\",\"riskDisclosureVersion\":\"<current-from-GET-/compliance/me>\"}}'`,
+        `next_hint=${gated(`clawnera-help request POST /compliance/me/use-context --auth-state-file ${actorAuthStatePlaceholder} --body '{\"useContext\":\"COMPANY\",\"professionalAcknowledgement\":{\"confirmedProfessionalCapacity\":true,\"confirmedAge18Plus\":true,\"termsVersion\":\"<current-from-GET-/compliance/me>\",\"riskDisclosureVersion\":\"<current-from-GET-/compliance/me>\"}}'`)}`,
       ];
     case "business_acknowledgement_version_mismatch":
       return [
         "cause=stored_professional_acknowledgement_is_outdated",
         "detail=re_read_document_versions_from_get_compliance_me_then_repeat_use_context_with_current_values",
         `next_hint=clawnera-help request GET /compliance/me --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
-        "next_hint=retry POST /compliance/me/use-context with current documentVersions from GET /compliance/me",
+        `next_hint=${gated(`clawnera-help request POST /compliance/me/use-context --auth-state-file ${actorAuthStatePlaceholder} --body '{\"useContext\":\"COMPANY\",\"professionalAcknowledgement\":{\"confirmedProfessionalCapacity\":true,\"confirmedAge18Plus\":true,\"termsVersion\":\"<current-from-GET-/compliance/me>\",\"riskDisclosureVersion\":\"<current-from-GET-/compliance/me>\"}}'`)}`,
       ];
     case "trader_verification_required":
       return [
         "cause=verified_trader_route_is_not_the_default_next_step_for_this_runtime",
         "detail=re_read_owner_surface_and_complete_canonical_professional_onboarding_before_retrying",
-        `next_hint=clawnera-help reputation-init --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
+        `next_hint=${gated(`clawnera-help reputation-init --auth-state-file ${actorAuthStatePlaceholder} --execute`)}`,
         `next_hint=clawnera-help request GET /compliance/me --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
       ];
     case "listing_deposit_required":
       return [
         "cause=listing_deposit_policy_active",
         "detail=public_listing_create_requires_reputation_init_plus_any_live_deposit_policy_preflight",
-        `next_hint=clawnera-help reputation-init --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
+        `next_hint=${gated(`clawnera-help reputation-init --auth-state-file ${actorAuthStatePlaceholder} --execute`)}`,
         `next_hint=clawnera-help request GET /policy/fees --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file>`,
-        `next_hint=clawnera-help listing-deposit-create --auth-state-file <${listingMode === "REQUEST" ? "request-buyer" : "seller"}-auth-state-file> --listing-mode ${listingMode || "<OFFER|REQUEST>"} --title '<title>' --description '<description>' --category <slug> --currency <IOTA|CLAW> --display-values --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'`,
+        `next_hint=${gated(`clawnera-help listing-deposit-create --auth-state-file ${actorAuthStatePlaceholder} --execute --listing-mode ${listingMode || "<OFFER|REQUEST>"} --title '<title>' --description '<description>' --category <slug> --currency <IOTA|CLAW> --display-values --milestones '<title:amount;title:amount>' --milestone-due-dates '<iso8601;iso8601>'`)}`,
         `next_hint=clawnera-help recipe ${listingMode === "REQUEST" ? "buyer-create-request" : "seller-create-listing"} --compact`,
       ];
     case "missing_listing_expiry_choice":
@@ -7148,7 +7778,7 @@ async function runBidCreate(commandArgs) {
       hintLines: buildBidCreateHintLines(result),
     };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "bid_create_failed" };
+    return marketplaceMutationFailure(error, "bid_create_failed");
   }
 }
 
@@ -7163,14 +7793,20 @@ function buildBidCreateHintLines(result = {}) {
         "cause=request_bidder_becomes_future_seller_and_must_complete_professional_onboarding",
         "detail=responding_to_a_request_requires_the_canonical_use_context_path_not_just_a_coarse_account_type_switch",
         "next_hint=clawnera-help request GET /compliance/me --auth-state-file <request-seller-auth-state-file>",
-        "next_hint=clawnera-help request POST /compliance/me/use-context --auth-state-file <request-seller-auth-state-file> --body '{\"useContext\":\"COMPANY\",\"professionalAcknowledgement\":{\"confirmedProfessionalCapacity\":true,\"confirmedAge18Plus\":true,\"termsVersion\":\"<current-from-GET-/compliance/me>\",\"riskDisclosureVersion\":\"<current-from-GET-/compliance/me>\"}}'",
+        `next_hint=${buildMarketplaceWriteHint(
+          "clawnera-help request POST /compliance/me/use-context --auth-state-file <request-seller-auth-state-file> --body '{\"useContext\":\"COMPANY\",\"professionalAcknowledgement\":{\"confirmedProfessionalCapacity\":true,\"confirmedAge18Plus\":true,\"termsVersion\":\"<current-from-GET-/compliance/me>\",\"riskDisclosureVersion\":\"<current-from-GET-/compliance/me>\"}}'",
+          { authStatePlaceholder: "<request-seller-auth-state-file>" },
+        )}`,
       ];
     case "business_acknowledgement_version_mismatch":
       return [
         "cause=stored_professional_acknowledgement_is_outdated",
         "detail=re_read_document_versions_from_get_compliance_me_then_repeat_use_context_with_current_values",
         "next_hint=clawnera-help request GET /compliance/me --auth-state-file <request-seller-auth-state-file>",
-        "next_hint=retry POST /compliance/me/use-context with current documentVersions from GET /compliance/me",
+        `next_hint=${buildMarketplaceWriteHint(
+          "clawnera-help request POST /compliance/me/use-context --auth-state-file <request-seller-auth-state-file> --body '{\"useContext\":\"COMPANY\",\"professionalAcknowledgement\":{\"confirmedProfessionalCapacity\":true,\"confirmedAge18Plus\":true,\"termsVersion\":\"<current-from-GET-/compliance/me>\",\"riskDisclosureVersion\":\"<current-from-GET-/compliance/me>\"}}'",
+          { authStatePlaceholder: "<request-seller-auth-state-file>" },
+        )}`,
       ];
     case "request_bidder_verification_required":
       return [
@@ -7295,7 +7931,10 @@ async function runBidAccept(commandArgs) {
     };
   } catch (error) {
     const errorCode = error instanceof Error ? error.message : "bid_accept_failed";
-    return { ok: false, error: errorCode, hintLines: buildBidAcceptHintLines({ error: errorCode }) };
+    return {
+      ...marketplaceMutationFailure(error, "bid_accept_failed"),
+      hintLines: buildBidAcceptHintLines({ error: errorCode }),
+    };
   }
 }
 
@@ -7307,8 +7946,14 @@ function buildBidAcceptHintLines(result = {}) {
     case "buyer_mismatch":
       return [
         "cause=bid_accept_is_buyer_side",
-        "next_hint=for OFFER listings, rerun bid-accept from the chosen buyer wallet",
-        "next_hint=for REQUEST listings, rerun bid-accept from the request creator / future buyer wallet",
+        `next_hint=for OFFER listings, ${buildMarketplaceWriteHint(
+          "clawnera-help bid-accept --auth-state-file <chosen-buyer-auth-state-file> --bid-id <bid-id>",
+          { authStatePlaceholder: "<chosen-buyer-auth-state-file>" },
+        )}`,
+        `next_hint=for REQUEST listings, ${buildMarketplaceWriteHint(
+          "clawnera-help bid-accept --auth-state-file <request-buyer-auth-state-file> --bid-id <bid-id>",
+          { authStatePlaceholder: "<request-buyer-auth-state-file>" },
+        )}`,
       ];
     default:
       return [];
@@ -7363,9 +8008,12 @@ function writeOptionalOutputFile(targetPath, payload, mode = 0o600) {
   if (!targetPath) {
     return null;
   }
+  if (mode === 0o600) {
+    writePrivateFileAtomicSync(targetPath, payload);
+    return targetPath;
+  }
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-  fs.writeFileSync(targetPath, payload, { mode });
-  fs.chmodSync(targetPath, mode);
+  fs.writeFileSync(targetPath, payload, { mode, flag: "wx" });
   return targetPath;
 }
 
@@ -7449,6 +8097,7 @@ async function callIotaJsonRpcForHelper(options = {}, body) {
   });
   const response = await fetch(rpcUrl, {
     method: "POST",
+    redirect: "error",
     headers: {
       "content-type": "application/json",
     },
@@ -7462,168 +8111,6 @@ async function callIotaJsonRpcForHelper(options = {}, body) {
     throw new Error(typeof payload.error?.message === "string" ? payload.error.message : "iota_rpc_error");
   }
   return payload?.result ?? null;
-}
-
-async function findResolveEscrowCompatTicket({ disputeCase, disputeCaseObjectId, options }) {
-  const canonicalPackageId = canonicalPackageIdFromObjectType(disputeCase?.type);
-  if (!canonicalPackageId) {
-    throw new Error("resolve_escrow_compat_package_unknown");
-  }
-  const resolvedEventType = `${canonicalPackageId}::dispute_quorum::DisputeQuorumResolved`;
-  let cursor = null;
-  for (let page = 0; page < 6; page += 1) {
-    const result = await callIotaJsonRpcForHelper(options, {
-      jsonrpc: "2.0",
-      id: `resolve-escrow-ticket-${page + 1}`,
-      method: "iotax_queryEvents",
-      params: [{ MoveEventType: resolvedEventType }, cursor, 20, true],
-    });
-    const events = Array.isArray(result?.data) ? result.data : [];
-    const matchingResolvedEvent = events.find(
-      (entry) => normalizeIotaAddress(entry?.parsedJson?.dispute_case_id || "") === disputeCaseObjectId,
-    );
-    if (matchingResolvedEvent) {
-      const txDigest =
-        typeof matchingResolvedEvent?.id?.txDigest === "string" ? matchingResolvedEvent.id.txDigest : "";
-      if (!txDigest) {
-        throw new Error("resolve_escrow_compat_finalize_tx_missing");
-      }
-      const transactionBlock = await callIotaJsonRpcForHelper(options, {
-        jsonrpc: "2.0",
-        id: "resolve-escrow-ticket-tx",
-        method: "iota_getTransactionBlock",
-        params: [txDigest, { showInput: true, showEvents: true }],
-      });
-      const resolved = resolveQuorumTicketFromFinalizeTx({
-        disputeCaseObjectId,
-        disputeCaseType: disputeCase?.type,
-        resolvedEvents: [matchingResolvedEvent],
-        transactionBlock,
-      });
-      if (!resolved) {
-        throw new Error("resolve_escrow_compat_ticket_not_found");
-      }
-      return resolved;
-    }
-    if (!result?.hasNextPage || !result?.nextCursor) {
-      break;
-    }
-    cursor = result.nextCursor;
-  }
-  throw new Error("resolve_escrow_compat_ticket_not_found");
-}
-
-async function maybeExecuteResolveEscrowCompatFallback({
-  errorMessage,
-  txPlan,
-  rawPath,
-  options,
-  timeoutMs,
-  signer,
-  autoHydratedReviewerContext,
-  autoRetriedExecutionCount,
-  txBytesOut,
-  planOut,
-}) {
-  if (txPlan?.txBuilder !== "orderEscrow.resolveDisputeWithBinding") {
-    return null;
-  }
-  if (!isMissingResolveDisputeWithBindingFunctionError(errorMessage)) {
-    return null;
-  }
-  const disputeCaseObjectId = resolveDisputeCaseIdFromTxPlanPath(rawPath);
-  if (!disputeCaseObjectId) {
-    return {
-      ok: false,
-      error: "resolve_escrow_compat_dispute_case_id_missing",
-      hint: "The current chain package still needs the dispute finalize ticket for resolve-escrow, but the disputeCaseId could not be recovered from the route.",
-    };
-  }
-  const disputeCall = await callApiRoute({
-    method: "GET",
-    rawPath: `/disputes/${disputeCaseObjectId}`,
-    options: stripInlineRequestBodyOptions(options),
-    timeoutMs,
-  });
-  if (!disputeCall.result.ok) {
-    return {
-      ok: false,
-      error: summarizeApiFailure(disputeCall.result),
-      status: disputeCall.result.status,
-      response: disputeCall.result.body,
-      disputeCaseObjectId,
-    };
-  }
-  const disputeCase = ensureDisputeCasePayload(disputeCall.result.body);
-  const compatTicket = await findResolveEscrowCompatTicket({
-    disputeCase,
-    disputeCaseObjectId,
-    options,
-  });
-  const signerAddress = normalizeIotaAddress(signer?.address || txPlan?.request?.sender || "");
-  if (compatTicket.finalizeSignerAddress && signerAddress && compatTicket.finalizeSignerAddress !== signerAddress) {
-    return {
-      ok: false,
-      error: "resolve_escrow_finalize_wallet_required",
-      disputeCaseObjectId,
-      hint:
-        `The current chain package still resolves escrow with the finalize ticket, and that ticket belongs to ${compatTicket.finalizeSignerAddress}. ` +
-        `Rerun the same resolve-escrow command with that wallet, or rerun finalize+resolve with the same buyer/seller wallet on a fresh case.`,
-      nextCommandHint: `clawnera-help tx-plan-execute POST '${rawPath}' --auth-state-file <finalize-wallet-auth-state-file>`,
-      compatResolveEscrowFallback: {
-        attempted: true,
-        finalizeTxDigest: compatTicket.txDigest,
-        finalizeSignerAddress: compatTicket.finalizeSignerAddress,
-      },
-    };
-  }
-  const compatTxPlan = {
-    ...txPlan,
-    txBuilder: "orderEscrow.resolveDisputeWithQuorumTicket",
-    request: {
-      ...txPlan.request,
-      quorumResolutionTicketObjectId: compatTicket.ticketObjectId,
-    },
-  };
-  const transaction = buildClawdexTxFromPlan(compatTxPlan);
-  const executed = await executeTransaction(transaction, {
-    alias: signer.alias,
-    address: signer.address,
-    keystorePath: signer.keystorePath,
-    network: options.network,
-    rpcUrl: options["rpc-url"],
-  });
-  if (txBytesOut) {
-    writeOptionalOutputFile(txBytesOut, `${executed.txBytesB64}\n`);
-  }
-  return {
-    ok: true,
-    mode: "execute",
-    rawPath,
-    apiBase: disputeCall.apiBase,
-    txBuilder: compatTxPlan.txBuilder,
-    signerAddress: executed.verifyResult?.signerAddress || signer.address || compatTxPlan.request.sender || null,
-    autoHydratedReviewerContext,
-    autoRetriedExecutionCount,
-    txDigest: resolveTxExecutionDigest(executed),
-    txBytesOut: txBytesOut || null,
-    planOut: planOut || null,
-    execution: executed.result,
-    createdObjects: extractCreatedObjects(executed),
-    disputeCaseObjectId,
-    postExecuteBinding: null,
-    mailboxSignalPosted: extractMailboxSignalPosted(executed),
-    mailboxSignalAcked: extractMailboxSignalAcked(executed),
-    disputeBondObjectId: null,
-    orderMailboxObjectId: null,
-    orderEscrowObjectId: extractCreatedObjectIdByTypeFragment(executed, "::order_escrow::OrderEscrow<") || null,
-    compatResolveEscrowFallback: {
-      used: true,
-      finalizeTxDigest: compatTicket.txDigest,
-      finalizeSignerAddress: compatTicket.finalizeSignerAddress,
-    },
-    orderStatusReadbackMayLag: true,
-  };
 }
 
 async function maybeClassifyLiveDisputeTxPlanExecutionError({
@@ -7684,6 +8171,8 @@ function classifyTxPlanRouteFailure({
   rawPath,
   options = {},
   result = {},
+  apiBase = "",
+  runtimeContext = null,
 }) {
   const error = summarizeApiFailure(result);
   const body =
@@ -7692,7 +8181,15 @@ function classifyTxPlanRouteFailure({
       : {};
   const retryAfterMs = extractTxPlanRouteRetryAfterMs(result);
   const requestBody = loadApiRequestBody(options);
-  const nextCommandHint = buildTxPlanNextCommandHint(method, rawPath, requestBody);
+  const nextCommandHint = buildTxPlanNextCommandHint(method, rawPath, {
+    ...requestBody,
+    apiBase: apiBase || options["api-base"],
+    context:
+      runtimeContext ||
+      {
+        authStateFile: options["auth-state-file"] || options["auth-state"],
+      },
+  });
   let waitUntilMs = null;
   let hint = "";
   switch (error) {
@@ -7716,7 +8213,11 @@ function classifyTxPlanRouteFailure({
         parsePositiveDeadlineMs(body.challengeDeadlineMs) ||
         (Number.isSafeInteger(retryAfterMs) && retryAfterMs >= 0 ? Date.now() + retryAfterMs : null);
       hint =
-        "Settlement is not ready yet. Wait for the printed settlement-ready or challenge deadline hint, then rerun the same resolve-escrow command from the same buyer or seller wallet used for finalize whenever the runtime still requires same-wallet closeout.";
+        "This Sui legacy/recovery escrow resolution is not ready. If the dispute is still open, use the atomic dispute-finalize or dispute-timeout-fallback recipe instead. Rerun resolve-escrow only on Sui after exact readback proves the case is closed and the bound escrow remains DISPUTED.";
+      break;
+    case "iota_dispute_resolve_escrow_route_retired":
+      hint =
+        "IOTA dispute escrow recovery is retired and must not be retried or rebuilt directly. Use dispute-finalize or dispute-timeout-fallback so the Fresh IOTA wrapper closes the case and bound escrow atomically.";
       break;
     case "reviewer_vote_commit_window_closed":
       waitUntilMs =
@@ -8114,7 +8615,10 @@ async function fetchMailboxEventsSnapshot(options, orderId, { timeoutMs, limit, 
           fallbackUsed = "onchain_rpc";
         }
       }
-    } catch {
+    } catch (error) {
+      if (marketplaceMutationFailure(error, "mailbox_chain_fallback_failed").exitCode === 78) {
+        throw error;
+      }
       // Keep the empty API feed result if on-chain fallback is unavailable.
     }
   }
@@ -8336,7 +8840,9 @@ async function buildDisputeSupplementalBundleForCli(options, {
     payloadFile: resolvedPayloadOut,
   };
   writeOptionalOutputFile(resolvedBuildOut, `${JSON.stringify(buildArtifact, null, 2)}\n`);
-  const authStateHint = shellQuote(effectiveRuntimeContext.authStateFile || "~/.config/clawnera/auth-state.json");
+  const authStateHint = effectiveRuntimeContext.authStateFile
+    ? shellQuote(effectiveRuntimeContext.authStateFile)
+    : "~/.config/clawnera/auth-state.json";
   return {
     ok: true,
     disputeCaseId,
@@ -8354,11 +8860,23 @@ async function buildDisputeSupplementalBundleForCli(options, {
     nextUploadHint:
       `clawnera-help managed-storage-upload --file ${shellQuote(resolvedPayloadOut)} --presign-file <presign-file.json>`,
     nextPresignHint:
-      `clawnera-help managed-storage-presign --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} ` +
-      `--file ${shellQuote(resolvedPayloadOut)} --payment-proof-file <payment-proof.json> --auth-state-file ${authStateHint}`,
+      buildMarketplaceWriteHint(
+        `clawnera-help managed-storage-presign --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} ` +
+          `--file ${shellQuote(resolvedPayloadOut)} --payment-proof-file <payment-proof.json> --auth-state-file ${authStateHint}`,
+        {
+          authStateFile: effectiveRuntimeContext.authStateFile,
+          fallbackSelector: "--auth-state-file ~/.config/clawnera/auth-state.json",
+        },
+      ),
     nextPublishHint:
-      `clawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id ${shellQuote(disputeCaseId)} ` +
-      `--bundle-build-file ${shellQuote(resolvedBuildOut)} --manifest-cid 'ipfs://<cid>' --auth-state-file ${authStateHint}`,
+      buildMarketplaceWriteHint(
+        `clawnera-help dispute-evidence-publish --kind supplemental-bundle --case-id ${shellQuote(disputeCaseId)} ` +
+          `--bundle-build-file ${shellQuote(resolvedBuildOut)} --manifest-cid 'ipfs://<cid>' --auth-state-file ${authStateHint}`,
+        {
+          authStateFile: effectiveRuntimeContext.authStateFile,
+          fallbackSelector: "--auth-state-file ~/.config/clawnera/auth-state.json",
+        },
+      ),
   };
 }
 
@@ -8490,7 +9008,7 @@ async function resolveLatestUserKeyAgreement(options, address, timeoutMs, maxKey
       timeoutMs: perKeyTimeoutMs,
     });
     if (!keyAgreementCall.result.ok) {
-      if (keyAgreementCall.result.status === 404) {
+      if (isExactKeyAgreementNotFound(keyAgreementCall.result)) {
         if (matched) {
           break;
         }
@@ -8776,8 +9294,8 @@ function mergeChainConfigWithReviewerRuntime(chainConfig, reviewerRuntime) {
     runtimeReviewerMinStakeNative = BigInt(String(reviewerRuntime.reviewerMinStakeIota).trim());
   }
   runtimeReviewerMinStakeIota = runtimeReviewerMinStakeNative;
-  if (runtimePackageId) {
-    merged.packageId = runtimePackageId;
+  if (runtimePackageId && runtimePackageId !== chainConfig.packageId) {
+    throw new Error("reviewer_runtime_package_id_mismatch");
   }
   if (runtimeDisputeQuorumConfigObjectId) {
     merged.disputeQuorumConfigObjectId = runtimeDisputeQuorumConfigObjectId;
@@ -8802,8 +9320,9 @@ async function fetchPolicyAndChainConfig(contextOptions = {}, runtimeOptions = {
   if (!feesCall.result.ok) {
     throw new Error(summarizeApiFailure(feesCall.result));
   }
-  const packageId = extractPackageIdFromPolicyResponse(feesCall.result.body);
-  const policyChainConfig = extractChainConfigHintsFromPolicyResponse(feesCall.result.body);
+  const packageAlias = normalizeString(runtimeOptions.packageAlias) || "settlement";
+  const policyContext = extractMarketplacePolicyPackageContext(feesCall.result.body, packageAlias);
+  const { packageId, packageIds, chainConfigHints: policyChainConfig } = policyContext;
   const timeoutMs = parsePositiveIntOption(contextOptions["timeout-ms"], "timeout_ms", 20_000);
   let reviewerRuntime = null;
   const reviewerRuntimeResult = await fetchReviewerRuntimeHints(contextOptions, timeoutMs);
@@ -8817,8 +9336,8 @@ async function fetchPolicyAndChainConfig(contextOptions = {}, runtimeOptions = {
     },
     feesCall.context,
   );
-  const chainConfig = await resolveClawdexChainConfig({
-    packageId,
+  const resolvedChainConfig = await resolveClawdexChainConfig({
+    packageId: policyChainConfig.settlementPackageId,
     disputeQuorumConfigObjectId:
       normalizeIotaAddress(reviewerRuntime?.disputeQuorumConfigObjectId || "") ||
       policyChainConfig.disputeQuorumConfigObjectId,
@@ -8831,13 +9350,41 @@ async function fetchPolicyAndChainConfig(contextOptions = {}, runtimeOptions = {
     network: iotaRuntime.network,
     rpcUrl: iotaRuntime.rpcUrl,
   });
+  const chainConfig = mergeChainConfigWithReviewerRuntime(
+    {
+      ...resolvedChainConfig,
+      governancePackageId: policyChainConfig.governancePackageId,
+      orderMailboxRegistryObjectId: policyChainConfig.orderMailboxRegistryObjectId,
+    },
+    reviewerRuntime,
+  );
   return {
     feesCall,
-    chainConfig: mergeChainConfigWithReviewerRuntime(chainConfig, reviewerRuntime),
+    chainConfig,
     iotaRuntime,
     packageId,
+    packageAlias,
+    packageIds,
     reviewerRuntime,
   };
+}
+
+async function fetchPolicyAndChainConfigForMarketplaceExecution(
+  contextOptions = {},
+  runtimeOptions = {},
+  executionMode = "dry_run",
+) {
+  try {
+    return await fetchPolicyAndChainConfig(contextOptions, runtimeOptions);
+  } catch (error) {
+    if (executionMode !== "execute") {
+      throw error;
+    }
+    throw marketplaceDirectGateError(error, {
+      stage: "policy_chain_config",
+      packageAlias: normalizeString(runtimeOptions.packageAlias) || "settlement",
+    });
+  }
 }
 
 async function ensureTransportKeyAgreementReadbackReady(input = {}) {
@@ -8936,6 +9483,14 @@ async function resolveReviewerTransportKeyMaterial({
         : "";
   const hasExplicitKeyVersion = options?.["transport-key-version"] !== undefined;
   const fallbackExpiresAtMs = Date.now() + 86_400_000;
+  const authStateSelector = authStateFile ? shellQuote(authStateFile) : "<reviewer-auth-state-file>";
+  const keyAgreementUpsertHint = buildMarketplaceWriteHint(
+    `clawnera-help key-agreement-upsert --auth-state-file ${authStateSelector}`,
+    {
+      authStateFile,
+      authStatePlaceholder: "<reviewer-auth-state-file>",
+    },
+  );
   let keyRecord;
   let transportKeyVersion = null;
   let remoteKeyAgreement = null;
@@ -8971,7 +9526,7 @@ async function resolveReviewerTransportKeyMaterial({
           status: remoteResolution.status,
           response: remoteResolution.response,
           keyAgreement: remoteResolution.keyAgreement,
-          hint: "run clawnera-help key-agreement-upsert first",
+          hint: keyAgreementUpsertHint,
         };
       }
       remoteKeyAgreement = remoteResolution.keyAgreement;
@@ -8988,6 +9543,10 @@ async function resolveReviewerTransportKeyMaterial({
       });
     }
   } catch (error) {
+    const failure = marketplaceMutationFailure(error, "missing_key_agreement_record");
+    if (failure.exitCode === 78) {
+      return failure;
+    }
     if (error instanceof Error && error.message === "local_key_agreement_record_not_found") {
       return {
         ok: false,
@@ -9000,16 +9559,15 @@ async function resolveReviewerTransportKeyMaterial({
           "key-agreements",
         ),
         hint: explicitKeyFile
-          ? "run clawnera-help key-agreement-upsert first"
-          : "rerun clawnera-help key-agreement-upsert first or pass --transport-key-file with the matching local private key record",
+          ? keyAgreementUpsertHint
+          : `${keyAgreementUpsertHint}; or pass --transport-key-file with the matching local private key record`,
       };
     }
     return {
-      ok: false,
-      error: error instanceof Error ? error.message : "missing_key_agreement_record",
+      ...failure,
       keyVersion: transportKeyVersion,
       keyFile: explicitKeyFile || "",
-      hint: "run clawnera-help key-agreement-upsert first",
+      hint: keyAgreementUpsertHint,
     };
   }
 
@@ -9023,7 +9581,7 @@ async function resolveReviewerTransportKeyMaterial({
       keyVersion: transportKeyVersion,
       keyFile: keyRecord.filePath,
       remoteKeyAgreement,
-      hint: "rerun clawnera-help key-agreement-upsert for the reviewer wallet or pass --transport-key-file with the matching local private key record",
+      hint: `${keyAgreementUpsertHint}; or pass --transport-key-file with the matching local private key record`,
     };
   }
 
@@ -9079,10 +9637,7 @@ async function runChainConfig(commandArgs) {
       guidance: buildChainConfigGuidance(chainConfig),
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "chain_config_failed",
-    };
+    return marketplaceMutationFailure(error, "chain_config_failed");
   }
 }
 
@@ -9095,11 +9650,33 @@ async function runTxPlanCommand(commandArgs, mode) {
       usage: txPlanUsageLines(mode),
     };
   }
+  if (mode !== "dry_run") {
+    return {
+      ok: false,
+      error: "generic_tx_plan_execution_disabled",
+      hint: "Use a reviewed chain-native wallet/client or a purpose-built helper. The generic CLI never signs or broadcasts API tx plans.",
+    };
+  }
+  if (options["tx-bytes-out"] !== undefined) {
+    return {
+      ok: false,
+      error: "tx_plan_bytes_output_disabled",
+      hint: "Dry-run reports effects only. It never exports transaction bytes as an executable or verified artifact.",
+    };
+  }
+  if (options["sui-private-key"]) {
+    return {
+      ok: false,
+      error: "sui_private_key_argv_disabled",
+      hint: "Use a protected Sui keystore or hardware-backed signer; never pass private keys in process arguments.",
+    };
+  }
 
   let method;
   let rawPath;
   try {
     ({ method, rawPath } = parseApiMethodPath(positionals));
+    assertRelativeApiRequestPath(rawPath);
   } catch (error) {
     return {
       ok: false,
@@ -9107,12 +9684,12 @@ async function runTxPlanCommand(commandArgs, mode) {
     };
   }
 
-  const retiredRoute = classifyRetiredTxPlanRoute(method, rawPath, options["api-base"]);
-  if (retiredRoute) {
+  const disabledRoute = classifyDisabledTxPlanRoute(method, rawPath, options["api-base"]);
+  if (disabledRoute) {
     return {
       ok: false,
-      error: retiredRoute.error,
-      hint: retiredRoute.hint,
+      error: disabledRoute.error,
+      hint: disabledRoute.hint,
     };
   }
 
@@ -9184,6 +9761,8 @@ async function runTxPlanCommand(commandArgs, mode) {
           rawPath,
           options: requestOptions,
           result: apiCall.result,
+          apiBase: apiCall.apiBase,
+          runtimeContext: apiCall.context,
         });
         if (classifiedRouteFailure?.retryable === true && autoRetriedRouteFetchCount < 1) {
           autoRetriedRouteFetchCount += 1;
@@ -9219,8 +9798,7 @@ async function runTxPlanCommand(commandArgs, mode) {
     }
   } catch (error) {
     return {
-      ok: false,
-      error: error instanceof Error ? error.message : "tx_plan_fetch_failed",
+      ...marketplaceMutationFailure(error, "tx_plan_fetch_failed"),
       hint: "set --api-base, --env-file, or --auth-state-file",
     };
   }
@@ -9237,208 +9815,69 @@ async function runTxPlanCommand(commandArgs, mode) {
   }
 
   const planOut = resolveOptionalPathOption(options["plan-out"]);
-  const txBytesOut = resolveOptionalPathOption(options["tx-bytes-out"]);
-  if (suiTxBytesPlan) {
-    if (planOut) {
-      writeOptionalOutputFile(planOut, JSON.stringify(apiCall.result.body, null, 2));
-    }
-    if (txBytesOut) {
-      writeOptionalOutputFile(txBytesOut, `${suiTxBytesPlan.transactionBytesBase64}\n`);
-    }
-    if (mode === "dry_run") {
-      try {
-        const dryRun = await dryRunSuiTransactionBytes(suiTxBytesPlan, options);
-        return {
-          ok: true,
-          mode,
-          method,
-          rawPath,
-          apiBase: apiCall.apiBase,
-          chainFamily: "sui",
-          chainNetwork: suiTxBytesPlan.chainNetwork,
-          txBuilder: suiTxBytesPlan.txBuilder,
-          target: suiTxBytesPlan.target,
-          signerAddress: suiTxBytesPlan.sender,
-          txBytesOut: txBytesOut || null,
-          planOut: planOut || null,
-          suiRpcUrl: dryRun.rpcUrl,
-          dryRun: dryRun.result,
-          gasSummary: formatDryRunGasSummary(dryRun.result),
-        };
-      } catch (error) {
-        return {
-          ok: false,
-          error: error instanceof Error ? error.message : "sui_tx_plan_dry_run_failed",
-          mode,
-          method,
-          rawPath,
-          apiBase: apiCall.apiBase,
-          chainFamily: "sui",
-          chainNetwork: suiTxBytesPlan.chainNetwork,
-          txBuilder: suiTxBytesPlan.txBuilder,
-          target: suiTxBytesPlan.target,
-          txBytesOut: txBytesOut || null,
-          planOut: planOut || null,
-          hint: "Sui tx-plan dry-run needs a reachable Sui fullnode RPC. Pass --sui-rpc-url <url> if the default network RPC is not reachable.",
-        };
-      }
-    }
-    try {
-      const executed = await executeSuiTransactionBytes(suiTxBytesPlan, options);
-      if (txBytesOut) {
-        writeOptionalOutputFile(txBytesOut, `${executed.signedBytesBase64}\n`);
-      }
-      const baseResult = {
-        ok: executed.executionStatus === "success",
-        mode,
-        method,
-        rawPath,
-        apiBase: apiCall.apiBase,
-        chainFamily: "sui",
-        chainNetwork: suiTxBytesPlan.chainNetwork,
-        txBuilder: suiTxBytesPlan.txBuilder,
-        target: suiTxBytesPlan.target,
-        signerAddress: executed.signer.address,
-        signerSource: executed.signer.source,
-        signatureScheme: executed.signer.scheme,
-        txDigest: executed.txDigest,
-        suiRpcUrl: executed.rpcUrl,
-        txBytesOut: txBytesOut || null,
-        planOut: planOut || null,
-        executionStatus: executed.executionStatus || null,
-        execution: executed.result,
-      };
-      if (baseResult.ok) {
-        return baseResult;
-      }
-      return {
-        ...baseResult,
-        error: "sui_transaction_execution_failed",
-        rawError: executed.executionError || null,
-      };
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "sui_tx_plan_execution_failed",
-        mode,
-        method,
-        rawPath,
-        apiBase: apiCall.apiBase,
-        chainFamily: "sui",
-        chainNetwork: suiTxBytesPlan.chainNetwork,
-        txBuilder: suiTxBytesPlan.txBuilder,
-        target: suiTxBytesPlan.target,
-        signerAddress: suiTxBytesPlan.sender,
-        txBytesOut: txBytesOut || null,
-        planOut: planOut || null,
-        keystorePath: error?.keystorePath || null,
-        candidates: Array.isArray(error?.candidates) ? error.candidates : undefined,
-        hint:
-          "Sui tx-plan execution needs a matching Sui signer. Pass --sui-private-key, CLAWNERA_SUI_PRIVATE_KEY, or --sui-keystore-path plus --sui-address/--sui-alias when the default Sui keystore is ambiguous.",
-      };
-    }
+  if (suiTxBytesPlan && !txPlan) {
+    return {
+      ok: false,
+      error: "raw_transaction_bytes_unverified",
+      mode,
+      method,
+      rawPath,
+      apiBase: apiCall.apiBase,
+      chainFamily: "sui",
+      chainNetwork: suiTxBytesPlan.chainNetwork,
+      hint: "Raw server transaction bytes are never treated as verified, written to disk, dry-run, signed, or broadcast. Require a canonical txBuilder/request plan that can be rebuilt locally.",
+    };
   }
 
-  const signer = resolveRuntimeSigner(options, apiCall.context);
-  const iotaRuntime = resolveRuntimeIotaOptions(options, apiCall.context);
-  let autoRetriedExecutionCount = 0;
-  while (true) {
-    try {
-      const transaction = buildClawdexTxFromPlan(txPlan);
-    if (planOut) {
-      writeOptionalOutputFile(planOut, JSON.stringify(apiCall.result.body, null, 2));
-    }
-
-    if (mode === "dry_run") {
-      const dryRun = await dryRunTransaction(transaction, {
-        ...iotaRuntime,
-      });
-      if (txBytesOut) {
-        writeOptionalOutputFile(txBytesOut, `${dryRun.txBytesB64}\n`);
-      }
-      return {
-        ok: true,
-        mode,
-        method,
-        rawPath,
-        apiBase: apiCall.apiBase,
-        txBuilder: txPlan.txBuilder,
-        signerAddress: txPlan.request.sender || null,
-        autoHydratedReviewerContext,
-        autoRetriedExecutionCount,
-        autoWaitUntilReadyCount,
-        txBytesOut: txBytesOut || null,
-        planOut: planOut || null,
-        dryRun: dryRun.result,
-        gasSummary: formatDryRunGasSummary(dryRun.result),
-      };
-    }
-
-    const executed = await executeTransaction(transaction, {
-      alias: signer.alias,
-      address: signer.address,
-      keystorePath: signer.keystorePath,
-      ...iotaRuntime,
+  let chainIdentity;
+  let reviewerSelectionAuthorization = null;
+  try {
+    reviewerSelectionAuthorization = assertTxPlanRouteAndActorIntent({
+      method,
+      rawPath,
+      actorAddress:
+        apiCall.context?.authState?.address || apiCall.context?.envValues?.CLAWNERA_API_ADDRESS || "",
+      txPlan: { ...txPlan, originalRequest: apiCall.jsonBody },
     });
-    if (txBytesOut) {
-      writeOptionalOutputFile(txBytesOut, `${executed.txBytesB64}\n`);
-    }
-    const disputeCaseObjectId = resolveDisputeCaseObjectIdForInviteBinding(txPlan, executed);
-    const executedSignerAddress =
-      normalizeIotaAddress(executed.verifyResult?.signerAddress || "") ||
-      normalizeIotaAddress(signer.address || "") ||
-      normalizeIotaAddress(txPlan.request.sender || "");
-    let postExecuteBinding = null;
-    const inviteBinding = txPlan.inviteBinding;
-    if (
-      inviteBinding &&
-      typeof inviteBinding === "object" &&
-      !Array.isArray(inviteBinding) &&
-      inviteBinding.postExecuteBindingRequired === true &&
-      typeof inviteBinding.bindRoute === "string" &&
-      inviteBinding.bindRoute.trim()
-    ) {
-      if (!disputeCaseObjectId) {
-        return {
-          ok: false,
-          error: "post_execute_invite_binding_missing_dispute_case_id",
-          txBuilder: txPlan.txBuilder,
-          txDigest: resolveTxExecutionDigest(executed),
-          bindRoute: inviteBinding.bindRoute.trim(),
-        };
+    chainIdentity = await assertTxPlanChainIdentity(txPlan, options);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "tx_plan_intent_validation_failed",
+      mode,
+      method,
+      rawPath,
+      txBuilder: txPlan.txBuilder,
+    };
+  }
+  const isSuiLocalPlan = chainIdentity.chainFamily === "sui";
+  const resolvedIotaRuntime = isSuiLocalPlan ? null : resolveRuntimeIotaOptions(options, apiCall.context);
+  const runtimeOptions = isSuiLocalPlan
+    ? {
+        chainFamily: "sui",
+        chainNetwork: chainIdentity.chainNetwork,
+        suiNetwork: chainIdentity.chainNetwork,
+        network: chainIdentity.chainNetwork,
+        suiRpcUrl: chainIdentity.rpcUrl,
+        rpcUrl: chainIdentity.rpcUrl,
       }
-      const bindCall = await callApiRoute({
-        method: "POST",
-        rawPath: inviteBinding.bindRoute.trim(),
-        options: {
-          ...options,
-          body: JSON.stringify({
-            disputeCaseObjectId,
-            activationTxDigest: resolveTxExecutionDigest(executed),
-          }),
-        },
-        timeoutMs,
-      });
-      postExecuteBinding = {
-        route: inviteBinding.bindRoute.trim(),
-        disputeCaseObjectId,
-        ok: bindCall.result.ok,
-        status: bindCall.result.status,
-        response: bindCall.result.body,
+    : {
+        ...resolvedIotaRuntime,
+        chainFamily: "iota",
+        chainNetwork: chainIdentity.chainNetwork,
+        network: chainIdentity.chainNetwork,
+        rpcUrl: chainIdentity.rpcUrl,
       };
-      if (!bindCall.result.ok) {
-        return {
-          ok: false,
-          error: "post_execute_invite_binding_failed",
-          txBuilder: txPlan.txBuilder,
-          txDigest: resolveTxExecutionDigest(executed),
-          disputeCaseObjectId,
-          bindRoute: inviteBinding.bindRoute.trim(),
-          status: bindCall.result.status,
-          response: bindCall.result.body,
-        };
-      }
-    }
+  try {
+    const transaction = buildClawdexTxFromPlan(txPlan);
+    const dryRun = await dryRunTransaction(transaction, {
+      ...runtimeOptions,
+    });
+    persistVerifiedDryRunPlan({
+      targetPath: planOut,
+      responseBody: apiCall.result.body,
+      dryRunResult: dryRun.result,
+    });
     return {
       ok: true,
       mode,
@@ -9446,97 +9885,31 @@ async function runTxPlanCommand(commandArgs, mode) {
       rawPath,
       apiBase: apiCall.apiBase,
       txBuilder: txPlan.txBuilder,
-      signerAddress: executedSignerAddress || null,
+      signerAddress: txPlan.request.sender || null,
+      chainFamily: chainIdentity.chainFamily,
+      chainNetwork: chainIdentity.chainNetwork,
+      chainIdentifier: chainIdentity.chainIdentifier,
       autoHydratedReviewerContext,
-      autoRetriedExecutionCount,
       autoWaitUntilReadyCount,
-      txDigest: resolveTxExecutionDigest(executed),
-      txBytesOut: txBytesOut || null,
+      reviewerSelectionAuthorization,
+      externalOperatorAuthorizationPreconditionDryRunSatisfied:
+        reviewerSelectionAuthorization?.required === true ? true : null,
+      inviteBinding: txPlan.inviteBinding,
+      preExecutionRequirements: txPlan.preExecutionRequirements,
       planOut: planOut || null,
-      execution: executed.result,
-      createdObjects: extractCreatedObjects(executed),
-      disputeCaseObjectId,
-      postExecuteBinding,
-      mailboxSignalPosted: extractMailboxSignalPosted(executed),
-      mailboxSignalAcked: extractMailboxSignalAcked(executed),
-      quorumResolutionTicketObjectId:
-        extractCreatedObjectIdByTypeSuffix(executed, "::dispute_quorum::QuorumResolutionTicket") || null,
-      disputeBondObjectId:
-        extractCreatedObjectIdByTypeSuffix(executed, "::dispute_quorum::OrderDisputeBond") || null,
-      orderMailboxObjectId:
-        extractCreatedObjectIdByTypeSuffix(executed, "::order_mailbox::OrderMailbox") || null,
-      orderEscrowObjectId:
-        extractCreatedObjectIdByTypeFragment(executed, "::order_escrow::OrderEscrow<") || null,
-      keepSameWalletForResolve:
-        txPlan.txBuilder === "disputeQuorum.finalizeCase" &&
-        Boolean(extractCreatedObjectIdByTypeSuffix(executed, "::dispute_quorum::QuorumResolutionTicket")),
+      dryRun: dryRun.result,
+      gasSummary: formatDryRunGasSummary(dryRun.result),
     };
-    } catch (error) {
-      const rawError = normalizeTxPlanErrorMessage(error) || "tx_plan_execute_failed";
-      let compatFallback = null;
-      let compatFallbackError = null;
-      try {
-        compatFallback = await maybeExecuteResolveEscrowCompatFallback({
-          errorMessage: rawError,
-          txPlan,
-          rawPath,
-          options,
-          timeoutMs,
-          signer,
-          autoHydratedReviewerContext,
-          autoRetriedExecutionCount,
-          txBytesOut,
-          planOut,
-        });
-      } catch (compatError) {
-        compatFallbackError =
-          normalizeTxPlanErrorMessage(compatError) || "resolve_escrow_compat_fallback_failed";
-      }
-      if (compatFallback) {
-        return compatFallback;
-      }
-      const classified =
-        (await maybeClassifyLiveDisputeTxPlanExecutionError({
-          errorMessage: rawError,
-          txBuilder: txPlan.txBuilder,
-          rawPath,
-          options,
-          timeoutMs,
-        })) ||
-        classifyTxPlanExecutionError({
-          errorMessage: rawError,
-          txBuilder: txPlan.txBuilder,
-        });
-      if (classified?.retryable === true && autoRetriedExecutionCount < 1) {
-        autoRetriedExecutionCount += 1;
-        continue;
-      }
-      const waitUntilReadyPlan = buildTxPlanWaitUntilReadyPlan({
-        classifiedFailure: classified,
-        waitUntilReadyEnabled: waitUntilReady,
-        waitUntilReadyDeadlineMs,
-      });
-      if (waitUntilReadyPlan?.allowed === true) {
-        autoWaitUntilReadyCount += 1;
-        await sleep(waitUntilReadyPlan.sleepMs);
-        continue;
-      }
-      return {
-        ok: false,
-        error: classified?.code || rawError,
-        rawError,
-        hint: classified?.hint,
-        retryable: classified?.retryable === true,
-        autoRetriedExecutionCount,
-        autoWaitUntilReadyCount,
-        compatFallbackError,
-        txBuilder: txPlan.txBuilder,
-        disputeCaseObjectId: classified?.disputeCaseObjectId || resolveDisputeCaseIdFromTxPlanPath(rawPath),
-        waitUntilMs: classified?.waitUntilMs || null,
-        waitUntilIso: classified?.waitUntilIso || null,
-        nextCommandHint: classified?.nextCommandHint || null,
-      };
-    }
+  } catch (error) {
+    return {
+      ok: false,
+      error: normalizeTxPlanErrorMessage(error) || "tx_plan_dry_run_failed",
+      txBuilder: txPlan.txBuilder,
+      chainFamily: chainIdentity.chainFamily,
+      chainNetwork: chainIdentity.chainNetwork,
+      chainIdentifier: chainIdentity.chainIdentifier,
+      planOut: planOut || null,
+    };
   }
 }
 
@@ -9566,6 +9939,10 @@ async function runOrderInitBond(commandArgs) {
   }
 
   try {
+    const executionMode = marketplaceExecutionMode(options);
+    if (executionMode === "execute") {
+      await assertMarketplaceMutationGate(options);
+    }
     const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
     const orderCall = await callApiRoute({
       method: "GET",
@@ -9600,9 +9977,9 @@ async function runOrderInitBond(commandArgs) {
       };
     }
 
-    const { chainConfig, packageId, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfig(options, {
+    const { chainConfig, packageId, packageIds, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfigForMarketplaceExecution(options, {
       ...iotaRuntime,
-    });
+    }, executionMode);
     const requiredReviewerVotes =
       options["required-reviewer-votes"] !== undefined
         ? parsePositiveBigIntOption(options["required-reviewer-votes"], "required_reviewer_votes")
@@ -9619,12 +9996,12 @@ async function runOrderInitBond(commandArgs) {
       seller: normalizeIotaAddress(order.sellerAddress),
       requiredReviewerVotes,
       requiredReviewerVotesFloor,
+      governanceConfigObjectId: chainConfig.governanceConfigObjectId,
       disputeQuorumConfigObjectId: chainConfig.disputeQuorumConfigObjectId,
     };
     const transaction = buildInitOrderBondTx(request);
     const signer = resolveRuntimeSigner(options, orderCall.context);
-    const dryRun = parseBooleanOption(options["dry-run"], false);
-    if (dryRun) {
+    if (executionMode === "dry_run") {
       const result = await dryRunTransaction(transaction, {
         ...resolvedIotaRuntime,
       });
@@ -9645,11 +10022,26 @@ async function runOrderInitBond(commandArgs) {
         dryRun: result.result,
       };
     }
+    const directGate = await assertMarketplaceDirectExecutionGate({
+      options,
+      runtimeContext: orderCall.context,
+      iotaRuntime: resolvedIotaRuntime,
+      packageAlias: "settlement",
+      packageId,
+      packageIds,
+      objectIds: {
+        governanceConfigObjectId: chainConfig.governanceConfigObjectId,
+        orderMailboxRegistryObjectId: chainConfig.orderMailboxRegistryObjectId,
+        disputeQuorumConfigObjectId: chainConfig.disputeQuorumConfigObjectId,
+      },
+    });
+    assertMarketplaceDirectGateStillFresh(directGate, "settlement");
     const executed = await executeTransaction(transaction, {
       alias: signer.alias,
       address: signer.address,
       keystorePath: signer.keystorePath,
-      ...resolvedIotaRuntime,
+      ...directGate.iotaRuntime,
+      beforeBroadcast: directGate.beforeBroadcast,
     });
     return {
       ok: true,
@@ -9670,10 +10062,7 @@ async function runOrderInitBond(commandArgs) {
       execution: executed.result,
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "order_init_bond_failed",
-    };
+    return marketplaceMutationFailure(error, "order_init_bond_failed");
   }
 }
 
@@ -9703,6 +10092,10 @@ async function runOrderCreateEscrow(commandArgs) {
   }
 
   try {
+    const executionMode = marketplaceExecutionMode(options);
+    if (executionMode === "execute") {
+      await assertMarketplaceMutationGate(options);
+    }
     const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
     const orderCall = await callApiRoute({
       method: "GET",
@@ -9734,9 +10127,9 @@ async function runOrderCreateEscrow(commandArgs) {
       };
     }
 
-    const { chainConfig, packageId, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfig(options, {
+    const { chainConfig, packageId, packageIds, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfigForMarketplaceExecution(options, {
       ...iotaRuntime,
-    });
+    }, executionMode);
     const deadlineMs =
       options["deadline-ms"] !== undefined
         ? parsePositiveBigIntOption(options["deadline-ms"], "deadline_ms")
@@ -9798,8 +10191,7 @@ async function runOrderCreateEscrow(commandArgs) {
 
     const transaction = buildCreateOrderEscrowTx(request);
     const signer = resolveRuntimeSigner(options, orderCall.context);
-    const dryRun = parseBooleanOption(options["dry-run"], false);
-    if (dryRun) {
+    if (executionMode === "dry_run") {
       const result = await dryRunTransaction(transaction, {
         ...resolvedIotaRuntime,
       });
@@ -9815,11 +10207,26 @@ async function runOrderCreateEscrow(commandArgs) {
       };
     }
 
+    const directGate = await assertMarketplaceDirectExecutionGate({
+      options,
+      runtimeContext: orderCall.context,
+      iotaRuntime: resolvedIotaRuntime,
+      packageAlias: "settlement",
+      packageId,
+      packageIds,
+      objectIds: {
+        governanceConfigObjectId: chainConfig.governanceConfigObjectId,
+        orderMailboxRegistryObjectId: chainConfig.orderMailboxRegistryObjectId,
+        marketplaceFeeConfigObjectId: chainConfig.escrowFeeConfigObjectId,
+      },
+    });
+    assertMarketplaceDirectGateStillFresh(directGate, "settlement");
     const executed = await executeTransaction(transaction, {
       alias: signer.alias,
       address: signer.address,
       keystorePath: signer.keystorePath,
-      ...resolvedIotaRuntime,
+      ...directGate.iotaRuntime,
+      beforeBroadcast: directGate.beforeBroadcast,
     });
     return {
       ok: true,
@@ -9837,8 +10244,7 @@ async function runOrderCreateEscrow(commandArgs) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "order_create_escrow_failed";
     return {
-      ok: false,
-      error: message,
+      ...marketplaceMutationFailure(error, "order_create_escrow_failed"),
       hint: /insufficient coin balance/i.test(message)
         ? "run clawnera-help iota-get-balance --alias <buyer-wallet-alias> --json and either lower the order amount or top up the buyer wallet before rerunning order-create-escrow"
         : "",
@@ -9864,6 +10270,7 @@ async function runKeyAgreementUpsert(commandArgs) {
   }
 
   try {
+    assertNoInlineKeyAgreementProtectionSecret(options);
     const runtimeContext = await resolveApiRuntimeContext(options);
     if (!runtimeContext.apiBase) {
       return {
@@ -9901,15 +10308,39 @@ async function runKeyAgreementUpsert(commandArgs) {
       options["key-file"],
       runtimeContext.authStateFile,
     );
-    const rotate = parseBooleanOption(options.rotate, false);
-    const readPath = `/users/${actorAddress}/key-agreement?keyVersion=${keyVersion}`;
+    return await withPrivateFileOperationLock(keyFile, async () => {
+      const rotate = parseBooleanOption(options.rotate, false);
+      const readPath = `/users/${actorAddress}/key-agreement?keyVersion=${keyVersion}`;
     const initialRead = await callApiRoute({
       method: "GET",
       rawPath: readPath,
       options,
       timeoutMs,
     });
-    const remoteKeyAgreement = initialRead.result.ok ? initialRead.result.body?.keyAgreement || null : null;
+    let remoteKeyAgreement = null;
+    if (initialRead.result.ok) {
+      if (
+        !initialRead.result.body?.keyAgreement ||
+        typeof initialRead.result.body.keyAgreement !== "object" ||
+        Array.isArray(initialRead.result.body.keyAgreement)
+      ) {
+        return {
+          ok: false,
+          error: "invalid_key_agreement_initial_readback",
+          status: initialRead.result.status,
+          response: initialRead.result.body,
+        };
+      }
+      remoteKeyAgreement = initialRead.result.body.keyAgreement;
+    } else if (!isExactKeyAgreementNotFound(initialRead.result)) {
+      return {
+        ok: false,
+        error: "key_agreement_initial_read_failed",
+        status: initialRead.result.status,
+        response: initialRead.result.body,
+        hint: "No local key was created or changed. Retry only after the exact key-agreement GET succeeds or returns 404 key_agreement_not_found.",
+      };
+    }
     const remoteExpiresAtMs =
       remoteKeyAgreement && typeof remoteKeyAgreement.expiresAt === "string"
         ? Date.parse(remoteKeyAgreement.expiresAt)
@@ -10061,10 +10492,14 @@ async function runKeyAgreementUpsert(commandArgs) {
       ) {
         break;
       }
+      if (!readCall.result.ok && !isExactKeyAgreementNotFound(readCall.result)) {
+        break;
+      }
     }
     if (!readCall || !readCall.result.ok) {
       return {
-        ok: true,
+        ok: false,
+        error: "key_agreement_readback_pending",
         apiBase: putCall.apiBase,
         address: actorAddress,
         keyVersion,
@@ -10075,6 +10510,7 @@ async function runKeyAgreementUpsert(commandArgs) {
         requestBody,
         readback: null,
         writeResponseKeyAgreement: putResponseKeyAgreement,
+        writeCommitted: true,
         readbackPending: true,
         warning: "key_agreement_readback_pending",
         verifyHint: `clawnera-help request GET '/users/${actorAddress}/key-agreement?keyVersion=${keyVersion}' --auth-state-file ${shellQuote(putCall.context.authStateFile || "~/.config/clawnera/auth-state.json")}`,
@@ -10096,7 +10532,8 @@ async function runKeyAgreementUpsert(commandArgs) {
       storedIsExpired
     ) {
       return {
-        ok: true,
+        ok: false,
+        error: "key_agreement_readback_mismatch",
         apiBase: putCall.apiBase,
         address: actorAddress,
         keyVersion,
@@ -10107,8 +10544,9 @@ async function runKeyAgreementUpsert(commandArgs) {
         requestBody,
         readback: stored || null,
         writeResponseKeyAgreement: putResponseKeyAgreement,
-        readbackPending: true,
-        warning: "key_agreement_readback_pending",
+        writeCommitted: true,
+        readbackPending: false,
+        warning: "key_agreement_readback_mismatch",
         verifyHint: `clawnera-help request GET '/users/${actorAddress}/key-agreement?keyVersion=${keyVersion}' --auth-state-file ${shellQuote(putCall.context.authStateFile || "~/.config/clawnera/auth-state.json")}`,
         readbackStatus: readCall.result.status,
         readbackResponse: readCall.result.body,
@@ -10116,7 +10554,23 @@ async function runKeyAgreementUpsert(commandArgs) {
         authStateRefreshed: putCall.context.authStateRefreshed || readCall.context.authStateRefreshed,
       };
     }
-    return {
+      const confirmedLocalKey = await loadKeyAgreementRecord(keyFile, {
+        expectedAddress: actorAddress,
+        expectedKeyVersion: keyVersion,
+      });
+      if (confirmedLocalKey.publicKeyMultibase !== stored.publicKeyMultibase) {
+        return {
+          ok: false,
+          error: "key_agreement_local_remote_readback_mismatch",
+          keyFile,
+          keyVersion,
+          localPublicKeyMultibase: confirmedLocalKey.publicKeyMultibase,
+          remotePublicKeyMultibase: stored.publicKeyMultibase,
+          writeCommitted: true,
+          verifyHint: `clawnera-help request GET '/users/${actorAddress}/key-agreement?keyVersion=${keyVersion}' --auth-state-file ${shellQuote(putCall.context.authStateFile || "~/.config/clawnera/auth-state.json")}`,
+        };
+      }
+      return {
       ok: true,
       apiBase: putCall.apiBase,
       address: actorAddress,
@@ -10129,12 +10583,55 @@ async function runKeyAgreementUpsert(commandArgs) {
       readback: stored,
       authStateFile: putCall.context.authStateFile,
       authStateRefreshed: putCall.context.authStateRefreshed || readCall.context.authStateRefreshed,
-    };
+      };
+    }, "key-agreement-upsert");
   } catch (error) {
+    return keyAgreementOperationError(error, "key_agreement_upsert_failed");
+  }
+}
+
+async function runKeyAgreementMigrate(commandArgs) {
+  const { options, positionals } = parseLongOptions(commandArgs);
+  if (options.help || options.h) {
+    return {
+      ok: true,
+      help: true,
+      usage: keyAgreementMigrateUsageLines(),
+    };
+  }
+  if (positionals.length > 0) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "key_agreement_upsert_failed",
+      error: "unexpected_positional_arguments",
+      details: positionals,
     };
+  }
+  try {
+    assertNoInlineKeyAgreementProtectionSecret(options);
+    const keyFile =
+      typeof options["key-file"] === "string" && options["key-file"].trim()
+        ? path.resolve(options["key-file"].trim())
+        : "";
+    if (!keyFile) {
+      return {
+        ok: false,
+        error: "missing_key_file",
+      };
+    }
+    const migrated = await migrateLegacyKeyAgreementRecord(keyFile);
+    return {
+      ok: true,
+      migrated: true,
+      keyFile: migrated.filePath,
+      version: migrated.version,
+      address: migrated.address,
+      keyVersion: migrated.keyVersion,
+      publicKeyMultibase: migrated.publicKeyMultibase,
+      expiresAtMs: migrated.expiresAtMs,
+      expired: migrated.expired,
+    };
+  } catch (error) {
+    return keyAgreementOperationError(error, "key_agreement_migration_failed");
   }
 }
 
@@ -10156,6 +10653,10 @@ async function runReputationInit(commandArgs) {
   }
 
   try {
+    const executionMode = marketplaceExecutionMode(options);
+    if (executionMode === "execute") {
+      await assertMarketplaceMutationGate(options);
+    }
     const runtimeContext = await resolveApiRuntimeContext(options);
     const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
     const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
@@ -10175,12 +10676,12 @@ async function runReputationInit(commandArgs) {
       };
     }
 
-    const { feesCall, chainConfig, packageId, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfig(options, {
+    const { feesCall, chainConfig, packageId, packageIds, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfigForMarketplaceExecution(options, {
       requireDisputeQuorumConfig: false,
       requireEscrowFeeConfig: false,
-      requireGovernanceConfig: false,
+      requireGovernanceConfig: true,
       ...iotaRuntime,
-    });
+    }, executionMode);
     const feePolicy = extractReputationInitFeePolicy(feesCall.result.body);
     const paymentCoinObjectId =
       typeof options["payment-coin-object-id"] === "string" && options["payment-coin-object-id"].trim()
@@ -10212,14 +10713,14 @@ async function runReputationInit(commandArgs) {
     const request = {
       packageId,
       sender: actorAddress,
+      governanceConfigObjectId: chainConfig.governanceConfigObjectId,
       reputationFeeConfigObjectId: feePolicy.configObjectId,
       initFeeAmount: BigInt(feePolicy.amount),
       expectedInitFeeAmount: BigInt(feePolicy.amount),
       ...(paymentCoinObjectId ? { paymentCoinObjectId } : {}),
     };
     const transaction = buildCreateReputationProfileTx(request);
-    const dryRun = parseBooleanOption(options["dry-run"], false);
-    if (dryRun) {
+    if (executionMode === "dry_run") {
       const result = await dryRunTransaction(transaction, {
         ...resolvedIotaRuntime,
       });
@@ -10235,11 +10736,26 @@ async function runReputationInit(commandArgs) {
       };
     }
 
+    const directGate = await assertMarketplaceDirectExecutionGate({
+      options,
+      runtimeContext,
+      iotaRuntime: resolvedIotaRuntime,
+      packageAlias: "settlement",
+      packageId,
+      packageIds,
+      objectIds: {
+        governanceConfigObjectId: chainConfig.governanceConfigObjectId,
+        orderMailboxRegistryObjectId: chainConfig.orderMailboxRegistryObjectId,
+        reputationInitFeeConfigObjectId: feePolicy.configObjectId,
+      },
+    });
+    assertMarketplaceDirectGateStillFresh(directGate, "settlement");
     const executed = await executeTransaction(transaction, {
       alias: signer.alias,
       address: signer.address,
       keystorePath: signer.keystorePath,
-      ...resolvedIotaRuntime,
+      ...directGate.iotaRuntime,
+      beforeBroadcast: directGate.beforeBroadcast,
     });
 
     let reputationProfileObjectId = extractCreatedObjectIdByTypeSuffix(executed, "::reputation::ReputationProfile");
@@ -10277,10 +10793,7 @@ async function runReputationInit(commandArgs) {
       execution: executed.result,
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "reputation_init_failed",
-    };
+    return marketplaceMutationFailure(error, "reputation_init_failed");
   }
 }
 
@@ -10302,6 +10815,10 @@ async function runReviewerRegister(commandArgs) {
   }
 
   try {
+    const executionMode = marketplaceExecutionMode(options);
+    if (executionMode === "execute") {
+      await assertMarketplaceMutationGate(options);
+    }
     const runtimeContext = await resolveApiRuntimeContext(options);
     const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
     const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
@@ -10338,12 +10855,12 @@ async function runReviewerRegister(commandArgs) {
       };
     }
 
-    const { chainConfig, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfig(options, {
+    const { chainConfig, packageId, packageIds, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfigForMarketplaceExecution(options, {
       requireDisputeQuorumConfig: true,
       requireEscrowFeeConfig: false,
       requireGovernanceConfig: false,
       ...iotaRuntime,
-    });
+    }, executionMode);
 
     let reputationProfileObjectId = "";
     try {
@@ -10354,10 +10871,19 @@ async function runReviewerRegister(commandArgs) {
         ...resolvedIotaRuntime,
       });
     } catch (error) {
+      const authStateSelector = runtimeContext.authStateFile
+        ? shellQuote(runtimeContext.authStateFile)
+        : "<reviewer-auth-state-file>";
       return {
         ok: false,
         error: error instanceof Error ? error.message : "reviewer_reputation_profile_not_found",
-        hint: "run clawnera-help reputation-init first",
+        hint: buildMarketplaceWriteHint(
+          `clawnera-help reputation-init --auth-state-file ${authStateSelector} --execute`,
+          {
+            authStateFile: runtimeContext.authStateFile,
+            authStatePlaceholder: "<reviewer-auth-state-file>",
+          },
+        ),
       };
     }
 
@@ -10435,9 +10961,34 @@ async function runReviewerRegister(commandArgs) {
       };
     }
 
+    const directGate = executionMode === "execute"
+      ? await assertMarketplaceDirectExecutionGate({
+          options,
+          runtimeContext,
+          iotaRuntime: resolvedIotaRuntime,
+          packageAlias: "settlement",
+          packageId,
+          packageIds,
+          objectIds: {
+            orderMailboxRegistryObjectId: chainConfig.orderMailboxRegistryObjectId,
+          },
+          reviewerPlan: {
+            txPlan,
+            actorAddress,
+            expectedBuilder: "disputeQuorum.registerReviewer",
+            expectedFunction: "register_reviewer_entry_with_reputation_cfg",
+            expectedRequest: {
+              reputationProfileObjectId,
+              transportType: body.transportType,
+              transportPubkeyHex: body.transportPubkeyHex,
+              minCaseRewardNative: body.minCaseRewardNative ?? body.minCaseRewardIota,
+              stakeAmount: body.stakeAmount,
+            },
+          },
+        })
+      : null;
     const transaction = buildClawdexTxFromPlan(planCall.result.body);
-    const dryRun = parseBooleanOption(options["dry-run"], false);
-    if (dryRun) {
+    if (executionMode === "dry_run") {
       const result = await dryRunTransaction(transaction, {
         ...resolvedIotaRuntime,
       });
@@ -10452,11 +11003,13 @@ async function runReviewerRegister(commandArgs) {
       };
     }
 
+    assertMarketplaceDirectGateStillFresh(directGate, "settlement");
     const executed = await executeTransaction(transaction, {
       alias: signer.alias,
       address: signer.address,
       keystorePath: signer.keystorePath,
-      ...resolvedIotaRuntime,
+      ...directGate.iotaRuntime,
+      beforeBroadcast: directGate.beforeBroadcast,
     });
 
     let reviewerReadback = null;
@@ -10488,10 +11041,7 @@ async function runReviewerRegister(commandArgs) {
       execution: executed.result,
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "reviewer_register_failed",
-    };
+    return marketplaceMutationFailure(error, "reviewer_register_failed");
   }
 }
 
@@ -10513,6 +11063,10 @@ async function runReviewerUpdate(commandArgs) {
   }
 
   try {
+    const executionMode = marketplaceExecutionMode(options);
+    if (executionMode === "execute") {
+      await assertMarketplaceMutationGate(options);
+    }
     const runtimeContext = await resolveApiRuntimeContext(options);
     const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
     const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
@@ -10540,12 +11094,24 @@ async function runReviewerUpdate(commandArgs) {
       timeoutMs,
     });
     if (!reviewerRead.result.ok) {
+      const authStateSelector = runtimeContext.authStateFile
+        ? shellQuote(runtimeContext.authStateFile)
+        : "<reviewer-auth-state-file>";
       return {
         ok: false,
         error: summarizeApiFailure(reviewerRead.result),
         status: reviewerRead.result.status,
         response: reviewerRead.result.body,
-        hint: reviewerRead.result.status === 404 ? "run clawnera-help reviewer-register first" : "",
+        hint:
+          reviewerRead.result.status === 404
+            ? buildMarketplaceWriteHint(
+                `clawnera-help reviewer-register --auth-state-file ${authStateSelector} --execute`,
+                {
+                  authStateFile: runtimeContext.authStateFile,
+                  authStatePlaceholder: "<reviewer-auth-state-file>",
+                },
+              )
+            : "",
       };
     }
     const reviewer = reviewerRead.result.body?.reviewer;
@@ -10557,12 +11123,12 @@ async function runReviewerUpdate(commandArgs) {
       };
     }
 
-    const { chainConfig, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfig(options, {
+    const { chainConfig, packageId, packageIds, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfigForMarketplaceExecution(options, {
       requireDisputeQuorumConfig: true,
       requireEscrowFeeConfig: false,
       requireGovernanceConfig: false,
       ...iotaRuntime,
-    });
+    }, executionMode);
 
     const transportKeyMaterial = await resolveReviewerTransportKeyMaterial({
       actorAddress,
@@ -10638,9 +11204,34 @@ async function runReviewerUpdate(commandArgs) {
       };
     }
 
+    const directGate = executionMode === "execute"
+      ? await assertMarketplaceDirectExecutionGate({
+          options,
+          runtimeContext,
+          iotaRuntime: resolvedIotaRuntime,
+          packageAlias: "settlement",
+          packageId,
+          packageIds,
+          objectIds: {
+            orderMailboxRegistryObjectId: chainConfig.orderMailboxRegistryObjectId,
+          },
+          reviewerPlan: {
+            txPlan,
+            actorAddress,
+            expectedBuilder: "disputeQuorum.updateReviewer",
+            expectedFunction: "update_reviewer",
+            expectedRequest: {
+              reviewerEntryObjectId,
+              transportType: body.transportType,
+              transportPubkeyHex: body.transportPubkeyHex,
+              minCaseRewardNative: body.minCaseRewardNative ?? body.minCaseRewardIota,
+              active: body.active,
+            },
+          },
+        })
+      : null;
     const transaction = buildClawdexTxFromPlan(planCall.result.body);
-    const dryRun = parseBooleanOption(options["dry-run"], false);
-    if (dryRun) {
+    if (executionMode === "dry_run") {
       const result = await dryRunTransaction(transaction, {
         ...resolvedIotaRuntime,
       });
@@ -10655,11 +11246,13 @@ async function runReviewerUpdate(commandArgs) {
       };
     }
 
+    assertMarketplaceDirectGateStillFresh(directGate, "settlement");
     const executed = await executeTransaction(transaction, {
       alias: signer.alias,
       address: signer.address,
       keystorePath: signer.keystorePath,
-      ...resolvedIotaRuntime,
+      ...directGate.iotaRuntime,
+      beforeBroadcast: directGate.beforeBroadcast,
     });
 
     let reviewerReadback = null;
@@ -10691,10 +11284,7 @@ async function runReviewerUpdate(commandArgs) {
       execution: executed.result,
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "reviewer_update_failed",
-    };
+    return marketplaceMutationFailure(error, "reviewer_update_failed");
   }
 }
 
@@ -10810,6 +11400,11 @@ async function runDeliverableEncrypt(commandArgs) {
       });
     } catch (error) {
       if (error instanceof Error && error.message === "local_key_agreement_record_not_found") {
+        const recoveryTarget = {
+          authStateFile: runtimeContext.authStateFile,
+          fallbackSelector: "--auth-state-file ~/.config/clawnera/auth-state.json",
+        };
+        const recoverySelector = buildMarketplaceTargetSelector(recoveryTarget);
         return {
           ok: false,
           error: "seller_local_key_agreement_record_not_found",
@@ -10821,7 +11416,9 @@ async function runDeliverableEncrypt(commandArgs) {
             "clawnera",
             "key-agreements",
           ),
-          hint: "rerun key-agreement-upsert for the seller wallet or pass --seller-key-file with the matching local private key record",
+          hint:
+            `${buildMarketplaceWriteHint(`clawnera-help key-agreement-upsert ${recoverySelector}`, recoveryTarget)} ` +
+            "for the seller wallet, or pass --seller-key-file with the matching local private key record",
         };
       }
       throw error;
@@ -10908,9 +11505,11 @@ async function runDeliverableEncrypt(commandArgs) {
         Array.isArray(storagePolicyCall.result.body?.policy?.modes?.managed?.allowedMimeTypes) &&
         storagePolicyCall.result.body.policy.modes.managed.allowedMimeTypes.includes("application/json"),
     );
-    const authStateHint = shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json");
-    const managedNextUploadHint = managedJsonAllowed
-      ? `clawnera-help managed-storage-fee-pay --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} --auth-state-file ${authStateHint}`
+    const authStateHint = runtimeContext.authStateFile
+      ? shellQuote(runtimeContext.authStateFile)
+      : "~/.config/clawnera/auth-state.json";
+    const managedStorageHint = managedJsonAllowed
+      ? "Managed storage requires an externally obtained policy-and-escrow-bound V2 payment proof; the public fee-payment builder is disabled."
       : null;
     return {
       ok: true,
@@ -10927,18 +11526,20 @@ async function runDeliverableEncrypt(commandArgs) {
       ciphertextSha256: encrypted.blob.ciphertextSha256,
       payloadOut,
       payload,
-      nextUploadHint:
-        managedNextUploadHint ||
-        `clawnera-help pinata-upload-json --file ${shellQuote(payloadOut)} --jwt-env PINATA_JWT`,
+      managedStorageHint,
+      nextUploadHint: `clawnera-help pinata-upload-json --file ${shellQuote(payloadOut)} --jwt-env PINATA_JWT`,
       nextSubmitHint:
-        `clawnera-help milestone-submit-byo --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} ` +
-        `--payload-file ${shellQuote(payloadOut)} --manifest-cid 'ipfs://<cid>' --auth-state-file ${authStateHint}`,
+        buildMarketplaceWriteHint(
+          `clawnera-help milestone-submit-byo --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} ` +
+            `--payload-file ${shellQuote(payloadOut)} --manifest-cid 'ipfs://<cid>' --auth-state-file ${authStateHint}`,
+          {
+            authStateFile: runtimeContext.authStateFile,
+            fallbackSelector: "--auth-state-file ~/.config/clawnera/auth-state.json",
+          },
+        ),
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "deliverable_encrypt_failed",
-    };
+    return marketplaceMutationFailure(error, "deliverable_encrypt_failed");
   }
 }
 
@@ -11209,8 +11810,14 @@ async function runDisputeEvidencePublish(commandArgs) {
         bodyOut,
         requestBody,
         nextPublishHint:
-          `clawnera-help dispute-evidence-publish ${requestBody.kind === "supplemental_bundle" ? "--kind supplemental-bundle " : ""}--case-id ${shellQuote(disputeCaseId)} ` +
-          `--auth-state-file ${shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json")}`,
+          buildMarketplaceWriteHint(
+            `clawnera-help dispute-evidence-publish ${requestBody.kind === "supplemental_bundle" ? "--kind supplemental-bundle " : ""}--case-id ${shellQuote(disputeCaseId)} ` +
+              `--auth-state-file ${runtimeContext.authStateFile ? shellQuote(runtimeContext.authStateFile) : "~/.config/clawnera/auth-state.json"}`,
+            {
+              authStateFile: runtimeContext.authStateFile,
+              fallbackSelector: "--auth-state-file ~/.config/clawnera/auth-state.json",
+            },
+          ),
       };
     }
 
@@ -11258,10 +11865,7 @@ async function runDisputeEvidencePublish(commandArgs) {
         `--auth-state-file ${shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json")}`,
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "dispute_evidence_publish_failed",
-    };
+    return marketplaceMutationFailure(error, "dispute_evidence_publish_failed");
   }
 }
 
@@ -11344,10 +11948,7 @@ async function runDisputeEvidenceBundleBuild(commandArgs) {
         ),
     });
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "dispute_evidence_bundle_build_failed",
-    };
+    return marketplaceMutationFailure(error, "dispute_evidence_bundle_build_failed");
   }
 }
 
@@ -11522,10 +12123,7 @@ async function runMailboxEvidenceExport(commandArgs) {
       selectedAckedSeqs: selectedAcked.map((entry) => entry.ackedSeq).filter(Boolean),
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "mailbox_evidence_export_failed",
-    };
+    return marketplaceMutationFailure(error, "mailbox_evidence_export_failed");
   }
 }
 
@@ -11850,10 +12448,7 @@ async function runCheckpointEvidenceExport(commandArgs) {
       ciphertextSha256,
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "checkpoint_evidence_export_failed",
-    };
+    return marketplaceMutationFailure(error, "checkpoint_evidence_export_failed");
   }
 }
 
@@ -11919,10 +12514,7 @@ async function runDisputeEvidenceList(commandArgs) {
         : null,
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "dispute_evidence_list_failed",
-    };
+    return marketplaceMutationFailure(error, "dispute_evidence_list_failed");
   }
 }
 
@@ -11989,10 +12581,7 @@ async function runDisputeEvidenceContent(commandArgs) {
         `--auth-state-file ${shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json")}`,
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "dispute_evidence_content_failed",
-    };
+    return marketplaceMutationFailure(error, "dispute_evidence_content_failed");
   }
 }
 
@@ -12139,15 +12728,12 @@ async function runDisputeEvidenceDecrypt(commandArgs) {
       summary: deriveDisputeSupplementalSummary(decrypted.plaintextJson),
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "dispute_evidence_decrypt_failed",
-    };
+    return marketplaceMutationFailure(error, "dispute_evidence_decrypt_failed");
   }
 }
 
 async function runManagedStorageFeePay(commandArgs) {
-  const { options, positionals } = parseLongOptions(commandArgs);
+  const { options } = parseLongOptions(commandArgs);
   if (options.help || options.h) {
     return {
       ok: true,
@@ -12155,232 +12741,12 @@ async function runManagedStorageFeePay(commandArgs) {
       usage: managedStorageFeePayUsageLines(),
     };
   }
-  if (positionals.length > 0) {
-    return {
-      ok: false,
-      error: "unexpected_positional_arguments",
-      details: positionals,
-    };
-  }
-
-  const orderId = typeof options["order-id"] === "string" ? options["order-id"].trim() : "";
-  const milestoneId = typeof options["milestone-id"] === "string" ? options["milestone-id"].trim() : "";
-  if (!orderId || !milestoneId) {
-    return {
-      ok: false,
-      error: "missing_order_id_or_milestone_id",
-    };
-  }
-
-  try {
-    const runtimeContext = await resolveApiRuntimeContext(options);
-    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
-    const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
-    const actorAddress = resolveActorAddressForSignedRun(options, runtimeContext) || normalizeIotaAddress(signer.entry.address || "");
-    if (!actorAddress) {
-      return {
-        ok: false,
-        error: "missing_actor_address",
-      };
-    }
-    if (actorAddress !== normalizeIotaAddress(signer.entry.address || "")) {
-      return {
-        ok: false,
-        error: "signer_actor_mismatch",
-      };
-    }
-    const orderCall = await callApiRoute({
-      method: "GET",
-      rawPath: `/orders/${orderId}`,
-      options,
-      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
-    });
-    if (!orderCall.result.ok) {
-      return {
-        ok: false,
-        error: summarizeApiFailure(orderCall.result),
-        status: orderCall.result.status,
-        response: orderCall.result.body,
-      };
-    }
-    const order = ensureOrderPayload(orderCall.result.body);
-    const parties = new Set([
-      normalizeIotaAddress(order.sellerAddress || ""),
-      normalizeIotaAddress(order.buyerAddress || ""),
-    ]);
-    if (!parties.has(actorAddress)) {
-      return {
-        ok: false,
-        error: "actor_not_order_party",
-      };
-    }
-
-    const storagePolicyCall = await callApiRoute({
-      method: "GET",
-      rawPath: "/policy/storage",
-      options,
-      timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
-    });
-    if (!storagePolicyCall.result.ok) {
-      return {
-        ok: false,
-        error: summarizeApiFailure(storagePolicyCall.result),
-        status: storagePolicyCall.result.status,
-        response: storagePolicyCall.result.body,
-      };
-    }
-    const managedPolicy = storagePolicyCall.result.body?.policy?.modes?.managed;
-    const feePolicy = managedPolicy?.fee;
-    if (!managedPolicy?.enabled || !feePolicy) {
-      return {
-        ok: false,
-        error: "managed_storage_disabled",
-      };
-    }
-    const feeAsset = String(feePolicy.asset || "").trim().toUpperCase();
-    const isSuiFeeAsset = feeAsset === "SUI";
-    if (feeAsset !== "IOTA" && !isSuiFeeAsset) {
-      return {
-        ok: false,
-        error: "managed_storage_fee_asset_unsupported",
-        feeAsset: feePolicy.asset || null,
-      };
-    }
-    const amountAtomic = parsePositiveBigIntOption(feePolicy.minAtomic, "managed_storage_fee_min_atomic");
-    const recipientAddress = isSuiFeeAsset
-      ? normalizeSuiAddressOrEmpty(feePolicy.recipient || "")
-      : normalizeIotaAddress(feePolicy.recipient || "");
-    if (!recipientAddress) {
-      return {
-        ok: false,
-        error: "managed_storage_fee_recipient_missing",
-      };
-    }
-
-    let packageId = "";
-    let transactionRuntime = {};
-    if (isSuiFeeAsset) {
-      const feesCall = await callApiRoute({
-        method: "GET",
-        rawPath: "/policy/fees",
-        options,
-        timeoutMs: parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000),
-      });
-      if (!feesCall.result.ok) {
-        return {
-          ok: false,
-          error: summarizeApiFailure(feesCall.result),
-          status: feesCall.result.status,
-          response: feesCall.result.body,
-        };
-      }
-      packageId = extractPackageIdFromPolicyResponse(feesCall.result.body);
-      transactionRuntime = {
-        chainFamily: "sui",
-        network: String(options["sui-network"] || options["chain-network"] || options.network || "").trim() || "mainnet",
-        rpcUrl: String(options["sui-rpc-url"] || options["rpc-url"] || "").trim() || undefined,
-      };
-    } else {
-      const resolved = await fetchPolicyAndChainConfig(options, {
-        ...iotaRuntime,
-      });
-      packageId = resolved.packageId;
-      transactionRuntime = resolved.iotaRuntime;
-    }
-    const tx = buildManagedStorageFeeTx({
-      chainFamily: isSuiFeeAsset ? "sui" : "iota",
-      packageId,
-      sender: actorAddress,
-      orderId,
-      milestoneId,
-      recipientAddress,
-      amountAtomic,
-      currency: feeAsset,
-    });
-    const dryRun = parseBooleanOption(options["dry-run"], false);
-    if (dryRun) {
-      const dryRunResult = await dryRunTransaction(tx, {
-        alias: signer.alias,
-        address: signer.address,
-        keystorePath: signer.keystorePath,
-        ...transactionRuntime,
-      });
-      return {
-        ok: true,
-        mode: "dry_run",
-        orderId,
-        milestoneId,
-        actorAddress,
-        packageId,
-        managedStoragePolicy: managedPolicy,
-        paymentProof: {
-          txDigest: null,
-          amountAtomic: amountAtomic.toString(),
-          asset: feeAsset,
-          recipientAddress,
-        },
-        dryRun: dryRunResult,
-      };
-    }
-
-    const executed = await executeTransaction(tx, {
-      alias: signer.alias,
-      address: signer.address,
-      keystorePath: signer.keystorePath,
-      ...transactionRuntime,
-    });
-    const txDigest = executed.result?.digest || null;
-    if (!txDigest) {
-      return {
-        ok: false,
-        error: "managed_storage_fee_tx_digest_missing",
-      };
-    }
-    const paymentProof = {
-      txDigest,
-      amountAtomic: amountAtomic.toString(),
-      asset: feeAsset,
-      recipientAddress,
-    };
-    const proofOut =
-      resolveOptionalPathOption(options["proof-out"]) ||
-      defaultGeneratedOutputPath(`clawnera-managed-storage-fee-${orderId}-${milestoneId}.json`, {
-        authStateFile: runtimeContext.authStateFile,
-      });
-    writeOptionalOutputFile(
-      proofOut,
-      `${JSON.stringify(
-        {
-          orderId,
-          milestoneId,
-          actorAddress,
-          paymentProof,
-        },
-        null,
-        2,
-      )}\n`,
-    );
-    return {
-      ok: true,
-      mode: "execute",
-      orderId,
-      milestoneId,
-      actorAddress,
-      packageId,
-      txDigest,
-      paymentProof,
-      proofOut,
-      execution: executed.result,
-      nextPresignHint:
-        `clawnera-help managed-storage-presign --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} ` +
-        `--file <payload.json> --payment-proof-file ${shellQuote(proofOut)} --auth-state-file ${shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json")}`,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "managed_storage_fee_pay_failed",
-    };
-  }
+  return {
+    ok: false,
+    error: "managed_storage_fee_payment_builder_disabled",
+    requiredEntrypoint: "manifest_anchor::pay_managed_storage_fee_*_v2",
+    hint: "The SDK builder exists, but this command stays closed until the active runtime publishes complete Settlement/Fulfillment/Ops and managed-storage singleton pointers. Use a reviewed chain-native flow or BYO storage.",
+  };
 }
 
 async function runManagedStoragePresign(commandArgs) {
@@ -12513,10 +12879,7 @@ async function runManagedStoragePresign(commandArgs) {
         `clawnera-help managed-storage-upload --file ${shellQuote(filePath)} --presign-file ${shellQuote(presignOut)}`,
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "managed_storage_presign_failed",
-    };
+    return marketplaceMutationFailure(error, "managed_storage_presign_failed");
   }
 }
 
@@ -12583,6 +12946,7 @@ async function runManagedStorageUpload(commandArgs) {
         error: "missing_signed_url_or_presign_file",
       };
     }
+    const uploadUrl = normalizeAuthenticatedUrl(signedUrl, { errorCode: "invalid_signed_upload_url" });
     const expiresAtMs = parseOptionalIsoTimestamp(presign.expiresAt);
     if (expiresAtMs !== null && expiresAtMs <= Date.now() + 5_000) {
       return {
@@ -12616,8 +12980,9 @@ async function runManagedStorageUpload(commandArgs) {
         : presign.fileName || fileMetadata.fileName;
     const formData = new FormData();
     formData.set("file", new Blob([fileMetadata.buffer], { type: fileMetadata.mimeType }), uploadFileName);
-    const response = await fetch(signedUrl, {
+    const response = await fetch(uploadUrl, {
       method: "POST",
+      redirect: "error",
       body: formData,
     });
     const raw = await response.text();
@@ -12681,7 +13046,9 @@ async function runManagedStorageUpload(commandArgs) {
       ipfsUri: uploadParsed.ipfsUri,
       nextSubmitHint:
         uploadParsed.ipfsUri && presign.orderId && presign.milestoneId
-          ? `clawnera-help milestone-submit-byo --order-id ${shellQuote(presign.orderId)} --milestone-id ${shellQuote(presign.milestoneId)} --payload-file ${shellQuote(filePath)} --manifest-cid ${shellQuote(uploadParsed.ipfsUri)} --auth-state-file <file>`
+          ? buildMarketplaceWriteHint(
+              `clawnera-help milestone-submit-byo --order-id ${shellQuote(presign.orderId)} --milestone-id ${shellQuote(presign.milestoneId)} --payload-file ${shellQuote(filePath)} --manifest-cid ${shellQuote(uploadParsed.ipfsUri)} --auth-state-file <file>`,
+            )
           : null,
     };
   } catch (error) {
@@ -12724,16 +13091,32 @@ async function runPinataUploadJson(commandArgs) {
     typeof options["jwt-file"] === "string" && options["jwt-file"].trim()
       ? path.resolve(String(options["jwt-file"]).trim())
       : "";
-  const fileJwt = jwtFile && fs.existsSync(jwtFile) ? fs.readFileSync(jwtFile, "utf8").trim() : "";
-  const jwt =
-    (typeof options.jwt === "string" && options.jwt.trim() ? String(options.jwt).trim() : "") ||
-    fileJwt ||
-    (typeof process.env[jwtEnvName] === "string" ? process.env[jwtEnvName].trim() : "");
+  if (typeof options.jwt === "string" && options.jwt.trim()) {
+    return {
+      ok: false,
+      error: "pinata_jwt_argv_disabled",
+      hint: `use an owner-only --jwt-file <file> or export ${jwtEnvName}=...`,
+    };
+  }
+  let fileJwt = "";
+  if (jwtFile) {
+    try {
+      fileJwt = String(await readPrivateFile(jwtFile, "utf8")).trim();
+    } catch (error) {
+      return {
+        ok: false,
+        error: "invalid_pinata_jwt_file",
+        detail: error instanceof Error ? error.message : String(error),
+        jwtFile,
+      };
+    }
+  }
+  const jwt = fileJwt || (typeof process.env[jwtEnvName] === "string" ? process.env[jwtEnvName].trim() : "");
   if (!jwt) {
     return {
       ok: false,
       error: "missing_pinata_jwt",
-      hint: `set --jwt <token>, --jwt-file <file>, or export ${jwtEnvName}=...`,
+      hint: `use an owner-only --jwt-file <file> or export ${jwtEnvName}=...`,
     };
   }
 
@@ -12745,6 +13128,7 @@ async function runPinataUploadJson(commandArgs) {
         : path.basename(filePath);
     const response = await fetch("https://api.pinata.cloud/pinning/pinJSONToIPFS", {
       method: "POST",
+      redirect: "error",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${jwt}`,
@@ -12819,11 +13203,6 @@ async function runMilestoneSubmitByo(commandArgs) {
 
   try {
     const runtimeContext = await resolveApiRuntimeContext(options);
-    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
-    const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
-    const actorAddress =
-      normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
-      normalizeIotaAddress(signer.entry.address || "");
     const orderCall = await callApiRoute({
       method: "GET",
       rawPath: `/orders/${orderId}`,
@@ -12839,6 +13218,18 @@ async function runMilestoneSubmitByo(commandArgs) {
       };
     }
     const order = ensureOrderPayload(orderCall.result.body);
+    const orderChainFamily = normalizeString(order.chainFamily || order.chain?.family).toLowerCase() || "iota";
+    if (orderChainFamily === "sui") {
+      return {
+        ok: false,
+        error: "unsupported_sui_milestone_submit_signer",
+        hint: "The public helper does not advertise Sui milestone signing until Sui auth and manifest signature verification are end-to-end bound.",
+      };
+    }
+    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const actorAddress =
+      normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
+      normalizeIotaAddress(signer.entry.address || "");
     const sellerAddress = normalizeIotaAddress(order.sellerAddress || "");
     if (actorAddress !== sellerAddress) {
       return {
@@ -12906,14 +13297,17 @@ async function runMilestoneSubmitByo(commandArgs) {
       sellerSignatureHash: sha256Hex(signed.signature),
       response: submitCall.result.body,
       nextAnchorHint:
-        `clawnera-help milestone-anchor --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} ` +
-        `--submit-body-file ${shellQuote(bodyOut)} --auth-state-file ${shellQuote(runtimeContext.authStateFile || "~/.config/clawnera/auth-state.json")}`,
+        buildMarketplaceWriteHint(
+          `clawnera-help milestone-anchor --order-id ${shellQuote(orderId)} --milestone-id ${shellQuote(milestoneId)} ` +
+            `--submit-body-file ${shellQuote(bodyOut)} --auth-state-file ${runtimeContext.authStateFile ? shellQuote(runtimeContext.authStateFile) : "~/.config/clawnera/auth-state.json"} --execute`,
+          {
+            authStateFile: runtimeContext.authStateFile,
+            fallbackSelector: "--auth-state-file ~/.config/clawnera/auth-state.json",
+          },
+        ),
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "milestone_submit_byo_failed",
-    };
+    return marketplaceMutationFailure(error, "milestone_submit_byo_failed");
   }
 }
 
@@ -12943,12 +13337,11 @@ async function runMilestoneAnchor(commandArgs) {
   }
 
   try {
+    const executionMode = marketplaceExecutionMode(options);
+    if (executionMode === "execute") {
+      await assertMarketplaceMutationGate(options);
+    }
     const runtimeContext = await resolveApiRuntimeContext(options);
-    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
-    const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
-    const actorAddress =
-      normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
-      normalizeIotaAddress(signer.entry.address || "");
     const orderCall = await callApiRoute({
       method: "GET",
       rawPath: `/orders/${orderId}`,
@@ -12964,6 +13357,19 @@ async function runMilestoneAnchor(commandArgs) {
       };
     }
     const order = ensureOrderPayload(orderCall.result.body);
+    const orderChainFamily = normalizeString(order.chainFamily || order.chain?.family).toLowerCase() || "iota";
+    if (orderChainFamily === "sui") {
+      return {
+        ok: false,
+        error: "unsupported_sui_milestone_anchor_signer",
+        hint: "Use a reviewed Sui-native client; this helper keeps the Sui milestone anchor surface closed.",
+      };
+    }
+    const signer = await resolveRuntimeSignerEntry(options, runtimeContext);
+    const iotaRuntime = resolveRuntimeIotaOptions(options, runtimeContext);
+    const actorAddress =
+      normalizeIotaAddress(runtimeContext.authState?.address || runtimeContext.envValues?.CLAWNERA_API_ADDRESS || "") ||
+      normalizeIotaAddress(signer.entry.address || "");
     const sellerAddress = normalizeIotaAddress(order.sellerAddress || "");
     if (actorAddress !== sellerAddress) {
       return {
@@ -12995,24 +13401,60 @@ async function runMilestoneAnchor(commandArgs) {
       };
     }
 
-    const { packageId, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfig(options, {
+    const { packageId, packageIds, chainConfig, iotaRuntime: resolvedIotaRuntime } = await fetchPolicyAndChainConfigForMarketplaceExecution(options, {
+      packageAlias: "ops",
+      requireDisputeQuorumConfig: false,
+      requireEscrowFeeConfig: false,
+      requireGovernanceConfig: true,
       ...iotaRuntime,
-    });
+    }, executionMode);
     const anchorTx = buildMilestoneAnchorTx({
       packageId,
       sender: sellerAddress,
       sellerAddress,
+      governanceConfigObjectId: chainConfig.governanceConfigObjectId,
       orderId,
       milestoneId,
       manifestCid,
       manifestSha256,
       sellerSignatureHash: sha256Hex(sellerSignature),
     });
+    if (executionMode === "dry_run") {
+      const result = await dryRunTransaction(anchorTx, {
+        ...resolvedIotaRuntime,
+      });
+      return {
+        ok: true,
+        mode: "dry_run",
+        orderId,
+        milestoneId,
+        packageId,
+        sellerAddress,
+        manifestCid,
+        manifestSha256,
+        gasSummary: formatDryRunGasSummary(result.result),
+        dryRun: result.result,
+      };
+    }
+    const directGate = await assertMarketplaceDirectExecutionGate({
+      options,
+      runtimeContext,
+      iotaRuntime: resolvedIotaRuntime,
+      packageAlias: "ops",
+      packageId,
+      packageIds,
+      objectIds: {
+        governanceConfigObjectId: chainConfig.governanceConfigObjectId,
+        orderMailboxRegistryObjectId: chainConfig.orderMailboxRegistryObjectId,
+      },
+    });
+    assertMarketplaceDirectGateStillFresh(directGate, "ops");
     const executed = await executeTransaction(anchorTx, {
       alias: signer.alias,
       address: signer.address,
       keystorePath: signer.keystorePath,
-      ...resolvedIotaRuntime,
+      ...directGate.iotaRuntime,
+      beforeBroadcast: directGate.beforeBroadcast,
     });
     const txDigest = executed.result?.digest || null;
     if (!txDigest) {
@@ -13048,6 +13490,19 @@ async function runMilestoneAnchor(commandArgs) {
         error: summarizeApiFailure(postCall.result),
         status: postCall.result.status,
         response: postCall.result.body,
+        txDigest,
+        writeCommitted: true,
+        reconcilePending: true,
+        reconcileHint:
+          buildMarketplaceWriteHint(
+            `clawnera-help request POST /orders/${orderId}/milestones/${milestoneId}/anchor ` +
+              `--auth-state-file ${runtimeContext.authStateFile ? shellQuote(runtimeContext.authStateFile) : "~/.config/clawnera/auth-state.json"} ` +
+              `--body ${shellQuote(JSON.stringify({ txDigest }))}`,
+            {
+              authStateFile: runtimeContext.authStateFile,
+              fallbackSelector: "--auth-state-file ~/.config/clawnera/auth-state.json",
+            },
+          ),
       };
     }
     let getCall = null;
@@ -13084,10 +13539,7 @@ async function runMilestoneAnchor(commandArgs) {
       reconcile: postCall.result.body?.reconcile || null,
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "milestone_anchor_failed",
-    };
+    return marketplaceMutationFailure(error, "milestone_anchor_failed");
   }
 }
 
@@ -13203,8 +13655,7 @@ async function runDeliverableDecrypt(commandArgs) {
         },
       );
     fs.mkdirSync(path.dirname(plaintextOut), { recursive: true });
-    fs.writeFileSync(plaintextOut, Buffer.from(plaintext), { mode: 0o600 });
-    fs.chmodSync(plaintextOut, 0o600);
+    writePrivateFileAtomicSync(plaintextOut, Buffer.from(plaintext));
     return {
       ok: true,
       orderId: payload.orderId,
@@ -13215,10 +13666,7 @@ async function runDeliverableDecrypt(commandArgs) {
       plaintextSha256: sha256Hex(Buffer.from(plaintext)),
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "deliverable_decrypt_failed",
-    };
+    return marketplaceMutationFailure(error, "deliverable_decrypt_failed");
   }
 }
 
@@ -13308,10 +13756,7 @@ async function runMailboxEvents(commandArgs) {
   try {
     return await fetchMailboxEventsSnapshot(options, orderId);
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "mailbox_events_failed",
-    };
+    return marketplaceMutationFailure(error, "mailbox_events_failed");
   }
 }
 
@@ -13406,19 +13851,16 @@ async function runMilestoneReject(commandArgs) {
       nextDisputeHint: "clawnera-help recipe dispute-open",
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "milestone_reject_failed",
-    };
+    return marketplaceMutationFailure(error, "milestone_reject_failed");
   }
 }
 
-function defaultReviewerShortlistReceiptPath(orderId, milestoneId) {
-  return generatedWorkingDirOutputPath(`clawnera-reviewer-shortlist-${orderId}-${milestoneId}.json`);
+function defaultReviewerShortlistReceiptPath(orderId, milestoneId, context = {}) {
+  return defaultGeneratedOutputPath(`clawnera-reviewer-shortlist-${orderId}-${milestoneId}.json`, context);
 }
 
-function defaultReviewerShortlistPublishPath(orderId, milestoneId) {
-  return generatedWorkingDirOutputPath(`clawnera-dispute-open-${orderId}-${milestoneId}.json`);
+function defaultReviewerShortlistPublishPath(orderId, milestoneId, context = {}) {
+  return defaultGeneratedOutputPath(`clawnera-dispute-open-${orderId}-${milestoneId}.json`, context);
 }
 
 function parseOrderContextFile(contextFilePath, expectedOrderId, expectedMilestoneId) {
@@ -13465,6 +13907,713 @@ function parseOrderContextFile(contextFilePath, expectedOrderId, expectedMilesto
   };
 }
 
+function normalizeReviewerCheckpoint(value, errorCode = "invalid_reviewer_checkpoint") {
+  const checkpoint = asRecord(value);
+  const rawDigest = typeof checkpoint?.digest === "string" ? checkpoint.digest : "";
+  const digest = normalizeString(rawDigest);
+  if (
+    !checkpoint ||
+    !digest ||
+    rawDigest !== digest ||
+    digest.length > 256 ||
+    /\s|[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u.test(digest)
+  ) {
+    throw new Error(errorCode);
+  }
+
+  let sequenceNumber = null;
+  if (checkpoint.sequenceNumber !== undefined && checkpoint.sequenceNumber !== null) {
+    if (typeof checkpoint.sequenceNumber === "string" && /^[0-9]+$/.test(checkpoint.sequenceNumber)) {
+      sequenceNumber = checkpoint.sequenceNumber;
+    } else if (Number.isSafeInteger(checkpoint.sequenceNumber) && checkpoint.sequenceNumber >= 0) {
+      sequenceNumber = String(checkpoint.sequenceNumber);
+    } else {
+      throw new Error(errorCode);
+    }
+  }
+
+  const timestampMs = checkpoint.timestampMs ?? null;
+  if (timestampMs !== null && (!Number.isSafeInteger(timestampMs) || timestampMs < 0)) {
+    throw new Error(errorCode);
+  }
+  return { digest, sequenceNumber, timestampMs };
+}
+
+function stableReviewerReceiptJsonValue(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => stableReviewerReceiptJsonValue(entry));
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, stableReviewerReceiptJsonValue(entry)]),
+  );
+}
+
+function hashStableReviewerReceiptValue(value) {
+  return sha256Hex(JSON.stringify(stableReviewerReceiptJsonValue(value)));
+}
+
+function canonicalReviewerAddressArray(value, errorCode) {
+  if (!Array.isArray(value)) {
+    throw new Error(errorCode);
+  }
+  const addresses = value.map((entry) => {
+    const raw = normalizeString(entry);
+    const address = normalizeIotaAddress(raw);
+    if (!address || raw !== address) {
+      throw new Error(errorCode);
+    }
+    return address;
+  });
+  if (new Set(addresses).size !== addresses.length) {
+    throw new Error(errorCode);
+  }
+  return addresses;
+}
+
+function resolveAuthenticatedReviewerShortlistActor(apiCall) {
+  const claims = asRecord(parseJwtPayload(apiCall?.context?.jwt));
+  const rawTokenActorAddress = normalizeString(claims?.sub);
+  const tokenActorAddress = normalizeIotaAddress(rawTokenActorAddress);
+  if (!tokenActorAddress || rawTokenActorAddress !== tokenActorAddress) {
+    throw new Error("reviewer_shortlist_authenticated_actor_invalid");
+  }
+
+  const contextActorAddresses = [
+    apiCall?.context?.authState?.address,
+    apiCall?.context?.envValues?.CLAWNERA_API_ADDRESS,
+  ].filter((value) => normalizeString(value));
+  for (const value of contextActorAddresses) {
+    const rawContextActorAddress = normalizeString(value);
+    const contextActorAddress = normalizeIotaAddress(rawContextActorAddress);
+    if (
+      !contextActorAddress ||
+      rawContextActorAddress !== contextActorAddress ||
+      contextActorAddress !== tokenActorAddress
+    ) {
+      throw new Error("reviewer_shortlist_authenticated_actor_mismatch");
+    }
+  }
+  return tokenActorAddress;
+}
+
+function canonicalReviewerCandidatePool(value) {
+  if (!Array.isArray(value)) {
+    throw new Error("reviewer_shortlist_receipt_candidate_pool_invalid");
+  }
+  const candidateByAddress = new Map();
+  for (const entry of value) {
+    const candidate = asRecord(entry);
+    const rawReviewerAddress = normalizeString(candidate?.reviewerAddress);
+    const reviewerAddress = normalizeIotaAddress(rawReviewerAddress);
+    if (
+      !candidate ||
+      !reviewerAddress ||
+      rawReviewerAddress !== reviewerAddress ||
+      candidateByAddress.has(reviewerAddress)
+    ) {
+      throw new Error("reviewer_shortlist_receipt_candidate_pool_invalid");
+    }
+    candidateByAddress.set(reviewerAddress, candidate);
+  }
+  return candidateByAddress;
+}
+
+function reviewerCheckpointTimestampMs(value, errorCode) {
+  if (Number.isSafeInteger(value) && value > 0) {
+    return value;
+  }
+  if (typeof value === "string" && /^[0-9]+$/.test(value)) {
+    const timestamp = BigInt(value);
+    if (timestamp > 0n && timestamp <= BigInt(Number.MAX_SAFE_INTEGER)) {
+      return Number(timestamp);
+    }
+  }
+  throw new Error(errorCode);
+}
+
+async function readExactReviewerCheckpointOnRpc({
+  checkpoint,
+  rpcUrl,
+  timeoutMs,
+  unavailableError,
+  invalidError,
+  mismatchError,
+}) {
+  const expectedCheckpoint = normalizeReviewerCheckpoint(checkpoint, invalidError);
+  if (expectedCheckpoint.sequenceNumber === null) {
+    throw new Error(invalidError);
+  }
+  const response = await requestJson(
+    rpcUrl,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: `clawnera-help-reviewer-checkpoint-${expectedCheckpoint.sequenceNumber}`,
+        method: "iota_getCheckpoint",
+        params: [expectedCheckpoint.sequenceNumber],
+      }),
+    },
+    timeoutMs,
+  );
+  if (!response.ok) {
+    throw new Error(unavailableError);
+  }
+  const result = asRecord(asRecord(response.body)?.result);
+  const rawSequenceNumber = result?.sequenceNumber;
+  const sequenceNumber =
+    typeof rawSequenceNumber === "string" && /^[0-9]+$/.test(rawSequenceNumber)
+      ? rawSequenceNumber
+      : Number.isSafeInteger(rawSequenceNumber) && rawSequenceNumber >= 0
+        ? String(rawSequenceNumber)
+        : null;
+  let timestampMs;
+  try {
+    timestampMs = reviewerCheckpointTimestampMs(result?.timestampMs, invalidError);
+  } catch {
+    throw new Error(invalidError);
+  }
+  const rpcCheckpoint = normalizeReviewerCheckpoint(
+    {
+      digest: result?.digest,
+      sequenceNumber,
+      timestampMs,
+    },
+    invalidError,
+  );
+  if (
+    rpcCheckpoint.sequenceNumber !== expectedCheckpoint.sequenceNumber ||
+    rpcCheckpoint.digest !== expectedCheckpoint.digest ||
+    (expectedCheckpoint.timestampMs !== null &&
+      rpcCheckpoint.timestampMs !== expectedCheckpoint.timestampMs)
+  ) {
+    throw new Error(mismatchError);
+  }
+  return rpcCheckpoint;
+}
+
+function assertReviewerShortlistReceiptBinding({
+  payload,
+  receipt,
+  scope,
+  requestBody,
+  requestedCheckpoint,
+  requestReceiptId,
+  authenticatedActorAddress,
+}) {
+  if (!receipt) {
+    throw new Error("reviewer_shortlist_receipt_invalid");
+  }
+  const receiptId = normalizeString(receipt.id);
+  if (!CANONICAL_LOWERCASE_UUID_PATTERN.test(receiptId)) {
+    throw new Error("reviewer_shortlist_receipt_invalid");
+  }
+  if (scope === "OPEN" && receiptId !== requestReceiptId) {
+    throw new Error("reviewer_shortlist_receipt_id_mismatch");
+  }
+  if (receipt.scope !== scope) {
+    throw new Error("reviewer_shortlist_receipt_context_mismatch");
+  }
+  if (
+    normalizeString(receipt.activatedAt) ||
+    normalizeString(receipt.activatedByActorAddress) ||
+    normalizeString(receipt.activationTxDigest)
+  ) {
+    throw new Error("reviewer_shortlist_receipt_already_activated");
+  }
+
+  const buyerAddress = normalizeIotaAddress(receipt.buyerAddress || "");
+  const sellerAddress = normalizeIotaAddress(receipt.sellerAddress || "");
+  if (!buyerAddress || !sellerAddress) {
+    throw new Error("reviewer_shortlist_receipt_context_mismatch");
+  }
+  if (scope === "OPEN") {
+    if (
+      normalizeString(receipt.orderId) !== requestBody.orderId ||
+      normalizeString(receipt.milestoneId) !== requestBody.milestoneId ||
+      buyerAddress !== requestBody.buyerAddress ||
+      sellerAddress !== requestBody.sellerAddress ||
+      normalizeString(receipt.disputeCaseObjectId)
+    ) {
+      throw new Error("reviewer_shortlist_receipt_context_mismatch");
+    }
+    if (receipt.assignmentRound !== 0) {
+      throw new Error("reviewer_shortlist_receipt_assignment_round_mismatch");
+    }
+  } else {
+    if (
+      normalizeIotaAddress(receipt.disputeCaseObjectId || "") !== requestBody.disputeCaseObjectId ||
+      !normalizeString(receipt.orderId) ||
+      !normalizeString(receipt.milestoneId) ||
+      !Number.isSafeInteger(receipt.assignmentRound) ||
+      receipt.assignmentRound < 1
+    ) {
+      throw new Error("reviewer_shortlist_receipt_context_mismatch");
+    }
+  }
+
+  const shortlistedReviewerAddresses = canonicalReviewerAddressArray(
+    receipt.shortlistedReviewerAddresses,
+    "reviewer_shortlist_receipt_reviewer_addresses_invalid",
+  );
+  if (
+    !Number.isSafeInteger(receipt.reviewerCountRequested) ||
+    receipt.reviewerCountRequested < 1 ||
+    receipt.reviewerCountRequested !== requestBody.reviewerCount ||
+    receipt.reviewerCountSelected !== shortlistedReviewerAddresses.length ||
+    payload.selectionComplete !== (receipt.reviewerCountSelected === receipt.reviewerCountRequested)
+  ) {
+    throw new Error("reviewer_shortlist_receipt_reviewer_count_mismatch");
+  }
+  if (
+    typeof receipt.directoryScanTruncated !== "boolean" ||
+    receipt.directoryScanTruncated !== (payload.directoryScanTruncated === true)
+  ) {
+    throw new Error("reviewer_shortlist_receipt_truncation_mismatch");
+  }
+  const hashFields = [
+    "requestHash",
+    "seedHash",
+    "candidatePoolHash",
+    "shortlistHash",
+    "receiptHash",
+  ];
+  if (hashFields.some((field) => !/^[0-9a-f]{64}$/.test(normalizeString(receipt[field])))) {
+    throw new Error("reviewer_shortlist_receipt_request_hash_invalid");
+  }
+  const createdByActorAddress = normalizeIotaAddress(receipt.createdByActorAddress || "");
+  if (
+    !createdByActorAddress ||
+    normalizeString(receipt.createdByActorAddress) !== createdByActorAddress ||
+    receipt.selectionPolicyVersion !== "reviewer_selector_v4"
+  ) {
+    throw new Error("reviewer_shortlist_receipt_hash_context_invalid");
+  }
+  if (createdByActorAddress !== authenticatedActorAddress) {
+    throw new Error("reviewer_shortlist_receipt_actor_mismatch");
+  }
+  const normalizeRequestFilter = (value) => [
+    ...new Set(
+      (Array.isArray(value) ? value : []).map((entry) => {
+        const address = normalizeIotaAddress(entry || "");
+        if (!address) {
+          throw new Error("reviewer_shortlist_receipt_filter_mismatch");
+        }
+        return address;
+      }),
+    ),
+  ].sort();
+  const requestedExcludedReviewerAddresses = normalizeRequestFilter(
+    requestBody.excludedReviewerAddresses,
+  );
+  const requestedBlockedReviewerAddresses = normalizeRequestFilter(
+    requestBody.blockedReviewerAddresses,
+  );
+  const expectedRequestHash = hashStableReviewerReceiptValue({
+    schemaVersion: "v1",
+    receiptId,
+    createdByActorAddress,
+    scope: requestBody.scope,
+    reviewerCount: requestBody.reviewerCount,
+    directoryScanLimit: requestBody.directoryScanLimit,
+    checkpointDigest: requestBody.checkpointDigest,
+    orderId: requestBody.orderId ?? null,
+    milestoneId: requestBody.milestoneId ?? null,
+    disputeCaseObjectId: requestBody.disputeCaseObjectId ?? null,
+    buyerAddress: requestBody.buyerAddress ?? null,
+    sellerAddress: requestBody.sellerAddress ?? null,
+    excludedReviewerAddresses: requestedExcludedReviewerAddresses,
+    blockedReviewerAddresses: requestedBlockedReviewerAddresses,
+    minPerformanceScore: requestBody.minPerformanceScore,
+    minReputationScore: requestBody.minReputationScore,
+    minReputationConfidence: requestBody.minReputationConfidence,
+    allowNewReviewers: requestBody.allowNewReviewers,
+    minDecisionsTotal: requestBody.minDecisionsTotal,
+    maxNoshowCount: requestBody.maxNoshowCount,
+    maxCommitRevealFailures: requestBody.maxCommitRevealFailures,
+  });
+  if (receipt.requestHash !== expectedRequestHash) {
+    throw new Error("reviewer_shortlist_receipt_request_hash_mismatch");
+  }
+
+  const blockedReviewerAddresses = canonicalReviewerAddressArray(
+    receipt.blockedReviewerAddresses,
+    "reviewer_shortlist_receipt_reviewer_addresses_invalid",
+  );
+  const excludedReviewerAddresses = canonicalReviewerAddressArray(
+    receipt.excludedReviewerAddresses,
+    "reviewer_shortlist_receipt_reviewer_addresses_invalid",
+  );
+  const blockedReviewerSet = new Set(blockedReviewerAddresses);
+  const excludedReviewerSet = new Set(excludedReviewerAddresses);
+  if (
+    requestedBlockedReviewerAddresses.some((address) => !blockedReviewerSet.has(address)) ||
+    requestedExcludedReviewerAddresses.some((address) => !excludedReviewerSet.has(address))
+  ) {
+    throw new Error("reviewer_shortlist_receipt_filter_mismatch");
+  }
+  const prohibitedReviewerAddresses = new Set([
+    buyerAddress,
+    sellerAddress,
+    ...blockedReviewerAddresses,
+    ...excludedReviewerAddresses,
+  ]);
+  if (shortlistedReviewerAddresses.some((address) => prohibitedReviewerAddresses.has(address))) {
+    throw new Error("reviewer_shortlist_receipt_reviewer_conflict");
+  }
+  const candidateByAddress = canonicalReviewerCandidatePool(receipt.candidatePool);
+  for (const reviewerAddress of shortlistedReviewerAddresses) {
+    if (candidateByAddress.get(reviewerAddress)?.eligible !== true) {
+      throw new Error("reviewer_shortlist_receipt_candidate_pool_invalid");
+    }
+  }
+  const receiptCheckpoint = normalizeReviewerCheckpoint(
+    {
+      digest: receipt.checkpointDigest,
+      sequenceNumber: receipt.checkpointSequenceNumber,
+      timestampMs: receipt.checkpointTimestampMs ?? null,
+    },
+    "reviewer_shortlist_receipt_checkpoint_invalid",
+  );
+  if (
+    receiptCheckpoint.sequenceNumber === null ||
+    normalizeString(receipt.checkpointSource) !== "rpc_latest_finalized"
+  ) {
+    throw new Error("reviewer_shortlist_receipt_checkpoint_invalid");
+  }
+  if (requestedCheckpoint.sequenceNumber === null) {
+    throw new Error("invalid_reviewer_checkpoint");
+  }
+  const receiptSequence = BigInt(receiptCheckpoint.sequenceNumber);
+  const requestedSequence = BigInt(requestedCheckpoint.sequenceNumber);
+  if (receiptSequence < requestedSequence) {
+    throw new Error("reviewer_shortlist_receipt_checkpoint_regressed");
+  }
+  if (receiptSequence === requestedSequence && receiptCheckpoint.digest !== requestedCheckpoint.digest) {
+    throw new Error("reviewer_shortlist_receipt_checkpoint_mismatch");
+  }
+  if (
+    requestedCheckpoint.timestampMs !== null &&
+    receiptCheckpoint.timestampMs !== null &&
+    receiptCheckpoint.timestampMs < requestedCheckpoint.timestampMs
+  ) {
+    throw new Error("reviewer_shortlist_receipt_checkpoint_regressed");
+  }
+  const expectedCandidatePoolHash = hashStableReviewerReceiptValue(receipt.candidatePool);
+  const expectedShortlistHash = hashStableReviewerReceiptValue(shortlistedReviewerAddresses);
+  const expectedSeedHash = hashStableReviewerReceiptValue({
+    seedScopeKey:
+      scope === "OPEN"
+        ? `${receipt.orderId}:${receipt.milestoneId}:open`
+        : `${receipt.disputeCaseObjectId || receipt.orderId}:replacement`,
+    assignmentRound: receipt.assignmentRound,
+    checkpointDigest: receipt.checkpointDigest,
+  });
+  const expectedReceiptHash = hashStableReviewerReceiptValue({
+    seedHash: expectedSeedHash,
+    candidatePoolHash: expectedCandidatePoolHash,
+    shortlistHash: expectedShortlistHash,
+    shortlistedReviewerAddresses,
+    selectionPolicyVersion: receipt.selectionPolicyVersion,
+  });
+  if (
+    receipt.seedHash !== expectedSeedHash ||
+    receipt.candidatePoolHash !== expectedCandidatePoolHash ||
+    receipt.shortlistHash !== expectedShortlistHash ||
+    receipt.receiptHash !== expectedReceiptHash
+  ) {
+    throw new Error("reviewer_shortlist_receipt_hash_mismatch");
+  }
+  return { receiptId, checkpoint: receiptCheckpoint };
+}
+
+function normalizeReviewerOpenRequestState(value) {
+  const state = asRecord(value);
+  const checkpoint = asRecord(state?.checkpoint);
+  const publishContext = asRecord(state?.publishContext);
+  const requestTarget = asRecord(state?.requestTarget);
+  const requestBody = asRecord(state?.requestBody);
+  if (
+    !state ||
+    state.format !== REVIEWER_OPEN_REQUEST_STATE_FORMAT ||
+    !checkpoint ||
+    !publishContext ||
+    !requestTarget ||
+    !requestBody ||
+    requestBody.scope !== "OPEN" ||
+    !CANONICAL_LOWERCASE_UUID_PATTERN.test(normalizeString(requestBody.receiptId)) ||
+    !normalizeString(requestBody.checkpointDigest) ||
+    normalizeString(requestBody.checkpointDigest).length > 256 ||
+    normalizeString(checkpoint.digest) !== normalizeString(requestBody.checkpointDigest)
+  ) {
+    throw new Error("invalid_reviewer_open_request_state");
+  }
+  if (typeof checkpoint.sequenceNumber !== "string") {
+    throw new Error("invalid_reviewer_open_request_state");
+  }
+  const normalizedCheckpoint = normalizeReviewerCheckpoint(checkpoint, "invalid_reviewer_open_request_state");
+  const apiBase = normalizeApiBase(requestTarget.apiBase);
+  if (!apiBase || apiBase !== requestTarget.apiBase) {
+    throw new Error("invalid_reviewer_open_request_state");
+  }
+  if (
+    !normalizeIotaAddress(publishContext.escrowObjectId || "") ||
+    !normalizeIotaAddress(publishContext.bondObjectId || "")
+  ) {
+    throw new Error("invalid_reviewer_open_request_state");
+  }
+  if (
+    !isDeepStrictEqual(
+      Object.keys(state).sort(),
+      ["checkpoint", "format", "publishContext", "requestBody", "requestTarget"],
+    )
+  ) {
+    throw new Error("invalid_reviewer_open_request_state");
+  }
+  if (!isDeepStrictEqual(Object.keys(checkpoint).sort(), ["digest", "sequenceNumber", "timestampMs"])) {
+    throw new Error("invalid_reviewer_open_request_state");
+  }
+  if (!isDeepStrictEqual(Object.keys(publishContext).sort(), ["bondObjectId", "escrowObjectId"])) {
+    throw new Error("invalid_reviewer_open_request_state");
+  }
+  if (!isDeepStrictEqual(Object.keys(requestTarget).sort(), ["apiBase"])) {
+    throw new Error("invalid_reviewer_open_request_state");
+  }
+  return {
+    format: REVIEWER_OPEN_REQUEST_STATE_FORMAT,
+    checkpoint: normalizedCheckpoint,
+    publishContext: {
+      escrowObjectId: normalizeIotaAddress(publishContext.escrowObjectId),
+      bondObjectId: normalizeIotaAddress(publishContext.bondObjectId),
+    },
+    requestTarget: { apiBase },
+    requestBody,
+  };
+}
+
+async function readReviewerOpenRequestState(requestStateFile) {
+  let content;
+  try {
+    content = await readPrivateFile(requestStateFile);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+  try {
+    return {
+      state: normalizeReviewerOpenRequestState(JSON.parse(content)),
+      sha256: createHash("sha256").update(content).digest("hex"),
+    };
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error("invalid_reviewer_open_request_state");
+    }
+    throw error;
+  }
+}
+
+function serializeReviewerOpenRequestState(checkpoint, publishContext, requestTarget, requestBody) {
+  return `${JSON.stringify(
+    {
+      format: REVIEWER_OPEN_REQUEST_STATE_FORMAT,
+      checkpoint: normalizeReviewerCheckpoint(checkpoint),
+      publishContext,
+      requestTarget,
+      requestBody,
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+async function createReviewerOpenRequestState(
+  requestStateFile,
+  checkpoint,
+  publishContext,
+  requestTarget,
+  requestBody,
+) {
+  const content = serializeReviewerOpenRequestState(checkpoint, publishContext, requestTarget, requestBody);
+  const created = await writePrivateFileAtomicExclusive(requestStateFile, content);
+  if (!created) {
+    throw new Error("reviewer_open_request_state_initialized_concurrently");
+  }
+  return createHash("sha256").update(content).digest("hex");
+}
+
+async function updateReviewerOpenRequestState(
+  requestStateFile,
+  expectedSha256,
+  checkpoint,
+  publishContext,
+  requestTarget,
+  requestBody,
+) {
+  const content = serializeReviewerOpenRequestState(checkpoint, publishContext, requestTarget, requestBody);
+  try {
+    await writePrivateFileAtomic(requestStateFile, content, { expectedSha256 });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      ["secret_file_compare_and_swap_conflict", "secret_file_write_in_progress"].includes(error.message)
+    ) {
+      throw new Error("reviewer_open_request_state_update_conflict");
+    }
+    throw error;
+  }
+  return createHash("sha256").update(content).digest("hex");
+}
+
+function canonicalReviewerShortlistPath(filePath) {
+  const resolved = path.resolve(filePath);
+  try {
+    return fs.realpathSync.native(resolved);
+  } catch (error) {
+    if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) {
+      throw error;
+    }
+  }
+  const suffix = [path.basename(resolved)];
+  let ancestor = path.dirname(resolved);
+  while (true) {
+    try {
+      return path.join(fs.realpathSync.native(ancestor), ...suffix);
+    } catch (error) {
+      if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) {
+        throw error;
+      }
+    }
+    const parent = path.dirname(ancestor);
+    if (parent === ancestor) {
+      return resolved;
+    }
+    suffix.unshift(path.basename(ancestor));
+    ancestor = parent;
+  }
+}
+
+function findReviewerShortlistPathCollision(entries) {
+  const surfaces = entries.flatMap((entry) => {
+    if (!entry.path) {
+      return [];
+    }
+    return [
+      { entry, path: entry.path },
+      ...(entry.writable ? [{ entry, path: `${entry.path}.lock` }] : []),
+    ];
+  });
+  for (let leftIndex = 0; leftIndex < surfaces.length; leftIndex += 1) {
+    const left = surfaces[leftIndex];
+    for (let rightIndex = leftIndex + 1; rightIndex < surfaces.length; rightIndex += 1) {
+      const right = surfaces[rightIndex];
+      if (
+        left.entry === right.entry ||
+        (!left.entry.writable && !right.entry.writable)
+      ) {
+        continue;
+      }
+      if (canonicalReviewerShortlistPath(left.path) === canonicalReviewerShortlistPath(right.path)) {
+        return {
+          fields: [left.entry.field, right.entry.field],
+          path: path.resolve(left.path),
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function assertPrivateReviewerShortlistOutputParent(filePath) {
+  const directory = path.dirname(path.resolve(filePath));
+  let stat;
+  try {
+    stat = fs.lstatSync(directory);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+    throw new Error("unsafe_reviewer_shortlist_output_directory");
+  }
+  if (typeof process.getuid === "function" && stat.uid !== process.getuid()) {
+    throw new Error("unsafe_reviewer_shortlist_output_directory_owner");
+  }
+  if ((stat.mode & 0o077) !== 0) {
+    throw new Error("unsafe_reviewer_shortlist_output_directory_mode");
+  }
+}
+
+function parseReviewerShortlistPolicyOptions(options = {}) {
+  return {
+    requestedReviewerCount:
+      options["reviewer-count"] === undefined
+        ? null
+        : parsePositiveIntOption(options["reviewer-count"], "reviewer_count", 3, 10),
+    directoryScanLimit: parsePositiveIntOption(
+      options["directory-scan-limit"],
+      "directory_scan_limit",
+      1000,
+      5000,
+    ),
+    minPerformanceScore: parseNonNegativeIntOption(
+      options["min-performance-score"],
+      "min_performance_score",
+      50,
+      10000,
+    ),
+    minReputationScore: parseNonNegativeIntOption(
+      options["min-reputation-score"],
+      "min_reputation_score",
+      50,
+      10000,
+    ),
+    minReputationConfidence: parseNonNegativeIntOption(
+      options["min-reputation-confidence"],
+      "min_reputation_confidence",
+      20,
+      10000,
+    ),
+    allowNewReviewers: parseBooleanOption(options["allow-new-reviewers"], true),
+    minDecisionsTotal: parseNonNegativeIntOption(
+      options["min-decisions-total"],
+      "min_decisions_total",
+      0,
+      10000,
+    ),
+    maxNoshowCount: parseNonNegativeIntOption(
+      options["max-noshow-count"],
+      "max_noshow_count",
+      3,
+      10000,
+    ),
+    maxCommitRevealFailures: parseNonNegativeIntOption(
+      options["max-commit-reveal-failures"],
+      "max_commit_reveal_failures",
+      3,
+      10000,
+    ),
+    allowTruncatedScan: parseBooleanOption(options["allow-truncated-scan"], false),
+    excludedReviewerAddresses:
+      typeof options["excluded-reviewers"] === "string" && options["excluded-reviewers"].trim()
+        ? parseCommaSeparatedIotaAddresses(options["excluded-reviewers"], "excluded_reviewers")
+        : undefined,
+    blockedReviewerAddresses:
+      typeof options["blocked-reviewers"] === "string" && options["blocked-reviewers"].trim()
+        ? parseCommaSeparatedIotaAddresses(options["blocked-reviewers"], "blocked_reviewers")
+        : undefined,
+  };
+}
+
 async function runReviewerShortlist(commandArgs) {
   const { options, positionals } = parseLongOptions(commandArgs);
   if (options.help || options.h) {
@@ -13481,11 +14630,74 @@ async function runReviewerShortlist(commandArgs) {
       details: positionals,
     };
   }
+  const unexpectedOptions = findUnexpectedOptions(options, REVIEWER_SHORTLIST_OPTION_NAMES);
+  if (unexpectedOptions.length > 0) {
+    return {
+      ok: false,
+      error: "unexpected_options",
+      unexpectedOptions,
+    };
+  }
 
   const orderId = typeof options["order-id"] === "string" ? options["order-id"].trim() : "";
   const milestoneId = typeof options["milestone-id"] === "string" ? options["milestone-id"].trim() : "";
-  const scopeRaw = typeof options.scope === "string" ? options.scope.trim().toUpperCase() : "OPEN";
-  const scope = scopeRaw === "REPLACEMENT" ? "REPLACEMENT" : "OPEN";
+  const hasScopeOption = Object.prototype.hasOwnProperty.call(options, "scope");
+  const scopeRaw = hasScopeOption && typeof options.scope !== "string"
+    ? ""
+    : typeof options.scope === "string"
+      ? options.scope.trim().toUpperCase()
+      : "OPEN";
+  if (scopeRaw !== "OPEN" && scopeRaw !== "REPLACEMENT") {
+    return {
+      ok: false,
+      error: "invalid_reviewer_shortlist_scope",
+      requestReceiptId: null,
+      requestStateFile: null,
+    };
+  }
+  const scope = scopeRaw;
+  const hasRequestReceiptIdOption = Object.prototype.hasOwnProperty.call(options, "request-receipt-id");
+  const hasRequestStateFileOption = Object.prototype.hasOwnProperty.call(options, "request-state-file");
+  if (hasRequestStateFileOption && !normalizeString(options["request-state-file"])) {
+    return {
+      ok: false,
+      error: "invalid_request_state_file",
+      requestReceiptId: null,
+      requestStateFile: null,
+    };
+  }
+  const requestStateFile = hasRequestStateFileOption
+    ? path.resolve(normalizeString(options["request-state-file"]))
+    : null;
+  if (scope === "REPLACEMENT" && (hasRequestReceiptIdOption || requestStateFile)) {
+    return {
+      ok: false,
+      error: hasRequestReceiptIdOption
+        ? "request_receipt_id_open_scope_only"
+        : "request_state_file_open_scope_only",
+      requestReceiptId: null,
+      requestStateFile,
+    };
+  }
+  if (scope === "OPEN" && !requestStateFile) {
+    return {
+      ok: false,
+      error: "request_state_file_required_for_open",
+      requestReceiptId: null,
+      requestStateFile: null,
+    };
+  }
+  let shortlistPolicy;
+  try {
+    shortlistPolicy = parseReviewerShortlistPolicyOptions(options);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "invalid_reviewer_shortlist_policy",
+      requestReceiptId: null,
+      requestStateFile,
+    };
+  }
   const contextFile =
     typeof options["order-context-file"] === "string" && options["order-context-file"].trim()
       ? path.resolve(String(options["order-context-file"]).trim())
@@ -13494,10 +14706,93 @@ async function runReviewerShortlist(commandArgs) {
     typeof options["publish-auth-state-file"] === "string" && options["publish-auth-state-file"].trim()
       ? path.resolve(String(options["publish-auth-state-file"]).trim())
       : null;
+  const authStateFile = resolveOptionalPathOption(
+    options["auth-state-file"] || process.env.CLAWNERA_AUTH_STATE_FILE,
+  );
+  const envFile = resolveOptionalPathOption(options["env-file"] || process.env.CLAWNERA_ENV_FILE);
+  const defaultOutputContext = { authStateFile };
+  const receiptOut =
+    resolveOptionalPathOption(options["receipt-out"]) ||
+    defaultReviewerShortlistReceiptPath(orderId || "replacement", milestoneId || "case", defaultOutputContext);
+  const publishBodyOut =
+    resolveOptionalPathOption(options["publish-body-out"]) ||
+    defaultReviewerShortlistPublishPath(orderId || "replacement", milestoneId || "case", defaultOutputContext);
+  try {
+    const pathCollision = findReviewerShortlistPathCollision([
+      { field: "requestStateFile", path: requestStateFile, writable: true },
+      { field: "receiptOut", path: receiptOut, writable: true },
+      { field: "publishBodyOut", path: publishBodyOut, writable: true },
+      { field: "orderContextFile", path: contextFile, writable: false },
+      { field: "authStateFile", path: authStateFile, writable: false },
+      { field: "publishAuthStateFile", path: publishAuthStateFile, writable: false },
+      { field: "envFile", path: envFile, writable: false },
+    ]);
+    if (pathCollision) {
+      return {
+        ok: false,
+        error: "reviewer_shortlist_path_collision",
+        collisionFields: pathCollision.fields,
+        collisionPath: pathCollision.path,
+        requestReceiptId: null,
+        requestStateFile,
+      };
+    }
+    for (const outputPath of [requestStateFile, receiptOut, publishBodyOut].filter(Boolean)) {
+      assertPrivateReviewerShortlistOutputParent(outputPath);
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "reviewer_shortlist_path_validation_failed",
+      requestReceiptId: null,
+      requestStateFile,
+    };
+  }
+
+  let persistedOpenRequestState = null;
+  let requestStateSha256 = null;
+  if (scope === "OPEN" && requestStateFile) {
+    try {
+      const persisted = await readReviewerOpenRequestState(requestStateFile);
+      persistedOpenRequestState = persisted?.state || null;
+      requestStateSha256 = persisted?.sha256 || null;
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "invalid_reviewer_open_request_state",
+        requestReceiptId: null,
+        requestStateFile,
+      };
+    }
+  }
+  let requestReceiptId = null;
+  if (scope === "OPEN") {
+    const requestedReceiptId = hasRequestReceiptIdOption ? normalizeString(options["request-receipt-id"]) : "auto";
+    try {
+      const explicitReceiptId =
+        requestedReceiptId === "auto"
+          ? null
+          : normalizeCanonicalLowercaseUuidOption(requestedReceiptId, "request_receipt_id");
+      const persistedReceiptId = normalizeString(persistedOpenRequestState?.requestBody?.receiptId);
+      if (explicitReceiptId && persistedReceiptId && explicitReceiptId !== persistedReceiptId) {
+        throw new Error("request_receipt_id_state_mismatch");
+      }
+      requestReceiptId = persistedReceiptId || explicitReceiptId || randomUUID();
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "invalid_request_receipt_id",
+        requestReceiptId: null,
+        requestStateFile,
+      };
+    }
+  }
   if (scope === "OPEN" && (!orderId || !milestoneId)) {
     return {
       ok: false,
       error: "missing_order_id_or_milestone_id",
+      requestReceiptId,
+      requestStateFile,
     };
   }
   if (contextFile && !fs.existsSync(contextFile)) {
@@ -13505,11 +14800,67 @@ async function runReviewerShortlist(commandArgs) {
       ok: false,
       error: "missing_order_context_file",
       contextFile,
+      requestReceiptId,
+      requestStateFile,
     };
   }
 
   try {
-    const checkpoint = await fetchLatestCheckpointRefForCli(options);
+    let hintedApiBaseRaw = normalizeString(options["api-base"] || process.env.CLAWNERA_API_BASE_URL);
+    if (!hintedApiBaseRaw && envFile && fs.existsSync(envFile)) {
+      hintedApiBaseRaw = normalizeString(parseSimpleEnvFile(fs.readFileSync(envFile, "utf8")).CLAWNERA_API_BASE_URL);
+    }
+    const hintedApiBase = normalizeApiBase(hintedApiBaseRaw);
+    if (hintedApiBaseRaw && !hintedApiBase) {
+      throw new Error("missing_or_invalid_api_base");
+    }
+    let shortlistRuntimeOptions = options;
+    if (persistedOpenRequestState) {
+      const expectedApiBase = persistedOpenRequestState.requestTarget.apiBase;
+      if (hintedApiBase && hintedApiBase !== expectedApiBase) {
+        return {
+          ok: false,
+          error: "reviewer_open_request_target_mismatch",
+          requestReceiptId,
+          requestStateFile,
+          expectedRequestTarget: persistedOpenRequestState.requestTarget,
+          actualRequestTarget: { apiBase: hintedApiBase },
+        };
+      }
+      shortlistRuntimeOptions = { ...options, "api-base": expectedApiBase };
+    }
+    const shortlistRuntimeContext = scope === "OPEN"
+      ? await resolveApiRuntimeContext(shortlistRuntimeOptions)
+      : null;
+    const requestTarget = scope === "OPEN"
+      ? { apiBase: normalizeApiBase(shortlistRuntimeContext?.apiBase) }
+      : null;
+    if (scope === "OPEN" && !requestTarget.apiBase) {
+      throw new Error("missing_or_invalid_api_base");
+    }
+    if (
+      persistedOpenRequestState &&
+      !isDeepStrictEqual(requestTarget, persistedOpenRequestState.requestTarget)
+    ) {
+      return {
+        ok: false,
+        error: "reviewer_open_request_target_mismatch",
+        requestReceiptId,
+        requestStateFile,
+        expectedRequestTarget: persistedOpenRequestState.requestTarget,
+        actualRequestTarget: requestTarget,
+      };
+    }
+    const { rpcUrl: reviewerCheckpointRpcUrl } = resolveIotaRpcUrl({
+      network: options.network,
+      rpcUrl: options["rpc-url"],
+    });
+    const checkpointSnapshot =
+      persistedOpenRequestState?.checkpoint || (await fetchLatestCheckpointRefForCli(options));
+    if (checkpointSnapshot.rpcUrl && checkpointSnapshot.rpcUrl !== reviewerCheckpointRpcUrl) {
+      throw new Error("reviewer_shortlist_checkpoint_rpc_target_mismatch");
+    }
+    const checkpoint = normalizeReviewerCheckpoint(checkpointSnapshot);
     const { chainConfig } =
       scope === "REPLACEMENT"
         ? await fetchPolicyAndChainConfig(options, {
@@ -13598,9 +14949,15 @@ async function runReviewerShortlist(commandArgs) {
     }
 
     const reviewerCount =
-      scope === "REPLACEMENT" && replacementRequiredReviewerVotes && options["reviewer-count"] === undefined
-        ? replacementRequiredReviewerVotes
-        : parsePositiveIntOption(options["reviewer-count"], "reviewer_count", 3);
+      shortlistPolicy.requestedReviewerCount ??
+      parsePositiveIntOption(
+        scope === "REPLACEMENT" && replacementRequiredReviewerVotes
+          ? replacementRequiredReviewerVotes
+          : undefined,
+        "reviewer_count",
+        3,
+        10,
+      );
     if (
       scope === "REPLACEMENT" &&
       replacementRequiredReviewerVotes &&
@@ -13621,6 +14978,7 @@ async function runReviewerShortlist(commandArgs) {
     const shortlistTimeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 30_000);
     const body = {
       scope,
+      receiptId: scope === "OPEN" ? requestReceiptId : undefined,
       orderId: scope === "OPEN" ? orderId : undefined,
       milestoneId: scope === "OPEN" ? milestoneId : undefined,
       buyerAddress: scope === "OPEN" ? buyerAddress : undefined,
@@ -13628,34 +14986,52 @@ async function runReviewerShortlist(commandArgs) {
       disputeCaseObjectId: scope === "REPLACEMENT" ? normalizeIotaAddress(options["dispute-case-id"] || "") || undefined : undefined,
       checkpointDigest: effectiveCheckpointDigest,
       reviewerCount,
-      directoryScanLimit: parsePositiveIntOption(options["directory-scan-limit"], "directory_scan_limit", 1000),
-      minPerformanceScore: parsePositiveIntOption(options["min-performance-score"], "min_performance_score", 50),
-      minReputationScore: parsePositiveIntOption(options["min-reputation-score"], "min_reputation_score", 50),
-      minReputationConfidence: parseNonNegativeIntOption(
-        options["min-reputation-confidence"],
-        "min_reputation_confidence",
-        20
-      ),
-      allowNewReviewers: parseBooleanOption(options["allow-new-reviewers"], true),
-      minDecisionsTotal: parsePositiveIntOption(options["min-decisions-total"], "min_decisions_total", 0),
-      maxNoshowCount: parsePositiveIntOption(options["max-noshow-count"], "max_noshow_count", 3),
-      maxCommitRevealFailures: parsePositiveIntOption(options["max-commit-reveal-failures"], "max_commit_reveal_failures", 3),
-      excludedReviewerAddresses:
-        typeof options["excluded-reviewers"] === "string" && options["excluded-reviewers"].trim()
-          ? parseCommaSeparatedIotaAddresses(options["excluded-reviewers"], "excluded_reviewers")
-          : undefined,
-      blockedReviewerAddresses:
-        typeof options["blocked-reviewers"] === "string" && options["blocked-reviewers"].trim()
-          ? parseCommaSeparatedIotaAddresses(options["blocked-reviewers"], "blocked_reviewers")
-          : undefined,
+      directoryScanLimit: shortlistPolicy.directoryScanLimit,
+      minPerformanceScore: shortlistPolicy.minPerformanceScore,
+      minReputationScore: shortlistPolicy.minReputationScore,
+      minReputationConfidence: shortlistPolicy.minReputationConfidence,
+      allowNewReviewers: shortlistPolicy.allowNewReviewers,
+      minDecisionsTotal: shortlistPolicy.minDecisionsTotal,
+      maxNoshowCount: shortlistPolicy.maxNoshowCount,
+      maxCommitRevealFailures: shortlistPolicy.maxCommitRevealFailures,
+      excludedReviewerAddresses: shortlistPolicy.excludedReviewerAddresses,
+      blockedReviewerAddresses: shortlistPolicy.blockedReviewerAddresses,
     };
+    let normalizedRequestBody = JSON.parse(JSON.stringify(body));
+    const publishContext = {
+      escrowObjectId,
+      bondObjectId: disputeBondObjectId,
+    };
+    if (
+      persistedOpenRequestState &&
+      (!isDeepStrictEqual(normalizedRequestBody, persistedOpenRequestState.requestBody) ||
+        !isDeepStrictEqual(publishContext, persistedOpenRequestState.publishContext))
+    ) {
+      return {
+        ok: false,
+        error: "reviewer_open_request_state_mismatch",
+        requestReceiptId,
+        requestStateFile,
+        checkpointDigest: checkpoint.digest,
+      };
+    }
+    if (scope === "OPEN" && requestStateFile && !persistedOpenRequestState) {
+      requestStateSha256 = await createReviewerOpenRequestState(
+        requestStateFile,
+        checkpoint,
+        publishContext,
+        requestTarget,
+        normalizedRequestBody,
+      );
+    }
     const requestShortlist = async () =>
       callApiRoute({
         method: "POST",
         rawPath: "/admin/reviewer-selection/shortlist",
         options: {
           ...options,
-          body: JSON.stringify(body),
+          ...(requestTarget ? { "api-base": requestTarget.apiBase } : {}),
+          body: JSON.stringify(normalizedRequestBody),
         },
         timeoutMs: shortlistTimeoutMs,
       });
@@ -13676,29 +15052,60 @@ async function runReviewerShortlist(commandArgs) {
     while (true) {
       shortlistCall = await requestShortlist();
       const shortlistFailureBody = asRecord(shortlistCall.result.body) || {};
-      const latestCheckpointDigest =
-        shortlistCall.result.status === 409 && shortlistFailureBody.error === "checkpoint_digest_mismatch"
-          ? typeof shortlistFailureBody.latestCheckpointDigest === "string"
-            ? shortlistFailureBody.latestCheckpointDigest.trim()
-            : ""
-          : "";
+      const isCheckpointMismatch =
+        shortlistCall.result.status === 409 && shortlistFailureBody.error === "checkpoint_digest_mismatch";
+      let latestCheckpoint = null;
+      if (isCheckpointMismatch) {
+        const proposedCheckpoint = normalizeReviewerCheckpoint(
+          {
+            digest: shortlistFailureBody.latestCheckpointDigest,
+            sequenceNumber: shortlistFailureBody.latestCheckpointSequenceNumber ?? null,
+            timestampMs: null,
+          },
+          "invalid_reviewer_checkpoint_mismatch_payload",
+        );
+        if (proposedCheckpoint.sequenceNumber === null) {
+          throw new Error("invalid_reviewer_checkpoint_mismatch_payload");
+        }
+        latestCheckpoint = await readExactReviewerCheckpointOnRpc({
+          checkpoint: proposedCheckpoint,
+          rpcUrl: reviewerCheckpointRpcUrl,
+          timeoutMs: shortlistTimeoutMs,
+          unavailableError: "reviewer_shortlist_checkpoint_mismatch_rpc_unavailable",
+          invalidError: "reviewer_shortlist_checkpoint_mismatch_rpc_invalid",
+          mismatchError: "reviewer_shortlist_checkpoint_mismatch_rpc_mismatch",
+        });
+      }
+      const latestCheckpointDigest = latestCheckpoint?.digest || "";
       if (
         latestCheckpointDigest &&
         latestCheckpointDigest !== effectiveCheckpointDigest &&
         checkpointDigestRetryCount < maxCheckpointDigestRetries
       ) {
+        if (
+          effectiveCheckpointSequenceNumber === null ||
+          BigInt(latestCheckpoint.sequenceNumber) <= BigInt(effectiveCheckpointSequenceNumber)
+        ) {
+          throw new Error("reviewer_shortlist_checkpoint_mismatch_regressed");
+        }
         effectiveCheckpointDigest = latestCheckpointDigest;
         body.checkpointDigest = latestCheckpointDigest;
-        if (
-          typeof shortlistFailureBody.latestCheckpointSequenceNumber === "string" &&
-          /^\d+$/.test(shortlistFailureBody.latestCheckpointSequenceNumber)
-        ) {
-          effectiveCheckpointSequenceNumber = shortlistFailureBody.latestCheckpointSequenceNumber;
-        } else if (
-          typeof shortlistFailureBody.latestCheckpointSequenceNumber === "number" &&
-          Number.isFinite(shortlistFailureBody.latestCheckpointSequenceNumber)
-        ) {
-          effectiveCheckpointSequenceNumber = String(shortlistFailureBody.latestCheckpointSequenceNumber);
+        effectiveCheckpointSequenceNumber = latestCheckpoint.sequenceNumber;
+        effectiveCheckpointTimestampMs = latestCheckpoint.timestampMs;
+        normalizedRequestBody = JSON.parse(JSON.stringify(body));
+        if (scope === "OPEN" && requestStateFile) {
+          requestStateSha256 = await updateReviewerOpenRequestState(
+            requestStateFile,
+            requestStateSha256,
+            {
+              digest: effectiveCheckpointDigest,
+              sequenceNumber: effectiveCheckpointSequenceNumber,
+              timestampMs: effectiveCheckpointTimestampMs,
+            },
+            publishContext,
+            requestTarget,
+            normalizedRequestBody,
+          );
         }
         checkpointDigestRetryCount += 1;
         continue;
@@ -13724,49 +15131,77 @@ async function runReviewerShortlist(commandArgs) {
         status: shortlistCall.result.status,
         response: shortlistCall.result.body,
         checkpointDigest: effectiveCheckpointDigest,
+        requestReceiptId,
+        requestStateFile,
       };
     }
     const payload = asRecord(shortlistCall.result.body) || {};
-    const publishTarget = asRecord(payload.publishTarget) || {};
-    const requestPatch = asRecord(publishTarget.requestPatch) || null;
-    const publishRoute = typeof publishTarget.route === "string" ? publishTarget.route.trim() : "";
     const receipt = asRecord(payload.receipt) || null;
-    const publishBody =
-      scope === "OPEN" && requestPatch
-        ? {
-            escrowObjectId,
-            bondObjectId: disputeBondObjectId,
-            ...requestPatch,
-          }
-        : scope === "REPLACEMENT" && requestPatch
-          ? {
-              reviewerRegistryObjectId: chainConfig?.reviewerRegistryObjectId || "",
-              ...requestPatch,
-            }
-        : requestPatch;
-    const receiptOut =
-      resolveOptionalPathOption(options["receipt-out"]) ||
-      defaultReviewerShortlistReceiptPath(orderId || "replacement", milestoneId || "case");
-    writeOptionalOutputFile(receiptOut, `${JSON.stringify(payload, null, 2)}\n`);
-    const publishBodyOut =
-      publishBody && publishRoute
-        ? resolveOptionalPathOption(options["publish-body-out"]) ||
-          defaultReviewerShortlistPublishPath(orderId || "replacement", milestoneId || "case")
-        : null;
-    if (publishBodyOut && publishBody) {
-      writeOptionalOutputFile(publishBodyOut, `${JSON.stringify(publishBody, null, 2)}\n`);
+    const responseReceiptId = typeof receipt?.id === "string" ? receipt.id : null;
+    if (scope === "OPEN" && responseReceiptId !== requestReceiptId) {
+      return {
+        ok: false,
+        error: "reviewer_shortlist_receipt_id_mismatch",
+        checkpointDigest: effectiveCheckpointDigest,
+        requestReceiptId,
+        requestStateFile,
+        receiptId: responseReceiptId,
+        receiptOut: null,
+        publishBodyOut: null,
+        response: payload,
+      };
+    }
+    let receiptBinding;
+    try {
+      const authenticatedActorAddress = resolveAuthenticatedReviewerShortlistActor(shortlistCall);
+      receiptBinding = assertReviewerShortlistReceiptBinding({
+        payload,
+        receipt,
+        scope,
+        requestBody: normalizedRequestBody,
+        requestedCheckpoint: {
+          digest: effectiveCheckpointDigest,
+          sequenceNumber: effectiveCheckpointSequenceNumber,
+          timestampMs: effectiveCheckpointTimestampMs,
+        },
+        requestReceiptId,
+        authenticatedActorAddress,
+      });
+      const verifiedReceiptCheckpoint = await readExactReviewerCheckpointOnRpc({
+        checkpoint: receiptBinding.checkpoint,
+        rpcUrl: reviewerCheckpointRpcUrl,
+        timeoutMs: shortlistTimeoutMs,
+        unavailableError: "reviewer_shortlist_receipt_checkpoint_rpc_unavailable",
+        invalidError: "reviewer_shortlist_receipt_checkpoint_rpc_invalid",
+        mismatchError: "reviewer_shortlist_receipt_checkpoint_rpc_mismatch",
+      });
+      receiptBinding = { ...receiptBinding, checkpoint: verifiedReceiptCheckpoint };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "reviewer_shortlist_receipt_invalid",
+        checkpointDigest: effectiveCheckpointDigest,
+        requestReceiptId,
+        requestStateFile,
+        receiptId: responseReceiptId,
+        receiptOut: null,
+        publishBodyOut: null,
+        response: payload,
+      };
     }
 
     const selectionComplete = payload.selectionComplete === true;
     const directoryScanTruncated = payload.directoryScanTruncated === true;
-    const allowTruncatedScan = parseBooleanOption(options["allow-truncated-scan"], false);
+    const allowTruncatedScan = shortlistPolicy.allowTruncatedScan;
     if (!selectionComplete) {
       return {
         ok: false,
         error: "selection_incomplete",
         checkpointDigest: effectiveCheckpointDigest,
-        receiptOut,
-        publishBodyOut,
+        requestReceiptId,
+        requestStateFile,
+        receiptOut: null,
+        publishBodyOut: null,
         response: payload,
       };
     }
@@ -13775,11 +15210,63 @@ async function runReviewerShortlist(commandArgs) {
         ok: false,
         error: "directory_scan_truncated",
         checkpointDigest: effectiveCheckpointDigest,
-        receiptOut,
-        publishBodyOut,
+        requestReceiptId,
+        requestStateFile,
+        receiptOut: null,
+        publishBodyOut: null,
         response: payload,
       };
     }
+
+    let shortlistAuthorization;
+    try {
+      shortlistAuthorization = assertReviewerShortlistAuthorizationHandoff({
+        payload,
+        scope,
+        orderId,
+        milestoneId,
+        disputeCaseObjectId: normalizeIotaAddress(options["dispute-case-id"] || ""),
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "reviewer_shortlist_authorization_handoff_invalid",
+        checkpointDigest: effectiveCheckpointDigest,
+        requestReceiptId,
+        requestStateFile,
+        receiptOut: null,
+        publishBodyOut: null,
+        response: payload,
+      };
+    }
+    if (scope === "REPLACEMENT" && !normalizeIotaAddress(chainConfig?.reviewerRegistryObjectId || "")) {
+      return {
+        ok: false,
+        error: "missing_reviewer_registry_object_id",
+        checkpointDigest: effectiveCheckpointDigest,
+        requestReceiptId,
+        requestStateFile,
+        receiptOut: null,
+        publishBodyOut: null,
+        response: payload,
+      };
+    }
+    writeOptionalOutputFile(receiptOut, `${JSON.stringify(payload, null, 2)}\n`);
+    const publishRoute = shortlistAuthorization.publishRoute;
+    const requestPatch = shortlistAuthorization.publishRequestPatch;
+    const publishBody =
+      scope === "OPEN"
+        ? {
+            escrowObjectId,
+            bondObjectId: disputeBondObjectId,
+            ...requestPatch,
+          }
+        : {
+            reviewerRegistryObjectId: chainConfig.reviewerRegistryObjectId,
+            ...requestPatch,
+          };
+    writeOptionalOutputFile(publishBodyOut, `${JSON.stringify(publishBody, null, 2)}\n`);
+
     const publishAuthHint = publishAuthStateFile
       ? shellQuote(publishAuthStateFile)
       : "<buyer-or-seller-auth-state-file>";
@@ -13787,6 +15274,11 @@ async function runReviewerShortlist(commandArgs) {
     if (effectiveCheckpointDigest !== checkpoint.digest) {
       warnings.push(
         `checkpoint_digest_advanced_to=${effectiveCheckpointDigest}; retried shortlist automatically ${checkpointDigestRetryCount} time(s) after server reported newer finalized checkpoints`
+      );
+    }
+    if (receiptBinding.checkpoint.digest !== effectiveCheckpointDigest) {
+      warnings.push(
+        `receipt_checkpoint_advanced_from_request=${effectiveCheckpointDigest}; receipt_checkpoint_digest=${receiptBinding.checkpoint.digest}; receipt_checkpoint_sequence_number=${receiptBinding.checkpoint.sequenceNumber}`
       );
     }
     if (shortlistRpcRetryCount > 0) {
@@ -13816,13 +15308,22 @@ async function runReviewerShortlist(commandArgs) {
       scope,
       orderId: orderId || null,
       milestoneId: milestoneId || null,
-      checkpointDigest: effectiveCheckpointDigest,
-      checkpointSequenceNumber: effectiveCheckpointSequenceNumber,
-      checkpointTimestampMs: effectiveCheckpointTimestampMs,
+      checkpointDigest: receiptBinding.checkpoint.digest,
+      checkpointSequenceNumber: receiptBinding.checkpoint.sequenceNumber,
+      checkpointTimestampMs: receiptBinding.checkpoint.timestampMs,
+      checkpointSource: normalizeString(receipt.checkpointSource),
+      requestedCheckpointDigest: effectiveCheckpointDigest,
+      requestedCheckpointSequenceNumber: effectiveCheckpointSequenceNumber,
+      requestedCheckpointTimestampMs: effectiveCheckpointTimestampMs,
+      requestReceiptId,
+      requestStateFile,
       receiptId: typeof receipt?.id === "string" ? receipt.id : null,
       receiptOut,
       publishRoute,
       publishBodyOut,
+      publishReady: false,
+      operatorAuthorizationRequired: true,
+      operatorAuthorizationHandoff: shortlistAuthorization.operatorAuthorizationHandoff,
       contextOrderStatus: orderStatus,
       contextMilestoneStatus: milestoneStatus,
       shortlistedReviewerAddresses: Array.isArray(receipt?.shortlistedReviewerAddresses)
@@ -13833,15 +15334,23 @@ async function runReviewerShortlist(commandArgs) {
       requiredReviewerVotes: replacementRequiredReviewerVotes,
       replacementReadyAtMs: replacementReadiness?.waitUntilMs || null,
       replacementReadyAtIso: replacementReadiness?.waitUntilIso || null,
-      nextPublishHint:
+      nextPublishHint: null,
+      nextPostAuthorizationDryRunHint:
         publishRoute && publishBodyOut
-          ? `clawnera-help tx-plan-execute POST ${shellQuote(publishRoute)} --auth-state-file ${publishAuthHint} --body-file ${shellQuote(publishBodyOut)}`
+          ? buildMarketplaceWriteHint(
+              `clawnera-help tx-plan-dry-run POST ${shellQuote(publishRoute)} --auth-state-file ${publishAuthHint} --body-file ${shellQuote(publishBodyOut)}`,
+              {
+                authStateFile: publishAuthStateFile,
+                authStatePlaceholder: "<buyer-or-seller-auth-state-file>",
+              },
+            )
           : null,
     };
   } catch (error) {
     return {
-      ok: false,
-      error: error instanceof Error ? error.message : "reviewer_shortlist_failed",
+      ...marketplaceMutationFailure(error, "reviewer_shortlist_failed"),
+      requestReceiptId,
+      requestStateFile,
     };
   }
 }
@@ -13945,10 +15454,7 @@ async function runReviewerVotePrepare(commandArgs) {
     }
     return payload;
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "reviewer_vote_prepare_failed",
-    };
+    return marketplaceMutationFailure(error, "reviewer_vote_prepare_failed");
   }
 }
 
@@ -13958,8 +15464,8 @@ function sponsorPreflightUsageLines() {
     "- Required auth: --auth-state-file <file> or --env-file <file> or --jwt <token>",
     "- Defaults: --purpose marketplace_tx --payment-coin claw",
     "- Optional: --gas-budget <int> --tx-family <family> --order-id <id> --timeout-ms <ms>",
-    "- Runtime returns strategy, diagnostics, tx family, and gas recommendations without consuming a reservation.",
-    "- Use this before sponsor reserve/execute for actor-scoped dry-run planning."
+    "- On a compatible target, the runtime can return diagnostics without reserving gas or executing a transaction; audit/rate state may still be recorded.",
+    "- Live write_freeze blocks this POST. The Fresh candidate also blocks it or returns Sponsor-disabled; it is not a current reserve/execute runbook."
   ];
 }
 
@@ -13982,10 +15488,16 @@ async function runSponsorPreflight(commandArgs) {
   }
 
   const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
-  const runtimeContext = await resolveApiRuntimeContext({
-    ...options,
-    "timeout-ms": timeoutMs
-  });
+  let runtimeContext;
+  try {
+    await assertMarketplaceMutationGate({ ...options, "timeout-ms": timeoutMs });
+    runtimeContext = await resolveApiRuntimeContext({
+      ...options,
+      "timeout-ms": timeoutMs
+    });
+  } catch (error) {
+    return marketplaceMutationFailure(error, "sponsor_preflight_helper_failed");
+  }
   const apiBase = runtimeContext.apiBase;
   if (!apiBase) {
     return {
@@ -14024,16 +15536,16 @@ async function runSponsorPreflight(commandArgs) {
       ...(gasBudget ? { gasBudget } : {})
     };
 
-    const { result: preflightResult } = await requestJsonWithRuntimeContext({
-      runtimeContext,
-      url: `${apiBase}/sponsor/preflight`,
+    const preflightCall = await callApiRoute({
       method: "POST",
-      headers: {
-        "content-type": "application/json"
+      rawPath: "/sponsor/preflight",
+      options: {
+        ...options,
+        body: JSON.stringify(preflightBody),
       },
-      body: JSON.stringify(preflightBody),
-      timeoutMs
+      timeoutMs,
     });
+    const preflightResult = preflightCall.result;
 
     if (!preflightResult.ok) {
       return {
@@ -14062,209 +15574,29 @@ async function runSponsorPreflight(commandArgs) {
       response
     };
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "sponsor_preflight_helper_failed"
-    };
+    return marketplaceMutationFailure(error, "sponsor_preflight_helper_failed");
   }
 }
 
 async function runSponsorExecute(commandArgs) {
-  const { options, positionals } = parseLongOptions(commandArgs);
+  const { options } = parseLongOptions(commandArgs);
   if (options.help || options.h) {
     return {
       ok: true,
       help: true,
-      usage: sponsorExecuteUsageLines()
+      usage: sponsorExecuteUsageLines(),
     };
   }
 
-  if (positionals.length > 0) {
-    return {
-      ok: false,
-      error: "unexpected_positional_arguments",
-      details: positionals
-    };
-  }
-
-  const timeoutMs = parsePositiveIntOption(options["timeout-ms"], "timeout_ms", 20_000);
-  const runtimeContext = await resolveApiRuntimeContext({
-    ...options,
-    "timeout-ms": timeoutMs
-  });
-  const apiBase = runtimeContext.apiBase;
-  if (!apiBase) {
-    return {
-      ok: false,
-      error: "missing_or_invalid_api_base",
-      hint: "set --api-base or CLAWNERA_API_BASE_URL"
-    };
-  }
-
-  if (!runtimeContext.jwt) {
-    return {
-      ok: false,
-      error: "missing_jwt",
-      hint: "set --auth-state-file / --env-file or provide --jwt"
-    };
-  }
-
-  const purpose = String(options.purpose || "marketplace_tx").trim().toLowerCase();
-  const paymentCoinRaw = options["payment-coin"];
-  const paymentCoin = paymentCoinRaw === undefined ? "claw" : String(paymentCoinRaw).trim().toLowerCase();
-  const orderId = typeof options["order-id"] === "string" ? options["order-id"].trim() : "";
-  const dryRun = Boolean(options["dry-run"]);
-  const buildCmd = typeof options["build-cmd"] === "string" ? options["build-cmd"] : "";
-  const reservationOut = typeof options["reservation-out"] === "string" ? options["reservation-out"].trim() : "";
-
-  try {
-    const gasBudget = parsePositiveIntOption(options["gas-budget"], "gas_budget", 1_000_000);
-    const builderTimeoutMs = parsePositiveIntOption(options["builder-timeout-ms"], "builder_timeout_ms", 60_000);
-    const idempotencyKey = typeof options["idempotency-key"] === "string" ? options["idempotency-key"] : randomUUID();
-
-    if (!dryRun && !buildCmd) {
-      return {
-        ok: false,
-        error: "missing_build_cmd",
-        hint: "set --build-cmd '<command>' or use --dry-run"
-      };
-    }
-
-    const reserveBody = {
-      purpose,
-      gasBudget,
-      ...(paymentCoin ? { paymentCoin } : {}),
-      ...(orderId ? { orderId } : {})
-    };
-
-    const { result: reserveResult } = await requestJsonWithRuntimeContext({
-      runtimeContext,
-      url: `${apiBase}/sponsor/reserve`,
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify(reserveBody),
-      timeoutMs
-    });
-
-    if (!reserveResult.ok) {
-      return {
-        ok: false,
-        error: reserveResult.error || "sponsor_reserve_failed",
-        status: reserveResult.status,
-        response: reserveResult.body
-      };
-    }
-
-    if (hasSelfPayFallback(reserveResult.body)) {
-      return {
-        ok: false,
-        error: "sponsor_fallback_self_pay_on_reserve",
-        response: reserveResult.body
-      };
-    }
-
-    const reservation = reserveResult.body?.reservation;
-    const reservationId =
-      reservation && typeof reservation.reservationId === "string" ? reservation.reservationId.trim() : "";
-    if (!reservationId) {
-      return {
-        ok: false,
-        error: "missing_reservation_id",
-        response: reserveResult.body
-      };
-    }
-
-    const safeReservationOut = reservationOut ? path.resolve(repoRoot, reservationOut) : "";
-    if (safeReservationOut) {
-      fs.mkdirSync(path.dirname(safeReservationOut), { recursive: true });
-      fs.writeFileSync(safeReservationOut, JSON.stringify(reserveResult.body, null, 2), { mode: 0o600 });
-      fs.chmodSync(safeReservationOut, 0o600);
-    }
-
-    if (dryRun) {
-      return {
-        ok: true,
-        mode: "dry_run",
-        reservationId,
-        orderId: orderId || null,
-        sponsorAddress: reservation?.sponsorAddress || null,
-        reservationOut: safeReservationOut || null
-      };
-    }
-
-    const buildEnv = {
-      ...process.env,
-      CLAWNERA_SPONSOR_RESERVATION_JSON: JSON.stringify(reserveResult.body),
-      CLAWNERA_SPONSOR_RESERVATION_ID: reservationId,
-      CLAWNERA_SPONSOR_API_BASE_URL: apiBase,
-      CLAWNERA_SPONSOR_PURPOSE: purpose,
-      CLAWNERA_SPONSOR_PAYMENT_COIN: paymentCoin || "",
-      CLAWNERA_SPONSOR_GAS_COINS_JSON: JSON.stringify(Array.isArray(reservation?.gasCoins) ? reservation.gasCoins : [])
-    };
-    if (safeReservationOut) {
-      buildEnv.CLAWNERA_SPONSOR_RESERVATION_FILE = safeReservationOut;
-    }
-
-    const built = runBuildCommand(buildCmd, buildEnv, builderTimeoutMs);
-    if (!built.ok || !built.payload) {
-      return {
-        ok: false,
-        error: built.error || "builder_failed",
-        reservationId
-      };
-    }
-
-    const { result: executeResult } = await requestJsonWithRuntimeContext({
-      runtimeContext,
-      url: `${apiBase}/sponsor/execute`,
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "idempotency-key": idempotencyKey
-      },
-      body: JSON.stringify({
-        reservationId,
-        txBytesB64: built.payload.txBytesB64,
-        userSig: built.payload.userSig
-      }),
-      timeoutMs
-    });
-
-    if (!executeResult.ok) {
-      return {
-        ok: false,
-        error: executeResult.error || "sponsor_execute_failed",
-        status: executeResult.status,
-        response: executeResult.body,
-        reservationId
-      };
-    }
-
-    if (hasSelfPayFallback(executeResult.body)) {
-      return {
-        ok: false,
-        error: "sponsor_fallback_self_pay_on_execute",
-        response: executeResult.body,
-        reservationId
-      };
-    }
-
-    return {
-      ok: true,
-      mode: "execute",
-      reservationId,
-      orderId: orderId || null,
-      txDigest: executeResult.body?.execution?.txDigest || null,
-      sponsorAddress: reservation?.sponsorAddress || null
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "sponsor_execute_helper_failed"
-    };
-  }
+  return {
+    ok: false,
+    error: "sponsor_execute_quarantined",
+    exitCode: 78,
+    runtimePosture: "not_queried",
+    releaseBaseMode: "self_pay",
+    sponsorMode: "deferred",
+    hint: "sponsor-preflight is only a non-reserving/non-executing diagnostic on an explicitly write-open compatible target",
+  };
 }
 
 function doctorUsageLines() {
@@ -14293,6 +15625,7 @@ function walletListUsageLines() {
 function apiRequestUsageLines() {
   return [
     "Authenticated request helper:",
+    ...MARKETPLACE_MUTATION_USAGE_LINES,
     "- Usage: clawnera-help request <GET|POST|PUT|PATCH|DELETE> </path>",
     "- Use API paths like /health or /orders/<order-id>; full URLs are rejected on purpose",
     "- Optional auth shortcuts: --auth-state-file <file> or --env-file <file>",
@@ -14321,24 +15654,31 @@ function chainConfigUsageLines() {
 
 function txPlanUsageLines(mode) {
   const label = mode === "dry_run" ? "dry-run" : "execute";
-  const verb = mode === "dry_run" ? "dry-runs" : "signs and broadcasts";
+  if (mode !== "dry_run") {
+    return [
+      "Generic tx-plan execute helper is disabled:",
+      "- `clawnera-help tx-plan-execute` never fetches, signs, or broadcasts a transaction",
+      "- Use a reviewed chain-native wallet/client or a purpose-built helper for execution",
+      "- Use `clawnera-help tx-plan-dry-run` only to rebuild and inspect canonical txBuilder/request plans",
+    ];
+  }
   return [
     `Tx-plan ${label} helper:`,
+    ...MARKETPLACE_MUTATION_USAGE_LINES,
     `- Usage: clawnera-help tx-plan-${label} <GET|POST|PUT|PATCH|DELETE> </path>`,
     "- Reuses the same auth/body flags as `clawnera-help request`",
     "- Use API paths only; full URLs are rejected to avoid leaking auth tokens to other hosts",
-    "- Fetches a canonical API tx plan. IOTA plans are built locally; Sui plans are unsigned transaction bytes from the API.",
+    "- Fetches a canonical API txBuilder/request plan and rebuilds it locally",
     "- Optional auth shortcuts: --auth-state-file <file> or --env-file <file>",
     "- Optional explicit auth: --api-base <url> --jwt <token>",
     "- Optional body: --body '{\"json\":true}' or --body-file ./payload.json",
     "- Optional nested body selection: --body-file ./vote-prepare.json --body-select commitRequestBody",
-    "- Optional signer overrides for IOTA execution: --alias <wallet-alias> --address <0x...> --keystore-path <file>",
-    "- Optional Sui signer overrides for execution: --sui-private-key <suiprivkey...> or --sui-keystore-path <file> --sui-address <0x...>",
-    "- Optional Sui RPC override: --sui-rpc-url <url> (or --rpc-url <url> on a Sui byte plan)",
-    "- Optional outputs: --plan-out <file> --tx-bytes-out <file>",
+    "- Raw transaction bytes are always unverified and are never dry-run, exported, signed, or broadcast",
+    "- The dry-run RPC is the exact RPC whose chain identifier was verified for the plan",
+    "- Optional RPC override: --sui-rpc-url <url> for Sui or --rpc-url <url> for IOTA",
+    "- Optional output: --plan-out <file>; --tx-bytes-out is disabled",
     "- Optional timer-aware retry: --wait-until-ready [--max-ready-wait-ms <ms>] waits through known commit/challenge/settlement windows before rerunning the same command",
-    "- Sui execution signs returned unsigned transaction bytes locally with a matching Sui signer and submits directly to the selected Sui RPC",
-    `- The package never sends a generic user PTB through the Clawnera worker; it ${verb} locally when the local wallet lane supports the chain`
+    "- Generic execution is disabled; this command reports dry-run effects only"
   ];
 }
 
@@ -14348,11 +15688,12 @@ function orderInitBondUsageLines() {
     "- Usage: clawnera-help order-init-bond --order-id <id> --auth-state-file <file>",
     "- Reads the order + fee policy, resolves live chain config, then builds `init_order_dispute_bond` locally",
     "- Optional: --required-reviewer-votes <odd-int> --required-reviewer-votes-floor <odd-int>",
-    "- Optional execution mode: --dry-run",
+    "- Default mode is dry-run. Use --execute only after `clawnera-help write-gate` succeeds for the exact API target; --dry-run and --execute are mutually exclusive.",
+    "- Live production currently reports write_freeze, and Fresh IOTA is not deployed/accepted, so execute mode must remain closed on both targets.",
     "- Optional signer overrides: --alias <wallet-alias> --address <0x...> --keystore-path <file>",
     "- This creates the shared dispute-bond object and reviewer-vote policy only; it does not fund the amount",
     "- Normal DUAL_BOND_REQUIRED funding still needs an explicit amount later on POST /orders/{orderId}/dispute-bond/fund",
-    "- Use this before `tx-plan-execute POST /orders/{orderId}/dispute-bond/fund ...`"
+    "- Use this before `tx-plan-dry-run POST /orders/{orderId}/dispute-bond/fund ...`"
   ];
 }
 
@@ -14567,23 +15908,40 @@ function orderCreateEscrowUsageLines() {
     "- Default escrow deadline is now + 172800000 ms (2 days); override with --deadline-ms <unix-ms>",
     "- IOTA orders may omit --payment-coin-object-id to split from tx.gas",
     "- CLAW orders require --claw-coin-type plus either --payment-coin-object-id or --claw-coin-object-id",
-    "- Optional execution mode: --dry-run",
+    "- Default mode is dry-run. Use --execute only after `clawnera-help write-gate` succeeds for the exact API target; --dry-run and --execute are mutually exclusive.",
+    "- Live production currently reports write_freeze, and Fresh IOTA is not deployed/accepted, so execute mode must remain closed on both targets.",
     "- Execute mode hard-fails if the on-chain tx itself fails; do not treat a digest alone as success",
     "- On success the helper prints order_escrow_object_id for the next bind step",
-    "- After execute, bind the created escrow object id with `clawnera-help request POST /orders/{orderId}/escrow/bind ...`"
+    "- After execute, bind the created escrow object id only with `clawnera-help write-gate --auth-state-file <file> && clawnera-help request POST /orders/{orderId}/escrow/bind --auth-state-file <file> ...`"
   ];
 }
 
 function keyAgreementUpsertUsageLines() {
   return [
     "Key agreement upsert helper:",
+    ...MARKETPLACE_MUTATION_USAGE_LINES,
     "- Usage: clawnera-help key-agreement-upsert --auth-state-file <file>",
     "- Generates or reuses a local X25519 key-agreement key, wallet-signs the binding message, then PUTs /users/me/key-agreement",
+    "- The private key is stored only in an authenticated encrypted envelope; the adjacent master-key default protects only against a record-only leak",
+    "- Production: pre-provision a cryptographically random owner-only 32-byte key outside the record directory, set CLAWNERA_KEY_AGREEMENT_MASTER_KEY_FILE to its path, and set CLAWNERA_KEY_AGREEMENT_REQUIRE_EXTERNAL_MASTER_KEY=1",
+    "- The strict flag accepts only 0 or 1 and fails closed for a missing or adjacent key; never put the secret itself in argv or env",
     "- Optional key selection: --key-version <int> --key-file <file> --rotate",
     "- Optional lifetime: --ttl-sec <sec> or --expires-at-ms <unix-ms>",
     "- Optional signer overrides: --alias <wallet-alias> --address <0x...> --keystore-path <file>",
     "- Run this for seller and buyer before encrypted milestone delivery",
-    "- The helper now keeps retrying readback for indexer lag; if it still prints readback_pending, re-run GET /users/{address}/key-agreement before encrypted delivery"
+    "- The helper retries readback for indexer lag; pending or mismatched post-PUT readback exits nonzero with write_committed=true and an exact verification command"
+  ];
+}
+
+function keyAgreementMigrateUsageLines() {
+  return [
+    "Legacy key agreement migration helper:",
+    "- Usage: clawnera-help key-agreement-migrate --key-file <legacy-record.json>",
+    "- Replaces one owner-only plaintext v1 record atomically with an authenticated encrypted v2 envelope",
+    "- No private key or protection secret is printed; plaintext legacy records remain rejected by every normal command",
+    "- The adjacent master-key default is for local convenience and protects only against a record-only leak",
+    "- Production: pre-provision a cryptographically random owner-only 32-byte key outside the record directory, set CLAWNERA_KEY_AGREEMENT_MASTER_KEY_FILE, and set CLAWNERA_KEY_AGREEMENT_REQUIRE_EXTERNAL_MASTER_KEY=1",
+    "- Migration also encrypts an expired legacy record, but normal use continues to reject it as expired",
   ];
 }
 
@@ -14594,7 +15952,9 @@ function reputationInitUsageLines() {
     "- Reads /policy/fees, resolves the live reputation fee config, then builds `reputation::create_reputation_profile_iota_entry` locally",
     "- This creates the wallet-owned activation/proof object and seeds the neutral shared participant summary; the owned profile is still not the mutable live summary by itself",
     "- Uses tx.gas by default; fund the wallet first or pass --payment-coin-object-id <coin>",
-    "- Optional: --dry-run --alias <wallet-alias> --address <0x...> --keystore-path <file>",
+    "- Default mode is dry-run. Use --execute only after `clawnera-help write-gate` succeeds for the exact API target; --dry-run and --execute are mutually exclusive.",
+    "- Live production currently reports write_freeze, and Fresh IOTA is not deployed/accepted, so execute mode must remain closed on both targets.",
+    "- Optional: --alias <wallet-alias> --address <0x...> --keystore-path <file>",
     "- Safe to rerun: if the actor already owns a reputation profile, this helper returns the existing object id"
   ];
 }
@@ -14608,10 +15968,12 @@ function reviewerRegisterUsageLines() {
     "- Uses the actor key-agreement public key as reviewer transportPubkeyHex",
     "- Defaults: --min-case-reward-native 1 and --stake-amount <live reviewer_min_stake_native>",
     "- Legacy alias still accepted: --min-case-reward-iota <int>",
-    "- Optional: --transport-type <u8> --transport-key-file <file> --transport-key-version <int> --dry-run",
+    "- Default mode is dry-run. Use --execute only after `clawnera-help write-gate` succeeds for the exact API target; --dry-run and --execute are mutually exclusive.",
+    "- Live production currently reports write_freeze, and Fresh IOTA is not deployed/accepted, so execute mode must remain closed on both targets.",
+    "- Optional: --transport-type <u8> --transport-key-file <file> --transport-key-version <int>",
     "- If transport key file/version are omitted, the helper resolves the latest non-expired remote key-agreement record and matches the local private key automatically",
     "- If key-agreement-upsert prints warning=key_agreement_readback_pending, wait until GET /users/{address}/key-agreement?keyVersion=<n> returns 200 with the same non-expired key before rerunning reviewer-register",
-    "- Run `clawnera-help key-agreement-upsert` and `clawnera-help reputation-init` first when onboarding a fresh reviewer"
+    "- For a fresh reviewer, run the exact-target gate immediately before key-agreement-upsert and again before reputation-init --execute"
   ];
 }
 
@@ -14634,22 +15996,43 @@ function buildDisputeEvidencePublishHintLines(result = {}) {
       error === "reviewer_key_agreement_expired_for_transport_pubkey"
         ? "cause=assigned reviewer transport metadata points at an expired key-agreement record"
         : "cause=assigned reviewer transport metadata is stale",
-      "next_hint=the affected reviewer should rerun clawnera-help key-agreement-upsert --auth-state-file <reviewer-auth-state-file>",
-      "next_hint=if the reviewer rotated or bumped key version, rerun clawnera-help reviewer-update --auth-state-file <reviewer-auth-state-file>",
+      `next_hint=the affected reviewer should run ${buildMarketplaceWriteHint(
+        "clawnera-help key-agreement-upsert --auth-state-file <reviewer-auth-state-file>",
+        { authStatePlaceholder: "<reviewer-auth-state-file>" },
+      )}`,
+      `next_hint=if the reviewer rotated or bumped key version, run ${buildMarketplaceWriteHint(
+        "clawnera-help reviewer-update --auth-state-file <reviewer-auth-state-file> --execute",
+        { authStatePlaceholder: "<reviewer-auth-state-file>" },
+      )}`,
       verifyPath
         ? `next_hint=if key-agreement-upsert prints warning=key_agreement_readback_pending, wait until GET ${verifyPath} returns 200 with a non-expired record before retrying publish`
         : "next_hint=if key-agreement-upsert prints warning=key_agreement_readback_pending, wait for the reviewer key-agreement readback to turn non-expired before retrying publish",
-      "next_hint=after reviewer key-agreement readback is fresh, rerun the same clawnera-help dispute-evidence-publish command from the buyer or seller wallet",
+      `next_hint=after reviewer key-agreement readback is fresh, ${buildMarketplaceWriteHint(
+        "clawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state-file>",
+        { authStatePlaceholder: "<buyer-or-seller-auth-state-file>" },
+      )}`,
     ];
   }
   if (error === "manifest_recipient_key_agreement_expired" || error === "manifest_recipient_key_agreement_not_found") {
     return [
       "cause=one of the original manifest recipients is stale or missing on key-agreement readback",
       "next_hint=refresh key-agreement for the original manifest participants, not the assigned reviewers",
-      "next_hint=the buyer wallet should rerun clawnera-help key-agreement-upsert --auth-state-file <buyer-auth-state-file> if its record is stale",
-      "next_hint=the seller wallet should rerun clawnera-help key-agreement-upsert --auth-state-file <seller-auth-state-file> if its record is stale",
-      "next_hint=only rerun reviewer-update when the helper explicitly reports reviewer_key_agreement_not_found_for_transport_pubkey or reviewer_key_agreement_expired_for_transport_pubkey",
-      "next_hint=after buyer/seller key-agreement readback is refreshed, rerun the same clawnera-help dispute-evidence-publish command",
+      `next_hint=if its record is stale, the buyer wallet should run ${buildMarketplaceWriteHint(
+        "clawnera-help key-agreement-upsert --auth-state-file <buyer-auth-state-file>",
+        { authStatePlaceholder: "<buyer-auth-state-file>" },
+      )}`,
+      `next_hint=if its record is stale, the seller wallet should run ${buildMarketplaceWriteHint(
+        "clawnera-help key-agreement-upsert --auth-state-file <seller-auth-state-file>",
+        { authStatePlaceholder: "<seller-auth-state-file>" },
+      )}`,
+      `next_hint=only when the helper explicitly reports reviewer transport-key drift, ${buildMarketplaceWriteHint(
+        "clawnera-help reviewer-update --auth-state-file <reviewer-auth-state-file> --execute",
+        { authStatePlaceholder: "<reviewer-auth-state-file>" },
+      )}`,
+      `next_hint=after buyer/seller key-agreement readback is refreshed, ${buildMarketplaceWriteHint(
+        "clawnera-help dispute-evidence-publish --case-id <dispute-case-id> --auth-state-file <buyer-or-seller-auth-state-file>",
+        { authStatePlaceholder: "<buyer-or-seller-auth-state-file>" },
+      )}`,
     ];
   }
   return [];
@@ -14662,10 +16045,12 @@ function reviewerUpdateUsageLines() {
     "- Reads the current reviewer entry, then refreshes transportPubkeyHex from the local key-agreement record for the same wallet",
     "- Stops if the same key version is not yet visible as a non-expired remote key-agreement record",
     "- Use this after `key-agreement-upsert --rotate`, after any key file replacement, or when reviewer-readable dispute evidence reports reviewer key-agreement drift",
-    "- Optional: --transport-type <u8> --transport-key-file <file> --transport-key-version <int> --min-case-reward-native <int> --active <true|false> --dry-run",
+    "- Default mode is dry-run. Use --execute only after `clawnera-help write-gate` succeeds for the exact API target; --dry-run and --execute are mutually exclusive.",
+    "- Live production currently reports write_freeze, and Fresh IOTA is not deployed/accepted, so execute mode must remain closed on both targets.",
+    "- Optional: --transport-type <u8> --transport-key-file <file> --transport-key-version <int> --min-case-reward-native <int> --active <true|false>",
     "- Legacy alias still accepted: --min-case-reward-iota <int>",
     "- If transport key file/version are omitted, the helper resolves the latest non-expired remote key-agreement record and matches the local private key automatically",
-    "- If the actor is not registered yet, stop and run `clawnera-help reviewer-register` first"
+    "- If the actor is not registered yet, stop; run the exact-target gate immediately before reviewer-register --execute"
   ];
 }
 
@@ -14683,6 +16068,7 @@ function deliverableEncryptUsageLines() {
 function disputeEvidencePublishUsageLines() {
   return [
     "Dispute evidence publish helper:",
+    ...MARKETPLACE_MUTATION_USAGE_LINES,
     "- Usage: clawnera-help dispute-evidence-publish --case-id <0x...> --auth-state-file <file>",
     "- Linked deliverable mode: the helper rewraps the already uploaded encrypted milestone payload locally for the currently assigned reviewers",
     "- Supplemental bundle mode: pass --kind supplemental-bundle --bundle-build-file <file> --manifest-cid ipfs://<cid>",
@@ -14764,17 +16150,19 @@ function checkpointEvidenceExportUsageLines() {
 
 function managedStorageFeePayUsageLines() {
   return [
-    "Managed storage fee helper:",
+    "Managed storage fee helper (runtime-gated):",
     "- Usage: clawnera-help managed-storage-fee-pay --order-id <id> --milestone-id <id> --auth-state-file <file>",
-    "- Reads /policy/storage + /policy/fees, builds the IOTA or Sui `manifest_anchor::pay_managed_storage_fee_*` transaction locally, then signs and broadcasts locally",
-    "- Optional: --proof-out <file> --dry-run --alias <wallet-alias> --address <0x...> --keystore-path <file> --sui-network <mainnet|testnet> --sui-rpc-url <url>",
-    "- Use this before managed-storage presign. The same actor must later use the payment proof."
+    "- The canonical V2 SDK builders bind Settlement GovernanceConfig, the Ops policy singleton, and the Fulfillment milestone escrow.",
+    "- This CLI command remains disabled until the active runtime publishes the complete package DAG and singleton object pointers.",
+    "- Until then, obtain an exact `manifest_anchor::pay_managed_storage_fee_*_v2` proof through a reviewed chain-native flow, then pass the saved proof to managed-storage-presign.",
+    "- Use BYO storage while that exact V2 payment flow is unavailable."
   ];
 }
 
 function managedStoragePresignUsageLines() {
   return [
     "Managed storage presign helper:",
+    ...MARKETPLACE_MUTATION_USAGE_LINES,
     "- Usage: clawnera-help managed-storage-presign --order-id <id> --milestone-id <id> --file <payload.json> --payment-proof-file <file> --auth-state-file <file>",
     "- Computes fileSizeBytes + sha256 locally, then POSTs /storage/uploads/presign in managed mode",
     "- Optional: --mime-type <type> --file-name <name> --presign-out <file> --attempts <n> --delay-ms <ms>",
@@ -14796,19 +16184,27 @@ function managedStorageUploadUsageLines() {
 function reviewerShortlistUsageLines() {
   return [
     "Reviewer shortlist helper:",
-    "- Usage: clawnera-help reviewer-shortlist --order-id <id> --milestone-id <id> --order-context-file <file> --auth-state-file <operator-auth-state>",
+    "- Usage: clawnera-help reviewer-shortlist --order-id <id> --milestone-id <id> --order-context-file <file> --request-state-file <owner-only-json> --auth-state-file <operator-auth-state>",
     "- Replacement usage: clawnera-help reviewer-shortlist --scope REPLACEMENT --dispute-case-id <0x...> --auth-state-file <operator-auth-state>",
-    "- Fetches the latest finalized checkpoint digest, builds the canonical shortlist body, and writes the exact publish body for dispute-open or reviewer-replace",
+    "- Fetches the newest checkpoint digest; the server decides whether it is inside the accepted finalized window.",
+    "- OPEN requires --request-state-file. The helper atomically persists one canonical receipt UUID, the exact normalized request, and canonical API base before POST, then rejects target or argument drift across retries.",
+    "- Optional for OPEN only: --request-receipt-id <lowercase-uuid|auto>.",
+    "- Request state, receipt, and publish outputs must use distinct paths under owner-only directories; default outputs use the private CLAWNERA artifacts directory.",
+    "- Validates the response receipt plus external-custody operator authorization handoff, then writes the exact future publish body for dispute-open or reviewer-replace.",
     "- The safest --order-context-file is a freshly saved buyer/seller GET /orders/{orderId}/timeline readback; operators may not be allowed to read actor-scoped order timeline routes directly",
+    "- Bounds: reviewer-count 1..10, directory-scan-limit 1..5000, and score/count filters 0..10000.",
     "- Optional: --reviewer-count <n> --allow-new-reviewers <true|false> --min-decisions-total <n> --allow-truncated-scan <true|false>",
     "- Optional: --escrow-object-id <0x...> --bond-object-id <0x...> when no stored order/timeline file is available",
     "- Optional outputs: --receipt-out <file> --publish-body-out <file> --publish-auth-state-file <buyer-or-seller-auth-state> --rpc-url <url>",
-    "- The shortlist call itself uses operator auth and only prepares the receipt plus the exact publish body.",
+    "- The shortlist call itself uses operator auth and only prepares the receipt, operatorAuthorizationHandoff, and exact future publish body.",
+    "- The helper enforces the exact-target write gate before the shortlist POST. Live production write_freeze and undeployed Fresh IOTA remain closed.",
+    "- publish_ready=false until the external custody workflow completes the exact operatorAuthorizationHandoff; never pass its missing operator inputs into this public helper.",
+    "- After operator authorization, the buyer/seller tx plan must return matching inviteBinding and preExecutionRequirements and must dry-run with explicit success effects.",
     "- OPEN publish is buyer/seller-owned: POST /orders/{orderId}/milestones/{milestoneId}/disputes/open.",
     "- REPLACEMENT publish is buyer/seller-owned: POST /disputes/{disputeCaseId}/reviewers/replace.",
     "- Reviewer-self routes begin only after the publish tx succeeds and ReviewerInvited is indexed.",
     "- After publish, trust post_execute_binding_ok=true as the activation proof. If it is missing or false, stop and inspect live receipt/dispute readback instead of reaching for a manual bind route.",
-    "- Important: shortlist success only prepares the exact publish body; current runtimes can still hard-stop on 409 reviewer_invite_tx_not_supported until the live package exposes invite-aware callables.",
+    "- Important: shortlist success only prepares a blocked authorization handoff plus the future publish body; current runtimes can still hard-stop on 409 reviewer_invite_tx_not_supported until the live package exposes invite-aware callables.",
     "- Important: replacement rounds are full reassignment rounds; do not request only the missing delta slots unless the live case already lowered requiredReviewerVotes."
   ];
 }
@@ -14822,7 +16218,7 @@ function mailboxEventsUsageLines() {
     "- If the wider event read times out transiently, the helper automatically retries with a smaller recent-event window",
     "- When the API event feed is empty, the helper only falls back to on-chain reads if you explicitly pass --network or --rpc-url",
     "- Use this instead of guessing seq numbers from raw /events queries",
-    "- If indexing is still catching up, use the mailbox_signal_posted_seq or mailbox_signal_acked_seq printed by tx-plan-execute as the temporary source of truth and re-read later"
+    "- If indexing is still catching up, use mailbox sequence values only from the verified chain-native receipt and re-read later"
   ];
 }
 
@@ -14830,7 +16226,8 @@ function pinataUploadJsonUsageLines() {
   return [
     "Pinata JSON upload helper:",
     "- Usage: clawnera-help pinata-upload-json --file <payload.json>",
-    "- Auth: --jwt <token>, --jwt-file <file>, or export PINATA_JWT=...",
+    "- Auth: owner-only --jwt-file <file>, or export PINATA_JWT=...",
+    "- JWT values in process arguments are rejected",
     "- Optional: --jwt-env <ENV_NAME> --name <pin-name>",
     "- Uploads one JSON file with pinJSONToIPFS and prints cid + ipfs:// URI"
   ];
@@ -14839,6 +16236,7 @@ function pinataUploadJsonUsageLines() {
 function milestoneSubmitByoUsageLines() {
   return [
     "Milestone submit helper (bring your own encrypted payload):",
+    ...MARKETPLACE_MUTATION_USAGE_LINES,
     "- Usage: clawnera-help milestone-submit-byo --order-id <id> --milestone-id <id> --payload-file <file> --manifest-cid ipfs://<cid> --auth-state-file <file>",
     "- Builds the canonical managed-deliverable manifest, signs it with the seller wallet, and POSTs /orders/{orderId}/milestones/{milestoneId}/submit",
     "- Optional output: --body-out <file>",
@@ -14850,7 +16248,9 @@ function milestoneAnchorUsageLines() {
   return [
     "Milestone anchor helper:",
     "- Usage: clawnera-help milestone-anchor --order-id <id> --milestone-id <id> --submit-body-file <file> --auth-state-file <file>",
-    "- Builds the on-chain manifest-anchor PTB locally, executes it locally, then POSTs /orders/{orderId}/milestones/{milestoneId}/anchor",
+    "- Builds the on-chain manifest-anchor PTB locally and dry-runs it by default without POSTing the anchor.",
+    "- Use --execute only after `clawnera-help write-gate` succeeds for the exact API target; execute sends the PTB and then POSTs /orders/{orderId}/milestones/{milestoneId}/anchor.",
+    "- Live production currently reports write_freeze, and Fresh IOTA is not deployed/accepted, so execute mode must remain closed on both targets.",
     "- Optional overrides: --manifest-cid ipfs://<cid> --manifest-sha256 <hex> --seller-signature <base64>",
     "- Use the submit body from milestone-submit-byo unless you intentionally override fields"
   ];
@@ -14859,6 +16259,7 @@ function milestoneAnchorUsageLines() {
 function milestoneRejectUsageLines() {
   return [
     "Milestone reject helper:",
+    ...MARKETPLACE_MUTATION_USAGE_LINES,
     "- Usage: clawnera-help milestone-reject --order-id <id> --milestone-id <id> --reason-text <text> --auth-state-file <file>",
     "- Alternative inputs: --reason-file <file> or --reason-hash <64-hex|sha256:64-hex>",
     "- Computes the canonical rejectionReasonHash locally when text/file input is used",
@@ -14890,7 +16291,7 @@ function reviewerVotePrepareUsageLines() {
     "- Canonical secure file path: --out reviewer-vote.json",
     "- Alternative secure file path: --json > reviewer-vote.json",
     "- Default stdout redacts commit and reveal payloads; plain stdout redirection alone is not a usable reveal file unless you also pass --json",
-    "- Direct next step: tx-plan-execute ... --body-file ./reviewer-vote.json --body-select commitRequestBody",
+    "- Direct inspection step: tx-plan-dry-run ... --body-file ./reviewer-vote.json --body-select commitRequestBody",
     "- Commit hash rule: sha256(vote_byte || case_id_bytes || reviewer_address_bytes || nonce_bytes)",
     "- Contract truth: vote=1 means seller settlement, vote=0 means buyer settlement",
   ];
@@ -15032,10 +16433,7 @@ async function runDoctorCommand(commandArgs) {
 
     return report;
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "doctor_failed"
-    };
+    return marketplaceMutationFailure(error, "doctor_failed");
   }
 }
 
@@ -15726,10 +17124,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     printDoctorReport(report);
   } else {
     console.error(`doctor_error: ${report.error}`);
-    process.exitCode = 1;
+    process.exitCode = report.exitCode ?? 1;
   }
   if (!report.ok && !report.help) {
-    process.exitCode = 1;
+    process.exitCode = report.exitCode ?? 1;
   }
 } else if (effectiveCommand === "triage") {
   const query = commandArgs.join(" ").trim();
@@ -15798,7 +17196,12 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
       console.log(`wallet_alias=${result.alias}`);
     }
     console.log(`keystore_path=${result.keystorePath}`);
-    console.log(`clawnera-help ensure-auth --api-base https://api.clawnera.com --keystore-path ${shellQuote(result.keystorePath)}${result.alias ? ` --alias ${shellQuote(result.alias)}` : ""} --auth-state-file ${shellQuote(defaultAuthStatePath())}`);
+    console.log(
+      `next_hint=${buildMarketplaceWriteHint(
+        `clawnera-help ensure-auth --api-base https://api.clawnera.com --keystore-path ${shellQuote(result.keystorePath)}${result.alias ? ` --alias ${shellQuote(result.alias)}` : ""} --auth-state-file ${shellQuote(defaultAuthStatePath())}`,
+        { apiBase: "https://api.clawnera.com" },
+      )}`,
+    );
   } else {
     console.error(`wallet_init_error: ${result.error}`);
     process.exitCode = 1;
@@ -15894,21 +17297,12 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
       console.log(`env_file=${result.envOut}`);
       console.log(`source ${shellQuote(result.envOut)}`);
     }
-    if (!result.stateOut && !result.envOut) {
-      console.log(`export CLAWNERA_API_BASE_URL=${shellQuote(result.apiBase)}`);
-      console.log(`export CLAWNERA_API_JWT=${shellQuote(result.token)}`);
-      console.log(`export CLAWNERA_API_REFRESH_TOKEN=${shellQuote(result.refreshToken)}`);
-      console.log(`export CLAWNERA_API_ADDRESS=${shellQuote(result.address)}`);
-      if (result.alias) {
-        console.log(`export CLAWNERA_API_ADDRESS_ALIAS=${shellQuote(result.alias)}`);
-      }
-    }
   } else {
     console.error(`auth_login_helper_error: ${result.error}`);
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "ensure-auth") {
   const result = await runEnsureAuth(commandArgs);
@@ -15943,10 +17337,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         `candidates=${result.candidates.map((candidate) => candidate.alias || candidate.address).join(",")}`
       );
     }
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "units") {
   const result = await runUnits(commandArgs);
@@ -15978,6 +17372,26 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   if (!result.ok && !result.help) {
     process.exitCode = 1;
   }
+} else if (effectiveCommand === "write-gate") {
+  const result = await runMarketplaceWriteGate(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`marketplace_mutation_gate_ok api_base=${result.apiBase}`);
+    console.log("source=runtime_db");
+    console.log("preset=normal");
+    console.log("public_api_writes=live");
+    console.log("marketplace_writes=live");
+  } else {
+    console.error(`marketplace_mutation_gate_error: ${result.error}`);
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = result.exitCode ?? 1;
+  }
 } else if (effectiveCommand === "request") {
   const result = await runApiRequest(commandArgs);
   if (flags.json) {
@@ -15989,11 +17403,11 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
   } else {
     console.log(JSON.stringify(result, null, 2));
     if (!result.ok) {
-      process.exitCode = 1;
+      process.exitCode = result.exitCode ?? 1;
     }
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "listing-categories") {
   const result = await runListingCategories(commandArgs);
@@ -16015,10 +17429,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`listing_categories_error: ${result.error}`);
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "listing-deposit-create") {
   const result = await runListingDepositCreate(commandArgs);
@@ -16054,10 +17468,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         console.error(line);
       }
     }
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "listing-create") {
   const result = await runListingCreate(commandArgs);
@@ -16105,10 +17519,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (Array.isArray(result.supportedCurrencies) && result.supportedCurrencies.length > 0) {
       console.error(`supported_display_currencies=${result.supportedCurrencies.join(",")}`);
     }
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "listing-cancel") {
   const result = await runListingCancel(commandArgs);
@@ -16132,10 +17546,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         console.error(line);
       }
     }
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "listing-renew") {
   const result = await runListingRenew(commandArgs);
@@ -16164,10 +17578,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         console.error(line);
       }
     }
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "bid-create") {
   const result = await runBidCreate(commandArgs);
@@ -16197,10 +17611,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         console.error(line);
       }
     }
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "bid-accept") {
   const result = await runBidAccept(commandArgs);
@@ -16222,10 +17636,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         console.error(line);
       }
     }
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "chain-config") {
   const result = await runChainConfig(commandArgs);
@@ -16252,10 +17666,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     printDisputeBondGuidanceLines(result.guidance);
   } else {
     console.error(`chain_config_error: ${result.error}`);
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "tx-plan-dry-run") {
   const result = await runTxPlanCommand(commandArgs, "dry_run");
@@ -16271,6 +17685,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.chainFamily) {
       console.log(`chain_family=${result.chainFamily}`);
     }
+    if (result.chainIdentifier) {
+      console.log(`chain_identifier=${result.chainIdentifier}`);
+    }
     if (result.suiRpcUrl) {
       console.log(`sui_rpc_url=${result.suiRpcUrl}`);
     }
@@ -16283,6 +17700,13 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.planOut) {
       console.log(`plan_file=${result.planOut}`);
     }
+    if (result.reviewerSelectionAuthorization?.required === true) {
+      console.log("external_operator_authorization_required=true");
+      console.log(`reviewer_selection_authorization_state=${result.reviewerSelectionAuthorization.state}`);
+      console.log(`reviewer_selection_receipt_id=${result.reviewerSelectionAuthorization.reviewerSelectionReceiptId}`);
+      console.log(`reviewer_selection_bind_route=${result.reviewerSelectionAuthorization.bindRoute}`);
+      console.log("external_operator_authorization_precondition_dry_run_satisfied=true");
+    }
     if (result.txBytesOut) {
       console.log(`tx_bytes_file=${result.txBytesOut}`);
     }
@@ -16293,6 +17717,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
     if (result.chainFamily) {
       console.error(`chain_family=${result.chainFamily}`);
+    }
+    if (result.chainIdentifier) {
+      console.error(`chain_identifier=${result.chainIdentifier}`);
     }
     if (result.target) {
       console.error(`target=${result.target}`);
@@ -16306,10 +17733,19 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.hint) {
       console.error(`hint=${result.hint}`);
     }
-    process.exitCode = 1;
+    if (result.waitUntilIso) {
+      console.error(`wait_until=${result.waitUntilIso}`);
+    }
+    if (Number.isInteger(result.retryAfterMs) && result.retryAfterMs >= 0) {
+      console.error(`retry_after_ms=${result.retryAfterMs}`);
+    }
+    if (result.nextCommandHint) {
+      console.error(`next_command=${result.nextCommandHint}`);
+    }
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "tx-plan-execute") {
   const result = await runTxPlanCommand(commandArgs, "execute");
@@ -16324,6 +17760,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`tx_digest=${result.txDigest || "unknown"}`);
     if (result.chainFamily) {
       console.log(`chain_family=${result.chainFamily}`);
+    }
+    if (result.chainIdentifier) {
+      console.log(`chain_identifier=${result.chainIdentifier}`);
     }
     if (result.suiRpcUrl) {
       console.log(`sui_rpc_url=${result.suiRpcUrl}`);
@@ -16412,6 +17851,9 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.chainFamily) {
       console.error(`chain_family=${result.chainFamily}`);
     }
+    if (result.chainIdentifier) {
+      console.error(`chain_identifier=${result.chainIdentifier}`);
+    }
     if (result.target) {
       console.error(`target=${result.target}`);
     }
@@ -16484,10 +17926,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     printDisputeBondGuidanceLines(result.guidance);
   } else {
     console.error(`order_init_bond_error: ${result.error}`);
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "order-create-escrow") {
   const result = await runOrderCreateEscrow(commandArgs);
@@ -16505,11 +17947,40 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.orderEscrowObjectId) {
       console.log(`order_escrow_object_id=${result.orderEscrowObjectId}`);
       console.log(
-        `next_bind=clawnera-help request POST /orders/${result.orderId}/escrow/bind --auth-state-file ~/.config/clawnera/auth-state.json --body '{\"escrowObjectId\":\"${result.orderEscrowObjectId}\"}'`,
+        `next_bind=${buildMarketplaceWriteHint(
+          `clawnera-help request POST /orders/${result.orderId}/escrow/bind --auth-state-file ~/.config/clawnera/auth-state.json --body '{\"escrowObjectId\":\"${result.orderEscrowObjectId}\"}'`,
+          { fallbackSelector: "--auth-state-file ~/.config/clawnera/auth-state.json" },
+        )}`,
       );
     }
   } else {
     console.error(`order_create_escrow_error: ${result.error}`);
+    if (result.hint) {
+      console.error(`hint=${result.hint}`);
+    }
+    process.exitCode = result.exitCode ?? 1;
+  }
+  if (!result.ok && !result.help) {
+    process.exitCode = result.exitCode ?? 1;
+  }
+} else if (effectiveCommand === "key-agreement-migrate") {
+  const result = await runKeyAgreementMigrate(commandArgs);
+  if (flags.json) {
+    printJson(result);
+  } else if (result.help && Array.isArray(result.usage)) {
+    for (const line of result.usage) {
+      console.log(line);
+    }
+  } else if (result.ok) {
+    console.log(`key_agreement_migrate_ok address=${result.address}`);
+    console.log(`key_version=${result.keyVersion}`);
+    console.log(`key_file=${result.keyFile}`);
+    console.log(`record_version=${result.version}`);
+    if (result.expired) {
+      console.log("warning=key_agreement_record_expired");
+    }
+  } else {
+    console.error(`key_agreement_migrate_error: ${result.error}`);
     if (result.hint) {
       console.error(`hint=${result.hint}`);
     }
@@ -16539,10 +18010,19 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`key_agreement_upsert_error: ${result.error}`);
-    process.exitCode = 1;
+    if (result.hint) {
+      console.error(`hint=${result.hint}`);
+    }
+    if (result.writeCommitted) {
+      console.error("write_committed=true");
+    }
+    if (result.verifyHint) {
+      console.error(`verify_readback=${result.verifyHint}`);
+    }
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "reputation-init") {
   const result = await runReputationInit(commandArgs);
@@ -16581,10 +18061,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.hint) {
       console.error(`hint=${result.hint}`);
     }
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "reviewer-register") {
   const result = await runReviewerRegister(commandArgs);
@@ -16619,10 +18099,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.hint) {
       console.error(`hint=${result.hint}`);
     }
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "reviewer-update") {
   const result = await runReviewerUpdate(commandArgs);
@@ -16651,10 +18131,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.hint) {
       console.error(`hint=${result.hint}`);
     }
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "deliverable-encrypt") {
   const result = await runDeliverableEncrypt(commandArgs);
@@ -16672,10 +18152,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`next_submit=${result.nextSubmitHint}`);
   } else {
     console.error(`deliverable_encrypt_error: ${result.error}`);
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "dispute-evidence-publish") {
   const result = await runDisputeEvidencePublish(commandArgs);
@@ -16712,10 +18192,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         console.error(line);
       }
     }
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "dispute-evidence-bundle-build") {
   const result = await runDisputeEvidenceBundleBuild(commandArgs);
@@ -16745,10 +18225,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`dispute_evidence_bundle_build_error: ${result.error}`);
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "dispute-evidence-list") {
   const result = await runDisputeEvidenceList(commandArgs);
@@ -16771,10 +18251,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`dispute_evidence_list_error: ${result.error}`);
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "dispute-evidence-content") {
   const result = await runDisputeEvidenceContent(commandArgs);
@@ -16793,10 +18273,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`dispute_evidence_content_error: ${result.error}`);
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "dispute-evidence-decrypt") {
   const result = await runDisputeEvidenceDecrypt(commandArgs);
@@ -16824,10 +18304,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`plaintext_sha256=${result.plaintextSha256}`);
   } else {
     console.error(`dispute_evidence_decrypt_error: ${result.error}`);
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "mailbox-evidence-export") {
   const result = await runMailboxEvidenceExport(commandArgs);
@@ -16860,10 +18340,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`next_publish=${result.nextPublishHint}`);
   } else {
     console.error(`mailbox_evidence_export_error: ${result.error}`);
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "checkpoint-evidence-export") {
   const result = await runCheckpointEvidenceExport(commandArgs);
@@ -16899,10 +18379,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`next_publish=${result.nextPublishHint}`);
   } else {
     console.error(`checkpoint_evidence_export_error: ${result.error}`);
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "managed-storage-fee-pay") {
   const result = await runManagedStorageFeePay(commandArgs);
@@ -16912,19 +18392,11 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     for (const line of result.usage) {
       console.log(line);
     }
-  } else if (result.ok) {
-    console.log(`managed_storage_fee_pay_ok order_id=${result.orderId} milestone_id=${result.milestoneId}`);
-    if (result.txDigest) {
-      console.log(`tx_digest=${result.txDigest}`);
-    }
-    if (result.proofOut) {
-      console.log(`payment_proof_file=${result.proofOut}`);
-    }
-    if (result.nextPresignHint) {
-      console.log(`next_presign=${result.nextPresignHint}`);
-    }
   } else {
     console.error(`managed_storage_fee_pay_error: ${result.error}`);
+    if (result.hint) {
+      console.error(`hint=${result.hint}`);
+    }
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {
@@ -16947,10 +18419,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`next_upload=${result.nextUploadHint}`);
   } else {
     console.error(`managed_storage_presign_error: ${result.error}`);
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "managed-storage-upload") {
   const result = await runManagedStorageUpload(commandArgs);
@@ -16999,11 +18471,23 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.receiptId) {
       console.log(`receipt_id=${result.receiptId}`);
     }
+    if (result.requestReceiptId) {
+      console.log(`request_receipt_id=${result.requestReceiptId}`);
+    }
+    if (result.requestStateFile) {
+      console.log(`request_state_file=${result.requestStateFile}`);
+    }
     if (result.receiptOut) {
       console.log(`receipt_file=${result.receiptOut}`);
     }
     if (result.publishBodyOut) {
       console.log(`publish_body_file=${result.publishBodyOut}`);
+    }
+    if (result.operatorAuthorizationRequired === true) {
+      console.log("external_operator_authorization_required=true");
+      console.log(`operator_authorization_state=${result.operatorAuthorizationHandoff?.state || "unknown"}`);
+      console.log(`operator_authorization_tx_builder=${result.operatorAuthorizationHandoff?.txBuilder || "unknown"}`);
+      console.log("publish_ready=false");
     }
     if (Array.isArray(result.shortlistedReviewerAddresses) && result.shortlistedReviewerAddresses.length > 0) {
       console.log(`shortlisted_reviewers=${result.shortlistedReviewerAddresses.join(",")}`);
@@ -17013,21 +18497,27 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
         console.log(`warning=${warning}`);
       }
     }
-    if (result.nextPublishHint) {
-      console.log(`next_publish=${result.nextPublishHint}`);
+    if (result.nextPostAuthorizationDryRunHint) {
+      console.log(`next_after_operator_authorization=${result.nextPostAuthorizationDryRunHint}`);
     }
   } else {
     console.error(`reviewer_shortlist_error: ${result.error}`);
+    if (result.requestReceiptId) {
+      console.error(`request_receipt_id=${result.requestReceiptId}`);
+    }
+    if (result.requestStateFile) {
+      console.error(`request_state_file=${result.requestStateFile}`);
+    }
     if (result.receiptOut) {
       console.error(`receipt_file=${result.receiptOut}`);
     }
     if (result.publishBodyOut) {
       console.error(`publish_body_file=${result.publishBodyOut}`);
     }
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "reviewer-invites") {
   const result = await runReviewerInvites(commandArgs);
@@ -17049,18 +18539,28 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
       const status = typeof invite?.status === "string" ? invite.status : "unknown";
       console.log(`invite dispute_case_object_id=${disputeCaseObjectId} status=${status}`);
       if (status === "invited") {
-        console.log(`next_accept=clawnera-help tx-plan-execute POST /disputes/${disputeCaseObjectId}/reviewers/accept --auth-state-file <reviewer-auth-state-file> --body '{}'`);
+        console.log(
+          `next_accept=${buildMarketplaceWriteHint(
+            `clawnera-help tx-plan-dry-run POST /disputes/${disputeCaseObjectId}/reviewers/accept --auth-state-file <reviewer-auth-state-file> --body '{}'`,
+            { authStatePlaceholder: "<reviewer-auth-state-file>" },
+          )}`,
+        );
       }
       if (status === "closed") {
-        console.log(`next_claim_metrics=clawnera-help tx-plan-execute POST /reviewers/me/claim-metrics --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"${disputeCaseObjectId}\"}'`);
+        console.log(
+          `next_claim_metrics=${buildMarketplaceWriteHint(
+            `clawnera-help tx-plan-dry-run POST /reviewers/me/claim-metrics --auth-state-file <reviewer-auth-state-file> --body '{\"disputeCaseObjectId\":\"${disputeCaseObjectId}\"}'`,
+            { authStatePlaceholder: "<reviewer-auth-state-file>" },
+          )}`,
+        );
       }
     }
   } else {
     console.error(`reviewer_invites_error: ${result.error}`);
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "mailbox-events") {
   const result = await runMailboxEvents(commandArgs);
@@ -17093,10 +18593,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`mailbox_events_error: ${result.error}`);
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "pinata-upload-json") {
   const result = await runPinataUploadJson(commandArgs);
@@ -17136,10 +18636,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     for (const line of buildMilestoneSubmitByoHintLines(result)) {
       console.error(line);
     }
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "milestone-anchor") {
   const result = await runMilestoneAnchor(commandArgs);
@@ -17151,13 +18651,28 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else if (result.ok) {
     console.log(`milestone_anchor_ok order_id=${result.orderId} milestone_id=${result.milestoneId}`);
-    console.log(`tx_digest=${result.txDigest}`);
+    console.log(`mode=${result.mode || "execute"}`);
+    if (result.txDigest) {
+      console.log(`tx_digest=${result.txDigest}`);
+    }
+    if (result.gasSummary) {
+      console.log(`gas_used=${result.gasSummary}`);
+    }
   } else {
     console.error(`milestone_anchor_error: ${result.error}`);
-    process.exitCode = 1;
+    if (result.writeCommitted) {
+      console.error("write_committed=true");
+    }
+    if (result.txDigest) {
+      console.error(`tx_digest=${result.txDigest}`);
+    }
+    if (result.reconcileHint) {
+      console.error(`reconcile_hint=${result.reconcileHint}`);
+    }
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "milestone-reject") {
   const result = await runMilestoneReject(commandArgs);
@@ -17178,10 +18693,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`milestone_reject_error: ${result.error}`);
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "deliverable-decrypt") {
   const result = await runDeliverableDecrypt(commandArgs);
@@ -17197,10 +18712,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log(`plaintext_sha256=${result.plaintextSha256}`);
   } else {
     console.error(`deliverable_decrypt_error: ${result.error}`);
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "reviewer-vote-prepare") {
   const result = await runReviewerVotePrepare(commandArgs);
@@ -17228,10 +18743,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     }
   } else {
     console.error(`reviewer_vote_prepare_error: ${result.error}`);
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "iota-active-env") {
   const result = await runIotaActiveEnv(commandArgs);
@@ -17389,6 +18904,16 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     console.log("next_readback=use tx_digest as the canonical on-chain lookup handle");
   } else {
     console.error(`iota_execute_transfer_error: ${result.error}`);
+    if (result.executionUncertain) {
+      console.error("execution_uncertain=true");
+      console.error("do_not_retry=true");
+    }
+    if (result.txDigest) {
+      console.error(`tx_digest=${result.txDigest}`);
+    }
+    if (result.verifyHint) {
+      console.error(`verify_hint=${result.verifyHint}`);
+    }
     process.exitCode = 1;
   }
   if (!result.ok && !result.help) {
@@ -17461,10 +18986,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (Array.isArray(result.issues) && result.issues.length > 0) {
       console.error(`issues=${result.issues.join(",")}`);
     }
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "first-steps") {
   const runMode = commandArgs.includes("--run");
@@ -17526,10 +19051,10 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     if (result.status) {
       console.error(`http_status=${result.status}`);
     }
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "sponsor-execute") {
   const result = await runSponsorExecute(commandArgs);
@@ -17539,26 +19064,14 @@ if (effectiveCommand === "help" || effectiveCommand === "-h" || effectiveCommand
     for (const line of result.usage) {
       console.log(line);
     }
-  } else if (result.ok) {
-    if (result.mode === "dry_run") {
-      console.log(`sponsor_reserve_ok reservation_id=${result.reservationId}`);
-      console.log("dry_run=true execute_step_skipped");
-      if (result.reservationOut) {
-        console.log(`reservation_file=${result.reservationOut}`);
-      }
-    } else {
-      console.log(`sponsor_reserve_ok reservation_id=${result.reservationId}`);
-      console.log(`sponsor_execute_ok tx_digest=${result.txDigest || "unknown"}`);
-    }
   } else {
     console.error(`sponsor_execute_helper_error: ${result.error}`);
-    if (result.status) {
-      console.error(`http_status=${result.status}`);
+    if (result.hint) {
+      console.error(`hint=${result.hint}`);
     }
-    process.exitCode = 1;
   }
   if (!result.ok && !result.help) {
-    process.exitCode = 1;
+    process.exitCode = result.exitCode ?? 1;
   }
 } else if (effectiveCommand === "validate") {
   const validation = validateRepository(flags.strict);

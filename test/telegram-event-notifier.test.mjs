@@ -7,6 +7,8 @@ import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import { loadState, main, saveState } from "../examples/telegram-event-notifier.mjs";
 
+process.umask(0o077);
+
 function withEnv(overrides, fn) {
   const previous = new Map();
   for (const [key, value] of Object.entries(overrides)) {
@@ -33,6 +35,67 @@ function withEnv(overrides, fn) {
 function buildJwtWithExp(expSeconds) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
   return `${encode({ alg: "none", typ: "JWT" })}.${encode({ exp: expSeconds })}.signature`;
+}
+
+const objectId = (byte) => `0x${byte.repeat(64)}`;
+
+function buildWriteGateAttestation(nonce) {
+  const generatedAtMs = Date.now();
+  return {
+    version: "marketplace_write_gate.v1",
+    nonce,
+    generatedAt: new Date(generatedAtMs).toISOString(),
+    generatedAtMs,
+    expiresAtMs: generatedAtMs + 5_000,
+    apiOrigin: "https://api.clawnera.com",
+    gate: {
+      source: "runtime_db",
+      preset: "normal",
+      publicApiWrites: "live",
+      marketplaceWrites: "live",
+      releaseProfile: "controlled_v1",
+      releasePhase: "canary_allowlisted",
+      runtimeReady: true,
+      productiveWritesEnabled: true
+    },
+    chain: {
+      family: "iota",
+      network: "mainnet",
+      chainIdentifier: "6364aad5",
+      packageIds: {
+        foundation: objectId("1"),
+        governance: objectId("b"),
+        settlement: objectId("2"),
+        fulfillment: objectId("3"),
+        ops: objectId("4")
+      },
+      objectIds: {
+        governanceConfigObjectId: null,
+        orderMailboxRegistryObjectId: objectId("c"),
+        disputeQuorumConfigObjectId: null,
+        marketplaceFeeConfigObjectId: null,
+        reputationInitFeeConfigObjectId: null,
+        listingDepositConfigObjectId: null,
+        reviewerRegistryObjectId: null
+      }
+    }
+  };
+}
+
+function writeGateResponse(input, { mutateBody, responseHeaders } = {}) {
+  const requestUrl = new URL(String(input));
+  const body = buildWriteGateAttestation(requestUrl.searchParams.get("nonce"));
+  mutateBody?.(body);
+  return {
+    ok: true,
+    status: 200,
+    headers: new Headers({
+      "cache-control": "private, no-store, max-age=0, must-revalidate",
+      pragma: "no-cache",
+      ...responseHeaders
+    }),
+    json: async () => body
+  };
 }
 
 test("saveState writes atomically and loadState falls back to backup on corrupt primary", async () => {
@@ -92,6 +155,21 @@ test("main rejects placeholder telegram credentials before polling", async () =>
     async () => {
       await assert.rejects(() => main([]), /invalid_env_TELEGRAM_BOT_TOKEN/);
     }
+  );
+});
+
+test("main rejects non-loopback HTTP API bases before polling", async () => {
+  await withEnv(
+    {
+      CLAWNERA_API_BASE_URL: "http://api.clawnera.com",
+      TELEGRAM_BOT_TOKEN: "123456:ABCDEF-real-token",
+      TELEGRAM_CHAT_ID: "123456",
+      CLAWNERA_API_JWT: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
+      CLAWNERA_NOTIFY_ONCE: "1",
+    },
+    async () => {
+      await assert.rejects(() => main([]), /missing_or_invalid_api_base/);
+    },
   );
 });
 
@@ -687,14 +765,28 @@ test("main exits in loop mode on fatal feed auth errors", async () => {
   }
 });
 
-test("main exits with a non-restarting fatal code on auth refresh 401 drift", async () => {
+test("main reaches auth refresh only after a valid nonce-bound write gate", async () => {
   const previousFetch = globalThis.fetch;
   const expiredToken = buildJwtWithExp(Math.floor(Date.now() / 1000) - 60);
   const previousExitCode = process.exitCode;
+  let gateCalls = 0;
+  let refreshCalls = 0;
 
-  globalThis.fetch = async (input) => {
+  globalThis.fetch = async (input, init = {}) => {
     const url = String(input);
+    if (new URL(url).pathname === "/policy/write-gate") {
+      gateCalls += 1;
+      assert.match(url, /^https:\/\/api\.clawnera\.com\/policy\/write-gate\?nonce=[0-9a-f]{32}$/);
+      assert.equal(init.method, "GET");
+      assert.equal(init.cache, "no-store");
+      assert.equal(init.redirect, "error");
+      assert.equal(init.headers?.["cache-control"], "no-cache, no-store");
+      assert.equal(init.headers?.pragma, "no-cache");
+      return writeGateResponse(input);
+    }
     if (url.includes("/auth/refresh")) {
+      refreshCalls += 1;
+      assert.equal(init.method, "POST");
       return {
         ok: false,
         status: 401,
@@ -719,11 +811,129 @@ test("main exits with a non-restarting fatal code on auth refresh 401 drift", as
         process.exitCode = 0;
         await main([]);
         assert.equal(process.exitCode, 78);
+        assert.equal(gateCalls, 1);
+        assert.equal(refreshCalls, 1);
       }
     );
   } finally {
     globalThis.fetch = previousFetch;
     process.exitCode = previousExitCode;
+  }
+});
+
+test("main fails closed before auth refresh for invalid write-gate attestations", async (t) => {
+  const cases = [
+    {
+      name: "nonce mismatch",
+      mutateBody: (body) => {
+        body.nonce = `${body.nonce[0] === "0" ? "1" : "0"}${body.nonce.slice(1)}`;
+      }
+    },
+    {
+      name: "cacheable response",
+      responseHeaders: {
+        "cache-control": "public, max-age=60"
+      }
+    },
+    {
+      name: "invalid ttl",
+      mutateBody: (body) => {
+        body.expiresAtMs = body.generatedAtMs + 4_000;
+      }
+    },
+    {
+      name: "closed gate",
+      mutateBody: (body) => {
+        body.gate.marketplaceWrites = "blocked";
+      }
+    }
+  ];
+
+  for (const testCase of cases) {
+    await t.test(testCase.name, async () => {
+      const previousFetch = globalThis.fetch;
+      const previousExitCode = process.exitCode;
+      const expiredToken = buildJwtWithExp(Math.floor(Date.now() / 1000) - 60);
+      let gateCalls = 0;
+      let refreshCalls = 0;
+
+      globalThis.fetch = async (input) => {
+        const requestUrl = new URL(String(input));
+        if (requestUrl.pathname === "/policy/write-gate") {
+          gateCalls += 1;
+          return writeGateResponse(input, testCase);
+        }
+        if (requestUrl.pathname === "/auth/refresh") {
+          refreshCalls += 1;
+          return {
+            ok: false,
+            status: 401,
+            text: async () => "",
+            json: async () => ({})
+          };
+        }
+        throw new Error(`unexpected_fetch:${requestUrl}`);
+      };
+
+      try {
+        await withEnv(
+          {
+            CLAWNERA_API_BASE_URL: "https://api.clawnera.com",
+            TELEGRAM_BOT_TOKEN: "123456:ABCDEF-real-token",
+            TELEGRAM_CHAT_ID: "123456",
+            CLAWNERA_API_JWT: expiredToken,
+            CLAWNERA_API_REFRESH_TOKEN: "refresh-token",
+            CLAWNERA_NOTIFY_ONCE: "0"
+          },
+          async () => {
+            process.exitCode = 0;
+            await main([]);
+            assert.equal(process.exitCode, 78);
+          }
+        );
+        assert.equal(gateCalls, 1);
+        assert.equal(refreshCalls, 0);
+      } finally {
+        globalThis.fetch = previousFetch;
+        process.exitCode = previousExitCode;
+      }
+    });
+  }
+});
+
+test("main keeps fresh-token notifier polling read-only without a write-gate request", async () => {
+  const previousFetch = globalThis.fetch;
+  const validToken = buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600);
+  const requests = [];
+
+  globalThis.fetch = async (input, init = {}) => {
+    const requestUrl = new URL(String(input));
+    requests.push({ method: init.method || "GET", pathname: requestUrl.pathname });
+    if (requestUrl.pathname === "/events") {
+      return {
+        ok: true,
+        json: async () => ({ items: [], nextCursor: null })
+      };
+    }
+    throw new Error(`unexpected_fetch:${requestUrl}`);
+  };
+
+  try {
+    await withEnv(
+      {
+        CLAWNERA_API_BASE_URL: "https://api.clawnera.com",
+        TELEGRAM_BOT_TOKEN: "123456:ABCDEF-real-token",
+        TELEGRAM_CHAT_ID: "123456",
+        CLAWNERA_API_JWT: validToken,
+        CLAWNERA_NOTIFY_ONCE: "1"
+      },
+      async () => {
+        await main([]);
+      }
+    );
+    assert.deepEqual(requests, [{ method: "GET", pathname: "/events" }]);
+  } finally {
+    globalThis.fetch = previousFetch;
   }
 });
 

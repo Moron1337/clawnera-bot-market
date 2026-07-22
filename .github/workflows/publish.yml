@@ -3,99 +3,272 @@ name: publish
 on:
   release:
     types: [published]
-  workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
+
+concurrency:
+  group: publish-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
 
 jobs:
-  publish:
-    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      source_commit: ${{ steps.pack.outputs.source_commit }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
-          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Validate publish source
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${GITHUB_REF}" != "refs/heads/main" ]]; then
-            echo "workflow_dispatch publishes are restricted to main" >&2
-            exit 1
-          fi
+          set -euo pipefail
+          bash ./scripts/release/verify-publish-source.sh "$RELEASE_TAG"
+
+      - name: Require verified live publish protections
+        run: |
+          set -euo pipefail
+          node ./scripts/release/check-live-publish-prerequisites.mjs
 
       - name: Setup Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version-file: .node-version
           cache: npm
-          registry-url: https://registry.npmjs.org
 
-      - name: Upgrade npm for trusted publishing
+      - name: Upgrade npm
         run: |
+          set -euo pipefail
           npm install -g npm@11.5.1
           npm --version
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install frozen dependencies
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
 
       - name: Release gate
-        run: npm run release:check
+        run: |
+          set -euo pipefail
+          npm run release:check
+
+      - name: Revalidate immutable publish source
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          bash ./scripts/release/verify-publish-source.sh "$RELEASE_TAG"
 
       - name: Resolve package version
         id: package
         run: |
+          set -euo pipefail
           package_version="$(node -p 'require("./package.json").version')"
+          node -e 'if (!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/.test(process.argv[1])) process.exit(1)' "$package_version"
           echo "version=$package_version" >> "$GITHUB_OUTPUT"
 
       - name: Check registry for existing version
-        id: registry
+        env:
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
         run: |
-          if npm view clawnera-bot-market@"${{ steps.package.outputs.version }}" version >/dev/null 2>&1; then
-            echo "already_published=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "already_published=false" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if npm view "clawnera-bot-market@$PACKAGE_VERSION" version >/dev/null 2>&1; then
+            echo "immutable_version_already_published: $PACKAGE_VERSION" >&2
+            exit 1
           fi
 
-      - name: Publish with provenance
-        if: steps.registry.outputs.already_published != 'true'
-        run: npm publish --access public --provenance
+      - name: Pack immutable artifact
+        id: pack
+        env:
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p .release-artifacts
+          npm pack --json --ignore-scripts > .release-artifacts/npm-pack.json
+          filename="$(node -e 'const p=require("./.release-artifacts/npm-pack.json"); process.stdout.write(p[0].filename)')"
+          node -e 'if (process.argv[1] !== `clawnera-bot-market-${process.argv[2]}.tgz`) process.exit(1)' "$filename" "$PACKAGE_VERSION"
+          mv -- "$filename" ".release-artifacts/$filename"
+          artifact=".release-artifacts/$filename"
+          digest="$(sha256sum "$artifact" | awk '{print $1}')"
+          source_commit="$(git rev-parse HEAD)"
+          printf '%s  %s\n' "$digest" "$filename" > .release-artifacts/SHA256SUMS
+          node - "$artifact" "$filename" "$digest" "$source_commit" "$PACKAGE_VERSION" "$RELEASE_TAG" <<'NODE'
+          const crypto = require("node:crypto");
+          const fs = require("node:fs");
+          const [artifactPath, artifact, expectedSha256, sourceCommit, version, tag] = process.argv.slice(2);
+          const bytes = fs.readFileSync(artifactPath);
+          const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
+          if (sha256 !== expectedSha256) throw new Error("release_artifact_sha256_mismatch");
+          const sha1 = crypto.createHash("sha1").update(bytes).digest("hex");
+          const sha512Integrity = `sha512-${crypto.createHash("sha512").update(bytes).digest("base64")}`;
+          fs.writeFileSync(
+            ".release-artifacts/release-manifest.json",
+            `${JSON.stringify({ artifact, sha256, sha1, sha512Integrity, sourceCommit, version, tag }, null, 2)}\n`,
+            { mode: 0o644 },
+          );
+          NODE
+          rm .release-artifacts/npm-pack.json
+          echo "source_commit=$source_commit" >> "$GITHUB_OUTPUT"
 
-      - name: Skip duplicate publish
-        if: steps.registry.outputs.already_published == 'true'
-        run: echo "Version ${{ steps.package.outputs.version }} is already published; skipping publish step."
+      - name: Verify release evidence
+        env:
+          ARTIFACT: clawnera-bot-market-${{ steps.package.outputs.version }}.tgz
+        run: |
+          set -euo pipefail
+          cd .release-artifacts
+          sha256sum --check SHA256SUMS
+          test "$(find . -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort | tr '\n' ' ')" = "SHA256SUMS $ARTIFACT release-manifest.json "
+
+      - name: Upload immutable release evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: clawnera-bot-market-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .release-artifacts/
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: 14
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.14.1
+          registry-url: https://registry.npmjs.org
+
+      - name: Download immutable release evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: clawnera-bot-market-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .release-artifacts
+
+      - name: Verify downloaded artifact binding
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ needs.build.outputs.source_commit }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          test ! -L .release-artifacts
+          test ! -L .release-artifacts/SHA256SUMS
+          test ! -L .release-artifacts/release-manifest.json
+          node - "$EXPECTED_SOURCE_COMMIT" "$RELEASE_TAG" <<'NODE'
+          const crypto = require("node:crypto");
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const [expectedSourceCommit, releaseTag] = process.argv.slice(2);
+          const manifestPath = ".release-artifacts/release-manifest.json";
+          const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+          const expectedKeys = ["artifact", "sha1", "sha256", "sha512Integrity", "sourceCommit", "tag", "version"];
+          if (Object.keys(manifest).sort().join("\n") !== expectedKeys.sort().join("\n")) throw new Error("release_manifest_shape_invalid");
+          if (!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/.test(manifest.version)) throw new Error("release_version_invalid");
+          if (manifest.artifact !== `clawnera-bot-market-${manifest.version}.tgz` || path.basename(manifest.artifact) !== manifest.artifact) throw new Error("release_artifact_name_invalid");
+          if (!/^[0-9a-f]{40}$/.test(expectedSourceCommit) || manifest.sourceCommit !== expectedSourceCommit) throw new Error("release_artifact_source_mismatch");
+          if (manifest.tag !== releaseTag || releaseTag !== `v${manifest.version}`) throw new Error("release_artifact_tag_mismatch");
+          const artifactPath = path.join(".release-artifacts", manifest.artifact);
+          const stat = fs.lstatSync(artifactPath);
+          if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("release_artifact_file_invalid");
+          const names = fs.readdirSync(".release-artifacts").sort();
+          if (names.join("\n") !== ["SHA256SUMS", manifest.artifact, "release-manifest.json"].sort().join("\n")) throw new Error("release_artifact_set_invalid");
+          const bytes = fs.readFileSync(artifactPath);
+          const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
+          const sha1 = crypto.createHash("sha1").update(bytes).digest("hex");
+          const sha512Integrity = `sha512-${crypto.createHash("sha512").update(bytes).digest("base64")}`;
+          if (sha256 !== manifest.sha256 || sha1 !== manifest.sha1 || sha512Integrity !== manifest.sha512Integrity) throw new Error("release_artifact_digest_mismatch");
+          if (fs.readFileSync(".release-artifacts/SHA256SUMS", "utf8") !== `${manifest.sha256}  ${manifest.artifact}\n`) throw new Error("release_checksums_invalid");
+          NODE
+          (cd .release-artifacts && sha256sum --check SHA256SUMS)
+
+      - name: Recheck registry for existing version
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./.release-artifacts/release-manifest.json").version')"
+          node -e 'if (!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/.test(process.argv[1])) process.exit(1)' "$version"
+          if npm view "clawnera-bot-market@$version" version >/dev/null 2>&1; then
+            echo "immutable_version_already_published: $version" >&2
+            exit 1
+          fi
+
+      - name: Publish exact artifact with provenance
+        run: |
+          set -euo pipefail
+          artifact="$(node -p 'require("./.release-artifacts/release-manifest.json").artifact')"
+          node -e 'if (!/^clawnera-bot-market-[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?\.tgz$/.test(process.argv[1])) process.exit(1)' "$artifact"
+          npm publish ".release-artifacts/$artifact" --access public --provenance --ignore-scripts
+
+  verify:
+    needs: [build, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.14.1
+          registry-url: https://registry.npmjs.org
+
+      - name: Download immutable release evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: clawnera-bot-market-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .release-artifacts
 
       - name: Registry readback
         run: |
-          version="${{ steps.package.outputs.version }}"
+          set -euo pipefail
+          version="$(node -p 'require("./.release-artifacts/release-manifest.json").version')"
+          node -e 'if (!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/.test(process.argv[1])) process.exit(1)' "$version"
           for attempt in 1 2 3 4 5 6; do
-            if npm view clawnera-bot-market@"$version" version dist --json; then
+            if npm view "clawnera-bot-market@$version" dist --json > .release-artifacts/registry-dist.json && \
+              node - <<'NODE'
+          const fs = require("node:fs");
+          const manifest = JSON.parse(fs.readFileSync(".release-artifacts/release-manifest.json", "utf8"));
+          const registry = JSON.parse(fs.readFileSync(".release-artifacts/registry-dist.json", "utf8"));
+          if (registry.shasum !== manifest.sha1 || registry.integrity !== manifest.sha512Integrity) {
+            throw new Error("registry_artifact_digest_mismatch");
+          }
+          NODE
+            then
               exit 0
             fi
-            if [ "$attempt" -lt 6 ]; then
-              sleep 10
-            fi
+            if [ "$attempt" -lt 6 ]; then sleep 10; fi
           done
-          echo "registry_readback_failed_for: $version" >&2
+          echo "registry_artifact_integrity_readback_failed_for: $version" >&2
           exit 1
 
       - name: Package-level npx readback
         run: |
-          version="${{ steps.package.outputs.version }}"
+          set -euo pipefail
+          version="$(node -p 'require("./.release-artifacts/release-manifest.json").version')"
+          node -e 'if (!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/.test(process.argv[1])) process.exit(1)' "$version"
           for attempt in 1 2 3 4 5 6; do
             tmpdir="$(mktemp -d)"
             if (
               cd "$tmpdir" &&
-              npm exec --yes --package=clawnera-bot-market@"$version" clawnera-help -- --help &&
-              npm exec --yes --package=clawnera-bot-market@"$version" clawnera-bot-market -- --help
+              npm exec --yes --package="clawnera-bot-market@$version" clawnera-help -- --help &&
+              npm exec --yes --package="clawnera-bot-market@$version" clawnera-bot-market -- --help
             ); then
               exit 0
             fi
-            if [ "$attempt" -lt 6 ]; then
-              sleep 10
-            fi
+            if [ "$attempt" -lt 6 ]; then sleep 10; fi
           done
           echo "package_level_npx_readback_failed_for: $version" >&2
           exit 1

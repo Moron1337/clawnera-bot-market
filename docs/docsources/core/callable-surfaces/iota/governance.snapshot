@@ -1,0 +1,49 @@
+admin|entry_public|entry public apply_admin_cap_rotation(cap: AdminCap, expected_pending_nonce: u64, cfg: &mut GovernanceConfig, clock: &Clock, ctx: &mut TxContext)
+admin|entry_public|entry public apply_arb_cap_rotation(cap: ArbCap, expected_pending_nonce: u64, cfg: &mut GovernanceConfig, clock: &Clock, ctx: &mut TxContext)
+admin|entry_public|entry public apply_treasury_cap_rotation(cap: TreasuryCap, expected_pending_nonce: u64, cfg: &mut GovernanceConfig, clock: &Clock, ctx: &mut TxContext)
+admin|entry_public|entry public rotate_admin_cap(cap: AdminCap, expected_incident_nonce: u64, expected_current_nonce: u64, cfg: &mut GovernanceConfig, new_owner: address, ctx: &mut TxContext)
+admin|entry_public|entry public rotate_arb_cap(cap: ArbCap, expected_incident_nonce: u64, expected_current_nonce: u64, cfg: &mut GovernanceConfig, new_owner: address, ctx: &mut TxContext)
+admin|entry_public|entry public rotate_treasury_cap(cap: TreasuryCap, expected_incident_nonce: u64, expected_current_nonce: u64, cfg: &mut GovernanceConfig, new_owner: address, ctx: &mut TxContext)
+admin|public|public apply_pending_launch_admission_update(_admin: &AdminCap, expected_pending_nonce: u64, cfg: &mut GovernanceConfig, clock: &Clock, ctx: &mut TxContext)
+admin|public|public apply_timelock_update(_admin: &AdminCap, expected_pending_nonce: u64, cfg: &mut GovernanceConfig, clock: &Clock, ctx: &mut TxContext)
+admin|public|public approve_pending_admin_cap_rotation(_treasury: &TreasuryCap, expected_pending_nonce: u64, cfg: &mut GovernanceConfig, ctx: &mut TxContext)
+admin|public|public approve_pending_arb_cap_rotation(_treasury: &TreasuryCap, expected_pending_nonce: u64, cfg: &mut GovernanceConfig, ctx: &mut TxContext)
+admin|public|public approve_pending_launch_admission_update(_treasury: &TreasuryCap, expected_pending_nonce: u64, cfg: &mut GovernanceConfig, ctx: &mut TxContext)
+admin|public|public approve_pending_timelock_update(_treasury: &TreasuryCap, expected_pending_nonce: u64, cfg: &mut GovernanceConfig, ctx: &mut TxContext)
+admin|public|public approve_pending_treasury_cap_rotation(_arb: &ArbCap, expected_pending_nonce: u64, cfg: &mut GovernanceConfig, ctx: &mut TxContext)
+admin|public|public assert_incident_not_frozen(cfg: &GovernanceConfig)
+admin|public|public assert_launch_principal_admitted(cfg: &GovernanceConfig, principal: address)
+admin|public|public assert_seller_deadline_claim_allowed(cfg: &GovernanceConfig, clock: &Clock)
+admin|public|public authorize_incident_admin_action(_admin: &AdminCap, cfg: &mut GovernanceConfig, expected_incident_nonce: u64, expected_current_nonce: u64, ctx: &TxContext): u64
+admin|public|public cancel_pending_admin_cap_rotation(_admin: &AdminCap, expected_pending_nonce: u64, cfg: &mut GovernanceConfig, ctx: &mut TxContext)
+admin|public|public cancel_pending_arb_cap_rotation(_admin: &AdminCap, expected_pending_nonce: u64, cfg: &mut GovernanceConfig, ctx: &mut TxContext)
+admin|public|public cancel_pending_launch_admission_update(_admin: &AdminCap, expected_pending_nonce: u64, cfg: &mut GovernanceConfig, ctx: &mut TxContext)
+admin|public|public cancel_pending_timelock_update(_admin: &AdminCap, expected_pending_nonce: u64, cfg: &mut GovernanceConfig, ctx: &mut TxContext)
+admin|public|public cancel_pending_treasury_cap_rotation(_admin: &AdminCap, expected_pending_nonce: u64, cfg: &mut GovernanceConfig, ctx: &mut TxContext)
+admin|public|public cap_rotation_timelock_ms(cfg: &GovernanceConfig): u64
+admin|public|public emergency_close_launch_admission(_admin: &AdminCap, expected_incident_nonce: u64, expected_current_nonce: u64, cfg: &mut GovernanceConfig, ctx: &mut TxContext)
+admin|public|public emergency_rotation_enabled(cfg: &GovernanceConfig): bool
+admin|public|public incident_buyer_protection_active(cfg: &GovernanceConfig, clock: &Clock): bool
+admin|public|public incident_freeze_enabled(cfg: &GovernanceConfig): bool
+admin|public|public launch_admission_actor_allowlisted(cfg: &GovernanceConfig, actor: address): bool
+admin|public|public launch_admission_actor_count(cfg: &GovernanceConfig): u64
+admin|public|public launch_admission_allowlisted_mode(): u8
+admin|public|public launch_admission_closed_mode(): u8
+admin|public|public launch_admission_mode(cfg: &GovernanceConfig): u8
+admin|public|public launch_admission_principal_admitted(cfg: &GovernanceConfig, principal: address): bool
+admin|public|public launch_admission_public_mode(): u8
+admin|public|public launch_admission_timelock_ms(cfg: &GovernanceConfig): u64
+admin|public|public pending_admin_rotation_approved(cfg: &GovernanceConfig): bool
+admin|public|public pending_arb_rotation_approved(cfg: &GovernanceConfig): bool
+admin|public|public pending_launch_admission_update(cfg: &GovernanceConfig): bool * bool * u8 * address * u8 * u64 * address
+admin|public|public pending_treasury_rotation_approved(cfg: &GovernanceConfig): bool
+admin|public|public post_incident_buyer_grace_ms(): u64
+admin|public|public queue_admin_cap_rotation(_admin: &AdminCap, expected_current_nonce: u64, cfg: &mut GovernanceConfig, new_owner: address, clock: &Clock, ctx: &mut TxContext)
+admin|public|public queue_arb_cap_rotation(_admin: &AdminCap, expected_current_nonce: u64, cfg: &mut GovernanceConfig, new_owner: address, clock: &Clock, ctx: &mut TxContext)
+admin|public|public queue_launch_admission_actor(_admin: &AdminCap, expected_current_nonce: u64, cfg: &mut GovernanceConfig, admitted_actor: address, clock: &Clock, ctx: &mut TxContext)
+admin|public|public queue_launch_admission_mode(_admin: &AdminCap, expected_current_nonce: u64, cfg: &mut GovernanceConfig, next_mode: u8, clock: &Clock, ctx: &mut TxContext)
+admin|public|public queue_timelock_update(_admin: &AdminCap, expected_current_nonce: u64, cfg: &mut GovernanceConfig, new_timelock_ms: u64, clock: &Clock, ctx: &mut TxContext)
+admin|public|public queue_treasury_cap_rotation(_admin: &AdminCap, expected_current_nonce: u64, cfg: &mut GovernanceConfig, new_owner: address, clock: &Clock, ctx: &mut TxContext)
+admin|public|public remove_launch_admission_actor(_admin: &AdminCap, expected_incident_nonce: u64, expected_current_nonce: u64, cfg: &mut GovernanceConfig, removed_actor: address, ctx: &mut TxContext)
+admin|public|public set_allow_emergency_rotation(_admin: &AdminCap, expected_incident_nonce: u64, expected_current_nonce: u64, cfg: &mut GovernanceConfig, enabled: bool, ctx: &mut TxContext)
+admin|public|public set_incident_freeze_v2(_admin: &AdminCap, expected_incident_nonce: u64, expected_current_nonce: u64, cfg: &mut GovernanceConfig, enabled: bool, clock: &Clock, ctx: &mut TxContext)

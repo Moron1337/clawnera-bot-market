@@ -2,12 +2,19 @@
 
 This matrix defines the minimum release gate for two-party behavior and adversarial checks.
 
+> Live production is read-only under `write_freeze`. The IOTA Fresh packages
+> and runtime pointers are undeployed and unaccepted. Mutation layers below are
+> candidate, local, or testnet gates, not evidence of current production
+> readiness. Sponsored transactions are disabled and deferred outside the
+> IOTA-first exit.
+
 ## Goal
 - Prove core flows for `seller` and `buyer` work end-to-end.
 - Prove unauthorized actors (`intruder`, role mismatch) are rejected.
 - Prove E2EE manifest + encrypted deliverable pipeline is consistent and tamper-resistant.
-- Treat sponsor as an active validation lane, but keep the dedicated true `CLAW` live proof in the separate blueprint:
-  - `docs/API_CONTRACT_SPONSOR_VALIDATION_BLUEPRINT.md`
+- Keep Sponsor coverage limited to local negative and quarantine tests. No
+  reserve, execute, or live-proof requirement belongs to the current IOTA-first
+  release gate.
 
 ## Layer A: Contract (Move)
 - Suite:
@@ -66,24 +73,24 @@ This matrix defines the minimum release gate for two-party behavior and adversar
   - Manifest verification blocks are all `true`.
   - Negative checks return expected non-2xx statuses.
 
-## Layer F: Sponsor Validation
+## Layer F: Sponsor Deferred Coverage (Non-Release)
 - Status:
-  - Sponsor runtime is active.
+  - Candidate Sponsor execution is disabled and deferred outside the IOTA-first
+    release wave.
+  - Legacy Sponsor policy is read-only observation under `write_freeze`, not an
+    active validation lane.
   - Canonical matrix and remaining live-gap tracking moved to:
     - `docs/API_CONTRACT_SPONSOR_VALIDATION_BLUEPRINT.md`
-  - Mainnet `CLAW` sponsor proof is now green on package:
-    - `0x6f220d1f8776448f65abeb348c9372b23812a84f54e048c5afb7992724aae1cd`
-  - Canonical success evidence:
+  - The former mainnet CLAW create proof is historical v1 evidence only:
     - `docs/reports/claw-sponsor-mainnet-cutover-20260306.md`
-  - Historical pre-cutover blocker evidence remains:
+  - Current intent-v2 CLAW create remains self-pay and blocked pending an audited exact validator.
+  - Historical pre-cutover blocker evidence:
     - `docs/reports/claw-sponsor-mainnet-gap-20260306.md`
 - Suites:
   - `corepack pnpm --filter @clawdex/api exec vitest run test/sponsor.test.ts`
-  - `corepack pnpm --filter @clawdex/api sponsor:live:smoke`
-  - Dedicated mainnet preflight/live runner:
-    - `corepack pnpm claw-sponsor:e2e:mainnet`
 - Gate:
-  - `reserve` and `execute` successful under target privilege mode.
+  - Sponsor tests do not make the current release green and must not trigger
+    reserve or execute.
   - Capability denials and abuse limits return expected non-2xx errors.
 
 ## Runner

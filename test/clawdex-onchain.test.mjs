@@ -54,6 +54,7 @@ function extractMoveCalls(tx) {
 }
 
 const SUI_NATIVE_COIN_TYPE = `0x${"0".repeat(63)}2::sui::SUI`;
+const IOTA_NATIVE_COIN_TYPE = `0x${"0".repeat(63)}2::iota::IOTA`;
 const SUI_USDC_TESTNET_COIN_TYPE = "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
 
 test("mailbox event extractors normalize posted and acked events from execution results", () => {
@@ -130,10 +131,11 @@ test("mailbox event extractors return null when the expected event is missing", 
   assert.equal(extractMailboxSignalAcked(executionResult), null);
 });
 
-test("buildClawdexTxFromPlan dispatches canonical binding-based order-escrow settlement", () => {
+test("buildClawdexTxFromPlan keeps binding-based order-escrow settlement Sui-legacy only", () => {
   const tx = buildClawdexTxFromPlan({
     txBuilder: "orderEscrow.resolveDisputeWithBinding",
     request: {
+      chainFamily: "sui",
       packageId: addr("1"),
       sender: addr("a"),
       escrowObjectId: addr("b"),
@@ -143,6 +145,22 @@ test("buildClawdexTxFromPlan dispatches canonical binding-based order-escrow set
   });
 
   assert.equal(extractLastMoveCallFunction(tx), "resolve_dispute_with_binding");
+
+  assert.throws(
+    () =>
+      buildClawdexTxFromPlan({
+        txBuilder: "orderEscrow.resolveDisputeWithBinding",
+        request: {
+          chainFamily: "iota",
+          packageId: addr("1"),
+          sender: addr("a"),
+          escrowObjectId: addr("b"),
+          escrowCoinType: `${addr("2")}::coin::COIN`,
+          disputeQuorumConfigObjectId: addr("c"),
+        },
+      }),
+    /iota_fresh_atomic_resolution_required/,
+  );
 });
 
 const DISPUTE_CLOSEOUT_REQUEST = Object.freeze({
@@ -156,7 +174,7 @@ const DISPUTE_CLOSEOUT_REQUEST = Object.freeze({
   disputeQuorumConfigObjectId: addr("6"),
   clockObjectId: addr("c"),
 });
-const DISPUTE_BOND_COIN_TYPE = `${addr("2")}::claw_coin::CLAW_COIN`;
+const SUI_DISPUTE_BOND_COIN_TYPE = `${addr("2")}::claw_coin::CLAW_COIN`;
 
 for (const chainFamily of ["iota", "sui"]) {
   for (const closeout of [
@@ -164,33 +182,57 @@ for (const chainFamily of ["iota", "sui"]) {
       txBuilder: "disputeQuorum.finalizeCase",
       nativeFunction: "finalize_case_with_quorum",
       typedFunction: "finalize_case_with_typed_quorum",
+      iotaNativeFunction: "finalize_case_with_quorum_and_resolve_escrow",
+      iotaTypedFunction: "finalize_case_with_typed_quorum_and_resolve_escrow",
     },
     {
       txBuilder: "disputeQuorum.resolveTimeoutFallback",
       nativeFunction: "resolve_case_with_timeout_fallback",
       typedFunction: "resolve_case_with_typed_timeout_fallback",
+      iotaNativeFunction: "resolve_case_with_timeout_fallback_and_resolve_escrow",
+      iotaTypedFunction: "resolve_case_with_typed_timeout_fallback_and_resolve_escrow",
     },
   ]) {
     for (const typed of [false, true]) {
       test(`buildClawdexTxFromPlan builds atomic ${chainFamily} ${closeout.txBuilder} ${typed ? "typed" : "native"} closeout`, () => {
+        const escrowCoinType = chainFamily === "iota" && !typed
+          ? IOTA_NATIVE_COIN_TYPE
+          : DISPUTE_CLOSEOUT_REQUEST.escrowCoinType;
+        const bondCoinType = chainFamily === "iota"
+          ? escrowCoinType
+          : SUI_DISPUTE_BOND_COIN_TYPE;
         const tx = buildClawdexTxFromPlan({
           txBuilder: closeout.txBuilder,
           request: {
             ...DISPUTE_CLOSEOUT_REQUEST,
             chainFamily,
-            ...(typed ? { bondCoinType: DISPUTE_BOND_COIN_TYPE } : {}),
+            escrowCoinType,
+            ...(typed ? { bondCoinType } : {}),
           },
         });
         const { calls } = extractMoveCalls(tx);
 
-        assert.equal(calls.length, 2);
-        assert.equal(calls[0].module, "dispute_quorum");
-        assert.equal(calls[0].function, typed ? closeout.typedFunction : closeout.nativeFunction);
-        assert.deepEqual(calls[0].typeArguments, typed ? [DISPUTE_BOND_COIN_TYPE] : []);
-        assert.equal(calls[1].module, "order_escrow");
-        assert.equal(calls[1].function, "resolve_dispute_with_binding");
-        assert.deepEqual(calls[1].typeArguments, [DISPUTE_CLOSEOUT_REQUEST.escrowCoinType]);
-        assert.deepEqual(calls[1].arguments[0], calls[0].arguments[3]);
+        if (chainFamily === "iota") {
+          assert.equal(calls.length, 1);
+          assert.equal(calls[0].module, "order_escrow");
+          assert.equal(calls[0].function, typed ? closeout.iotaTypedFunction : closeout.iotaNativeFunction);
+          assert.deepEqual(
+            calls[0].typeArguments,
+            typed
+              ? [escrowCoinType, escrowCoinType]
+              : [escrowCoinType],
+          );
+          assert.equal(calls[0].arguments.length, 6);
+        } else {
+          assert.equal(calls.length, 2);
+          assert.equal(calls[0].module, "dispute_quorum");
+          assert.equal(calls[0].function, typed ? closeout.typedFunction : closeout.nativeFunction);
+          assert.deepEqual(calls[0].typeArguments, typed ? [SUI_DISPUTE_BOND_COIN_TYPE] : []);
+          assert.equal(calls[1].module, "order_escrow");
+          assert.equal(calls[1].function, "resolve_dispute_with_binding");
+          assert.deepEqual(calls[1].typeArguments, [DISPUTE_CLOSEOUT_REQUEST.escrowCoinType]);
+          assert.deepEqual(calls[1].arguments[0], calls[0].arguments[3]);
+        }
       });
     }
 
@@ -212,6 +254,23 @@ for (const chainFamily of ["iota", "sui"]) {
           expectedError,
         );
       }
+    });
+  }
+
+  if (chainFamily === "iota") {
+    test("buildClawdexTxFromPlan rejects mismatched typed IOTA dispute settlement assets", () => {
+      assert.throws(
+        () =>
+          buildClawdexTxFromPlan({
+            txBuilder: "disputeQuorum.finalizeCase",
+            request: {
+              ...DISPUTE_CLOSEOUT_REQUEST,
+              chainFamily,
+              bondCoinType: SUI_DISPUTE_BOND_COIN_TYPE,
+            },
+          }),
+        /typed_bond_coin_type_must_match_escrow_coin_type/,
+      );
     });
   }
 
@@ -775,7 +834,7 @@ test("buildClawdexTxFromPlan rejects removed quorum-ticket compatibility builder
   );
 });
 
-test("buildClawdexTxFromPlan allows bootstrap whitelist dispute open with an empty invite list", () => {
+test("buildClawdexTxFromPlan uses the atomic IOTA dispute-open wrapper with an empty bootstrap invite list", () => {
   const tx = buildClawdexTxFromPlan({
     txBuilder: "disputeQuorum.openMilestoneDisputeCase",
     request: {
@@ -788,18 +847,17 @@ test("buildClawdexTxFromPlan allows bootstrap whitelist dispute open with an emp
       governanceConfigObjectId: addr("e"),
       reputationFeeConfigObjectId: addr("f"),
       openDisputeArgMode: "guarded_governance_and_clock",
-      escrowCoinType: `${addr("2")}::coin::COIN`,
+      escrowCoinType: IOTA_NATIVE_COIN_TYPE,
       invitedReviewerAddresses: [],
     },
   });
 
-  const data = tx.getData();
-  const firstCommand = data.commands[0];
-  const firstMoveCall = firstCommand && "MoveCall" in firstCommand ? firstCommand.MoveCall : null;
-
-  assert.equal(firstMoveCall?.function, "open_dispute_guarded");
-  assert.equal(firstMoveCall?.arguments?.length, 4);
-  assert.equal(extractLastMoveCallFunction(tx), "open_milestone_dispute_case_entry_v2");
+  const { calls } = extractMoveCalls(tx);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].module, "order_escrow");
+  assert.equal(calls[0].function, "open_milestone_dispute_case_entry_with_invites");
+  assert.deepEqual(calls[0].typeArguments, [IOTA_NATIVE_COIN_TYPE]);
+  assert.equal(calls[0].arguments.length, 8);
 });
 
 test("buildClawdexTxFromPlan uses Sui V2 no-invite dispute-open entrypoints", () => {

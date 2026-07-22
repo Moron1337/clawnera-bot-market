@@ -74,14 +74,14 @@ Use it for two things:
 | Vote prepare | `clawnera-help reviewer-vote-prepare` | `live-green` | Covered for reviewer1/reviewer2/reviewer4. |
 | Vote commit | `tx-plan-dry-run POST /disputes/{caseId}/votes/commit` | `live-green` | Covered live. |
 | Vote reveal | `tx-plan-dry-run POST /disputes/{caseId}/votes/reveal` | `live-green` | Covered live on the reviewer1/reviewer2/reviewer4 quorum case after the real commit window opened. |
-| Finalize | `tx-plan-dry-run POST /disputes/{caseId}/finalize` | `live-green` | Historical live run covered the route and wait window. The Fresh candidate now returns one atomic two-call PTB that closes Case/Bond and bound Escrow together; that exact shape still needs fresh live proof. |
-| Fallback timeout | `tx-plan-dry-run POST /disputes/{caseId}/fallback/timeout` | `pending` | Fresh candidate returns the same atomic two-call shape with timeout decision first; no eligible live run exists yet. |
-| Resolve escrow (legacy/recovery) | `tx-plan-dry-run POST /disputes/{caseId}/resolve-escrow` | `live-green` | Historical two-step recovery evidence only. This is not the normal second phase after a Fresh atomic finalize/timeout PTB. |
+| Finalize | `tx-plan-dry-run POST /disputes/{caseId}/finalize` | `live-green` | Historical live run covered the route and wait window. The undeployed Fresh candidate now returns one atomic IOTA wrapper call that closes Case/Bond and bound Escrow together; that exact shape still needs fresh live proof. |
+| Fallback timeout | `tx-plan-dry-run POST /disputes/{caseId}/fallback/timeout` | `pending` | The undeployed Fresh candidate returns one atomic IOTA timeout wrapper call; no eligible live run exists yet. |
+| Resolve escrow (Sui legacy/recovery) | `tx-plan-dry-run POST /disputes/{caseId}/resolve-escrow` | `historical-only` | Historical two-step evidence applies only to the Sui legacy recovery lane. The undeployed Fresh IOTA candidate fails closed with `410 Gone`; that behavior still needs post-deploy verification. |
 | Reviewer claim metrics | `tx-plan-dry-run POST /reviewers/me/claim-metrics` | `live-green` | Covered live for reviewer1/reviewer2/reviewer4 on the freshly closed case. Majority payouts still happen at finalize. |
 
 ## Current Live Blockers
 
-- The historical two-step quorum closeout is live-green, but it is not acceptance evidence for the Fresh atomic two-call candidate.
+- The historical two-step quorum closeout is live-green, but it is not acceptance evidence for the Fresh atomic one-wrapper candidate.
 - Reviewer stake is a real live precondition. A reviewer below the current minimum will fail on `reviewers/accept` even if the invite exists.
 - `POST /orders/{orderId}/dispute-bond/fund` is not a thin `amount`-only helper body on the live tx-plan route. It needs the full four-field body listed above.
 - Fresh atomic finalize and `fallback/timeout` both still need exact-shape live proof; timeout needs a genuinely eligible case instead of a forced synthetic shortcut.
@@ -89,7 +89,7 @@ Use it for two things:
 
 ## Recommended Completion Order
 
-1. exercise Fresh atomic finalize with exact two-call readback
+1. exercise Fresh atomic finalize with exact one-wrapper readback
 2. exercise one eligible atomic fallback lane (`fallback/timeout`)
 3. then move to local-LLM bot traffic
 4. only after that widen to external-user bot traffic

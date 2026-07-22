@@ -42,7 +42,7 @@ Quellen:
 | `resolve_dispute_to_buyer` | Arb-Cap Resolution buyer | arb/admin path | ArbCap, disputed state |
 | `resolve_dispute_after_timeout_split` | Timeout Fallback Split | permissionless timeout path | timeout reached, kein dispute-quorum binding fuer dieses escrow |
 | `resolve_dispute_after_timeout_to_seller` | Timeout Fallback seller | permissionless timeout path | timeout reached |
-| `resolve_dispute_with_binding` | Binding-based Quorum Settlement | zweiter Call der atomaren Closeout-PTB; separat nur Recovery | finalized dispute-quorum binding fuer dieses escrow vorhanden |
+| `resolve_dispute_with_binding` | Sui Legacy Binding Settlement | nur separater Sui Legacy-/Recovery-Call; Fresh IOTA nutzt die `*_and_resolve_escrow` Wrapper | finalized dispute-quorum binding fuer dieses escrow vorhanden |
 
 ### `milestone_escrow`
 
@@ -133,10 +133,10 @@ Quellen:
 | `POST /disputes/{id}/votes/commit` | `disputeQuorum.commitVote` | `dispute_quorum::commit_vote` |
 | `POST /disputes/{id}/votes/reveal` | `disputeQuorum.revealVote` | `dispute_quorum::reveal_vote` |
 | `POST /disputes/{id}/reviewers/replace` | `disputeQuorum.startReplacementRound` | `dispute_quorum::start_replacement_round` |
-| `POST /disputes/{id}/finalize` | `disputeQuorum.finalizeCase` | `dispute_quorum::finalize_case_with_quorum` -> `order_escrow::resolve_dispute_with_binding` in derselben PTB |
-| `POST /disputes/{id}/fallback/resolve` (Operator/Admin-only) | Admin-SDK `resolveFallback` | `dispute_quorum::resolve_case_with_platform_fallback` -> `order_escrow::resolve_dispute_with_binding` in derselben PTB |
-| `POST /disputes/{id}/fallback/timeout` | `disputeQuorum.resolveTimeoutFallback` | `dispute_quorum::resolve_case_with_timeout_fallback` -> `order_escrow::resolve_dispute_with_binding` in derselben PTB |
-| `POST /disputes/{id}/resolve-escrow` (Legacy/Recovery) | `orderEscrow.resolveDisputeWithBinding` | separater `order_escrow::resolve_dispute_with_binding` nur fuer Recovery/Reconciliation |
+| `POST /disputes/{id}/finalize` | `disputeQuorum.finalizeCase` | IOTA Fresh: ein `order_escrow::finalize_case_with_*_quorum_and_resolve_escrow` Wrapper-Call |
+| `POST /disputes/{id}/fallback/resolve` (Operator/Admin-only) | Admin-SDK `resolveFallback` | IOTA Fresh: ein `order_escrow::resolve_case_with_*_platform_fallback_and_resolve_escrow` Wrapper-Call |
+| `POST /disputes/{id}/fallback/timeout` | `disputeQuorum.resolveTimeoutFallback` | IOTA Fresh: ein `order_escrow::resolve_case_with_*_timeout_fallback_and_resolve_escrow` Wrapper-Call |
+| `POST /disputes/{id}/resolve-escrow` (Sui Legacy/Recovery) | `orderEscrow.resolveDisputeWithBinding` | IOTA: `410 Gone`; separater `order_escrow::resolve_dispute_with_binding` bleibt Sui-Legacy |
 | `N/A (direct SDK/PTB only)` | `buildApproveMutualCancelOrderEscrowTx` / `buildMutualCancelOrderEscrowTx` | `order_escrow::approve_mutual_cancel` / `order_escrow::mutual_cancel` |
 | `N/A (direct SDK/PTB only)` | `buildPayManagedStorageFeeIotaTx` / `buildSuiPayManagedStorageFeeSuiTx` | `manifest_anchor::pay_managed_storage_fee_iota_v2` / `manifest_anchor::pay_managed_storage_fee_sui_v2` |
 | `POST /orders/{orderId}/reviews` | `review.postWithEscrow/postWithMilestoneEscrow` | `review::post_review_with_escrow` / `review::post_review_with_milestone_escrow` |
@@ -144,10 +144,10 @@ Quellen:
 | `POST /deadline-ext/{id}/reject` | `deadlineExt.reject` | `deadline_ext::reject_extension` |
 
 Finalize, permissionless Timeout-Fallback und der Operator/Admin-only ArbCap
-Platform-Fallback bestehen jeweils aus genau zwei geordneten Move Calls in einer
-atomaren PTB. Beide Calls verwenden dasselbe Config-Transaktionsargument. Der
-Public Helper exponiert den Platform-Fallback nicht. `/resolve-escrow` ist kein
-normaler zweiter Schritt, sondern bleibt Legacy-/Recovery-/Reconciliation-Surface.
+Platform-Fallback bestehen auf Fresh IOTA jeweils aus genau einem atomaren
+`order_escrow`-Wrapper-Call. Der Public Helper exponiert den Platform-Fallback
+nicht. IOTA `/resolve-escrow` ist retired (`410 Gone`); die separate
+Legacy-/Recovery-/Reconciliation-Surface gilt nur fuer Sui.
 
 ## 4) Was fuer Bots typischerweise NICHT direkt relevant ist
 

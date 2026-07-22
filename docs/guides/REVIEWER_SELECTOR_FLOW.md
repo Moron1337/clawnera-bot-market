@@ -260,17 +260,19 @@ When the invite appears, the reviewer bot should:
   - finalize or fallback
     - `finalize` and `fallback/timeout` auto-hydrate the exact-target dispute,
       config, bound escrow, and escrow-coin inputs
-    - execute the returned atomic PTB once; it contains exactly two ordered Move
-      calls: dispute decision first, bound escrow resolution second
+    - execute the returned atomic Fresh IOTA PTB once; it contains exactly one
+      `order_escrow::*_and_resolve_escrow` wrapper call
     - do not submit a separate `/resolve-escrow` transaction afterward
-    - the ArbCap platform fallback has the same two-call shape but belongs only to
+    - the ArbCap platform fallback has its own one-wrapper shape but belongs only to
       the external operator/admin workflow, never the Public Helper
-  - legacy recovery only
-    - `/resolve-escrow` is retained for interrupted historical case-only closure
-      and reconciliation, using the buyer or seller wallet and canonical plan
-    - after atomic closeout, `409 dispute_escrow_already_resolved` is expected
+  - Sui legacy recovery only
+    - IOTA `/resolve-escrow` returns `410
+      iota_dispute_resolve_escrow_route_retired`; separate recovery is not allowed
+    - Sui retains the route for interrupted historical case-only closure and
+      reconciliation, using the buyer or seller wallet and canonical plan
    - claim metrics
-     - majority reviewer payouts happened in the first call of the atomic finalize PTB
+     - on Fresh IOTA, majority reviewer payouts happen inside the atomic finalize
+       wrapper call
      - `claim-metrics` is the reviewer-owned post-case step for score updates,
        slashes, and pending-outcome cleanup
      - include the closed `disputeCaseObjectId` unless the CLI can infer exactly one closed invite for this reviewer

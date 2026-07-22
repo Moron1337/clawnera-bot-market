@@ -122,10 +122,10 @@ Dieser Helper-Stand enthaelt die lokale fail-closed Bindung an Foundation -> Gov
 
 1. Einen sauberen Clawdex-Checkout exakt auf dem finalen, gepushten, vollstaendigen 40-Zeichen-SHA verwenden. Der Commit muss auf `origin` liegen und auf `origin/main` basieren.
    - Vor dem Sync muessen `README.md`, `contracts/README.md` und `docs/SMART_CONTRACT_ARCHITECTURE_MAP.md` im Clawdex-Commit ebenfalls die fuenf aktiven Fresh-Roots nennen. Ein Stand, der nur `claw_foundation` + `claw_settlement_core` als aktive Wahrheit ausweist, ist nicht sync-faehig.
-   - `docs/SMART_CONTRACT_ERKLAERUNG_2026-02-25.md` darf nicht weiter den alten Monolith-Snapshot als vollstaendige produktive Surface ausweisen; entweder runtime-seitig aktualisieren oder aus dem freigegebenen Public-Mirror entfernen.
+   - `docs/SMART_CONTRACT_ERKLAERUNG_2026-02-25.md` bleibt als veraltete Monolith-Erklaerung ausserhalb des freigegebenen Public-Mirrors.
 2. Im Helper-Repo genau einmal ausfuehren:
    - `MARKETPLACE_SOURCE_ROOT=/path/to/clean/clawdex MARKETPLACE_SOURCE_COMMIT=<final-pushed-full-40-char-sha> bash ./scripts/sync-local-sources.sh`
-3. Den gesamten v4-Mirror mit 28 Dateien und `docs/docsources/SYNC_MANIFEST.txt` als eine Rotation reviewen. Fuer diese Aenderung insbesondere pruefen:
+3. Den gesamten v4-Mirror mit 27 Dateien und `docs/docsources/SYNC_MANIFEST.txt` als eine Rotation reviewen. Fuer diese Aenderung insbesondere pruefen:
    - `docs/docsources/core/openapi.yaml`
    - `docs/docsources/core/openapi.public.yaml`
    - `docs/docsources/core/openapi.advanced.yaml`
@@ -133,7 +133,7 @@ Dieser Helper-Stand enthaelt die lokale fail-closed Bindung an Foundation -> Gov
    - `docs/docsources/core/callable-surfaces/iota/{foundation,governance,settlement,fulfillment,ops}.snapshot`
    - `lib/vendor/clawdex-sdk/tx/orderMailbox.js`
    - `config/marketplace-deployments.json`
-   - der alte Einzelpfad `docs/docsources/core/callable_surface.snapshot` muss entfernt sein
+   - die alten Pfade `docs/docsources/core/callable_surface.snapshot` und `docs/docsources/core/SMART_CONTRACT_ERKLAERUNG_2026-02-25.md` muessen entfernt sein
 4. Im vendorten Mailbox-Builder nachweisen, dass Fresh `settlementAbi` auswertet, `orderMailboxRegistryObjectId` zwingend verlangt und an `orderMailbox.init` weitergibt. In den API-Schemata muessen `governancePackageId` und `orderMailboxRegistryObjectId` enthalten sein.
 5. Keine Admin-/Operator-Kommandos fuer Fee-Queue, -Approve oder -Apply in CLI, Recipes, Topics oder Examples uebernehmen.
 6. Danach `npm run check:sync-provenance`, die fokussierten Topologie-/Write-Gate-Tests, `npm run validate -- --strict` und `npm run release:check` ausfuehren.

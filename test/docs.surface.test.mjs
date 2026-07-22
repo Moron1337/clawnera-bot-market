@@ -694,7 +694,7 @@ test("reviewer docs require dispute-scoped evidence before voting", () => {
   assert.match(routeMatrix, /linked_deliverable` oder `supplemental_bundle/);
 });
 
-test("active dispute guides require atomic closeout and recovery-only escrow resolution", () => {
+test("active dispute guides require one-wrapper IOTA closeout and Sui-only legacy recovery", () => {
   const readme = readRepoFile("README.md");
   const apiReference = readRepoFile("docs/guides/API_REFERENCE.md");
   const onboarding = readRepoFile("docs/guides/BOT_ONBOARDING.md");
@@ -726,10 +726,12 @@ test("active dispute guides require atomic closeout and recovery-only escrow res
   ];
   for (const text of closeoutDocs) {
     assert.match(text, /atomic|atomar/i);
-    assert.match(text, /two[- ]call|two ordered|zwei[- ]call|zwei geordnet/i);
+    assert.match(text, /wrapper/i);
     assert.match(text, /resolve-escrow/);
     assert.match(text, /legacy/i);
     assert.match(text, /recovery/i);
+    assert.match(text, /Sui/i);
+    assert.match(text, /410/);
     assert.equal(text.includes("same wallet that received the `QuorumResolutionTicket`"), false);
     assert.equal(text.includes("quorum_resolution_ticket_owner_mismatch"), false);
     assert.doesNotMatch(text, /and then runs `\/resolve-escrow`|then resolves escrow/i);
@@ -755,10 +757,10 @@ test("active dispute guides require atomic closeout and recovery-only escrow res
     assert.match(text, /Public Helper/is);
   }
   assert.match(sdkUsage, /@clawdex\/sdk\/admin/);
-  assert.match(contractReference, /resolve_dispute_with_binding/);
-  assert.match(apiReference, /resolve_dispute_with_binding/);
-  assert.match(tasks, /`resolve-dispute`[\s\S]*legacy\/recovery\/reconciliation only/i);
-  assert.match(functionMap, /Historical two-step recovery evidence only/);
+  assert.match(contractReference, /Sui[\s\S]*resolve_dispute_with_binding|resolve_dispute_with_binding[\s\S]*Sui/i);
+  assert.match(apiReference, /410[\s\S]*iota_dispute_resolve_escrow_route_retired/i);
+  assert.match(tasks, /`resolve-dispute`[\s\S]*Sui legacy\/recovery\/reconciliation only/i);
+  assert.match(functionMap, /Historical two-step evidence applies only to the Sui legacy recovery lane/);
   assert.match(tasks, /refresh the original buyer\/seller key-agreement records first/i);
   assert.equal(tasks.includes("each assigned reviewer must rerun `key-agreement-upsert` and then `reviewer-update` before the buyer/seller retries publish"), false);
 });

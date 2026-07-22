@@ -112,9 +112,9 @@
 
 | Route | Capability | API-Rollencheck | Hinweis |
 | --- | --- | --- | --- |
-| `POST /disputes/{id}/finalize` | `dispute.finalize` | capability, optional strict party guard | Liefert eine atomare Zwei-Call-PTB: Quorum-Finalisierung zuerst, `resolve_dispute_with_binding` fuer das gebundene Escrow danach. Einmal ausfuehren, keinen separaten Resolve anhaengen. |
-| `POST /disputes/{id}/fallback/timeout` | `dispute.fallback.timeout` | capability, optional strict party guard | Permissionless Timeout-Entscheidung und gebundene Escrow-Aufloesung laufen in derselben atomaren Zwei-Call-PTB. |
-| `POST /disputes/{id}/resolve-escrow` | `dispute.resolve_escrow` | capability, optional strict party guard | Nur Legacy-/Recovery-/Reconciliation fuer unterbrochene case-only Ablaeufe; kein normaler zweiter Schritt nach atomarem Finalize/Fallback. |
+| `POST /disputes/{id}/finalize` | `dispute.finalize` | capability, optional strict party guard | Fresh IOTA liefert eine atomare Ein-Wrapper-PTB, die Quorum und gebundenes Escrow gemeinsam abschliesst. Einmal ausfuehren, keinen separaten Resolve anhaengen. |
+| `POST /disputes/{id}/fallback/timeout` | `dispute.fallback.timeout` | capability, optional strict party guard | Fresh IOTA fuehrt Permissionless Timeout und gebundene Escrow-Aufloesung in einem atomaren `order_escrow`-Wrapper aus. |
+| `POST /disputes/{id}/resolve-escrow` | `dispute.resolve_escrow` | IOTA: keine Auth-Pruefung vor `410`; Sui: capability/party guard | IOTA ist retired; nur Sui behaelt Legacy-/Recovery-/Reconciliation fuer unterbrochene case-only Ablaeufe. |
 ## 6) Wichtig: API-Guard vs. On-Chain-Guard
 
 - Einige Endpunkte pruefen Rollen strikt im API-Layer (z. B. Milestone submit/accept/reject, dispute open, reviewers replace).
@@ -145,6 +145,5 @@ nicht Teil des normalen Buyer-/Seller-/Reviewer-Pfads:
 - `GET /admin/reviewer-selection-receipts/{receiptId}`
 - `POST /disputes/{id}/fallback/resolve`
   - Operator/Admin-only ArbCap Platform-Fallback; ausserhalb des Public Helpers
-  - liefert dieselbe atomare Zwei-Call-Form: Platform-Entscheidung zuerst,
-    gebundene Escrow-Aufloesung danach
+  - liefert auf Fresh IOTA einen atomaren Platform-Fallback-und-Escrow-Wrapper-Call
 - `POST /orders/{orderId}/mark-disputed`

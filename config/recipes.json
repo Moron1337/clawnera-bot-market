@@ -1585,7 +1585,7 @@
         "Use this route only for quorum finalization. If quorum never formed and the permissionless timeout is available, use dispute-timeout-fallback instead.",
         "Immediately before the public POST, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Run clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/finalize --auth-state-file <buyer-or-seller-auth-state-file> --body '{}'. Require the returned request to bind the canonical bond and escrow and require explicit dry-run success effects.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
-        "Execute the reviewed plan once in the same buyer or seller chain-native wallet. The plan finalizes the case and resolves the bound escrow atomically.",
+        "Execute the reviewed plan once in the same buyer or seller chain-native wallet. On Fresh IOTA require exactly one order_escrow finalize-and-resolve wrapper call; the plan finalizes the case and resolves the bound escrow atomically.",
         "Read back the exact dispute and order. Require a closed dispute and terminal settlement before treating the closeout as complete.",
         "Do not run resolve-dispute after a successful atomic close."
       ],
@@ -1629,7 +1629,7 @@
         "Do not use the admin platform-fallback route. The public normal fallback is POST /disputes/{disputeCaseId}/fallback/timeout.",
         "Immediately before the public POST, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
         "Run clawnera-help tx-plan-dry-run POST /disputes/{disputeCaseId}/fallback/timeout --auth-state-file <buyer-or-seller-auth-state-file> --body '{}'. Require the returned request to bind the canonical bond and escrow and require explicit dry-run success effects.\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical txBuilder/request; it never signs, exports bytes, or broadcasts. Execute separately in a reviewed chain-native wallet/client and verify the receipt through API readback.",
-        "Execute the reviewed plan once in the same buyer or seller chain-native wallet. The plan resolves the timeout path and the bound escrow atomically.",
+        "Execute the reviewed plan once in the same buyer or seller chain-native wallet. On Fresh IOTA require exactly one order_escrow timeout-and-resolve wrapper call; the plan resolves the timeout path and the bound escrow atomically.",
         "Read back the exact dispute and order. Require a fallback-resolved dispute and terminal settlement before treating the closeout as complete.",
         "Do not run resolve-dispute after a successful atomic close."
       ],
@@ -1670,7 +1670,7 @@
         "Public buyer, seller, and reviewer bots stop here. This route is operator-internal and requires the configured arb admin plus externally custodied ArbCap authority.",
         "Do not place ArbCap data, admin credentials, or an executable platform-fallback body into the public helper.",
         "Use dispute-finalize for normal quorum closeout or dispute-timeout-fallback for the permissionless timeout path.",
-        "Only the dedicated admin/operator custody workflow may build, authorize, execute, and audit this fallback."
+        "Only the dedicated admin/operator custody workflow may build, authorize, execute, and audit this fallback. Fresh IOTA uses one atomic order_escrow platform-fallback-and-resolve wrapper call."
       ],
       "examples": [
         "No public execution command is provided. Record the dispute case id and hand the incident to the configured admin/operator custody workflow."
@@ -1684,12 +1684,13 @@
     },
     {
       "id": "resolve-dispute",
-      "title": "Legacy Recovery Resolve Dispute Escrow",
+      "title": "Sui Legacy Recovery Resolve Dispute Escrow",
       "aliases": ["dispute-resolve", "resolve-dispute-escrow", "legacy-resolve-dispute"],
-      "summary": "Recover or reconcile an already closed legacy or partially completed dispute whose bound escrow is still DISPUTED; this is not a normal closeout step.",
+      "summary": "Recover or reconcile an already closed Sui legacy dispute whose bound escrow is still DISPUTED; Fresh IOTA returns 410 Gone and has no separate recovery transaction.",
       "role": "buyer_or_seller",
-      "when": "Use this only when exact readback or an operator recovery procedure proves that the case is already closed but atomic escrow settlement did not complete.",
+      "when": "Use this only on a Sui legacy target when exact readback or an operator recovery procedure proves that the case is already closed but escrow settlement did not complete.",
       "needs": [
+        "The configured API and tx plan explicitly identify the Sui chain family; stop on every IOTA target.",
         "The dispute is already finalized or fallback-resolved on-chain.",
         "The bound escrow still reads DISPUTED after a legacy, migration, or interrupted pre-atomic closeout.",
         "The wallet is the buyer or seller for the disputed order."
@@ -1705,7 +1706,8 @@
         "GET /orders/{orderId}"
       ],
       "steps": [
-        "Do not use this recipe for an open case. Use dispute-finalize for quorum closeout or dispute-timeout-fallback after timeout eligibility.",
+        "Do not use this recipe on IOTA: the route is retired and returns iota_dispute_resolve_escrow_route_retired with HTTP 410 before authentication or RPC.",
+        "Do not use this recipe for an open Sui case. Use dispute-finalize for quorum closeout or dispute-timeout-fallback after timeout eligibility.",
         "Read the exact dispute and order snapshots and confirm the case is closed while the bound escrow is still DISPUTED.",
         "Record why the normal atomic close did not settle the escrow; do not infer a recovery need from stale events.",
         "Immediately before the recovery POST, rerun clawnera-help write-gate --api-base <target-api-base>. Stop on any nonzero or closed result; do not reuse an earlier pass.",
@@ -1713,10 +1715,11 @@
         "Execute the reviewed recovery plan once, then read back the dispute and order state."
       ],
       "examples": [
-        "Recovery only after exact readback proves a closed case with an unsettled escrow; current Live write_freeze and undeployed Fresh fail closed:\\nclawnera-help request GET /disputes/<dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request GET /orders/<order-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/resolve-escrow --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical recovery plan; it never signs, exports bytes, or broadcasts. Execute only as an audited recovery transaction, never after a successful atomic finalize or timeout fallback."
+        "Sui legacy recovery only after exact readback proves a closed case with an unsettled escrow; IOTA must stop on HTTP 410:\\nclawnera-help request GET /disputes/<dispute-case-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help request GET /orders/<order-id> --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help write-gate --auth-state-file ~/.config/clawnera/auth-state.json\\nclawnera-help tx-plan-dry-run POST /disputes/<dispute-case-id>/resolve-escrow --auth-state-file ~/.config/clawnera/auth-state.json --body '{}'\nSecurity boundary: tx-plan-dry-run only rebuilds and simulates the canonical Sui legacy recovery plan; it never signs, exports bytes, or broadcasts."
       ],
       "stopConditions": [
-        "Stop if the dispute case is still open; return to dispute-finalize or dispute-timeout-fallback.",
+        "Stop immediately on every IOTA target or iota_dispute_resolve_escrow_route_retired response; do not attempt direct builder recovery.",
+        "Stop if the Sui dispute case is still open; return to dispute-finalize or dispute-timeout-fallback.",
         "Stop if dispute_settlement_not_ready is returned; recovery cannot close the dispute case.",
         "Stop if dispute_escrow_already_resolved is returned; the atomic or prior recovery settlement already completed."
       ],

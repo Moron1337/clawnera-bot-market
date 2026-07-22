@@ -36,7 +36,6 @@ export const EXPECTED_SYNC_PATHS = Object.freeze([
   "docs/docsources/core/BOT_PROTOCOL_V1.md",
   "docs/docsources/core/BOT_QUICKSTART.md",
   "docs/docsources/core/SMART_CONTRACT_ARCHITECTURE_MAP.md",
-  "docs/docsources/core/SMART_CONTRACT_ERKLAERUNG_2026-02-25.md",
   "docs/docsources/core/SMART_CONTRACT_FUNCTION_INVENTORY_AND_USER_TEST_MATRIX.md",
   "docs/docsources/core/TWO_PARTY_TEST_MATRIX.md",
   "docs/docsources/core/apiContract.json",
@@ -69,6 +68,7 @@ const SYNC_PATHS_BY_FORMAT = Object.freeze({
 });
 const RETIRED_SYNC_PATHS_V4 = Object.freeze([
   "docs/docsources/core/callable_surface.snapshot",
+  "docs/docsources/core/SMART_CONTRACT_ERKLAERUNG_2026-02-25.md",
 ]);
 
 export const EXPECTED_PUBLISHED_SYNC_PATHS = Object.freeze([

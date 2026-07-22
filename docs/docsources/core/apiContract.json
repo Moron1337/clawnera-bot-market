@@ -10142,6 +10142,19 @@
             "propertyNames": [
               "error"
             ]
+          },
+          "410": {
+            "status": "410",
+            "reusableResponseRef": null,
+            "schemaRef": "#/components/schemas/ErrorResponse",
+            "schemaName": "ErrorResponse",
+            "requiredFields": [
+              "error"
+            ],
+            "optionalFields": [],
+            "propertyNames": [
+              "error"
+            ]
           }
         }
       }
@@ -23217,6 +23230,19 @@
         },
         "409": {
           "status": "409",
+          "reusableResponseRef": null,
+          "schemaRef": "#/components/schemas/ErrorResponse",
+          "schemaName": "ErrorResponse",
+          "requiredFields": [
+            "error"
+          ],
+          "optionalFields": [],
+          "propertyNames": [
+            "error"
+          ]
+        },
+        "410": {
+          "status": "410",
           "reusableResponseRef": null,
           "schemaRef": "#/components/schemas/ErrorResponse",
           "schemaName": "ErrorResponse",

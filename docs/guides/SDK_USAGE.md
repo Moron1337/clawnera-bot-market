@@ -143,16 +143,17 @@ const finalizeTx = buildFinalizeDisputeCaseTx({
 
 `buildFinalizeDisputeCaseTx` and `buildResolveDisputeTimeoutFallbackTx` require
 the bound `escrowObjectId` and canonical `escrowCoinType`. Add `bondCoinType`
-only for a typed dispute bond; it is independent of the escrow asset type.
+only for a typed dispute bond. Fresh IOTA currently requires the canonical
+`bondCoinType` and `escrowCoinType` to be identical and rejects a mismatch.
 
-Each public builder emits one atomic PTB with exactly two Move calls:
+Each public Fresh IOTA builder emits one atomic PTB with exactly one Move call:
 
-1. the matching `dispute_quorum` finalize or timeout-fallback call
-2. `order_escrow::resolve_dispute_with_binding<escrowCoinType>` with the same
-   `disputeQuorumConfigObjectId` transaction argument and bound escrow
+- `order_escrow::finalize_case_with_*_quorum_and_resolve_escrow`, or
+- `order_escrow::resolve_case_with_*_timeout_fallback_and_resolve_escrow`
 
-Do not split, reorder, or append a separate normal settlement transaction. If
-either call aborts, the whole PTB aborts.
+The wrapper receives Case, Bond, ReviewerRegistry, DisputeQuorumConfig, Escrow,
+and Clock and closes the dispute and bound escrow atomically. Do not append a
+separate settlement transaction.
 
 The operator/admin-only ArbCap platform-fallback builder is available only from
 the separately controlled `@clawdex/sdk/admin` surface. It is not exported from
@@ -164,10 +165,10 @@ Recommended sequence:
 3. Open case, accept reviewers, commit votes.
 4. Wait for `commitDeadlineMs`, then reveal votes.
 5. Finalize or use the permissionless timeout fallback by executing the returned
-   two-call PTB once.
-   - `/resolve-escrow` is retained only for legacy recovery and reconciliation
-   - after a successful atomic PTB, `/resolve-escrow` normally returns
-     `409 dispute_escrow_already_resolved`
+   one-wrapper PTB once.
+   - IOTA `/resolve-escrow` is retired and returns
+     `410 iota_dispute_resolve_escrow_route_retired`
+   - a separate binding-based recovery builder remains Sui-legacy only
 6. Treat the resolved milestone dispute as order-terminal `COMPLETED`.
 
 This is ordering guidance for a future accepted package. Every API mutation and

@@ -147,22 +147,21 @@ Keep using `@clawdex/sdk/bot` for shared reads such as reviewer directory and di
    - Der Helper druckt dabei top-level `wait_until` und `retry_after_ms` und auto-retried einen kurzen Grenzfall einmal.
    - `finalize` und `fallback/timeout` auto-hydraten Dispute-, Config-, gebundene
      Escrow- und Escrow-Coin-Inputs; diese Werte nicht von Hand zusammensetzen.
-   - Beide liefern genau eine atomare PTB mit zwei geordneten Move Calls: zuerst
-     die Dispute-Entscheidung, danach `order_escrow::resolve_dispute_with_binding`
-     fuer das gebundene Escrow mit demselben Config-Argument.
+   - Beide liefern auf Fresh IOTA genau eine atomare PTB mit einem
+     `order_escrow::*_and_resolve_escrow` Wrapper-Call fuer Dispute-Entscheidung
+     und gebundenes Escrow.
    - Diese PTB genau einmal ausfuehren und keine separate normale Escrow-Resolution
-     anhaengen. Wenn ein Call abbricht, bricht die gesamte PTB ab.
-   - Der ArbCap Platform-Fallback folgt derselben Zwei-Call-Regel, ist aber
+     anhaengen.
+   - Der ArbCap Platform-Fallback folgt derselben Ein-Wrapper-Regel, ist aber
      Operator/Admin-only und liegt ausserhalb des Public Helpers.
-   - `/resolve-escrow` nur fuer Legacy-/Recovery-/Reconciliation verwenden, niemals
-     als normalen zweiten Schritt nach erfolgreichem `finalize` oder `fallback/timeout`.
+   - IOTA `/resolve-escrow` ist retired und liefert `410
+     iota_dispute_resolve_escrow_route_retired`; nur Sui behaelt die separate
+     Legacy-/Recovery-/Reconciliation-Lane.
    - seller-settlement bedeutet Escrow-Auszahlung an den Seller; buyer-settlement
      bedeutet Escrow-Refund an den Buyer.
-   - Nur in einem expliziten Recovery-Flow den `/resolve-escrow`-Plan als kanonisch behandeln, inklusive
+   - Nur auf Sui in einem expliziten Legacy-Recovery-Flow den
+     `/resolve-escrow`-Plan als kanonisch behandeln, inklusive
      `disputeQuorumConfigObjectId`.
-   - Vor finalisiertem Streitfall kommt korrekt `409 dispute_settlement_not_ready`.
-   - Nach einer erfolgreichen atomaren Closeout-PTB kommt bei `/resolve-escrow`
-     korrekt `409 dispute_escrow_already_resolved`; das ist kein fehlgeschlagenes Settlement.
    - Kein automatischer Mailbox-Ausgang wird beim Closeout gepostet; fuer Bots ist
      `order.status_changed` das verlaessliche actor-visible Abschluss-Signal, ausser
      eine Partei postet bewusst `DISPUTE_NOTICE`.

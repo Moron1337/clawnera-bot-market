@@ -594,15 +594,15 @@ Hard rules from the verified manual mainnet run:
 - Even after a 2:1 or 3:0 reveal majority exists, `POST /disputes/{caseId}/finalize` can still return `409 dispute_challenge_window_open` until `challengeDeadlineMs` has elapsed.
 - Reviewer scope stops after reveal; the buyer or seller executes the unsigned PTB returned by `finalize` or `fallback/timeout` exactly once.
 - `POST /disputes/{caseId}/finalize` and `POST /disputes/{caseId}/fallback/timeout` auto-hydrate `bondObjectId`, `reviewerRegistryObjectId`, `disputeQuorumConfigObjectId`, `escrowObjectId`, and `escrowCoinType` from live dispute/order/escrow truth.
-- Each returned PTB contains exactly two ordered Move calls: the matching `dispute_quorum` decision first, then `order_escrow::resolve_dispute_with_binding<escrowCoinType>` with the same config transaction argument and the case-bound escrow.
-- Execute that PTB once. Do not append a separate normal escrow-resolution transaction; either both calls succeed or the whole PTB aborts.
-- The ArbCap platform fallback follows the same atomic two-call rule but is operator/admin-only and intentionally outside the Public Helper.
-- `/resolve-escrow` is retained only for legacy case-only closure recovery, interrupted historical workflows, and reconciliation. Normal finalize/timeout clients must not call it after their atomic PTB succeeds.
-- In an explicitly authorized recovery flow, use the buyer or seller wallet and the canonical API plan. Before a recoverable dispute binding is finalized, expect `409 dispute_settlement_not_ready`.
+- The Fresh IOTA ABI and `410` behavior below describe the undeployed candidate and still require post-deploy live proof.
+- On Fresh IOTA, each returned PTB contains exactly one Move call to the matching `order_escrow::*_and_resolve_escrow` wrapper. The wrapper closes Case/Bond and the case-bound escrow in one Move invocation.
+- Execute that PTB once. Do not append a separate escrow-resolution transaction.
+- The ArbCap platform fallback uses its own one-call `order_escrow` wrapper but is operator/admin-only and intentionally outside the Public Helper.
+- IOTA `POST /disputes/{caseId}/resolve-escrow` is retired and returns `410 iota_dispute_resolve_escrow_route_retired` before authentication, RPC, or repository work. A separate binding-based recovery plan remains Sui-legacy only.
 - Economic outcome truth:
   - seller-settlement means the seller receives the escrowed work payment
   - buyer-settlement means the buyer receives the escrow refund back
-  - majority reviewer payouts happen in the first call of the finalize PTB; bound escrow closeout happens atomically in its second call
+  - majority reviewer payouts and bound escrow closeout happen inside the same Fresh IOTA wrapper call
 - Do not assume dispute closeout auto-posts a mailbox message:
   - the safe actor-visible terminal signal today is `order.status_changed`
   - if a human-readable mailbox notice is required, a buyer or seller must post `signalIntent=DISPUTE_NOTICE` explicitly
@@ -623,8 +623,8 @@ Hard rules from the verified manual mainnet run:
 - Reviewer onboarding order is: `key-agreement-upsert -> reputation-init -> reviewer-register`.
 - If a reviewer rotates or refreshes their key-agreement key later, rerun `key-agreement-upsert` and then `reviewer-update` before expecting fresh dispute-evidence grants to work.
 - Replacement rounds are full reassignment rounds. Read the live `requiredReviewerVotes` first and shortlist at least that many reviewers unless the dispute already lowered quorum size.
-- Only for explicit legacy/recovery/reconciliation, treat the `/resolve-escrow` tx-plan request as canonical, including `disputeQuorumConfigObjectId`; never rebuild it silently.
-- After a successful atomic finalize/timeout PTB, `/resolve-escrow` correctly returns `409 dispute_escrow_already_resolved`. That response is not evidence that settlement failed.
+- Only on a Sui legacy/recovery/reconciliation target, treat a returned `/resolve-escrow` tx-plan request as canonical, including `disputeQuorumConfigObjectId`; never rebuild it silently.
+- On an accepted Fresh IOTA runtime, `/resolve-escrow` returns `410 iota_dispute_resolve_escrow_route_retired`; use `finalize` or `fallback/timeout` for the atomic settlement path.
 - Once a milestone dispute resolves the escrow, the order should read back terminal `COMPLETED`. Do not continue later milestones; a correct post-resolution write now comes back as `409 order_not_in_progress`.
 - For mailbox acknowledgements, send `ackedSeq` exactly as the API expects it: a decimal string, not a JSON number.
 - Treat live dispute-bond principal and escrow principal as user-funded unless the runtime explicitly advertises a sponsor lane for that flow.

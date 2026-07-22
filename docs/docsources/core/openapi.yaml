@@ -3853,6 +3853,10 @@ paths:
       tags: [Disputes]
       operationId: resolveEscrowWithDisputeBindingPlan
       x-clawnera-surface: public-user
+      description: >-
+        Retained Sui recovery route for resolving an escrow after a separately finalized dispute.
+        IOTA Fresh finalization and fallback routes resolve the bound escrow atomically, so IOTA
+        requests fail closed with `410 Gone` before authentication, RPC, or repository work.
       parameters:
         - name: disputeCaseId
           in: path
@@ -3867,13 +3871,19 @@ paths:
               $ref: "#/components/schemas/DisputeResolveEscrowRequest"
       responses:
         "200":
-          description: Recovery/reconciliation transaction plan for `order_escrow::resolve_dispute_with_binding`; normal finalize and fallback plans already include this call atomically.
+          description: Sui recovery/reconciliation transaction plan for `order_escrow::resolve_dispute_with_binding`.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/TxPlanResponse"
         "409":
           description: Escrow/order mismatch, already-resolved escrow, or dispute settlement not yet finalized on-chain.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "410":
+          description: IOTA recovery planning is retired because dispute finalization and fallback settlement are atomic.
           content:
             application/json:
               schema:
@@ -10224,6 +10234,8 @@ components:
           properties:
             foundationPackageId:
               type: string
+            governancePackageId:
+              type: string
             settlementPackageId:
               type: string
             fulfillmentPackageId:
@@ -10231,6 +10243,8 @@ components:
             opsPackageId:
               type: string
             governanceConfigObjectId:
+              type: string
+            orderMailboxRegistryObjectId:
               type: string
             assetLaneManagerPackageId:
               type: string
@@ -10502,6 +10516,8 @@ components:
           properties:
             foundationPackageId:
               type: string
+            governancePackageId:
+              type: string
             settlementPackageId:
               type: string
             fulfillmentPackageId:
@@ -10511,6 +10527,8 @@ components:
             marketplaceFeeConfigObjectId:
               type: string
             governanceConfigObjectId:
+              type: string
+            orderMailboxRegistryObjectId:
               type: string
             disputeQuorumConfigObjectId:
               type: string
@@ -11176,9 +11194,12 @@ components:
               pattern: "^[0-9a-f]{8}$"
             packageIds:
               type: object
-              required: [foundation, settlement, fulfillment, ops]
+              required: [foundation, governance, settlement, fulfillment, ops]
               properties:
                 foundation:
+                  type: string
+                  pattern: "^0x[0-9a-f]{64}$"
+                governance:
                   type: string
                   pattern: "^0x[0-9a-f]{64}$"
                 settlement:
@@ -11195,6 +11216,7 @@ components:
               required:
                 [
                   governanceConfigObjectId,
+                  orderMailboxRegistryObjectId,
                   disputeQuorumConfigObjectId,
                   marketplaceFeeConfigObjectId,
                   reputationInitFeeConfigObjectId,
@@ -11203,6 +11225,10 @@ components:
                 ]
               properties:
                 governanceConfigObjectId:
+                  type: string
+                  nullable: true
+                  pattern: "^0x[0-9a-f]{64}$"
+                orderMailboxRegistryObjectId:
                   type: string
                   nullable: true
                   pattern: "^0x[0-9a-f]{64}$"

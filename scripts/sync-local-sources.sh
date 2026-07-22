@@ -85,7 +85,6 @@ COMMITTED_SOURCE_MAPPINGS=(
   "docs/TWO_PARTY_TEST_MATRIX.md|docs/docsources/core/TWO_PARTY_TEST_MATRIX.md"
   "docs/SMART_CONTRACT_ARCHITECTURE_MAP.md|docs/docsources/core/SMART_CONTRACT_ARCHITECTURE_MAP.md"
   "docs/SMART_CONTRACT_FUNCTION_INVENTORY_AND_USER_TEST_MATRIX.md|docs/docsources/core/SMART_CONTRACT_FUNCTION_INVENTORY_AND_USER_TEST_MATRIX.md"
-  "docs/SMART_CONTRACT_ERKLAERUNG_2026-02-25.md|docs/docsources/core/SMART_CONTRACT_ERKLAERUNG_2026-02-25.md"
   "apps/api/openapi.yaml|docs/docsources/core/openapi.yaml"
   "apps/api/openapi.public.yaml|docs/docsources/core/openapi.public.yaml"
   "apps/api/openapi.advanced.yaml|docs/docsources/core/openapi.advanced.yaml"
@@ -115,10 +114,11 @@ GENERATED_SOURCE_MAPPINGS=(
 SOURCE_MAPPINGS=("${COMMITTED_SOURCE_MAPPINGS[@]}" "${GENERATED_SOURCE_MAPPINGS[@]}")
 RETIRED_SYNC_DESTINATIONS=(
   "docs/docsources/core/callable_surface.snapshot"
+  "docs/docsources/core/SMART_CONTRACT_ERKLAERUNG_2026-02-25.md"
 )
-if [[ "${#COMMITTED_SOURCE_MAPPINGS[@]}" -ne 17 ]] \
+if [[ "${#COMMITTED_SOURCE_MAPPINGS[@]}" -ne 16 ]] \
   || [[ "${#GENERATED_SOURCE_MAPPINGS[@]}" -ne 11 ]] \
-  || [[ "${#SOURCE_MAPPINGS[@]}" -ne 28 ]]; then
+  || [[ "${#SOURCE_MAPPINGS[@]}" -ne 27 ]]; then
   echo "invalid_sync_mapping_count: committed=${#COMMITTED_SOURCE_MAPPINGS[@]} generated=${#GENERATED_SOURCE_MAPPINGS[@]} total=${#SOURCE_MAPPINGS[@]}"
   exit 1
 fi

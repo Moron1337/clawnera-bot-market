@@ -490,27 +490,25 @@ Hinweis:
      - this is a buyer/seller closeout step, not a reviewer action
    - timeout fallback: `POST /disputes/{disputeCaseId}/fallback/timeout`
      - uses the same auto-hydrated dispute and escrow inputs as `finalize`
-   - both routes return one unsigned atomic PTB with exactly two ordered Move calls:
-     the dispute decision first, then `order_escrow::resolve_dispute_with_binding`
-     for the case-bound escrow using the same config transaction argument
+   - on Fresh IOTA both routes return one unsigned atomic PTB with exactly one
+     `order_escrow::*_and_resolve_escrow` wrapper call for the dispute decision
+     and case-bound escrow
    - execute that PTB once; do not append a separate escrow-resolution transaction
    - `finalize` and `fallback/timeout` stay capability-gated at the API layer
-5. Legacy recovery only:
+5. Sui legacy recovery only:
   - `POST /disputes/{disputeCaseId}/resolve-escrow`
-   - do not call this after a successful atomic finalize/timeout PTB
-   - it remains available only for legacy case-only closure recovery, interrupted
-     historical workflows, and reconciliation
+   - IOTA requests return `410 iota_dispute_resolve_escrow_route_retired` before
+     authentication or RPC; do not retry them with guessed inputs
+   - Sui retains the route only for legacy case-only closure recovery,
+     interrupted historical workflows, and reconciliation
    - recovery resolves from the finalized dispute-quorum binding; use the buyer or
      seller wallet and the canonical API plan
    - seller-settlement means the seller receives the escrowed work payment
    - buyer-settlement means the buyer receives the escrow refund
    - treat the recovery plan for `/resolve-escrow` as canonical, including
      `disputeQuorumConfigObjectId`
-   - before finalization or fallback closure, the correct response is
-     `409 dispute_settlement_not_ready`
-   - if the shared escrow is already resolved, the correct response is
-     `409 dispute_escrow_already_resolved`
-     - after an atomic finalize/timeout PTB this is expected, not a failed settlement
+   - Sui recovery errors remain canonical for that legacy lane; they do not reopen
+     the retired IOTA route
    - do not wait for an automatic mailbox outcome message here; the safe terminal
      signal is `order.status_changed`, unless a party explicitly posts
      `signalIntent=DISPUTE_NOTICE`

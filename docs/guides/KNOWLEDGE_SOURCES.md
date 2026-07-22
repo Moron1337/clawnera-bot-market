@@ -21,7 +21,7 @@ Dieses Repo ist der bot-orientierte Knowledge-Layer.
 - Maintainer-only: normale Nutzer brauchen diesen Schritt nicht.
 - Der Sync akzeptiert nur den erwarteten GitHub-Origin, einen sauberen Checkout des expliziten Commits und einen Commit auf einem gefetchten `origin/*`-Ref, der auf `origin/main` basiert.
 - Installation und SDK-Build laufen mit eingefrorenem Lockfile; jede Quelle und jedes Ziel muss eine regulaere Datei ohne Symlink-Komponente sein.
-- Der aktuell eingecheckte `clawnera.sync.v3`-Mirror enthaelt noch einen einzelnen Legacy-Snapshot. Er ist keine vollstaendige Fresh-ABI-Quelle. Der naechste freigegebene Source-Sync schreibt `clawnera.sync.v4`, ersetzt ihn durch die fuenf Root-Snapshots und entfernt das alte Ziel.
+- Der aktuell eingecheckte `clawnera.sync.v3`-Mirror enthaelt noch einen einzelnen Legacy-Snapshot und die alte Monolith-Erklaerung. Beides ist keine Fresh-ABI-Autoritaet. Der naechste freigegebene Source-Sync schreibt `clawnera.sync.v4`, ersetzt den Snapshot durch die fuenf Root-Snapshots und entfernt beide veralteten Ziele.
 
 ## Wichtige kopierte Dateien
 - `docs/docsources/core/openapi.yaml`

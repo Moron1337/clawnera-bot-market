@@ -810,7 +810,7 @@ function compactRecipeCommand(recipe) {
     case "dispute-platform-fallback":
       return "STOP: admin-only external-custody path; the public helper does not execute or dry-run platform fallback";
     case "resolve-dispute":
-      return `RECOVERY ONLY: ${gated(`clawnera-help tx-plan-dry-run POST /disputes/<disputeCaseId>/resolve-escrow ${auth} --body '{}'`)}`;
+      return `SUI LEGACY RECOVERY ONLY (IOTA: 410 GONE): ${gated(`clawnera-help tx-plan-dry-run POST /disputes/<disputeCaseId>/resolve-escrow ${auth} --body '{}'`)}`;
     case "local-iota-transfer":
       return "clawnera-help iota-prepare-transfer --to <address> --amount <amount>";
     default:
@@ -868,7 +868,7 @@ function compactRecipeWriteText(recipe) {
     case "dispute-platform-fallback":
       return "admin-only, not publicly executable: POST /disputes/{disputeCaseId}/fallback/resolve";
     case "resolve-dispute":
-      return "legacy/recovery only: POST /disputes/{disputeCaseId}/resolve-escrow";
+      return "Sui legacy/recovery only; IOTA 410 Gone: POST /disputes/{disputeCaseId}/resolve-escrow";
     default: {
       const routes = Array.isArray(recipe.routes) ? recipe.routes : [];
       return selectPrimaryWriteRoute(routes);
@@ -8213,7 +8213,11 @@ function classifyTxPlanRouteFailure({
         parsePositiveDeadlineMs(body.challengeDeadlineMs) ||
         (Number.isSafeInteger(retryAfterMs) && retryAfterMs >= 0 ? Date.now() + retryAfterMs : null);
       hint =
-        "The legacy/recovery escrow resolution is not ready. If the dispute is still open, use the atomic dispute-finalize or dispute-timeout-fallback recipe instead. Rerun resolve-escrow only after exact readback proves the case is closed and the bound escrow remains DISPUTED.";
+        "This Sui legacy/recovery escrow resolution is not ready. If the dispute is still open, use the atomic dispute-finalize or dispute-timeout-fallback recipe instead. Rerun resolve-escrow only on Sui after exact readback proves the case is closed and the bound escrow remains DISPUTED.";
+      break;
+    case "iota_dispute_resolve_escrow_route_retired":
+      hint =
+        "IOTA dispute escrow recovery is retired and must not be retried or rebuilt directly. Use dispute-finalize or dispute-timeout-fallback so the Fresh IOTA wrapper closes the case and bound escrow atomically.";
       break;
     case "reviewer_vote_commit_window_closed":
       waitUntilMs =

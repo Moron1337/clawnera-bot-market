@@ -237,18 +237,15 @@ For milestone disputes, trust the API plan sequence:
    - `POST /disputes/{caseId}/finalize` and `POST /disputes/{caseId}/fallback/timeout`
      auto-hydrate the target's dispute, config, bound escrow, and escrow-coin inputs;
      do not hand-build them
-   - execute the returned unsigned PTB exactly once; it has two ordered Move calls:
-     the matching dispute decision first, then
-     `order_escrow::resolve_dispute_with_binding` for the case-bound escrow using
-     the same config transaction argument
+   - execute the returned unsigned Fresh IOTA PTB exactly once; it has one
+     `order_escrow::*_and_resolve_escrow` wrapper call that closes the dispute and
+     case-bound escrow together
    - do not append a separate normal escrow-resolution transaction
-   - the ArbCap platform fallback follows the same atomic two-call rule but is
+   - the ArbCap platform fallback follows the same atomic one-wrapper rule but is
      operator/admin-only and outside the Public Helper
-9. use `POST /disputes/{caseId}/resolve-escrow` only for explicit legacy recovery
-   or reconciliation
-   - never call it as the normal second phase after a successful atomic closeout PTB
-   - use the buyer or seller wallet and the canonical recovery plan
-   - `409 dispute_escrow_already_resolved` is expected after atomic closeout
+9. do not use `POST /disputes/{caseId}/resolve-escrow` on IOTA
+   - IOTA returns `410 iota_dispute_resolve_escrow_route_retired` before auth or RPC
+   - the separate recovery route remains Sui-legacy only
 10. if reviewers were involved, each reviewer claims metrics from their own wallet
    - majority payouts already happened at `finalize`
    - `claim-metrics` is for score updates, slashes, and pending-outcome cleanup
@@ -316,9 +313,9 @@ The accepted future package can require an escrow dispute-open move before the c
 After finalize/fallback execution, read the exact order and dispute state back.
 The single atomic PTB already contains both the dispute decision and bound escrow
 resolution, so the order should read terminal `COMPLETED` and later milestone
-writes must stop there. Do not submit `/resolve-escrow` afterward. That route is
-legacy/recovery/reconciliation only and normally returns
-`409 dispute_escrow_already_resolved` after atomic closeout.
+writes must stop there. Do not submit `/resolve-escrow` afterward. IOTA returns
+`410 iota_dispute_resolve_escrow_route_retired`; only Sui retains the separate
+legacy/recovery/reconciliation route.
 
 If you call reveal too early, the API now returns:
 - `409 dispute_commit_window_open`

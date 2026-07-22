@@ -70,16 +70,16 @@ Wichtig:
 - `POST /orders/{orderId}/mark-disputed`:
   - optionaler DB-only Notfallpfad auf `DISPUTED` (nur wenn Runtime dies erlaubt).
 - Normal Dispute Settlement (`/disputes/*/finalize|fallback/timeout`):
-  - eine atomare PTB setzt zuerst den Case/Bond-Outcome und loest danach das
-    gebundene Escrow mit demselben Config-Argument auf.
+  - auf Fresh IOTA setzt ein einzelner atomarer `order_escrow`-Wrapper-Call den
+    Case/Bond-Outcome und loest das gebundene Escrow auf.
   - kein separater `/resolve-escrow`-Call folgt nach erfolgreicher PTB.
   - je nach Quorum-/Fallback-Outcome final `COMPLETED` oder `CANCELLED`.
   - seller-settlement -> Seller bekommt das Escrow.
   - buyer-settlement -> Buyer bekommt den Escrow-Refund.
   - fuer Bots ist danach `order.status_changed` das verlaessliche actor-visible Abschluss-Signal;
     es gibt keinen automatischen Mailbox-Ausgang nur wegen des Dispute-Endes.
-- `/resolve-escrow` bleibt ausschliesslich Legacy-/Recovery-/Reconciliation fuer
-  unterbrochene case-only Ablaeufe; nach atomarem Closeout ist
-  `409 dispute_escrow_already_resolved` erwartet.
+- IOTA `/resolve-escrow` ist retired und liefert `410
+  iota_dispute_resolve_escrow_route_retired`; separate
+  Legacy-/Recovery-/Reconciliation gilt nur fuer Sui.
 - Der ArbCap Platform-Fallback ist Operator/Admin-only, liegt ausserhalb des
-  Public Helpers und verwendet ebenfalls eine atomare Zwei-Call-PTB.
+  Public Helpers und verwendet auf Fresh IOTA ebenfalls einen atomaren Wrapper-Call.

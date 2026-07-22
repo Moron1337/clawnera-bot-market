@@ -134,20 +134,20 @@ Auth note:
 - `reviewer-vote`
   - commit -> wait -> reveal; reviewer duty stops there
   - buyer or seller executes the single atomic `finalize` / `fallback/timeout`
-    two-call PTB; do not append a separate normal escrow resolution
+    PTB; on Fresh IOTA it contains exactly one `order_escrow` wrapper call
   - if commit returns `reviewer_vote_commit_window_closed`, stop and wait until the printed `revealDeadlineMs`; do not keep retrying commit
 - `reviewer-claim-metrics`
   - if the CLI prints `claim_metrics_dispute_case_ambiguous`, use one of the returned `disputeCaseObjectIds`, confirm it via `GET /reviewers/me/invites`, and rerun with `--body '{"disputeCaseObjectId":"..."}'`
   - clear the reviewer-owned post-case pending outcome without wasting a no-op tx
 - `resolve-dispute`
-  - legacy/recovery/reconciliation only for an interrupted historical case-only close
+  - Sui legacy/recovery/reconciliation only for an interrupted historical case-only close
   - recovery route: `POST /disputes/{disputeCaseId}/resolve-escrow`
-  - use the buyer or seller wallet and the canonical recovery plan
-  - never run it as a normal second phase after a successful atomic finalize/timeout PTB;
-    `409 dispute_escrow_already_resolved` is then expected
+  - IOTA returns `410 iota_dispute_resolve_escrow_route_retired`; do not attempt a
+    direct detached recovery transaction
+  - on Sui, use the buyer or seller wallet and the canonical recovery plan
   - common aliases: `dispute-resolve`, `resolve-dispute-escrow`, `legacy-resolve-dispute`
 
-The ArbCap platform fallback follows the same atomic two-call contract but is
+The ArbCap platform fallback uses its own atomic Fresh IOTA wrapper call but is
 operator/admin-only and intentionally unavailable through the Public Helper.
 - `local-iota-transfer`
   - local user-side IOTA transfer

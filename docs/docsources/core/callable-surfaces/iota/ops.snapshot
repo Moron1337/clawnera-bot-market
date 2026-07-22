@@ -1,0 +1,35 @@
+listing_deposit|entry_public|entry public create_listing_deposit_iota_entry(governance_cfg: &GovernanceConfig, owner: address, listing_ref: vector<u8>, payment: Coin<IOTA>, cfg: &mut ListingDepositConfig, ctx: &mut TxContext)
+listing_deposit|entry_public|entry public create_listing_deposit_iota_shared_entry(governance_cfg: &GovernanceConfig, listing_ref: vector<u8>, payment: Coin<IOTA>, cfg: &mut ListingDepositConfig, ctx: &mut TxContext)
+listing_deposit|public|public active_state(): u8
+listing_deposit|public|public apply_listing_deposit_policy_update(_admin: &AdminCap, governance_cfg: &GovernanceConfig, expected_pending_nonce: u64, cfg: &mut ListingDepositConfig, clock: &Clock, ctx: &mut TxContext)
+listing_deposit|public|public approve_pending_listing_deposit_policy_update(_treasury: &TreasuryCap, governance_cfg: &GovernanceConfig, expected_pending_nonce: u64, cfg: &mut ListingDepositConfig, ctx: &mut TxContext)
+listing_deposit|public|public bound_listing_deposit_id_for_view(cfg: &ListingDepositConfig, owner: address, listing_ref: vector<u8>): bool * address
+listing_deposit|public|public cancel_pending_listing_deposit_policy_update(_admin: &AdminCap, expected_pending_nonce: u64, cfg: &mut ListingDepositConfig, ctx: &mut TxContext)
+listing_deposit|public|public deposit_amount_iota(cfg: &ListingDepositConfig): u64
+listing_deposit|public|public forfeit_listing_deposit_by_policy_and_unbind(_admin: &AdminCap, governance_cfg: &GovernanceConfig, cfg: &mut ListingDepositConfig, deposit: &mut ListingDeposit, ctx: &mut TxContext)
+listing_deposit|public|public forfeit_listing_deposit_with_refund_bps_and_unbind(_admin: &AdminCap, governance_cfg: &GovernanceConfig, cfg: &mut ListingDepositConfig, deposit: &mut ListingDeposit, refund_bps: u64, ctx: &mut TxContext)
+listing_deposit|public|public forfeit_sink(cfg: &ListingDepositConfig): address
+listing_deposit|public|public forfeited_state(): u8
+listing_deposit|public|public has_pending_update(cfg: &ListingDepositConfig): bool
+listing_deposit|public|public partial_refund_bps(cfg: &ListingDepositConfig): u64
+listing_deposit|public|public pending_deposit_amount_iota(cfg: &ListingDepositConfig): u64
+listing_deposit|public|public pending_effective_at_ms(cfg: &ListingDepositConfig): u64
+listing_deposit|public|public pending_forfeit_sink(cfg: &ListingDepositConfig): address
+listing_deposit|public|public pending_partial_refund_bps(cfg: &ListingDepositConfig): u64
+listing_deposit|public|public pending_treasury_approved(cfg: &ListingDepositConfig): bool
+listing_deposit|public|public queue_listing_deposit_policy_update(_admin: &AdminCap, governance_cfg: &GovernanceConfig, expected_current_nonce: u64, cfg: &mut ListingDepositConfig, deposit_amount_iota: u64, partial_refund_bps: u64, forfeit_sink: address, clock: &Clock, ctx: &mut TxContext)
+listing_deposit|public|public refund_listing_deposit_full_and_unbind(_admin: &AdminCap, governance_cfg: &GovernanceConfig, cfg: &mut ListingDepositConfig, deposit: &mut ListingDeposit, ctx: &mut TxContext)
+listing_deposit|public|public refunded_state(): u8
+listing_deposit|public|public settlement_forfeit_partial_mode(): u8
+listing_deposit|public|public settlement_refund_full_mode(): u8
+listing_deposit|public|public timelock_ms(cfg: &ListingDepositConfig): u64
+manifest_anchor|entry_public|entry public anchor_milestone_manifest(governance_cfg: &GovernanceConfig, seller_address: address, order_id: String, milestone_id: String, manifest_cid: String, manifest_sha256: String, seller_sig_hash: String, ctx: &mut TxContext)
+manifest_anchor|entry_public|entry public pay_managed_storage_fee_iota_v2(governance_cfg: &GovernanceConfig, fee_config: &mut ManagedStorageFeeConfig, milestone: &MilestoneEscrow, order_id: String, expected_escrow_id: address, milestone_idx: u64, proof_nonce: vector<u8>, expected_recipient: address, payment: Coin<IOTA>, ctx: &mut TxContext)
+manifest_anchor|public|public apply_managed_storage_fee_policy_update(_admin: &AdminCap, governance_cfg: &GovernanceConfig, expected_pending_nonce: u64, cfg: &mut ManagedStorageFeeConfig, clock: &Clock, ctx: &mut TxContext)
+manifest_anchor|public|public approve_pending_managed_storage_fee_policy_update(_treasury: &TreasuryCap, governance_cfg: &GovernanceConfig, expected_pending_nonce: u64, cfg: &mut ManagedStorageFeeConfig, ctx: &mut TxContext)
+manifest_anchor|public|public cancel_pending_managed_storage_fee_policy_update(_admin: &AdminCap, expected_pending_nonce: u64, cfg: &mut ManagedStorageFeeConfig, ctx: &mut TxContext)
+manifest_anchor|public|public config_id(cfg: &ManagedStorageFeeConfig): address
+manifest_anchor|public|public policy_enabled(cfg: &ManagedStorageFeeConfig): bool
+manifest_anchor|public|public policy_min_atomic(cfg: &ManagedStorageFeeConfig): u64
+manifest_anchor|public|public policy_recipient(cfg: &ManagedStorageFeeConfig): address
+manifest_anchor|public|public queue_managed_storage_fee_policy_update(_admin: &AdminCap, governance_cfg: &GovernanceConfig, expected_current_nonce: u64, cfg: &mut ManagedStorageFeeConfig, min_atomic: u64, recipient: address, clock: &Clock, ctx: &mut TxContext)

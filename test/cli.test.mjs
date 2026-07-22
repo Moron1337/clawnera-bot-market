@@ -1143,7 +1143,7 @@ test("recipes command lists minimal task recipes", () => {
   assert.match(result.stdout, /dispute-finalize: Atomic Quorum Dispute Close/);
   assert.match(result.stdout, /dispute-timeout-fallback: Atomic Timeout Dispute Close/);
   assert.match(result.stdout, /dispute-platform-fallback: Admin Platform Dispute Fallback \[role: admin_only]/);
-  assert.match(result.stdout, /resolve-dispute: Legacy Recovery Resolve Dispute Escrow/);
+  assert.match(result.stdout, /resolve-dispute: Sui Legacy Recovery Resolve Dispute Escrow/);
 });
 
 test("recipes compact output is token-light", () => {
@@ -1587,13 +1587,14 @@ test("mailbox signal alias resolves to the mailbox handshake recipe", () => {
   assert.ok(payload.recipe.routes.some((route) => /mailbox\/post-signal-plan/.test(route)));
 });
 
-test("resolve dispute alias resolves to the legacy recovery recipe", () => {
+test("resolve dispute alias resolves to the Sui-only legacy recovery recipe", () => {
   const result = runCli(["recipe", "dispute-resolve", "--json"]);
   assert.equal(result.status, 0);
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, true);
   assert.equal(payload.recipe.id, "resolve-dispute");
-  assert.match(payload.recipe.summary, /not a normal closeout step/i);
+  assert.match(payload.recipe.summary, /Sui legacy/i);
+  assert.match(payload.recipe.summary, /Fresh IOTA returns 410 Gone/i);
   assert.ok(payload.recipe.examples.some((example) => /resolve-escrow/.test(example)));
   assert.ok(payload.recipe.examples.every((example) => !/quorumResolutionTicketObjectId/.test(example)));
 });
@@ -1673,17 +1674,23 @@ test("reviewer claim recipe explains explicit case-id versus safe inference", ()
   assert.match(result.stdout, /reviewer_metrics_claim_not_required/);
 });
 
-test("resolve dispute recipe is limited to legacy and recovery flow", () => {
+test("resolve dispute recipe is limited to Sui legacy recovery and retires IOTA", () => {
   const result = runCli(["recipe", "resolve-dispute"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /# Legacy Recovery Resolve Dispute Escrow/);
-  assert.match(result.stdout, /not a normal closeout step/i);
-  assert.match(result.stdout, /case is already closed but atomic escrow settlement did not complete/i);
+  assert.match(result.stdout, /# Sui Legacy Recovery Resolve Dispute Escrow/);
+  assert.match(result.stdout, /Fresh IOTA returns 410 Gone/i);
+  assert.match(result.stdout, /iota_dispute_resolve_escrow_route_retired/);
+  assert.match(result.stdout, /case is already closed but escrow settlement did not complete/i);
   assert.match(result.stdout, /Use dispute-finalize for quorum closeout or dispute-timeout-fallback/i);
   assert.match(result.stdout, /dispute_settlement_not_ready/);
   assert.doesNotMatch(result.stdout, /quorumResolutionTicketObjectId/);
   assert.doesNotMatch(result.stdout, /quorum_resolution_ticket_object_id/);
   assert.match(result.stdout, /GET \/disputes\/<dispute-case-id>/);
+
+  const compact = runCli(["recipe", "resolve-dispute", "--compact"]);
+  assert.equal(compact.status, 0);
+  assert.match(compact.stdout, /^do:SUI LEGACY RECOVERY ONLY \(IOTA: 410 GONE\):/m);
+  assert.match(compact.stdout, /^write:Sui legacy\/recovery only; IOTA 410 Gone:/m);
 });
 
 test("show recipes topic works", () => {

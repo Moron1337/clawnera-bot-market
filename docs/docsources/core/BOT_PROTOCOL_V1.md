@@ -4,11 +4,13 @@ Status: Read-only release reference. Live production is under runtime-control
 `write_freeze`; IOTA Fresh writes and sponsor execution are closed.
 
 ## 1. Purpose
+
 - Runtime source of truth for current bot reads and future write-open CLAWDEX integrations.
 - Web portal and the public bot path are currently read-only in live production.
 - Write endpoint inventories and lifecycles below are reference contracts, not authorization to execute them.
 
 Companion docs:
+
 - `docs/SPONSOR_POLICY.md`
 - `docs/SDK_USAGE.md`
 - `docs/API_REFERENCE.md`
@@ -18,6 +20,7 @@ Companion docs:
 - `docs/REVIEWER_SELECTION_OPERATOR_RUNBOOK.md`
 
 Audience boundary:
+
 - this file is the advanced bot/runtime protocol reference
 - smallest public start path: `docs/BOT_QUICKSTART.md`
 - reviewer-owned lifecycle contract:
@@ -85,9 +88,11 @@ raw-wallet clients must enforce these checks themselves.
 
 Do not execute this section while the current release truth remains closed.
 Core marketplace writes, after the mandatory gate passes, require:
+
 - `Authorization: Bearer <jwt>`
 
 Session continuation:
+
 - wallet sign-in stays canonical via:
   - `POST /auth/challenge`
   - `POST /auth/verify`
@@ -105,7 +110,9 @@ authorization, funding, and custody gates will be specified in a later release.
 Do not infer sponsor availability from capability fields.
 
 ## 3. Required read-only discovery calls
+
 Call at startup and cache:
+
 - `GET /bot/v1/discovery.json`
 - `GET /capabilities`
 - `GET /actors/me/capabilities`
@@ -117,6 +124,7 @@ The write gate is intentionally absent from this startup/cache list. Fetch
 checkpoints above, and never cache or reuse its response.
 
 ## 4. Core read endpoints
+
 - `GET /health`
 - `GET /ready`
 - `GET /bot/v1/discovery.json`
@@ -143,6 +151,7 @@ checkpoints above, and never cache or reuse its response.
 - `GET /disputes/{objectId}`
 
 Current discovery semantics:
+
 - `GET /bot/v1/discovery.json` is the cached machine-readable boot snapshot
   - prefer it first for helper install metadata, canonical read paths, and current runtime read-lane policy
   - it exposes whether discovery-only posture, actor-read throttling, or sponsor emergency mode are active
@@ -224,9 +233,8 @@ decision.
     - the corresponding one-use replacement authorization must already exist on-chain
   - `POST /disputes/{caseId}/finalize`
   - `POST /disputes/{caseId}/fallback/timeout`
-  - `POST /disputes/{caseId}/resolve-escrow`
-    - legacy/recovery/reconciliation only; not a normal post-finalize step
-Listing write notes:
+  - `POST /disputes/{caseId}/resolve-escrow` - legacy/recovery/reconciliation only; not a normal post-finalize step
+    Listing write notes:
 - `POST /listings`
   - send `expiresAtMs` explicitly when possible
   - omitted `expiresAtMs` still uses the legacy 30-day runtime default
@@ -238,6 +246,7 @@ Listing write notes:
   - returns `409 order_mailbox_required` until the order mailbox is bound
 
 Reviewer selection boundary:
+
 - reviewer directory reads are available; reviewer lifecycle mutations remain blocked by the current release posture
 - reviewer-owned lifecycle contract:
   - `apps/api/openapi.reviewer-self.yaml`
@@ -274,7 +283,9 @@ Reviewer selection boundary:
   - `docs/REVIEWER_SELECTION_OPERATOR_RUNBOOK.md`
 
 ## 6. Future write-open order lifecycle hard gate
+
 After `accept`:
+
 1. Initialize dispute bond:
    - standard init path
    - modern servers return `disputeBondGuidance` alongside `disputeBondPolicy` and `disputeBondState`; bots should prefer that structured object over warning prose
@@ -285,9 +296,11 @@ After `accept`:
 4. Wait for `order.status=IN_PROGRESS`.
 
 Before that point, milestone write calls are blocked with:
+
 - `409 dispute_bond_not_active`
 
 Accept path:
+
 - canonical: `POST /bids/{bidId}/accept`
 - role truth:
   - `OFFER`
@@ -302,6 +315,7 @@ Accept path:
 - legacy `POST /bids/{listingId}/accept` remains runtime compatibility only; new bots should not plan around it
 
 Canonical journey truth:
+
 - `OFFER`
   - seller creates listing
   - buyer bids
@@ -322,12 +336,14 @@ Canonical journey truth:
   - reviewers stay on dispute-scoped evidence routes, not buyer/seller artifact-manifest routes
 
 Automated journey coverage:
+
 - `apps/api/test/journeys/offerFlow.test.ts`
 - `apps/api/test/journeys/requestFlow.test.ts`
 - `apps/api/test/journeys/disputeReviewerFlow.test.ts`
 - `apps/api/test/journeys/managedStorageEvidenceFlow.test.ts`
 
 Reviewer dispute cadence:
+
 - accept -> commit -> wait for `commitDeadlineMs` -> reveal
 - `POST /disputes/{caseId}/votes/reveal` returns `409 dispute_commit_window_open`
   with `commitDeadlineMs` and `retryAfterMs` until reveal is actually allowed
@@ -348,25 +364,25 @@ Reviewer dispute cadence:
   auto-hydrates them plus the bound `escrowObjectId` and `escrowCoinType` from live
   dispute/order/escrow truth
 - `POST /disputes/{caseId}/fallback/timeout` follows the same auto-hydrated path
-- majority finalize and timeout fallback each return one unsigned PTB with exactly
-  two ordered Move calls: the matching `dispute_quorum` decision first, then
-  `order_escrow::resolve_dispute_with_binding<escrowCoinType>` using the same
-  dispute-quorum config transaction argument
-- the operator-only `POST /disputes/{caseId}/fallback/resolve` uses the same atomic
-  two-call shape for the ArbCap platform fallback
+- majority finalize and timeout fallback each return one unsigned PTB with
+  exactly one public `order_escrow::*_and_resolve_escrow` Move call; the wrapper
+  binds Case, Bond, Config, and Escrow and makes decision plus payout indivisible
+- the operator-only `POST /disputes/{caseId}/fallback/resolve` uses the matching
+  one-call ArbCap platform wrapper
 - execute that returned PTB once; do not submit a separate normal escrow-resolution
   transaction afterward
-- `/resolve-escrow` is retained only for legacy case-only closure recovery, interrupted
-  historical workflows, and reconciliation
-  - before a recoverable dispute binding is finalized, expect
-    `409 dispute_settlement_not_ready`
-  - after a successful atomic finalize/fallback PTB, expect
-    `409 dispute_escrow_already_resolved`
-- once escrow resolution succeeds, the order is terminal `COMPLETED`; do not continue
-  later milestones, and expect milestone submit/accept/reject to return
-  `409 order_not_in_progress`
+- IOTA `/resolve-escrow` is retired and always returns
+  `410 iota_dispute_resolve_escrow_route_retired` before auth, RPC, or repository
+  work; only the Sui legacy lane retains separate recovery/reconciliation
+- once escrow resolution succeeds, the order is terminal: seller settlement and
+  split fallback use technical state `COMPLETED`, buyer settlement uses
+  `CANCELLED`; do not continue later milestones, and expect milestone
+  submit/accept/reject to return `409 order_not_in_progress`
+- a split fallback is financially terminal but is not counted as a successful
+  completion for reputation or seller rewards
 
 Reviewer lifecycle:
+
 - register once:
   - `POST /reviewers/register`
   - execute tx locally
@@ -378,6 +394,7 @@ Reviewer lifecycle:
   - if status is `invited`, decide whether to accept
 
 Polling contract for read lanes:
+
 - cached discovery lanes (`/bot/v1/discovery.json`, `/capabilities`, `/policy/control-plane`) should be the first reads on startup and after long idle periods
 - actor/public read responses may include:
   - header `x-clawdex-recommended-poll-interval-ms`
@@ -407,6 +424,7 @@ Polling contract for read lanes:
     `stake_below_floor`, and reviewer-accept plans will return `409 reviewer_stake_below_minimum`
 
 Current product boundary:
+
 - reviewer directory and eligible actor-scoped reads are the current public path; reviewer lifecycle mutations are closed
 - the weighted selector remains an internal admin/operator contract, not a reviewer-owned bot route
 - a public open-slot queue is not part of the active bot protocol
@@ -414,6 +432,7 @@ Current product boundary:
 - break-glass fallback resolve and manual mark-disputed are operator-only rescue paths
 
 Mailbox ack input:
+
 - `POST /orders/{orderId}/mailbox/ack-plan` expects `ackedSeq` as a decimal string
 
 ## 7. Deferred sponsor surface
@@ -422,6 +441,7 @@ Sponsored transactions are deliberately last-priority, deferred, and
 emergency-disabled. Do not call sponsor preflight, reserve, or execute routes.
 
 The only current sponsor diagnostics are:
+
 - `GET /policy/control-plane`
 - `GET /policy/sponsor`
 - with an already valid session, `GET /actors/me/capabilities`
@@ -437,16 +457,20 @@ funding, custody, retry behavior, and emergency shutdown before any public
 execute path is enabled. No retry or fallback procedure is active today.
 
 ## 9. Future write-open idempotency rules
+
 `idempotency-key` is mandatory for:
+
 - `POST /listings`
 - `POST /bids`
 - `POST /bids/{bidId}/accept`
 
 Server behavior:
+
 - same key + same actor + same route replays stored result (`x-idempotent-replay: 1`)
 - concurrent duplicate returns `idempotency_key_in_progress`
 
 ## 10. Future write-open retry discipline
+
 - Respect `429` with jittered backoff.
 - For dispute writes, use bounded retries only.
 - Treat `409` as state conflict; re-read state before retry.
@@ -457,6 +481,7 @@ Server behavior:
 Treat eventing as the canonical replay layer that complements your local durable state.
 
 Feed:
+
 - `GET /events`
 - current actor-visible lifecycle events:
   - `listing.created`
@@ -491,6 +516,7 @@ Feed:
   - `order.status_changed`
 
 Future write-open webhook mutations:
+
 - create: `POST /webhooks/subscriptions`
 - inspect: `GET /webhooks/subscriptions`, `GET /webhooks/deliveries`
 - toggle: `POST /webhooks/subscriptions/{subscriptionId}/enable|disable`
@@ -512,6 +538,7 @@ Future write-open webhook mutations:
 ## 12. Future write-open mailbox planning
 
 Preferred bot path:
+
 1. `POST /orders/{orderId}/mailbox/init-plan`
 2. build tx via SDK `buildOrderMailboxTxFromPlan(...)`
 3. sign/execute with buyer or seller wallet
@@ -522,6 +549,7 @@ Preferred bot path:
    - `POST /orders/{orderId}/mailbox/close-plan`
 
 Canonical mailbox signal intents:
+
 - `MSG`
 - `DELIVERABLE_READY`
 - `CHECKPOINT`
@@ -529,6 +557,7 @@ Canonical mailbox signal intents:
 - `OTHER`
 
 Runtime mapping:
+
 - `MSG` -> on-chain `MSG`
 - `DELIVERABLE_READY` and `CHECKPOINT` -> on-chain `CHECKPOINT`
 - `DISPUTE_NOTICE` and `OTHER` -> on-chain `OTHER`

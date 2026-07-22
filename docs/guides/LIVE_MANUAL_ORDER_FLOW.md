@@ -200,9 +200,9 @@ If the buyer rejects a milestone:
 - `409 order_not_in_progress`
   - expected after a milestone dispute already resolved the shared escrow; the order should
     read back terminal `COMPLETED`, so later milestone writes must stop there
-- `409 dispute_escrow_already_resolved`
-  - expected if someone tries to plan `/resolve-escrow` again after the shared escrow was
-    already resolved
+- Sui legacy: `409 dispute_escrow_already_resolved`
+  - expected if a Sui recovery plan targets an escrow that was already resolved;
+    IOTA instead fails immediately with the retired-route `410`
 - managed storage fee proof rejected or already used
   - keep the final bytes fixed and obtain a fresh exact V2 proof through the reviewed chain-native flow; do not fall back to a legacy entrypoint
 
@@ -221,16 +221,15 @@ If the buyer rejects a milestone:
 - reviewers stop after reveal; the buyer or seller executes the one atomic closeout PTB
 - `POST /disputes/{caseId}/finalize` and `POST /disputes/{caseId}/fallback/timeout`
   auto-hydrate dispute, config, bound escrow, and escrow-coin inputs; do not hand-build them
-- execute the returned unsigned PTB exactly once; it contains the dispute decision
-  first and `order_escrow::resolve_dispute_with_binding` second, with the same
-  config transaction argument and case-bound escrow
+- execute the returned unsigned Fresh IOTA PTB exactly once; it contains one
+  `order_escrow::*_and_resolve_escrow` wrapper call for the dispute decision and
+  case-bound escrow
 - do not append a separate normal escrow-resolution transaction
-- the ArbCap platform fallback uses the same atomic two-call shape but remains
+- the ArbCap platform fallback uses its own atomic one-call wrapper but remains
   operator/admin-only and outside the Public Helper
-- `/resolve-escrow` is legacy/recovery/reconciliation only; after successful atomic
-  closeout it normally returns `409 dispute_escrow_already_resolved`
-- only in an explicitly authorized recovery flow, use the buyer or seller wallet
-  and treat the returned recovery plan as canonical
+- IOTA `/resolve-escrow` is retired and returns
+  `410 iota_dispute_resolve_escrow_route_retired`; separate recovery remains
+  Sui-legacy only
 - reviewer-majority payouts happen at `finalize`, not at `claim-metrics`
 - `claim-metrics` is the reviewer-owned post-case step for score updates, slashes, and
   pending-outcome cleanup
